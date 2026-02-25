@@ -10,5 +10,5 @@ This skill provides a comprehensive pipeline for quad-modal AI filmmaking. To mi
 ### Key Workflows
 - [Vision & Philosophy](references/index.md)
 - [Delegation & Platform](references/index.md)
-- [Architecture & Precision](references/index.md)
+- [Architecture & Precision (ZH/JA)](references/index.md)
 - [VFX, Audio & Recipes](references/index.md)
