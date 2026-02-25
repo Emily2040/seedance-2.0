@@ -5,7 +5,7 @@ license: MIT
 user-invocable: true
 user-invokable: true
 tags: ["copyright", "content-policy", "ip", "openclaw", "antigravity", "gemini-cli", "codex", "cursor"]
-metadata: {"version": "3.3.0", "updated": "2026-02-25", "openclaw": {"emoji": "\u2696\ufe0f", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "\u2696\ufe0f", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "\u2696\ufe0f", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
+metadata: {"version": "3.3.0", "updated": "2026-02-25", "openclaw": {"emoji": "⚖️", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "⚖️", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "⚖️", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
 ---
 
 # seedance-copyright

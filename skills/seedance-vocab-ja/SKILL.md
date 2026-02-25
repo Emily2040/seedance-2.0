@@ -5,7 +5,7 @@ license: MIT
 user-invocable: true
 user-invokable: true
 tags: ["vocabulary", "japanese", "i18n", "openclaw", "antigravity", "gemini-cli"]
-metadata: {"version": "3.2.0", "updated": "2026-02-25", "openclaw": {"emoji": "\ud83c\uddef\ud83c\uddf5", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "\ud83c\uddef\ud83c\uddf5", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "\ud83c\uddef\ud83c\uddf5", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
+metadata: {"version": "3.2.0", "updated": "2026-02-25", "openclaw": {"emoji": "🇯🇵", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "🇯🇵", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🇯🇵", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
 ---
 
 # seedance-vocab-ja · 日本語映画・撮影用語集
