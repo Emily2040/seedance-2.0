@@ -2388,7 +2388,7 @@ This skill document is a living artifact. Contributions are welcome:
 
 MIT License
 
-Copyright (c) 2026 AI Filmmaking Research Collective
+Copyright (c) 2026 Iamemily2050 (@iamemily2050)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -2406,9 +2406,9 @@ This skill document synthesizes knowledge from:
 - 150+ prompt variation stress tests
 - Q1 2026 platform behavior verification
 
-**Maintainers:** AI Filmmaking Research Collective  
-**Contact:** [Your contact information]  
-**Repository:** [Your GitHub repository URL]
+**Maintainers:** Iamemily2050 (@iamemily2050)  
+**Contact:** @iamemily2050 on X/IG  
+**Repository:** https://github.com/Emily2040/seedance-2.0-skill
 
 ---
 
