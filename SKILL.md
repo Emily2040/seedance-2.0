@@ -1,15 +1,14 @@
 # seedance-2.0
-Seedance 2.0 filmmaking pipeline.
 Author: Iamemily2050 (@iamemily2050)
 
-## Workflow
-1. Analyze: [vision](references/vision.md)
-2. Mode: [delegation](references/delegation.md)
-3. Build: [architecture](references/prompt_architecture.md)
-4. Precision: [vocabulary](references/vocabulary_zh.md)
+## Seedance 2.0 Skill
+This skill provides a comprehensive pipeline for quad-modal AI filmmaking. To minimize token usage, the core documentation is modularized.
 
-## Refs
-- [Philosophy](references/philosophy.md)
-- [Platform](references/platform.md)
-- [Map](references/architecture.md)
-- [Legal](references/legal_acks.md)
+### Access Modules
+[**Main Index & All Modules**](references/index.md)
+
+### Key Workflows
+- [Vision & Philosophy](references/index.md)
+- [Delegation & Platform](references/index.md)
+- [Architecture & Precision](references/index.md)
+- [VFX, Audio & Recipes](references/index.md)
