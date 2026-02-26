@@ -5,9 +5,9 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-3.6.0-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
+  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-3.6.1-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-b000ff?style=flat-square&labelColor=0d1117" alt="License"></a>
-  <a href="skills"><img src="https://img.shields.io/badge/skills-19_modules-ff006e?style=flat-square&labelColor=0d1117" alt="Skills"></a>
+  <a href="skills"><img src="https://img.shields.io/badge/skills-20_modules-ff006e?style=flat-square&labelColor=0d1117" alt="Skills"></a>
   <a href="#-multilingual-precision"><img src="https://img.shields.io/badge/languages-5-ffbe0b?style=flat-square&labelColor=0d1117" alt="Languages"></a>
   <a href="#-platform-matrix"><img src="https://img.shields.io/badge/platforms-10+-00f0ff?style=flat-square&labelColor=0d1117" alt="Platforms"></a>
   <a href="https://agentskills.io/"><img src="https://img.shields.io/badge/Agent_Skills-Open_Standard-58a6ff?style=flat-square&labelColor=0d1117" alt="Agent Skills"></a>
@@ -19,9 +19,11 @@
 </p>
 
 <p align="center">
-  <b>Author:</b> <a href="https://github.com/Emily2040">Emily (@iamemily2050)</a> · 
-  <b>Platform:</b> <a href="https://seed.bytedance.com">ByteDance Seedance 2.0</a> · Dreamina · Jimeng<br>
-  <b>Updated:</b> 2026-02-25 · Q1 2026 release intelligence
+  <b>Author:</b> <a href="https://github.com/Emily2040">Emily (@iamemily2050)</a> &nbsp;|&nbsp;
+  <a href="https://x.com/iamemily2050">𝕏</a> &nbsp;|&nbsp;
+  <a href="https://instagram.com/iamemily2050">IG</a><br>
+  <b>Platform:</b> <a href="https://seed.bytedance.com/en/seedance2_0">ByteDance Seedance 2.0</a> · <a href="https://dreamina.capcut.com/tools/seedance-2-0">Dreamina</a> · <a href="https://jimeng.jianying.com/">Jimeng</a><br>
+  <b>Updated:</b> 2026-02-26 · Q1 2026 release intelligence
 </p>
 
 ---
@@ -101,6 +103,33 @@
 
 </details>
 
+<details>
+<summary><b>🇨🇳 Working Examples (Chinese Prompts)</b></summary>
+<br>
+
+| # | Genre | Difficulty | Description |
+|:---:|:---|:---:|:---|
+| 1 | 剧情短剧 Short Drama | Expert | 霸道总裁爽剧风格 — 15s multi-shot reversal scene |
+| 2 | 剧情短剧 Short Drama | Beginner | 优雅晾衣场景 — simple elegant action loop |
+| 3 | 剧情短剧 Short Drama | Intermediate | 维多利亚时代街景 — period drama environment |
+| 4 | 广告 Advertising | Advanced | 互动绘画角色 — painting character comes alive |
+| 5 | 广告 Advertising | Creative | 摩托车广告 — donkey motorcycle stunt ad |
+| 6 | 广告 Advertising | Creative | 反转零食广告 — spy thriller snack reveal |
+| 7 | 动漫武打 Animation | Expert | 哪吒 vs 敖丙 — 4-act ice/fire battle sequence |
+| 8 | 动漫武打 Animation | Advanced | 多视频参考打斗 — multi-reference fight scene |
+| 9 | 产品展示 Product | Intermediate | 高端香水 MG 动画 — luxury perfume ad |
+| 10 | 产品展示 Product | Advanced | 多图融合产品展示 — multi-image bag showcase |
+| 11 | 产品展示 Product | Advanced | 经典广告节奏复刻 — car ad rhythm clone |
+| 12 | 视觉特效 VFX | Advanced | 粒子特效片头 — gold particle title animation |
+| 13 | 运镜叙事 Cinematography | Advanced | 一镜到底追踪镜头 — one-take tracking shot |
+| 14 | 运镜叙事 Cinematography | Advanced | 动作+运镜双重复刻 — dance performance clone |
+| 15 | 运镜叙事 Cinematography | Advanced | 角色替换 — character replacement in video |
+| 16 | 音乐卡点 Beat Sync | Advanced | 风光片音乐卡点 — landscape beat sync |
+
+→ Full prompts: [`skills/seedance-examples-zh/SKILL.md`](skills/seedance-examples-zh/SKILL.md)
+
+</details>
+
 <br>
 
 ## `>` Quick Install
@@ -134,16 +163,16 @@ opencode skills install https://github.com/Emily2040/seedance-2.0
 
 | Platform | Workspace path | Global path |
 |:---|:---|:---|
-| **Antigravity** | `.agent/skills/seedance-20/` | `~/.gemini/antigravity/skills/seedance-20/` |
-| **Gemini CLI** | `.gemini/skills/seedance-20/` | `~/.gemini/skills/seedance-20/` |
-| **Firebase Studio** | `.idx/skills/seedance-20/` | — |
-| **Claude Code** | `.claude/skills/seedance-20/` | `~/.claude/skills/seedance-20/` |
-| **OpenClaw** | `.claude/skills/seedance-20/` | `~/.claude/skills/seedance-20/` |
-| **GitHub Copilot** | `.github/skills/seedance-20/` | `~/.copilot/skills/seedance-20/` |
-| **Codex** | `.agents/skills/seedance-20/` | `~/.agents/skills/seedance-20/` |
-| **Cursor** | `.cursor/skills/seedance-20/` | `~/.cursor/skills/seedance-20/` |
-| **Windsurf** | `.windsurf/skills/seedance-20/` | `~/.codeium/windsurf/skills/seedance-20/` |
-| **OpenCode** | `.opencode/skills/seedance-20/` | `~/.config/opencode/skills/seedance-20/` |
+| [**Antigravity**](https://antigravity.google/) | `.agent/skills/seedance-20/` | `~/.gemini/antigravity/skills/seedance-20/` |
+| [**Gemini CLI**](https://geminicli.com/) | `.gemini/skills/seedance-20/` | `~/.gemini/skills/seedance-20/` |
+| [**Firebase Studio**](https://firebase.studio/) | `.idx/skills/seedance-20/` | — |
+| [**Claude Code**](https://code.claude.com/) | `.claude/skills/seedance-20/` | `~/.claude/skills/seedance-20/` |
+| [**OpenClaw**](https://openclaw.ai/) | `.claude/skills/seedance-20/` | `~/.claude/skills/seedance-20/` |
+| [**GitHub Copilot**](https://github.com/features/copilot) | `.github/skills/seedance-20/` | `~/.copilot/skills/seedance-20/` |
+| [**Codex**](https://openai.com/codex/) | `.agents/skills/seedance-20/` | `~/.agents/skills/seedance-20/` |
+| [**Cursor**](https://cursor.com/) | `.cursor/skills/seedance-20/` | `~/.cursor/skills/seedance-20/` |
+| [**Windsurf**](https://windsurf.com/) | `.windsurf/skills/seedance-20/` | `~/.codeium/windsurf/skills/seedance-20/` |
+| [**OpenCode**](https://opencode.ai/) | `.opencode/skills/seedance-20/` | `~/.config/opencode/skills/seedance-20/` |
 
 </details>
 
@@ -153,15 +182,15 @@ opencode skills install https://github.com/Emily2040/seedance-2.0
 
 <table>
 <tr>
-<td align="center" width="11%"><b>Antigravity</b></td>
-<td align="center" width="11%"><b>Gemini CLI</b></td>
-<td align="center" width="11%"><b>Firebase</b></td>
-<td align="center" width="11%"><b>Claude Code</b></td>
-<td align="center" width="11%"><b>OpenClaw</b></td>
-<td align="center" width="11%"><b>Copilot</b></td>
-<td align="center" width="11%"><b>Codex</b></td>
-<td align="center" width="11%"><b>Cursor</b></td>
-<td align="center" width="11%"><b>Windsurf</b></td>
+<td align="center" width="11%"><a href="https://antigravity.google/"><b>Antigravity</b></a></td>
+<td align="center" width="11%"><a href="https://geminicli.com/"><b>Gemini CLI</b></a></td>
+<td align="center" width="11%"><a href="https://firebase.studio/"><b>Firebase Studio</b></a></td>
+<td align="center" width="11%"><a href="https://code.claude.com/"><b>Claude Code</b></a></td>
+<td align="center" width="11%"><a href="https://openclaw.ai/"><b>OpenClaw</b></a></td>
+<td align="center" width="11%"><a href="https://github.com/features/copilot"><b>Copilot</b></a></td>
+<td align="center" width="11%"><a href="https://openai.com/codex/"><b>Codex</b></a></td>
+<td align="center" width="11%"><a href="https://cursor.com/"><b>Cursor</b></a></td>
+<td align="center" width="11%"><a href="https://windsurf.com/"><b>Windsurf</b></a></td>
 </tr>
 <tr>
 <td align="center">✅</td>
@@ -201,10 +230,10 @@ seedance-2.0/
 ├── SKILL.md                         ← Root entry point (75 lines)
 ├── LICENSE                          ← MIT
 ├── README.md                        ← You are here
-├── CHANGELOG.md                     ← v3.0.0 → v3.6.0
+├── CHANGELOG.md                     ← v3.0.0 → v3.6.1
 ├── .github/
 │   └── CODEOWNERS                   ← @iamemily2050
-├── skills/                          ← 19 modular sub-skills
+├── skills/                          ← 20 modular sub-skills
 │   ├── seedance-interview/          ← 📋 Pre-production
 │   ├── seedance-prompt/             ← ✍️ Prompt architecture
 │   ├── seedance-camera/             ← 🎥 Camera language
@@ -223,7 +252,8 @@ seedance-2.0/
 │   ├── seedance-vocab-ja/           ← 🇯🇵 Japanese
 │   ├── seedance-vocab-ko/           ← 🇰🇷 Korean
 │   ├── seedance-vocab-es/           ← 🇪🇸 Spanish
-│   └── seedance-vocab-ru/           ← 🇷🇺 Russian
+│   ├── seedance-vocab-ru/           ← 🇷🇺 Russian
+│   └── seedance-examples-zh/        ← 🇨🇳 Chinese Working Examples
 └── references/                      ← 4 reference files
     ├── platform-constraints.md      ← Platform limits & rules
     ├── json-schema.md               ← JSON prompt schema
@@ -246,7 +276,7 @@ seedance-2.0/
 
 ## `>` Compliance
 
-All 20 skills pass the [AgentSkills open standard](https://agentskills.io/) validation:
+All 21 skills pass the [AgentSkills open standard](https://agentskills.io/) validation:
 
 - ✅ `name` — lowercase, hyphen-separated, no dots or spaces
 - ✅ `description` — single-quoted, verb-first, includes WHEN trigger phrases
@@ -259,7 +289,7 @@ All 20 skills pass the [AgentSkills open standard](https://agentskills.io/) vali
 
 ## `>` Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full version history from v3.0.0 to v3.6.0.
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history from v3.0.0 to v3.6.1.
 
 <br>
 
