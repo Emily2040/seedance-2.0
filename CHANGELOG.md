@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [3.7.0] — 2026-02-26
+### Changed
+- Redesigned `seedance-interview` as **"The Director's Journey"** — a multi-stage storytelling workflow (Vision → Narrative → Visuals → Technical → Final Brief).
+- Replaced the A/B/C/D/E guided stages with creative "Director's Questions" for deeper narrative extraction.
+- Added `references/storytelling-framework.md` — professional cinematography and narrative design principles.
+- Updated root `SKILL.md` to v3.7.0 with storytelling-framework reference and interview in core pipeline.
+- Updated README.md: version badge, interview emoji 🎭, skill count 20, references count 5.
+
 ## [3.6.1] — 2026-02-26
 
 ### Added

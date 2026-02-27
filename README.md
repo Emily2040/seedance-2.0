@@ -5,7 +5,7 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-3.6.1-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
+  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-3.7.0-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-b000ff?style=flat-square&labelColor=0d1117" alt="License"></a>
   <a href="skills"><img src="https://img.shields.io/badge/skills-20_modules-ff006e?style=flat-square&labelColor=0d1117" alt="Skills"></a>
   <a href="#-multilingual-precision"><img src="https://img.shields.io/badge/languages-5-ffbe0b?style=flat-square&labelColor=0d1117" alt="Languages"></a>
@@ -39,7 +39,7 @@
 </td>
 <td width="50%">
 
-**For Agent Builders** — Each of the 19 sub-skills is independently loadable. Your agent reads the 75-line root `SKILL.md`, identifies the task, and loads only the specific modules it needs. Zero token waste. Maximum precision.
+**For Agent Builders** — Each of the 20 sub-skills is independently loadable. Your agent reads the 75-line root `SKILL.md`, identifies the task, and loads only the specific modules it needs. Zero token waste. Maximum precision.
 
 </td>
 </tr>
@@ -63,7 +63,7 @@
 
 | Skill | Emoji | What it does |
 |:---|:---:|:---|
-| [`seedance-interview`](skills/seedance-interview/SKILL.md) | 📋 | Guided pre-production interview → structured Seedance prompt |
+| [`seedance-interview`](skills/seedance-interview/SKILL.md) | 🎭 | Director's Journey — multi-stage storytelling interview → cinematic production brief |
 | [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | ✍️ | Build and validate prompts — 5-layer stack, @Tag system, quad-modal rules |
 | [`seedance-camera`](skills/seedance-camera/SKILL.md) | 🎥 | Camera movement, shot framing, multi-shot sequences, anti-drift locks |
 | [`seedance-motion`](skills/seedance-motion/SKILL.md) | 🏃 | Motion timing, action choreography, fight physics, video extension chains |
@@ -213,7 +213,7 @@ Seedance 2.0 includes dedicated cinematic vocabulary modules for five languages,
 
 <table>
 <tr>
-<td align="center"><b>🇨🇳 Chinese</b><br><code>vocab-zh</code><br><sub>296 lines</sub></td>
+<td align="center"><b>🇨🇳 Chinese</b><br><code>vocab-zh</code><br><sub>400+ terms</sub></td>
 <td align="center"><b>🇯🇵 Japanese</b><br><code>vocab-ja</code><br><sub>235 lines</sub></td>
 <td align="center"><b>🇰🇷 Korean</b><br><code>vocab-ko</code><br><sub>225 lines</sub></td>
 <td align="center"><b>🇪🇸 Spanish</b><br><code>vocab-es</code><br><sub>232 lines</sub></td>
@@ -230,11 +230,11 @@ seedance-2.0/
 ├── SKILL.md                         ← Root entry point (75 lines)
 ├── LICENSE                          ← MIT
 ├── README.md                        ← You are here
-├── CHANGELOG.md                     ← v3.0.0 → v3.6.1
+├── CHANGELOG.md                     ← v3.0.0 → v3.7.0
 ├── .github/
-│   └── CODEOWNERS                   ← @iamemily2050
+│   └── CODEOWNERS                   ← @Emily2040
 ├── skills/                          ← 20 modular sub-skills
-│   ├── seedance-interview/          ← 📋 Pre-production
+│   ├── seedance-interview/          ← 🎭 Director's Journey
 │   ├── seedance-prompt/             ← ✍️ Prompt architecture
 │   ├── seedance-camera/             ← 🎥 Camera language
 │   ├── seedance-motion/             ← 🏃 Motion control
@@ -254,10 +254,11 @@ seedance-2.0/
 │   ├── seedance-vocab-es/           ← 🇪🇸 Spanish
 │   ├── seedance-vocab-ru/           ← 🇷🇺 Russian
 │   └── seedance-examples-zh/        ← 🇨🇳 Chinese Working Examples
-└── references/                      ← 4 reference files
+└── references/                      ← 5 reference files
     ├── platform-constraints.md      ← Platform limits & rules
     ├── json-schema.md               ← JSON prompt schema
     ├── prompt-examples.md           ← Copy-paste examples
+    ├── storytelling-framework.md    ← Narrative design & visual layering principles
     └── quick-ref.md                 ← Quick reference card
 ```
 
@@ -271,6 +272,7 @@ seedance-2.0/
 | [`json-schema.md`](references/json-schema.md) | JSON prompt schema for structured generation |
 | [`prompt-examples.md`](references/prompt-examples.md) | Compact, copy-paste prompt examples |
 | [`quick-ref.md`](references/quick-ref.md) | Quick reference card for all parameters |
+| [`storytelling-framework.md`](references/storytelling-framework.md) | Narrative design, visual layering, and director's toolkit principles |
 
 <br>
 
@@ -282,14 +284,14 @@ All 21 skills pass the [AgentSkills open standard](https://agentskills.io/) vali
 - ✅ `description` — single-quoted, verb-first, includes WHEN trigger phrases
 - ✅ `license: MIT` · `user-invocable: true` · `user-invokable: true`
 - ✅ `tags:` array and `metadata` with `version`, `updated`, `author`, platform blocks
-- ✅ `metadata.parent: seedance-20` on all 19 sub-skills
+- ✅ `metadata.parent: seedance-20` on all 20 sub-skills
 - ✅ No illegal top-level custom fields
 
 <br>
 
 ## `>` Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full version history from v3.0.0 to v3.6.1.
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history from v3.0.0 to v3.7.0.
 
 <br>
 
