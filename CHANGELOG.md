@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [3.8.0] — 2026-02-27
+### Added
+- **Dual Workflow System**: Two distinct prompt engineering workflows now available.
+  - `seedance-prompt-short`: New short-form prompt skill with hard 2000-character budget and Compression Engine (4 rules: Verbs > Adjectives, Show Don't Tell, Film Language, Trust the Model).
+  - `seedance-interview-short`: New short-form interview skill with live character counter and Director's Notes + Compression Log in final output.
+- **Field Note**: Added practitioner note that Seedance V2 performs best with short (<2000 char) Chinese prompts in `README.md` and root `SKILL.md`.
+- **README**: New "Two Workflows: Max Detail vs. Max Performance" section with comparison table. Sub-skill count updated to 22.
+### Preserved
+- `seedance-prompt` and `seedance-interview` (Max Detail, Long Form) fully intact.
+
+---
+
 ## [3.7.0] — 2026-02-26
 ### Changed
 - Redesigned `seedance-interview` as **"The Director's Journey"** — a multi-stage storytelling workflow (Vision → Narrative → Visuals → Technical → Final Brief).

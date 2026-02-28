@@ -28,6 +28,19 @@
 
 ---
 
+## `>` Two Workflows: Max Detail vs. Max Performance
+
+This repository now offers two distinct workflows for prompt engineering:
+
+| Workflow | Best for | Philosophy |
+|:---|:---|:---|
+| **1. Max Detail (Long Form)** | Professional production, complex scenes, maximum creative control | Leave no detail to chance. Specify everything. |
+| **2. Max Performance (Short Form)** | Quick iteration, single clips, high-volume generation | Trust the model. Focus on the emotional core. |
+
+> **Note from the field (Feb 2026):** At the moment, Seedance V2 performs significantly better with short prompts (below 2000 characters) written in Chinese. For best results, use the **Max Performance** workflow.
+
+---
+
 ## `>` Why Seedance 2.0?
 
 <table>
@@ -39,7 +52,7 @@
 </td>
 <td width="50%">
 
-**For Agent Builders** — Each of the 20 sub-skills is independently loadable. Your agent reads the 75-line root `SKILL.md`, identifies the task, and loads only the specific modules it needs. Zero token waste. Maximum precision.
+**For Agent Builders** — Each of the 22 sub-skills is independently loadable. Your agent reads the 75-line root `SKILL.md`, identifies the task, and loads only the specific modules it needs. Zero token waste. Maximum precision.
 
 </td>
 </tr>
@@ -233,9 +246,11 @@ seedance-2.0/
 ├── CHANGELOG.md                     ← v3.0.0 → v3.7.0
 ├── .github/
 │   └── CODEOWNERS                   ← @Emily2040
-├── skills/                          ← 20 modular sub-skills
-│   ├── seedance-interview/          ← 🎭 Director's Journey
-│   ├── seedance-prompt/             ← ✍️ Prompt architecture
+├── skills/                          ← 22 modular sub-skills
+│   ├── seedance-interview/          ← 🎭 Max Detail (Long Form)
+│   ├── seedance-interview-short/    ← 🎙️ Max Performance (2000-char)
+│   ├── seedance-prompt/             ← ✍️ Max Detail (Long Form)
+│   ├── seedance-prompt-short/       ← ⚡️ Max Performance (2000-char)
 │   ├── seedance-camera/             ← 🎥 Camera language
 │   ├── seedance-motion/             ← 🏃 Motion control
 │   ├── seedance-lighting/           ← 💡 Lighting design

@@ -12,7 +12,12 @@ metadata: {"version": "3.7.0", "updated": "2026-02-26", "openclaw": {"emoji": "�
 
 Seedance 2.0 quad-modal AI filmmaking (T2V · I2V · V2V · R2V).
 
-Start: [skill:seedance-interview] — reads story/script, asks gap-fill questions, outputs production brief.
+This library offers two workflows:
+
+1. **Max Detail (Long Form)**: For professional production. Start with [skill:seedance-interview].
+2. **Max Performance (Short Form)**: For high-volume generation. Start with [skill:seedance-interview-short].
+
+> **Note (Feb 2026):** Seedance V2 currently performs best with short (<2000 char) Chinese prompts.
 
 > **⚠️ Feb 2026 Status**: Seedance 2.0 API global release was delayed (from planned Feb 24) due to copyright enforcement actions by Disney, Paramount Skydance, Netflix, MPA, and SAG-AFTRA. ByteDance paused real-person face uploads Feb 15. Content filters for named franchise characters, anime IPs, and streaming originals have been tightened. The [skill:seedance-copyright] module reflects the current post-enforcement state. Run it before every generation.
 
@@ -53,7 +58,7 @@ opencode skills install https://github.com/Emily2040/seedance-2.0
 ## Skills
 
 **Core pipeline**
-[skill:seedance-interview] · [skill:seedance-prompt] · [skill:seedance-camera] · [skill:seedance-motion] · [skill:seedance-lighting] · [skill:seedance-characters] · [skill:seedance-style] · [skill:seedance-vfx] · [skill:seedance-audio] · [skill:seedance-pipeline] · [skill:seedance-recipes] · [skill:seedance-troubleshoot]
+[skill:seedance-interview] / [skill:seedance-interview-short] · [skill:seedance-prompt] / [skill:seedance-prompt-short] · [skill:seedance-camera] · [skill:seedance-motion] · [skill:seedance-lighting] · [skill:seedance-characters] · [skill:seedance-style] · [skill:seedance-vfx] · [skill:seedance-audio] · [skill:seedance-pipeline] · [skill:seedance-recipes] · [skill:seedance-troubleshoot]
 
 **Content quality**
 [skill:seedance-copyright] · [skill:seedance-antislop]
