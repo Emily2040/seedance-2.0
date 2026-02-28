@@ -4,7 +4,7 @@ description: 'Look up 400+ Chinese cinematic, photography, and production terms 
 license: MIT
 user-invocable: true
 tags: ["vocabulary", "chinese", "i18n", "openclaw", "antigravity", "gemini-cli"]
-metadata: {"version": "3.7.0", "updated": "2026-02-26", "openclaw": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
+metadata: {"version": "3.8.0", "updated": "2026-02-27", "openclaw": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
 ---
 
 # seedance-vocab-zh · 中文电影摄影术语全集

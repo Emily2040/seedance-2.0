@@ -5,9 +5,9 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-3.7.0-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
+  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-3.8.0-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-b000ff?style=flat-square&labelColor=0d1117" alt="License"></a>
-  <a href="skills"><img src="https://img.shields.io/badge/skills-20_modules-ff006e?style=flat-square&labelColor=0d1117" alt="Skills"></a>
+  <a href="skills"><img src="https://img.shields.io/badge/skills-22_modules-ff006e?style=flat-square&labelColor=0d1117" alt="Skills"></a>
   <a href="#-multilingual-precision"><img src="https://img.shields.io/badge/languages-5-ffbe0b?style=flat-square&labelColor=0d1117" alt="Languages"></a>
   <a href="#-platform-matrix"><img src="https://img.shields.io/badge/platforms-10+-00f0ff?style=flat-square&labelColor=0d1117" alt="Platforms"></a>
   <a href="https://agentskills.io/"><img src="https://img.shields.io/badge/Agent_Skills-Open_Standard-58a6ff?style=flat-square&labelColor=0d1117" alt="Agent Skills"></a>
@@ -23,7 +23,7 @@
   <a href="https://x.com/iamemily2050">𝕏</a> &nbsp;|&nbsp;
   <a href="https://instagram.com/iamemily2050">IG</a><br>
   <b>Platform:</b> <a href="https://seed.bytedance.com/en/seedance2_0">ByteDance Seedance 2.0</a> · <a href="https://dreamina.capcut.com/tools/seedance-2-0">Dreamina</a> · <a href="https://jimeng.jianying.com/">Jimeng</a><br>
-  <b>Updated:</b> 2026-02-26 · Q1 2026 release intelligence
+  <b>Updated:</b> 2026-02-27 · Q1 2026 release intelligence
 </p>
 
 ---
@@ -77,7 +77,9 @@ This repository now offers two distinct workflows for prompt engineering:
 | Skill | Emoji | What it does |
 |:---|:---:|:---|
 | [`seedance-interview`](skills/seedance-interview/SKILL.md) | 🎭 | Director's Journey — multi-stage storytelling interview → cinematic production brief |
+| [`seedance-interview-short`](skills/seedance-interview-short/SKILL.md) | 🎙️ | Max Performance — guided interview outputting a 2000-char compressed brief with live counter |
 | [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | ✍️ | Build and validate prompts — 5-layer stack, @Tag system, quad-modal rules |
+| [`seedance-prompt-short`](skills/seedance-prompt-short/SKILL.md) | ⚡️ | Max Performance — 2000-char budget system with Compression Engine (4 rules) |
 | [`seedance-camera`](skills/seedance-camera/SKILL.md) | 🎥 | Camera movement, shot framing, multi-shot sequences, anti-drift locks |
 | [`seedance-motion`](skills/seedance-motion/SKILL.md) | 🏃 | Motion timing, action choreography, fight physics, video extension chains |
 | [`seedance-lighting`](skills/seedance-lighting/SKILL.md) | 💡 | Lighting, atmosphere, light transitions, mood and time-of-day specs |
@@ -108,7 +110,7 @@ This repository now offers two distinct workflows for prompt engineering:
 
 | Skill | Flag | Languages | Terms |
 |:---|:---:|:---|---:|
-| [`seedance-vocab-zh`](skills/seedance-vocab-zh/SKILL.md) | 🇨🇳 | Chinese cinematic vocabulary | 320+ |
+| [`seedance-vocab-zh`](skills/seedance-vocab-zh/SKILL.md) | 🇨🇳 | Chinese cinematic vocabulary | 400+ |
 | [`seedance-vocab-ja`](skills/seedance-vocab-ja/SKILL.md) | 🇯🇵 | Japanese cinematic vocabulary | 280+ |
 | [`seedance-vocab-ko`](skills/seedance-vocab-ko/SKILL.md) | 🇰🇷 | Korean cinematic vocabulary | 270+ |
 | [`seedance-vocab-es`](skills/seedance-vocab-es/SKILL.md) | 🇪🇸 | Spanish cinematic vocabulary (Castilian + Latin American) | 270+ |
@@ -243,7 +245,7 @@ seedance-2.0/
 ├── SKILL.md                         ← Root entry point (75 lines)
 ├── LICENSE                          ← MIT
 ├── README.md                        ← You are here
-├── CHANGELOG.md                     ← v3.0.0 → v3.7.0
+├── CHANGELOG.md                     ← v3.0.0 → v3.8.0
 ├── .github/
 │   └── CODEOWNERS                   ← @Emily2040
 ├── skills/                          ← 22 modular sub-skills
@@ -293,20 +295,20 @@ seedance-2.0/
 
 ## `>` Compliance
 
-All 21 skills pass the [AgentSkills open standard](https://agentskills.io/) validation:
+All 22 skills pass the [AgentSkills open standard](https://agentskills.io/) validation:
 
 - ✅ `name` — lowercase, hyphen-separated, no dots or spaces
 - ✅ `description` — single-quoted, verb-first, includes WHEN trigger phrases
 - ✅ `license: MIT` · `user-invocable: true` · `user-invokable: true`
 - ✅ `tags:` array and `metadata` with `version`, `updated`, `author`, platform blocks
-- ✅ `metadata.parent: seedance-20` on all 20 sub-skills
+- ✅ `metadata.parent: seedance-20` on all 22 sub-skills
 - ✅ No illegal top-level custom fields
 
 <br>
 
 ## `>` Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full version history from v3.0.0 to v3.7.0.
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history from v3.0.0 to v3.8.0.
 
 <br>
 
