@@ -4,7 +4,7 @@ description: 'Browse 16+ battle-tested, production-ready Chinese prompt examples
 license: MIT
 user-invocable: true
 tags: ["examples", "prompts", "chinese", "i18n", "openclaw", "antigravity", "gemini-cli"]
-metadata: {"version": "3.8.0", "updated": "2026-02-27", "openclaw": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
+metadata: {"version": "4.0.0", "updated": "2026-02-28", "openclaw": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🇨🇳", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
 ---
 
 # seedance-examples-zh · 中文实战案例库

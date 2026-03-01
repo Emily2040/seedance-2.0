@@ -1,180 +1,47 @@
 ---
 name: seedance-troubleshoot
-description: 'Diagnose and fix Seedance 2.0 generation failures, quality issues, and content blocks using a pre-generation checklist and error-specific remedies. Use when generation fails, output is wrong aspect ratio, motion is chaotic, characters drift, audio desyncs, or a copyright filter triggers.'
+description: "Diagnose and fix failing or low-quality Seedance 2.0 prompts using a cognitive, first-principles approach. Use when a prompt is consistently failing, producing generic output, or being rejected. Follow the \"Conservation Law\" workflow: Isolate → Invert → Re-build."
 license: MIT
 user-invocable: true
-user-invokable: true
-tags: ["troubleshoot", "qa", "debug", "openclaw", "antigravity", "gemini-cli", "codex", "cursor"]
-metadata: {"version": "3.8.0", "updated": "2026-02-27", "openclaw": {"emoji": "🔧", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "parent": "seedance-20", "antigravity": {"emoji": "🔧", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🔧", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
+tags: ["debugging", "troubleshooting", "prompt-engineering", "quality-control", "root-cause-analysis", "seedance-20"]
+metadata: {"version": "4.0.0", "updated": "2026-02-28", "openclaw": {"emoji": "🔧", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "antigravity": {"emoji": "🔧", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🔧", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
 ---
 
-# seedance-troubleshoot
+# seedance-troubleshoot · The Conservation Law (v4.0)
 
-Diagnose and fix Seedance 2.0 generation problems.
+This skill diagnoses and fixes failing Seedance 2.0 prompts. Instead of a checklist of common fixes, it identifies the fundamental, unbreakable trade-off in a failing prompt and then "inverts" the design to find a creative escape route.
 
-## Pre-Generation Checklist
+## The Workflow (Cognitive Opcodes)
 
-- [ ] Prompt is plain text (no raw JSON)
-- [ ] Subject + primary action in first 20–30 words
-- [ ] Total files ≤ 12 (Rule of 12)
-- [ ] Each image < 30 MB (JPG/PNG/WEBP)
-- [ ] Videos: 3 clips total, **combined ≤ 15 s** (not 15 s each)
-- [ ] Audio total ≤ 15 s MP3
-- [ ] No real celebrity faces or brand logos
-- [ ] No copyrighted character names (use archetypes)
-- [ ] Duration within platform range (4–15 s; no confirmed mobile-specific cap)
-- [ ] Aspect ratio declared (16:9 / 9:16 / 4:3 / 3:4 / 21:9 / 1:1)
+### 1. Failing Prompt (User Input)
+- Get a prompt that is consistently failing, producing low-quality output, or being rejected.
+- **Example:** `"A hyper-detailed character with intricate facial tattoos performs a fast, 360-degree spinning aerial kick in a dark, moody alley."`
 
----
+### 2. Identify the Conservation Law (L11-C Opcode)
+- Analyze the prompt to find the two competing demands that are creating a "conservation law" — a trade-off where you can have one or the other, but not both at maximum quality.
+- **AI Analysis:**
+  - **Demand 1 (Sensitivity):** "hyper-detailed character with intricate facial tattoos" requires high model attention to fine, static detail.
+  - **Demand 2 (Absorption):** "fast, 360-degree spinning aerial kick" requires high model attention to complex, high-velocity motion.
+  - **The Conservation Law:** `Sensitivity (Detail) x Absorption (Movement) = Constant`. To maximize one, you must strategically sacrifice the other. The prompt is failing because it demands maximum detail *and* maximum movement, which exceeds the model's capacity.
 
-## Error Lookup
+### 3. Expose the Trade-off & Invert the Design (L11-C Opcode)
+- Present the conservation law to the user and propose an "inversion" of the design that preserves the creative intent while respecting the trade-off.
+- **AI Output:**
+  - **Expose:** "This prompt is failing because of a Conservation Law: you can have the intricate detail or the fast motion, but not both at once. We must choose which is more important to the story."
+  - **Invert:** "Instead of a fast, 360-degree kick that loses the tattoo detail, let's try a **slow-motion, 180-degree arc** where the camera **tracks the face**, keeping the tattoos in sharp focus. We can use lighting and motion blur on the background to *imply* speed, preserving the feeling of action without sacrificing the detail."
 
-### Output: chaotic / incoherent motion
-**Cause**: prompt overloaded, competing actions.  
-**Fix**: shorten to ≤ 50 words. Lock camera: `locked-off static camera`. One action per clip.
-
-### Output: character drifting / inconsistent face
-**Cause**: no reference image.  
-**Fix**: upload character photo as `@Image1`. Add `maintain character identity from @Image1`.
-
-### Output: camera wandering unintentionally
-**Cause**: no camera instruction.  
-**Fix**: add `locked-off static camera` or explicit movement (`slow push-in`, `dolly right`).
-
-### Output: background morphing mid-clip
-**Cause**: no environment anchor.  
-**Fix**: add environment reference `@Image2`. Add `environment locked: [location]`.
-
-### Output: audio desync / lip mismatch
-**Cause**: audio too long, noisy audio, fast speech rate, or prompt motion tokens conflict with lip engine.  
-**Fix**:
-- Trim audio to < 10 s (10–15 s range is unreliable for sync).
-- Remove ALL head/face motion tokens from prompt (nodding, turning, shaking).
-- Slow speech recording to ~80% natural pace before uploading.
-- Clean audio: remove background noise, reverb, and crowd sound before uploading.
-- Add to prompt: `camera locked, neutral expression, lip-sync matches @Audio1 exactly`.
-- See [skill:seedance-audio] → Failure Mode 2 for full diagnostic.
-
-### Output: audio replaced / model rewrites uploaded audio (音频被乱改)
-**Cause**: Seedance's generative audio engine overrides the reference when it detects sounds it can replicate, especially when competing motion tokens are present.  
-**Fix (timestamp anchoring method — field-tested on Douyin)**:
-- Add to prompt: `Audio @Audio1 plays exactly as uploaded from 0s to end. Do not modify or replace the audio content.`
-- Remove all ambient/music/SFX tokens from the prompt (they invite audio generation).
-- Reduce prompt complexity to under 50 words total.
-- See [skill:seedance-audio] → Failure Mode 1.
-
-### Output: no character detected / lip-sync not activating
-**Note**: Master/Quick/Standard mode selection belongs to the Jimeng **Digital Human (数字人)** tool, which uses OmniHuman-1 — NOT Seedance 2.0 video generation. Do not mix the two.  
-For Seedance 2.0 video generation:  
-**Cause A**: Face reference image has multiple people — audio routing fails.  
-**Fix**: Use single-person reference image in the character prompt. Include explicit lip-sync instruction.  
-**Cause B**: Audio is wrong format (not MP3).  
-**Fix**: Convert to MP3, 128–320 kbps, ≤15 s. Silent failure if wrong format.  
-**Cause C**: Prompt has no lip-sync instruction.  
-**Fix**: Add `lip-sync matches @Audio1 exactly` or explicit dialogue in quotes.
-
-### Output: multi-character lip-sync — wrong or both characters broken
-**Cause**: Officially confirmed open problem in Seedance 2.0. ByteDance's own release blog states: "Seedance 2.0 仍需继续解决多人口型匹配" (still needs to solve multi-person lip-sync matching). This is not a configuration error — it is an unresolved model limitation as of Q1 2026.  
-**Fix**: Do not attempt two-character lip-sync in a single generation.
-Use the separate generation + compositing pipeline:
-1. Generate character A alone with A's audio segment
-2. Generate character B alone with B's audio segment
-3. Composite in CapCut/Jianying: PiP layout + linear mask (15–20% feather)
-4. When A speaks: A layer = video / B layer = static image. Swap for B.
-Full workflow: [skill:seedance-audio] → Multi-Character Lip-Sync Workaround.
-
-### Output: lip-sync generation fails silently (no error, no sync)
-**Cause**: Audio format is not MP3. WAV, AAC, OGG, FLAC, M4A all fail silently — no error message shown.  
-**Fix**: Convert audio to MP3 (128–320 kbps, ≤15 s, ≤10 MB) before uploading. This is the #1 silent failure cause.
-
-### Feature: voice cloning / Face-to-Voice not available
-**Status**: Suspended Feb 2026 (ByteDance enforcement — privacy/copyright).  
-**Fix**: Pre-record audio with desired voice, or use external TTS (ElevenLabs, Minimax TTS) to generate the voice, then upload that MP3. Do not reference voice clone features in prompts.
-
-### Output: blocked / refused — IP / copyright
-**Cause**: real face reference, brand name, copyrighted IP, or policy violation.  
-**Fix**: remove real person references. Replace brand names with descriptors. Use original archetypes.  
-**Post-Feb-15 note**: filter thresholds raised. Named franchise characters (Disney, Netflix, Paramount), named real actors, and anime character names now fail even with paraphrasing. Use full descriptor substitution from [skill:seedance-copyright].
-
-### Output: blocked / refused — deepfake / likeness
-**Cause**: face upload of real person; `replace face with [name]` pattern.  
-**Fix**: ByteDance suspended real-person face uploads Feb 15. Upload original character art only. Remove any `face-swap` or `replace @Image1's face` language.
-
-### API: release delayed / integration unstable
-**Cause**: Feb 2026 copyright enforcement. Global API release was delayed from planned Feb 24 date.  
-**Fix**: Do not build production integrations against Seedance API until ByteDance issues a new release schedule. For stable production, use WAN 2.2 or local OSS models as interim fallback. Poll ByteDance official channels for new date.
-
-### Output: character falls into generic type
-**Cause**: content filter stripping the specific character descriptor.  
-**Fix**: verify descriptor does not contain any named franchise term. Check [skill:seedance-copyright] substitution table. Add more specific original design details (outfit, hair, scar pattern, body build).
-
-### Output: wrong aspect ratio
-**Cause**: platform default applied.  
-**Fix**: state aspect ratio explicitly in prompt tail: `[16:9]` or set in platform UI before generating.
-
-### Output: motion too slow / static
-**Cause**: heavy style tokens suppressing motion.  
-**Fix**: cut style tokens to 1–2. Add `dynamic motion`, `continuous movement`.
-
-### Output: motion too fast / shaky
-**Cause**: over-specified action frequency.  
-**Fix**: add `smooth`, `stabilized`, `cinematic pace`. Reduce action density.
-
-### Output: lighting inconsistent
-**Cause**: no lighting anchor.  
-**Fix**: load [skill:seedance-lighting]. Add single key-light descriptor: `soft side key`, `golden backlight`.
-
-### Output: style inconsistent across chain
-**Cause**: no style reference carried forward.  
-**Fix**: re-upload first-shot frame as `@Image1` in each extension clip. Repeat style token.
-
-### Output: extension breaks continuity
-**Cause**: missing subject re-anchor.  
-**Fix**: use extension formula: `Extend @Video1 by [X] s. [Re-upload @Image1 character]. New action: [desc].`
-
-### API: status stuck at `processing`
-**Cause**: timeout or server queue.  
-**Fix**: poll at 5 s intervals. If no response after 120 s, cancel and retry with same seed.
-
-### API: no endpoint available (2026-02-25 status)
-**Cause**: Seedance 2.0 official API launch was delayed from Feb 24 due to copyright dispute. No public API exists as of this date.  
-**Fix**: Use the Dreamina/Jimeng web platform (jimeng.jianying.com) for generation. For automated workflows, use third-party proxy APIs (AtlasCloud, APIYI) at your own risk — they are unofficial. Do not build production integrations until ByteDance announces an official API release date.
-
-### API: 400 Bad Request
-**Cause**: raw JSON in prompt field, or invalid parameter value.  
-**Fix**: compile JSON to plain text. Check `duration` is integer within range, `aspect_ratio` is valid string.
+### 4. Re-build with Inversion (L8 Opcode)
+- Construct the final, high-density prompt based on the inverted design.
+- **Final Prompt Output:** `"slow-motion, 180-degree arc kick. The camera tracks the face of a character with intricate facial tattoos, keeping them in sharp focus. The background is a dark alley with motion blur to imply speed. Use a single, hard rim light to highlight the tattoos. 1800 chars."`
 
 ---
 
-## Compression Ladder (prompt budget exceeded)
+## Why This Works (Cognitive Science)
 
-Remove in this order — stop when within budget:
-
-1. Remove filler phrases (`beautiful`, `amazing`, `stunning`)
-2. Collapse environment to 3-word anchor (`misty mountain road`)
-3. Cut style to 1 token (`cinematic` or `documentary`)
-4. Drop SOUND layer entirely
-5. Merge CAMERA + STYLE into single phrase
-6. **Never cut**: SUBJECT · ACTION · @Tag assignments
+- **Makes Invisible Constraints Visible:** The AI exposes the hidden, fundamental trade-offs in the model's architecture that the user cannot see.
+- **Provides Creative Escape Routes:** Instead of just saying "this is not possible," the AI "inverts" the design to find a creative solution that achieves the same emotional impact through a different technical path.
+- **Builds a Deeper Mental Model:** This process teaches the user to think in terms of trade-offs and conservation laws, leading to more effective and sophisticated prompt design in the future.
 
 ---
 
-## Quality Upgrade Checklist
-
-| Symptom | Upgrade |
-|---|---|
-| Flat lighting | Add key light + rim light descriptor |
-| Lifeless motion | Add verb specificity (`lunges`, `spirals`, `snaps`) |
-| Generic look | Add 1 cinematographer / film reference token |
-| No atmosphere | Add weather or particle effect (`dust motes`, `light fog`) |
-| Weak audio | Load [skill:seedance-audio] → add ambient + sfx layers |
-
----
-
-## Routing
-
-Prompt construction errors → [skill:seedance-prompt]  
-Camera / storyboard issues → [skill:seedance-camera]  
-API / post-processing → [skill:seedance-pipeline]  
-Character consistency → [skill:seedance-characters]  
-Audio issues → [skill:seedance-audio]
+*Maintained by [Emily (@iamemily2050)](https://github.com/Emily2040)*

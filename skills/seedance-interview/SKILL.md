@@ -1,61 +1,48 @@
 ---
 name: seedance-interview
-description: 'Guide users through a multi-stage creative journey to craft cinematic stories and single clips for Seedance 2.0. Use when a user has a vague idea, needs a script, or wants to elevate a simple prompt into a professional production brief. Follow the "Director''s Journey" workflow: Vision → Narrative → Visuals → Technical → Final Brief.'
+description: 'Guide users through a multi-stage creative journey to craft cinematic stories and single clips for Seedance 2.0. Use when a user has a vague idea, needs a script, or wants to elevate a simple prompt into a professional production brief. Follow the "Director\'s Journey" workflow: Vision → Narrative → Visuals → Technical → Final Brief.'
 license: MIT
 user-invocable: true
 user-invokable: true
 tags: ["storytelling", "creative-writing", "directing", "pre-production", "scriptwriting", "narrative-design", "cinematography", "seedance-20"]
-metadata: {"version": "3.8.0", "updated": "2026-02-27", "openclaw": {"emoji": "🎭", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "antigravity": {"emoji": "🎭", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🎭", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
+metadata: {"version": "4.0.0", "updated": "2026-02-28", "openclaw": {"emoji": "🎭", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "antigravity": {"emoji": "🎭", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🎭", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
 ---
 
-# seedance-interview · The Director's Journey
+# seedance-interview · The Director\'s Journey (v4.0)
 
 This skill transforms a simple idea into a professional Seedance 2.0 production brief. It uses a structured, multi-stage interview process to ensure narrative depth, visual layering, and technical precision.
 
-## The Workflow
+## The Workflow (Cognitive Opcodes)
 
-### Stage 1: The Vision (The "What")
-Identify the core intent. Is it a **Single Cinematic Clip** or a **Narrative Story**?
-- **Single Clip**: Focus on a specific moment, texture, or visual effect (e.g., a luxury product shot, a nature time-lapse).
-- **Narrative Story**: Focus on characters, conflict, and emotional arc (e.g., a mecha launch, a quiet confession).
+### Stage 1: The Vision (Generative Construction - L8 Opcode)
+- **Action:** Get a 1-sentence concept from the user.
+- **AI:** Immediately build a "Safe," "Generic," or "Flawed" version of the scene. This is the sacrificial artifact.
+- **AI Output:** `"I have built a Safe version of your scene: *[A woman in a red dress walks down a rainy street at night.]*"`
 
-### Stage 2: The Narrative Core (The "Why")
-Establish the emotional anchor and hook.
-- **The Hook**: What is the first thing that grabs the viewer?
-- **The Conflict/Tension**: What is the central struggle or mystery?
-- **The Resolution**: How does the scene or story conclude?
+### Stage 2: The Narrative Core (Attack & Deconstruct - L7 Opcode)
+- **Action:** Present the safe draft to the user and instruct them to "attack" it. Use provocative, targeted questions to find the "cinematic friction."
+- **AI Output:** `"Now, I will attack this draft. It is generic. It conceals the *why*. It has no cinematic friction. Director, your turn: What is the one thing in this scene that *shouldn\\'t* be there? What is the \\'impossible\\' visual you want to capture? Don\\'t describe the scene—describe the *friction*."`
 
-### Stage 3: Visual Layering (The "How")
-Build the scene in layers using the [ref:storytelling-framework].
-- **Subject Layer**: Primary and secondary subjects with specific attributes.
-- **Action Layer**: Primary motion + secondary micro-movements (breathing, touch, debris).
-- **Environmental Layer**: Atmosphere, weather, and props that react to the action.
+### Stage 3: Visual Layering (Isolate the Invariant - L9 Opcode)
+- **Action:** Based on the user\'s attack, identify the core, non-negotiable element of their vision. This is the "invariant" that must be preserved.
+- **User Input:** `"The friction is that the rain isn\\'t falling down. It\\'s rising up from the pavement."`
+- **AI Analysis:** The invariant is **inverted gravity**. The emotional core is surrealism and defiance of physics.
 
-### Stage 4: Technical Precision
-Define the "eye" of the camera and the "ear" of the scene.
-- **Camera Language**: Specific lenses (e.g., 100mm macro), shots (e.g., crane rise), and movements.
-- **Audio Design**: Music mood, specific SFX (e.g., crisp cap-twist), and dialogue.
-- **Physics & Constraints**: How should elements behave? (e.g., "liquid must obey fluid dynamics").
+### Stage 4: Technical Precision (Re-build with Friction - L8 Opcode)
+- **Action:** Construct the final, high-density prompt around the identified invariant and friction points. Discard the generic elements from the first draft.
+- **Final Prompt Output:** `"(surrealism, defiance of physics) A woman in a simple black coat stands on a wet street at night. Rain rises from the asphalt, droplets ascending into the dark sky. Her hair lifts slightly with the upward motion. Low-angle shot, static. The only light is the unnatural reflection of streetlights on the rising water. 1200 chars."`
 
 ### Stage 5: The Final Production Brief
-Output a structured JSON-ready brief following the [ref:json-schema].
-
-## Creative Prompts for the Interviewer
-
-When interviewing the user, use these "Director's Questions" to pull out creative details:
-- "What is the **emotional temperature** of this scene? Is it cold and sterile, or warm and intimate?"
-- "If we were to zoom in on a **micro-detail**, what would we see? A single drop of amber liquid? A trembling hand?"
-- "How does the **environment react** to the main action? Does the wind move the hair? Does the shockwave disperse the clouds?"
-- "What is the **sound of the silence** in this scene? Is it a low ambient hum or a distant temple bell?"
-
-## Example Output Structure
-
-The final brief should include:
-- **Caption (Short & Long)**: Descriptive and evocative.
-- **Director Notation**: Time-stamped breakdown of the action.
-- **Subject/Action/Scene/Camera/Style/Audio**: Layered technical details.
-- **Constraints & Physics**: Rules for the AI to follow.
-- **Quality Tags**: Standardized Seedance 2.0 tags.
+- **Action:** Output a structured JSON-ready brief following the [ref:json-schema].
 
 ---
+
+## Why This Works (Cognitive Science)
+
+- **Reduces Cognitive Load:** It is easier for a human to critique a flawed object than to create a perfect one from scratch.
+- **Reveals Latent Needs:** The "attack" phase bypasses the user\'s conscious, descriptive mind and taps into their deeper, emotional and visual needs.
+- **Forces Density:** By focusing on "friction" and "invariants," the final prompt is naturally dense and free of slop.
+
+---
+
 *Maintained by [Emily (@iamemily2050)](https://github.com/Emily2040)*

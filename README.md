@@ -5,7 +5,7 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-3.8.0-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
+  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-4.0.0-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-b000ff?style=flat-square&labelColor=0d1117" alt="License"></a>
   <a href="skills"><img src="https://img.shields.io/badge/skills-22_modules-ff006e?style=flat-square&labelColor=0d1117" alt="Skills"></a>
   <a href="#-multilingual-precision"><img src="https://img.shields.io/badge/languages-5-ffbe0b?style=flat-square&labelColor=0d1117" alt="Languages"></a>
@@ -23,7 +23,7 @@
   <a href="https://x.com/iamemily2050">𝕏</a> &nbsp;|&nbsp;
   <a href="https://instagram.com/iamemily2050">IG</a><br>
   <b>Platform:</b> <a href="https://seed.bytedance.com/en/seedance2_0">ByteDance Seedance 2.0</a> · <a href="https://dreamina.capcut.com/tools/seedance-2-0">Dreamina</a> · <a href="https://jimeng.jianying.com/">Jimeng</a><br>
-  <b>Updated:</b> 2026-02-27 · Q1 2026 release intelligence
+  <b>Updated:</b> 2026-02-28 · Q1 2026 release intelligence
 </p>
 
 ---
@@ -76,9 +76,9 @@ This repository now offers two distinct workflows for prompt engineering:
 
 | Skill | Emoji | What it does |
 |:---|:---:|:---|
-| [`seedance-interview`](skills/seedance-interview/SKILL.md) | 🎭 | Director's Journey — multi-stage storytelling interview → cinematic production brief |
+| [`seedance-interview`](skills/seedance-interview/SKILL.md) | 🎭 | **Cognitive L8** — Construction-First interview: builds a draft, user attacks it, cinematic friction emerges |
 | [`seedance-interview-short`](skills/seedance-interview-short/SKILL.md) | 🎙️ | Max Performance — guided interview outputting a 2000-char compressed brief with live counter |
-| [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | ✍️ | Build and validate prompts — 5-layer stack, @Tag system, quad-modal rules |
+| [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | ✍️ | **Cognitive L7** — Concealment Check: exposes hidden vagueness, forces measurable detail before building |
 | [`seedance-prompt-short`](skills/seedance-prompt-short/SKILL.md) | ⚡️ | Max Performance — 2000-char budget system with Compression Engine (4 rules) |
 | [`seedance-camera`](skills/seedance-camera/SKILL.md) | 🎥 | Camera movement, shot framing, multi-shot sequences, anti-drift locks |
 | [`seedance-motion`](skills/seedance-motion/SKILL.md) | 🏃 | Motion timing, action choreography, fight physics, video extension chains |
@@ -89,7 +89,7 @@ This repository now offers two distinct workflows for prompt engineering:
 | [`seedance-audio`](skills/seedance-audio/SKILL.md) | 🔊 | Native audio design, dialogue lip-sync, @Audio1 reference, desync fixes |
 | [`seedance-pipeline`](skills/seedance-pipeline/SKILL.md) | 🔗 | ComfyUI nodes, API integration, Firebase Studio, post-processing chains |
 | [`seedance-recipes`](skills/seedance-recipes/SKILL.md) | 📖 | Genre template recipes: product ads, fight scenes, music videos, and more |
-| [`seedance-troubleshoot`](skills/seedance-troubleshoot/SKILL.md) | 🔧 | QA checklist, generation failure diagnostics, emergency fix procedures |
+| [`seedance-troubleshoot`](skills/seedance-troubleshoot/SKILL.md) | 🔧 | **Cognitive L11** — Conservation Law: identifies fundamental trade-offs, inverts design for creative escape |
 
 </details>
 
@@ -245,13 +245,13 @@ seedance-2.0/
 ├── SKILL.md                         ← Root entry point (75 lines)
 ├── LICENSE                          ← MIT
 ├── README.md                        ← You are here
-├── CHANGELOG.md                     ← v3.0.0 → v3.8.0
+├── CHANGELOG.md                     ← v3.0.0 → v4.0.0
 ├── .github/
 │   └── CODEOWNERS                   ← @Emily2040
 ├── skills/                          ← 22 modular sub-skills
-│   ├── seedance-interview/          ← 🎭 Max Detail (Long Form)
+│   ├── seedance-interview/          ← 🎭 Cognitive L8 Construction-First
 │   ├── seedance-interview-short/    ← 🎙️ Max Performance (2000-char)
-│   ├── seedance-prompt/             ← ✍️ Max Detail (Long Form)
+│   ├── seedance-prompt/             ← ✍️ Cognitive L7 Concealment Check
 │   ├── seedance-prompt-short/       ← ⚡️ Max Performance (2000-char)
 │   ├── seedance-camera/             ← 🎥 Camera language
 │   ├── seedance-motion/             ← 🏃 Motion control
@@ -262,7 +262,7 @@ seedance-2.0/
 │   ├── seedance-audio/              ← 🔊 Audio & lip-sync
 │   ├── seedance-pipeline/           ← 🔗 Pipeline ops
 │   ├── seedance-recipes/            ← 📖 Genre recipes
-│   ├── seedance-troubleshoot/       ← 🔧 QA & debugging
+│   ├── seedance-troubleshoot/       ← 🔧 Cognitive L11 Conservation Law
 │   ├── seedance-copyright/          ← ⚖️ IP governance
 │   ├── seedance-antislop/           ← 🚫 Language filter
 │   ├── seedance-vocab-zh/           ← 🇨🇳 Chinese
@@ -308,7 +308,7 @@ All 22 skills pass the [AgentSkills open standard](https://agentskills.io/) vali
 
 ## `>` Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full version history from v3.0.0 to v3.8.0.
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history from v3.0.0 to v4.0.0.
 
 <br>
 

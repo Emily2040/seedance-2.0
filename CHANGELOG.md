@@ -6,6 +6,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [4.0.0] — 2026-02-28
+### Added
+- **Cognitive Architecture Upgrade** — Three core skills redesigned using cognitive opcodes inspired by [agi-in-md](https://github.com/Cranot/agi-in-md).
+  - `seedance-interview` **L8 Construction-First**: AI builds a "Safe" draft immediately, then asks the user to "attack" it. The user's attack reveals the true creative intent — the "cinematic friction" — which becomes the foundation of the final prompt.
+  - `seedance-prompt` **L7 Concealment Check**: Before building a prompt, the AI scans for "concealment words" (beautiful, stunning, epic) that hide a lack of specific visual information. Each is deconstructed and replaced with measurable, observable detail.
+  - `seedance-troubleshoot` **L11 Conservation Law**: When a prompt consistently fails, the AI identifies the fundamental trade-off (e.g., Detail × Motion = Constant) and "inverts" the design to find a creative escape route.
+- **Storytelling Framework Reference** — Added `references/storytelling-framework.md` with narrative design, visual layering, and director's toolkit principles.
+
+### Changed
+- Root `SKILL.md` version bumped to `4.0.0`.
+- All 22 sub-skill `SKILL.md` files synchronized to `4.0.0` with `2026-02-28` date.
+- `README.md` updated: version badge, skill descriptions, architecture tree, and CHANGELOG reference.
+
+---
+
 ## [3.8.0] — 2026-02-27
 ### Added
 - **Dual Workflow System**: Two distinct prompt engineering workflows now available.

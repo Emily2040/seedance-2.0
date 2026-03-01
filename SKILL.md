@@ -5,7 +5,7 @@ license: MIT
 user-invocable: true
 user-invokable: true
 tags: ["ai-video", "filmmaking", "bytedance", "seedance", "multimodal", "lip-sync", "openclaw", "antigravity", "gemini-cli", "firebase", "codex", "cursor", "windsurf", "opencode"]
-metadata: {"version": "3.8.0", "updated": "2026-02-27", "openclaw": {"emoji": "🎬", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "antigravity": {"emoji": "🎬", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🎬", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "firebase": {"emoji": "🎬", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
+metadata: {"version": "4.0.0", "updated": "2026-02-28", "openclaw": {"emoji": "🎬", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "antigravity": {"emoji": "🎬", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "gemini-cli": {"emoji": "🎬", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "firebase": {"emoji": "🎬", "homepage": "https://github.com/Emily2040/seedance-2.0"}, "author": "Emily (@iamemily2050)", "repository": "https://github.com/Emily2040/seedance-2.0"}
 ---
 
 # seedance-20
@@ -77,6 +77,8 @@ opencode skills install https://github.com/Emily2040/seedance-2.0
 
 | Version | Date | Changes |
 |---|---|---|
+| 4.0.0 | 2026-02-28 | Cognitive Architecture upgrade: L8 Construction-First interview, L7 Concealment Check prompt, L11 Conservation Law troubleshoot. Inspired by agi-in-md cognitive compression. |
+| 3.8.0 | 2026-02-27 | Dual Workflow System: Max Detail + Max Performance. Added seedance-prompt-short and seedance-interview-short. |
 | 3.7.0 | 2026-02-26 | Redesigned seedance-interview as "Director's Journey" with 5-stage storytelling workflow. Added storytelling-framework reference. |
 | 3.6.1 | 2026-02-26 | Enhanced vocab-zh (400+ terms, 16 categories). Added seedance-examples-zh with 16 battle-tested Chinese prompts across 7 genres. |
 | 3.3.0 | 2026-02-25 | Rewrote seedance-interview v4.0: A/B/C/D/E guided stages, 5-flow types (image/video/audio/one-liner/script), 3-option prompt output, language selection |
