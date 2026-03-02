@@ -110,6 +110,7 @@ seedance-20 (router)
 ├── seedance-troubleshoot ← QA, errors, fixes
 ├── seedance-copyright    ← IP rules, safe substitutions
 ├── seedance-antislop     ← kill hollow language
+├── seedance-filter       ← content filter navigation
 ├── seedance-vocab-zh     ← 中文影视术语 (320+ terms)
 ├── seedance-vocab-ja     ← 日本語映画術語 (280+ terms)
 ├── seedance-vocab-ko     ← 한국어 영화 용어 (270+ terms)

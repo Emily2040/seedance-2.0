@@ -5,9 +5,9 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-4.0.0-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
+  <a href="https://github.com/Emily2040/seedance-2.0/releases"><img src="https://img.shields.io/badge/version-4.1.0-00f0ff?style=flat-square&labelColor=0d1117" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-b000ff?style=flat-square&labelColor=0d1117" alt="License"></a>
-  <a href="skills"><img src="https://img.shields.io/badge/skills-22_modules-ff006e?style=flat-square&labelColor=0d1117" alt="Skills"></a>
+  <a href="skills"><img src="https://img.shields.io/badge/skills-23_modules-ff006e?style=flat-square&labelColor=0d1117" alt="Skills"></a>
   <a href="#-multilingual-precision"><img src="https://img.shields.io/badge/languages-5-ffbe0b?style=flat-square&labelColor=0d1117" alt="Languages"></a>
   <a href="#-platform-matrix"><img src="https://img.shields.io/badge/platforms-10+-00f0ff?style=flat-square&labelColor=0d1117" alt="Platforms"></a>
   <a href="https://agentskills.io/"><img src="https://img.shields.io/badge/Agent_Skills-Open_Standard-58a6ff?style=flat-square&labelColor=0d1117" alt="Agent Skills"></a>
@@ -23,7 +23,7 @@
   <a href="https://x.com/iamemily2050">𝕏</a> &nbsp;|&nbsp;
   <a href="https://instagram.com/iamemily2050">IG</a><br>
   <b>Platform:</b> <a href="https://seed.bytedance.com/en/seedance2_0">ByteDance Seedance 2.0</a> · <a href="https://dreamina.capcut.com/tools/seedance-2-0">Dreamina</a> · <a href="https://jimeng.jianying.com/">Jimeng</a><br>
-  <b>Updated:</b> 2026-02-28 · Q1 2026 release intelligence
+  <b>Updated:</b> 2026-03-02 · Q1 2026 release intelligence
 </p>
 
 ---
@@ -52,7 +52,7 @@ This repository now offers two distinct workflows for prompt engineering:
 </td>
 <td width="50%">
 
-**For Agent Builders** — Each of the 22 sub-skills is independently loadable. Your agent reads the 75-line root `SKILL.md`, identifies the task, and loads only the specific modules it needs. Zero token waste. Maximum precision.
+**For Agent Builders** — Each of the 23 sub-skills is independently loadable. Your agent reads the 75-line root `SKILL.md`, identifies the task, and loads only the specific modules it needs. Zero token waste. Maximum precision.
 
 </td>
 </tr>
@@ -101,6 +101,7 @@ This repository now offers two distinct workflows for prompt engineering:
 |:---|:---:|:---|
 | [`seedance-copyright`](skills/seedance-copyright/SKILL.md) | ⚖️ | IP rules, safe substitutions, Feb 2026 enforcement data |
 | [`seedance-antislop`](skills/seedance-antislop/SKILL.md) | 🚫 | Detects and removes AI filler language and hollow superlatives from prompts |
+| [`seedance-filter`](skills/seedance-filter/SKILL.md) | 🛡️ | Content filter intelligence: diagnose false-positive blocks, write prompts that pass |
 
 </details>
 

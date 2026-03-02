@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [4.1.0] — 2026-03-02
+### Added
+- **New `seedance-filter` skill** — Content filter intelligence module. Explains how the Seedance 2.0 content filter evaluates prompts (language-model-based intent assessment, not keyword matching), documents the 37% false-positive block rate, and provides actionable techniques: four-question framework, high-risk word avoidance, image upload best practices, Chinese prompt trick, and professional-language framing.
+
+### Changed
+- Root `SKILL.md` version bumped to `4.1.0` with `2026-03-02` date.
+- `README.md` updated: version badge `4.1.0`, skill count `23`, Content Quality table includes `seedance-filter`.
+- `CHANGELOG.md` updated with this entry.
+- `references/quick-ref.md` skill map updated to include `seedance-filter`.
+
+---
+
 ## [4.0.0] — 2026-02-28
 ### Added
 - **Cognitive Architecture Upgrade** — Three core skills redesigned using cognitive opcodes inspired by [agi-in-md](https://github.com/Cranot/agi-in-md).
