@@ -8,7 +8,7 @@ tags:
   - cinematography
   - seedance-20
 metadata:
-  version: "5.4.6"
+  version: "5.4.7"
   updated: "2026-06-11"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"

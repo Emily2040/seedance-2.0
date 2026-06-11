@@ -51,6 +51,20 @@ REQUIRED_IDS = {
     "delivery_qc_preflight",
     "imf_localization_versioning",
     "visual_gallery_six_text_rich_assets",
+    "anti_slop_rewrite",
+    "chinese_examples_safe_rewrite",
+    "japanese_prompt_translation",
+    "korean_prompt_translation",
+    "spanish_prompt_translation",
+    "russian_dialogue_prompt",
+    "short_interview_three_questions",
+    "vfx_physics_endpoint",
+    "platform_spec_fal_verification",
+    "prohibited_request_plain_refusal",
+    "wrong_model_craft_only",
+    "no_background_plain_interview",
+    "english_slop_and_filter_vocab",
+    "multilingual_slop_decomposition",
 }
 
 

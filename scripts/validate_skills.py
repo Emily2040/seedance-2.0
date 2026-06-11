@@ -16,7 +16,7 @@ EXPECTED_SKILLS = [
     "seedance-vocab-ko", "seedance-vocab-ru", "seedance-vocab-zh",
 ]
 
-EXPECTED_VERSION = "5.4.6"
+EXPECTED_VERSION = "5.4.7"
 
 REQUIRED_REFERENCES = [
     "references/api-status.md",
@@ -24,6 +24,10 @@ REQUIRED_REFERENCES = [
     "references/research-2026-05-30.md",
     "references/agent-compatibility.md",
     "references/api-workflow.md",
+    "references/capability-map.md",
+    "references/allocation-model.md",
+    "references/multishot-grammar.md",
+    "references/2d-anime-grammar.md",
     "references/pro-filmmaking-standards.md",
     "references/cinematography-shot-language.md",
     "references/shot-list-continuity.md",

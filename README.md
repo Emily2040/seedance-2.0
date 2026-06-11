@@ -6,7 +6,7 @@
 
 Text-to-video · Image-to-video · Video-to-video · Reference-to-video · Audio-aware prompting · Copyright-safe rewrites · Agent Skills
 
-[![Version](https://img.shields.io/badge/version-5.4.6-111827?labelColor=0f172a)](#changelog)
+[![Version](https://img.shields.io/badge/version-5.4.7-111827?labelColor=0f172a)](#changelog)
 [![Skills](https://img.shields.io/badge/sub--skills-24-0ea5e9?labelColor=0f172a)](#skill-map)
 [![References](https://img.shields.io/badge/references-45-8b5cf6?labelColor=0f172a)](#reference-library)
 [![Evals](https://img.shields.io/badge/evals-58-22c55e?labelColor=0f172a)](#validation)
@@ -16,7 +16,7 @@ Author: [Iamemily2050 (@iamemily2050)](https://github.com/Emily2040) · [Instagr
 
 Platform context: [ByteDance Seedance 2.0](https://seed.bytedance.com/en/seedance2_0) · Dreamina · Jimeng · Doubao · [Volcengine Ark](https://www.volcengine.com/docs/82379/2291680?lang=zh) · [BytePlus ModelArk](https://docs.byteplus.com/en/docs/ModelArk/2291680) · [Runway Seedance 2](https://docs.dev.runwayml.com/guides/seedance/) · fal
 
-Updated: **2026-06-11** · **v5.4.6 capability-extraction layer, fal surface, and plain-language interview**
+Updated: **2026-06-11** · **v5.4.7 multilingual anti-slop layer, English vocabulary, and fact-check hardening**
 
 ---
 
@@ -186,6 +186,10 @@ The README now includes a committed visual set rather than a single generic hero
 | [`research-2026-05-30.md`](references/research-2026-05-30.md) | Dated source and field-observation snapshot. |
 | [`agent-compatibility.md`](references/agent-compatibility.md) | Agent Skills structure, Codex compatibility, and packaging notes. |
 | [`api-workflow.md`](references/api-workflow.md) | Volcengine, BytePlus, Runway, async task, reference-file, pricing, and production workflow checklist. |
+| [`capability-map.md`](references/capability-map.md) | Design into model strengths and around known limits before prompting. |
+| [`allocation-model.md`](references/allocation-model.md) | Where one generation spends its fidelity budget: identity vs motion vs scene density. |
+| [`multishot-grammar.md`](references/multishot-grammar.md) | Shot labels, the shots-times-seconds budget, and cut grammar inside one generation. |
+| [`2d-anime-grammar.md`](references/2d-anime-grammar.md) | Cel/anime medium grammar: layers, burst-vs-held motion, the no-lens rule. |
 | [`pro-filmmaking-standards.md`](references/pro-filmmaking-standards.md) | Professional production spine and source boundaries for film, commercial, post, localization, and delivery work. |
 | [`cinematography-shot-language.md`](references/cinematography-shot-language.md) | Shot contracts, shot size, lens feel, camera support, movement, blocking, and coverage language. |
 | [`shot-list-continuity.md`](references/shot-list-continuity.md) | Treatment-to-shot-list workflow, continuity ledger, and professional handoff fields. |
@@ -276,7 +280,7 @@ The v5.4.5 front page uses multiple generated cinematic bitmap hero shots, text-
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v5.4.6**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v5.4.7**.
 
 ## License
 

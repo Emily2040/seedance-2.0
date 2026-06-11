@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here.
 
+## [5.4.7] — 2026-06-11
+
+### Added
+
+- Added the multilingual anti-slop layer: language-specific Slop Traps tables in all six vocabulary files (en, zh, ja, ko, es, ru), each converting that community's own empty-quality words into the physical elements that produce the feeling, grounded in community-documented practice.
+- Added `skills/seedance-vocab-en`: English precision vocabulary with a 51-row function table, de-slop pass, and filter-aware homonym repairs (clarity-only; genuinely risky content routes to the filter boundary).
+- Added the six-class slop taxonomy to `anti-slop-lexicon.md` and `seedance-antislop`: empty evaluators, borrowed image-model tokens, tag salad, negation slop, adjective stacking, and cross-language feel-suffix words, with tag-salad and negation repair sections.
+- Added eval cases for English slop and filter vocabulary and Chinese feel-word decomposition (58 cases total).
+- Added a fal source row to the source registry, fal model-page URLs to the api-status recheck list, and verified r2v request fields and tier-specific resolution (2026-06-11).
+
+### Changed
+
+- Relabeled fast-tier multi-shot reliability limits from official to field-observed after live verification; reframed the stale fal resolution conflict as tier-specific status.
+- Hardened `scripts/vocab_schema_check.py`: Slop Traps section required in every language file; Text and Editing added to strict required functions.
+- Registered the four capability references (`capability-map.md`, `allocation-model.md`, `multishot-grammar.md`, `2d-anime-grammar.md`) in the validator and the README Reference Library, and protected all 58 eval cases with required IDs.
+- Kept the plain-language interview within its five-question cap by folding the reference-asset question into the batch.
+- Trued up README badges (24 sub-skills, 45 references, 58 evals) and added English to the multilingual vocabulary line.
+- Bumped active skill metadata, validator expectations, and eval metadata to v5.4.7.
+
 ## [5.4.6] — 2026-06-11
 
 ### Added
