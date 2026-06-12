@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## [5.5.1] — 2026-06-12
+
+### Added
+
+- Added the cross-agent compatibility matrix: verified install paths and routes for Google Antigravity, OpenClaw (ClawHub-compatible), and Hermes Agent; a Trae (ByteDance) call-out; the 30-plus reported SKILL.md-compatible client tier (Cline, Roo Code, Goose, Amp, OpenCode, Kiro, Qwen Code, Continue, Crush, Droid, OpenHands, Letta, and more); and the registry/marketplace channel notes with a do-not-claim rule for unpublished listings.
+- Extended the README install table to nine verified targets plus the portable-shape rule for every other standard-compliant client.
+
+### Changed
+
+- Refined the front-page type system: high-contrast editorial serif stack (Didot / Bodoni MT / Hoefler Text / Baskerville / Palatino, Georgia fallback) for the wordmark and operating-diagram root, the tagline recast as a serif italic aphorism in sentence case, and lighter, airier monospace specification labels across all three vector assets; design tokens updated.
+- Corrected the OpenClaw install row (its own paths and CLI, not the Claude workspace path) and bumped agent-compatibility verification to 2026-06-12.
+- Bumped active skill metadata, validator expectations, and eval metadata to v5.5.1.
+
 ## [5.5.0] — 2026-06-12
 
 The minor bump marks the completion of the production arc built across the 5.4.6-5.4.9 line: capability extraction, the six-language anti-slop system, the plain-language interview, the editorial front page, model mechanics, and the soul layer - now closed by the iteration economy.

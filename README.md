@@ -12,7 +12,7 @@
 
 An agent operating system for Seedance 2.0 filmmaking — text, image, video, and reference to video<br>with native audio, IP-safe rewrites, and source-dated platform facts in six languages.
 
-[![Version](https://img.shields.io/badge/version-5.5.0-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
+[![Version](https://img.shields.io/badge/version-5.5.1-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
 [![Sub-skills](https://img.shields.io/badge/sub--skills-24-4A4438?style=flat-square&labelColor=14110B)](#skill-map)
 [![References](https://img.shields.io/badge/references-47-4A4438?style=flat-square&labelColor=14110B)](#reference-library)
 [![Evals](https://img.shields.io/badge/evals-61-4A4438?style=flat-square&labelColor=14110B)](#validation)
@@ -26,7 +26,7 @@ Author: [Iamemily2050 (@iamemily2050)](https://github.com/Emily2040) · [Instagr
 
 Platform context: [ByteDance Seedance 2.0](https://seed.bytedance.com/en/seedance2_0) · Dreamina · Jimeng · Doubao · [Volcengine Ark](https://www.volcengine.com/docs/82379/2291680?lang=zh) · [BytePlus ModelArk](https://docs.byteplus.com/en/docs/ModelArk/2291680) · [Runway Seedance 2](https://docs.dev.runwayml.com/guides/seedance/) · fal
 
-Updated: **2026-06-12** · **v5.5.0 the complete production arc: capability, soul, mechanics, and the iteration economy**
+Updated: **2026-06-12** · **v5.5.1 elegant editorial type and the 30-plus-agent ecosystem**
 
 ---
 
@@ -308,7 +308,7 @@ The README must stay readable in GitHub mobile, dark mode, and narrow widths. SV
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v5.5.0**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v5.5.1**.
 
 ## License
 
