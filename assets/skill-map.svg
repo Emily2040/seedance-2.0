@@ -8,7 +8,7 @@
       .grp{font:400 13px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#E2A75E;letter-spacing:3px}
       .item{font:400 12.5px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#9A917D;letter-spacing:1px}
       .item-b{font:400 12.5px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#EDE6D6;letter-spacing:1px}
-      .tiny{font:500 11px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#6E6755;letter-spacing:2px}
+      .tiny{font:400 11px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#6E6755;letter-spacing:2px}
       .box{fill:none;stroke:#2E2A22;stroke-width:1}
       .boxa{fill:none;stroke:#E2A75E;stroke-width:1.5}
       .hair{stroke:#2E2A22;stroke-width:1}
