@@ -1,0 +1,18 @@
+{
+  "project_id": "seq_airport_arrival",
+  "clip_id": "clip_01",
+  "parent_clip_id": null,
+  "sequence_index": 1,
+  "narrative_job": "Exit terminal and approach the open rear car door.",
+  "target_duration_sec": null,
+  "generation_mode": "T2V",
+  "shot_structure": "phased_single_take",
+  "already_happened": [],
+  "this_clip_only": ["beat_terminal_exit", "beat_reach_car"],
+  "reserved_for_later": ["beat_enter_car", "beat_departure"],
+  "planned_start_state": {"summary": "traveler inside terminal threshold"},
+  "planned_end_state": {"summary": "traveler beside open rear car door"},
+  "continuity_locks": ["traveler identity", "charcoal coat", "left-to-right travel", "black sedan"],
+  "allowed_changes": ["crowd parts around traveler", "rain reflections shift"],
+  "status": "ready"
+}

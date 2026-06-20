@@ -1,0 +1,17 @@
+{
+  "project_id": "seq_observed_deviation",
+  "clip_id": "clip_01",
+  "take_id": "take_clip01_b",
+  "source_status": "reviewed",
+  "verdict": "accept_with_deviation",
+  "observed_start_state": {"summary": "courier crouches at locked case"},
+  "observed_end_state": {"summary": "courier has unlocked and opened the case; signal device is visible but not lit"},
+  "completed_beats": ["beat_unlock_case", "beat_open_case"],
+  "incomplete_beats": ["beat_signal_lights"],
+  "unexpected_completed_beats": ["beat_open_case"],
+  "continuity_breaks": [],
+  "accepted_deviations": ["case opened one clip earlier than planned"],
+  "observation_confidence": "high",
+  "uncertainties": [],
+  "requires_user_confirmation": false
+}

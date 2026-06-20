@@ -36,6 +36,17 @@ One line per take — this is the story state made auditable:
 
 Re-reading the log beats re-living it. Two takes in the log with the same flaw is a rewrite, by rule — no third attempt on luck.
 
+## Sequence Canon [internal]
+
+For sequence projects, a take review decides whether footage becomes canon.
+
+- Accept: record observed start/end state and allow it to become a parent source.
+- Accept with deviation: record the deviation, update downstream beats, and carry unfinished work forward.
+- Repair: do not advance the sequence until the repaired tail or layer is accepted.
+- Reject: do not update canon and do not use that take as a parent source.
+
+Accepted observed state overrides planned state. If a clip unexpectedly completes a future beat, mark that beat completed and remove it from later prompts.
+
 ## When the answer is "don't generate"
 
 Honest direction sometimes refuses the tool: dense on-screen text belongs to post, a real product's exact behavior may belong to a camera, archival reality belongs to licensing, and a shot that has failed its budget twice after decomposition belongs to a different idea. "Film this one for real" is a deliverable, not a failure.

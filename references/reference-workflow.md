@@ -21,6 +21,8 @@ Before writing prompt prose, assign every uploaded asset a role. Role mapping pr
 - When authorization is unclear, transfer broad motion, tempo, mood, or production function rather than protected identity.
 - Treat multimodal reference generation, video edit, video extend, and first/last-frame generation as separate tasks. They can share assets, but the prompt should name the active workflow.
 - If audio and video references compete, make the video silent when audio timing must dominate, or state that the video controls camera/motion only and `[Audio1]` controls tempo.
+- In sequences, separate canonical references from accepted continuity sources: canonical identity/product references control immutable design, while accepted previous footage controls transient opening state.
+- Never let a motion reference overwrite continuity locks, completed beats, reserved beats, or exact reference tags.
 
 ## Workflow-Specific Patterns
 
@@ -55,3 +57,7 @@ Field-observed technique; test before promising results. Probably the most under
 ## Template
 
 `[Image1] controls product identity. [Video1] controls camera pace only. [Audio1] controls tempo only. Preserve the subject from [Image1]; do not copy characters, logos, music, voice, or environment from [Video1]/[Audio1].`
+
+## Sequence Transfer Template
+
+`[Video 1] is the accepted previous clip and controls only the actual opening state, camera phase, motion phase, ambience, and environment arrangement. @Image 1 controls canonical identity. Preserve both tags exactly. Do not copy unrelated identity, costume, logo, or future action from any reference.`

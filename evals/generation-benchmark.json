@@ -1,0 +1,40 @@
+{
+  "benchmark_version": "6.0.0",
+  "updated": "2026-06-20",
+  "note": "Synthetic benchmark fixtures for structure validation only; they are not production generation results.",
+  "cases": [
+    {
+      "id": "benchmark_sequence_airport_clip02",
+      "project_id": "seq_airport_arrival",
+      "clip_id": "clip_02",
+      "expected_checks": [
+        "starts from observed two-step-away state",
+        "excludes terminal exit replay",
+        "excludes vehicle departure"
+      ],
+      "is_synthetic_fixture": true
+    },
+    {
+      "id": "benchmark_standalone_watch",
+      "project_id": "standalone_watch_drop",
+      "clip_id": "clip_01",
+      "expected_checks": [
+        "does not output sequence architecture",
+        "preserves [Image1] product identity",
+        "one action and endpoint"
+      ],
+      "is_synthetic_fixture": true
+    },
+    {
+      "id": "benchmark_observed_deviation",
+      "project_id": "seq_observed_deviation",
+      "clip_id": "clip_02",
+      "expected_checks": [
+        "does not repeat unexpected completed beat",
+        "continues from open case",
+        "lights signal device only"
+      ],
+      "is_synthetic_fixture": true
+    }
+  ]
+}

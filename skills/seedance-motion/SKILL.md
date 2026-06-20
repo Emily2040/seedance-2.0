@@ -9,8 +9,8 @@ tags:
   - physics
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -58,6 +58,10 @@ For reference footage, use only owned, licensed, public-domain, stock, mocap, re
 ## Stability Rules
 
 Hands, faces, logos, and product geometry drift when too many actions occur. Reduce motion around fragile details: lock the camera for lip-sync, keep hands in simple poses, ask product parts to remain rigid, and move light or environment instead of the core identity anchor.
+
+## Sequence State
+
+When sequence state is present, inherit the observed action phase, open motion vector, current clip scope, continuity locks, exact reference tags, and reserved future beats. Do not replay actions marked already happened or completed. Do not perform a reserved beat early; carry unfinished motion from the accepted end state into the next clip.
 
 ## Output Contract
 

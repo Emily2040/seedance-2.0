@@ -36,3 +36,7 @@ Use this when mining prompt corpora, forums, Reddit posts, Chinese guides, Russi
 ## Transformation Rule
 
 Raw community prompts should become original safe examples. Replace protected names with archetypes, named brands with user-owned/product placeholders, and real-person references with authorization-gated language.
+
+## Sequence Example Rule
+
+Do not copy commercial creators' continuation prompts as golden examples. Extract reusable structure only: actual ending, completed action, current clip job, reserved future action, reference-transfer boundary, and endpoint. Rewrite into original sequence examples with synthetic project IDs and clearly synthetic fixtures.

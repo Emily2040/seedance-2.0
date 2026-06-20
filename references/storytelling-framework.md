@@ -24,3 +24,15 @@ Camera, lighting, and audio should support that beat instead of competing with i
 ## Micro-Story Checklist
 
 The subject is named or tagged. The action is a verb, not an emotion. The scene has one useful environmental detail. The camera has a start and endpoint. The lighting source is motivated. The sound layer either supports the beat or stays silent. The final frame is different from the first frame.
+
+## Three Scales For Sequence Work
+
+Story layer: initial condition -> objective -> escalation -> final outcome. This layer explains why the project exists, but it does not authorize every event to appear in the current prompt.
+
+Sequence layer: Clip 01 job -> Clip 02 job -> Clip 03 job -> resolution. Each clip has one narrative job and a completed endpoint.
+
+Clip layer: already happened -> actual opening state -> current action -> physical consequences -> completed endpoint -> reserved future action.
+
+## Scope Firewall
+
+Story context informs motivation, performance, atmosphere, and pacing. Story context does not let the current clip perform future events, skip physical handoff states, reveal reserved information, or assume a planned ending that the accepted footage did not reach.

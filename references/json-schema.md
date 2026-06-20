@@ -82,3 +82,15 @@ Use this schema when the user wants structured output or when an automation pipe
 ```
 
 The JSON wrapper is for planning. The final prompt still needs to read naturally. For professional work, keep the production, shot-list, continuity, localization, audio, color, and delivery fields as handoff metadata; do not cram all of them into the prompt.
+
+## Sequence-State Schemas
+
+Version 6 adds machine-valid state fixtures under `schemas/`:
+
+- `project-state.schema.json` for project state, story, beats, clip lineage, take history, canon revision, and reference registry.
+- `clip-contract.schema.json` for the current clip production task.
+- `take-review.schema.json` for observed start/end state, accepted deviations, completed beats, and rejection/repair verdicts.
+- `prompt-spec.schema.json` for internal prompt compilation metadata.
+- `generation-run.schema.json` for synthetic benchmark and local run records.
+
+These schemas are planning artifacts. The final Seedance prompt remains natural language unless the user explicitly requests structured output.

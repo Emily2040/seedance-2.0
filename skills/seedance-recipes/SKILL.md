@@ -9,8 +9,8 @@ tags:
   - recipes
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -62,6 +62,10 @@ A recipe is a head start, never a mold. The user wants the confidence of a prove
 ## Selection Rule
 
 If a user gives many goals, choose the recipe that protects the most fragile requirement. Product identity beats camera spectacle; lip-sync beats large head motion; character consistency beats complex choreography; first/last-frame target accuracy beats extra style changes; safety and authorization beat style mimicry.
+
+## Sequence State
+
+When sequence state is present, recipes must inherit the story spine, current clip scope, continuity locks, exact reference tags, completed beats, and reserved future beats. A recipe can propose a clip map, but it must finalize only the current unresolved prompt and leave later prompts provisional until accepted footage is reviewed.
 
 ## Output Contract
 

@@ -60,6 +60,8 @@ When no rule covers the request: (1) ask which mechanism dominates; (2) ask what
 
 ## Mechanism-indexed diagnosis
 
+Sequence-state failures usually come from compounding error and broken trajectory: a later prompt starts from the planned state instead of the observed state, or repeats a completed action because the project did not log it. The repair is not stronger adjectives; it is a better state handoff.
+
 | Symptom | Dominant mechanism | Lever |
 |---|---|---|
 | Output generic despite long prompt | 1 — attention diluted | cut slop, reorder priorities first |

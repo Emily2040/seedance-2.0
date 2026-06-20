@@ -1,0 +1,23 @@
+{
+  "project_id": "seq_airport_arrival",
+  "clip_id": "clip_01",
+  "take_id": "take_clip01_a",
+  "source_status": "reviewed",
+  "verdict": "accept_with_deviation",
+  "observed_start_state": {
+    "summary": "traveler exits the terminal into rain"
+  },
+  "observed_end_state": {
+    "summary": "traveler remains two steps from the open rear car door",
+    "travel_direction": "left-to-right",
+    "open_motion": "walking continues"
+  },
+  "completed_beats": ["beat_terminal_exit"],
+  "incomplete_beats": ["beat_reach_car"],
+  "unexpected_completed_beats": [],
+  "continuity_breaks": ["planned endpoint not reached"],
+  "accepted_deviations": ["final frame is two steps before the door"],
+  "observation_confidence": "high",
+  "uncertainties": [],
+  "requires_user_confirmation": false
+}

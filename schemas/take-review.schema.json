@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Emily2040/seedance-2.0/schemas/take-review.schema.json",
+  "title": "Seedance Take Review",
+  "type": "object",
+  "required": [
+    "project_id",
+    "clip_id",
+    "take_id",
+    "source_status",
+    "verdict",
+    "observed_start_state",
+    "observed_end_state",
+    "completed_beats",
+    "incomplete_beats",
+    "unexpected_completed_beats",
+    "continuity_breaks",
+    "accepted_deviations",
+    "observation_confidence",
+    "uncertainties",
+    "requires_user_confirmation"
+  ],
+  "properties": {
+    "project_id": {"type": "string"},
+    "clip_id": {"type": "string"},
+    "take_id": {"type": "string"},
+    "source_status": {"enum": ["generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]},
+    "verdict": {"enum": ["accept", "accept_with_deviation", "repair", "reject"]},
+    "observed_start_state": {"type": "object"},
+    "observed_end_state": {"type": "object"},
+    "completed_beats": {"type": "array", "items": {"type": "string"}},
+    "incomplete_beats": {"type": "array", "items": {"type": "string"}},
+    "unexpected_completed_beats": {"type": "array", "items": {"type": "string"}},
+    "continuity_breaks": {"type": "array"},
+    "accepted_deviations": {"type": "array"},
+    "observation_confidence": {"enum": ["low", "medium", "high"]},
+    "uncertainties": {"type": "array", "items": {"type": "string"}},
+    "requires_user_confirmation": {"type": "boolean"}
+  }
+}

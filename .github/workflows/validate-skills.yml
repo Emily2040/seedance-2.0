@@ -24,3 +24,21 @@ jobs:
         run: python scripts/source_registry_check.py --strict
       - name: Validate multilingual vocabulary schema
         run: python scripts/vocab_schema_check.py --strict
+      - name: Validate sequence project state
+        run: python scripts/project_state_check.py --strict
+      - name: Validate continuity chains
+        run: python scripts/continuity_chain_check.py --strict
+      - name: Validate behavior contracts
+        run: python scripts/behavior_contract_check.py --strict
+      - name: Validate sequence evals
+        run: python scripts/sequence_eval_check.py --strict
+      - name: Validate generation-run fixtures
+        run: python scripts/generation_run_check.py --strict
+      - name: Lint compiled prompts
+        run: python scripts/prompt_lint.py --self-test --strict
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Compile Python files
+        run: python -m compileall scripts tests
+      - name: Check diff whitespace
+        run: git diff --check

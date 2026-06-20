@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [6.0.0] — 2026-06-20
+
+### Added
+
+- Added stateful sequence architecture: `seedance-sequence`, `seedance-continuation`, sequence project state, continuation handoff, prompt compiler, surface prompt profiles, reference transfer contracts, event density, continuity QC, dense storyboard mode, and failure atlas references.
+- Added JSON schemas for project state, clip contracts, take reviews, prompt specs, and generation run records.
+- Added deterministic local validators for prompt linting, project state, continuity chains, behavior contracts, sequence evals, and generation-run fixtures.
+- Added golden examples for airport continuation, observed deviation, standalone clips, compact I2V, R2V role isolation, phased single-take, dense 2D storyboard, sequence continuation, first/last-frame transition, and one-layer video edit.
+- Added 47 sequence-state eval cases, generation benchmark fixtures, and JSONL generation-run examples.
+
+### Changed
+
+- Root routing now runs a Sequence Gate before the Mode Gate and requires accepted source footage or an observed final state before continuation prompts.
+- Interview, prompt, short-prompt, troubleshooting, camera, motion, characters, audio, lighting, style, and recipe skills now inherit sequence state, continuity locks, completed beats, reserved future beats, and exact reference tags when present.
+- README, skill map, reference library, validation commands, agent compatibility notes, eval rubric, JSON schema reference, and CI workflow now reflect v6.0.0.
+- Prompt budget guidance is surface-specific instead of treating any character count as universal.
+
 ## [5.5.2] — 2026-06-12
 
 ### Changed

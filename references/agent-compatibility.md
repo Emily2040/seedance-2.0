@@ -70,3 +70,4 @@ Runway MCP is a separate agent connector surface. It can expose Seedance 2.0 thr
 - Do not claim ClawHub or any registry lists this skill unless it has actually been published there.
 - Do not claim every client honors the same metadata fields beyond `name` and `description`.
 - Do not claim this repository provides a live Seedance API wrapper. It is an agent-skill workflow and reference package.
+- Do not claim that an agent has hidden cross-session memory of a sequence project. Use the Project State Capsule to restore story goal, final outcome, accepted clips, current actual state, open motion, completed beats, next clip job, continuity locks, allowed changes, reserved future beats, extension depth, and unresolved uncertainties.

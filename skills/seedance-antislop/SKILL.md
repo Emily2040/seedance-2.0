@@ -8,8 +8,8 @@ tags:
   - anti-slop
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"

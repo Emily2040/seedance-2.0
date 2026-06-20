@@ -1,0 +1,18 @@
+{
+  "project_id": "seq_airport_arrival",
+  "clip_id": "clip_02",
+  "parent_clip_id": "clip_01",
+  "sequence_index": 2,
+  "narrative_job": "Complete the final two steps, enter the car, and close the rear door.",
+  "target_duration_sec": null,
+  "generation_mode": "V2V",
+  "shot_structure": "phased_single_take",
+  "already_happened": ["beat_terminal_exit"],
+  "this_clip_only": ["beat_reach_car", "beat_enter_car"],
+  "reserved_for_later": ["beat_departure"],
+  "planned_start_state": {"summary": "traveler two steps from open rear car door, still moving left-to-right"},
+  "planned_end_state": {"summary": "traveler inside rear seat with door closed, car not yet moving"},
+  "continuity_locks": ["traveler identity", "wardrobe", "left-to-right travel", "black sedan", "rainy curbside"],
+  "allowed_changes": ["door closes after traveler enters"],
+  "status": "ready"
+}

@@ -1,0 +1,56 @@
+{
+  "schema_version": "6.0.0",
+  "state_revision": 1,
+  "project_id": "standalone_watch_drop",
+  "project_mode": "standalone_clip",
+  "surface": {"name": "unknown", "profile": "conservative_generic", "verified_at": null},
+  "clip_budget_sec": null,
+  "prompt_budget": null,
+  "story": {
+    "logline": "A watch catches one clean beam of light.",
+    "story_promise": "A simple product reveal.",
+    "objective": "Show the watch face and material.",
+    "initial_condition": "Watch rests in shadow.",
+    "final_outcome": "Logo and watch face are clearly lit.",
+    "target_duration_sec": null,
+    "tone": "premium calm",
+    "medium": "product_or_object"
+  },
+  "world_bible": {"location": "black acrylic product table"},
+  "reference_registry": [{"tag": "[Image1]", "role": "watch identity", "preserve_exact_tag": true}],
+  "beats": [
+    {"beat_id": "beat_light_reveal", "description": "A narrow light reveals the watch face.", "narrative_function": "product proof", "status": "current", "assigned_clip_id": "clip_01", "dependencies": []}
+  ],
+  "clips": [
+    {
+      "clip_id": "clip_01",
+      "parent_clip_id": null,
+      "sequence_index": 1,
+      "prompt_version": "6.0.0",
+      "generation_mode": "I2V",
+      "source_clip_tag": null,
+      "status": "ready",
+      "narrative_job": "Reveal the watch with one light sweep.",
+      "already_happened": [],
+      "this_clip_only": ["beat_light_reveal"],
+      "reserved_for_later": [],
+      "planned_start_state": {"product_identity": "watch from [Image1]", "reference_tags": ["[Image1]"]},
+      "planned_end_state": {"product_identity": "watch from [Image1]", "reference_tags": ["[Image1]"]},
+      "observed_start_state": null,
+      "observed_end_state": null,
+      "continuity_locks": ["product identity", "logo", "case geometry", "reference_tags"],
+      "allowed_changes": ["light sweep across glass"],
+      "continuity_breaks": [],
+      "accepted_deviations": [],
+      "transition_in": "standalone",
+      "transition_out": "finished product reveal",
+      "open_motion_vectors": [],
+      "handoff_requirements": [],
+      "extension_depth": 0
+    }
+  ],
+  "take_history": [],
+  "current_clip_id": "clip_01",
+  "canon_revision": 1,
+  "updated_at": "2026-06-20"
+}

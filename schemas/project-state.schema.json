@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Emily2040/seedance-2.0/schemas/project-state.schema.json",
+  "title": "Seedance Sequence Project State",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "state_revision",
+    "project_id",
+    "project_mode",
+    "surface",
+    "clip_budget_sec",
+    "prompt_budget",
+    "story",
+    "world_bible",
+    "reference_registry",
+    "beats",
+    "clips",
+    "take_history",
+    "current_clip_id",
+    "canon_revision",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "state_revision": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "project_mode": {"enum": ["standalone_clip", "sequence_project"]},
+    "surface": {"type": "object"},
+    "clip_budget_sec": {"type": ["number", "null"]},
+    "prompt_budget": {"type": ["integer", "null"]},
+    "story": {"$ref": "#/$defs/story"},
+    "world_bible": {"type": "object"},
+    "reference_registry": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+    "beats": {"type": "array", "items": {"$ref": "#/$defs/beat"}},
+    "clips": {"type": "array", "items": {"$ref": "#/$defs/clip"}},
+    "take_history": {"type": "array"},
+    "current_clip_id": {"type": "string"},
+    "canon_revision": {"type": "integer", "minimum": 1},
+    "updated_at": {"type": "string"}
+  },
+  "$defs": {
+    "story": {
+      "type": "object",
+      "required": ["logline", "story_promise", "objective", "initial_condition", "final_outcome", "target_duration_sec", "tone", "medium"],
+      "properties": {
+        "logline": {"type": "string"},
+        "story_promise": {"type": "string"},
+        "objective": {"type": "string"},
+        "initial_condition": {"type": "string"},
+        "final_outcome": {"type": "string"},
+        "target_duration_sec": {"type": ["number", "null"]},
+        "tone": {"type": "string"},
+        "medium": {"type": "string"}
+      }
+    },
+    "reference": {
+      "type": "object",
+      "required": ["tag", "role", "preserve_exact_tag"],
+      "properties": {
+        "tag": {"type": "string", "minLength": 1},
+        "role": {"type": "string"},
+        "preserve_exact_tag": {"const": true}
+      }
+    },
+    "beat": {
+      "type": "object",
+      "required": ["beat_id", "description", "narrative_function", "status", "assigned_clip_id", "dependencies"],
+      "properties": {
+        "beat_id": {"type": "string"},
+        "description": {"type": "string"},
+        "narrative_function": {"type": "string"},
+        "status": {"enum": ["planned", "current", "completed", "omitted", "replaced"]},
+        "assigned_clip_id": {"type": ["string", "null"]},
+        "dependencies": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "clip": {
+      "type": "object",
+      "required": [
+        "clip_id",
+        "parent_clip_id",
+        "sequence_index",
+        "prompt_version",
+        "generation_mode",
+        "status",
+        "narrative_job",
+        "already_happened",
+        "this_clip_only",
+        "reserved_for_later",
+        "planned_start_state",
+        "planned_end_state",
+        "observed_start_state",
+        "observed_end_state",
+        "continuity_locks",
+        "allowed_changes",
+        "continuity_breaks",
+        "accepted_deviations",
+        "transition_in",
+        "transition_out",
+        "open_motion_vectors",
+        "handoff_requirements",
+        "extension_depth"
+      ],
+      "properties": {
+        "clip_id": {"type": "string"},
+        "parent_clip_id": {"type": ["string", "null"]},
+        "sequence_index": {"type": "integer", "minimum": 1},
+        "prompt_version": {"type": "string"},
+        "generation_mode": {"type": "string"},
+        "source_clip_tag": {"type": ["string", "null"]},
+        "status": {"enum": ["planned", "ready", "generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]},
+        "narrative_job": {"type": "string"},
+        "already_happened": {"type": "array", "items": {"type": "string"}},
+        "this_clip_only": {"type": "array", "items": {"type": "string"}},
+        "reserved_for_later": {"type": "array", "items": {"type": "string"}},
+        "planned_start_state": {"type": "object"},
+        "planned_end_state": {"type": "object"},
+        "observed_start_state": {"type": ["object", "null"]},
+        "observed_end_state": {"type": ["object", "null"]},
+        "continuity_locks": {"type": "array"},
+        "allowed_changes": {"type": "array"},
+        "continuity_breaks": {"type": "array"},
+        "accepted_deviations": {"type": "array"},
+        "transition_in": {"type": "string"},
+        "transition_out": {"type": "string"},
+        "open_motion_vectors": {"type": "array"},
+        "handoff_requirements": {"type": "array"},
+        "extension_depth": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

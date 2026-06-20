@@ -9,8 +9,8 @@ tags:
   - dialogue
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -54,6 +54,10 @@ Use one speaker per short clip when reliability matters. If two characters must 
 If dialogue desyncs, shorten the line, lock the camera, remove head turns, clean the audio role, and reduce competing SFX. If the wrong speaker talks, assign tags and split lines by speaker. If audio is ignored, remove extra music/SFX instructions and make the reference role explicit.
 
 If audio and video references fight each other, mute the reference video before upload when possible, or make the priority explicit: `[Video1] controls camera only; [Audio1] controls tempo and energy`.
+
+## Sequence State
+
+When sequence state is present, inherit completed dialogue, active dialogue, ambience, music phase, SFX phase, current clip scope, continuity locks, exact reference tags, and reserved future beats. Do not repeat completed dialogue unless the user explicitly asks for a reprise. Continue or intentionally change the audio phase instead of restarting it by accident.
 
 ## Output Contract
 

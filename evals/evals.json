@@ -1,6 +1,6 @@
 {
-  "version": "5.5.2",
-  "updated": "2026-06-12",
+  "version": "6.0.0",
+  "updated": "2026-06-20",
   "cases": [
     {
       "id": "vague_idea_interview",
@@ -952,6 +952,1510 @@
       "skills_expected_to_activate": [
         "seedance-troubleshoot"
       ]
+    },
+    {
+      "id": "sequence_long_idea_routes_to_plan",
+      "prompt": "V6 check: sequence long idea routes to plan.",
+      "expected_output": "Handles sequence long idea routes to plan according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: sequence long idea routes to plan",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": true,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "standalone_clip_does_not_overplan",
+      "prompt": "V6 check: standalone clip does not overplan.",
+      "expected_output": "Handles standalone clip does not overplan according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: standalone clip does not overplan",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ],
+      "critical": true,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "standalone"
+    },
+    {
+      "id": "sequence_defines_final_outcome",
+      "prompt": "V6 check: sequence defines final outcome.",
+      "expected_output": "Handles sequence defines final outcome according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: sequence defines final outcome",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": true,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "sequence_outputs_only_first_final_prompt",
+      "prompt": "V6 check: sequence outputs only first final prompt.",
+      "expected_output": "Handles sequence outputs only first final prompt according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: sequence outputs only first final prompt",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": true,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "continuation_requires_source_clip",
+      "prompt": "V6 check: continuation requires source clip.",
+      "expected_output": "Handles continuation requires source clip according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuation requires source clip",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "continuation_requires_observed_end_state",
+      "prompt": "V6 check: continuation requires observed end state.",
+      "expected_output": "Handles continuation requires observed end state according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuation requires observed end state",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": false,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "continuation_uses_observed_not_planned_state",
+      "prompt": "V6 check: continuation uses observed not planned state.",
+      "expected_output": "Handles continuation uses observed not planned state according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuation uses observed not planned state",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "continuation_does_not_replay_previous_action",
+      "prompt": "V6 check: continuation does not replay previous action.",
+      "expected_output": "Handles continuation does not replay previous action according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuation does not replay previous action",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "continuation_respects_reserved_future_beats",
+      "prompt": "V6 check: continuation respects reserved future beats.",
+      "expected_output": "Handles continuation respects reserved future beats according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuation respects reserved future beats",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": false,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "continuation_preserves_open_motion_vector",
+      "prompt": "V6 check: continuation preserves open motion vector.",
+      "expected_output": "Handles continuation preserves open motion vector according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuation preserves open motion vector",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "native_extend_vs_next_shot",
+      "prompt": "V6 check: native extend vs next shot.",
+      "expected_output": "Handles native extend vs next shot according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: native extend vs next shot",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "accepted_take_updates_canon",
+      "prompt": "V6 check: accepted take updates canon.",
+      "expected_output": "Handles accepted take updates canon according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: accepted take updates canon",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "rejected_take_does_not_update_canon",
+      "prompt": "V6 check: rejected take does not update canon.",
+      "expected_output": "Handles rejected take does not update canon according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: rejected take does not update canon",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "accepted_deviation_replans_downstream",
+      "prompt": "V6 check: accepted deviation replans downstream.",
+      "expected_output": "Handles accepted deviation replans downstream according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: accepted deviation replans downstream",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "unexpected_completed_beat_removed_from_future",
+      "prompt": "V6 check: unexpected completed beat removed from future.",
+      "expected_output": "Handles unexpected completed beat removed from future according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: unexpected completed beat removed from future",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "unfinished_beat_carried_or_repaired",
+      "prompt": "V6 check: unfinished beat carried or repaired.",
+      "expected_output": "Handles unfinished beat carried or repaired according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: unfinished beat carried or repaired",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": false,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "clip_lineage_parent_id",
+      "prompt": "V6 check: clip lineage parent id.",
+      "expected_output": "Handles clip lineage parent id according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: clip lineage parent id",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "reference_tags_survive_clip_chain",
+      "prompt": "V6 check: reference tags survive clip chain.",
+      "expected_output": "Handles reference tags survive clip chain according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: reference tags survive clip chain",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "exact_reference_tag_preserved",
+      "prompt": "V6 check: exact reference tag preserved.",
+      "expected_output": "Handles exact reference tag preserved according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: exact reference tag preserved",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": true,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "reference_transfer_and_ignore_present",
+      "prompt": "V6 check: reference transfer and ignore present.",
+      "expected_output": "Handles reference transfer and ignore present according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: reference transfer and ignore present",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "multi_subject_reference_selector",
+      "prompt": "V6 check: multi subject reference selector.",
+      "expected_output": "Handles multi subject reference selector according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: multi subject reference selector",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "local_reference_reanchor",
+      "prompt": "V6 check: local reference reanchor.",
+      "expected_output": "Handles local reference reanchor according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: local reference reanchor",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "continuity_source_vs_motion_reference",
+      "prompt": "V6 check: continuity source vs motion reference.",
+      "expected_output": "Handles continuity source vs motion reference according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuity source vs motion reference",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "multi_character_screen_direction_handoff",
+      "prompt": "V6 check: multi character screen direction handoff.",
+      "expected_output": "Handles multi character screen direction handoff according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: multi character screen direction handoff",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "prop_state_handoff",
+      "prompt": "V6 check: prop state handoff.",
+      "expected_output": "Handles prop state handoff according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: prop state handoff",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "audio_state_handoff",
+      "prompt": "V6 check: audio state handoff.",
+      "expected_output": "Handles audio state handoff according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: audio state handoff",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "camera_phase_handoff",
+      "prompt": "V6 check: camera phase handoff.",
+      "expected_output": "Handles camera phase handoff according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: camera phase handoff",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": false,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "extension_drift_triggers_reanchor",
+      "prompt": "V6 check: extension drift triggers reanchor.",
+      "expected_output": "Handles extension drift triggers reanchor according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: extension drift triggers reanchor",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "cross_session_project_capsule",
+      "prompt": "V6 check: cross session project capsule.",
+      "expected_output": "Handles cross session project capsule according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: cross session project capsule",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "compact_prompt_does_not_become_dense",
+      "prompt": "V6 check: compact prompt does not become dense.",
+      "expected_output": "Handles compact prompt does not become dense according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: compact prompt does not become dense",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "standalone"
+    },
+    {
+      "id": "dense_storyboard_has_completed_shot_endpoints",
+      "prompt": "V6 check: dense storyboard has completed shot endpoints.",
+      "expected_output": "Handles dense storyboard has completed shot endpoints according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: dense storyboard has completed shot endpoints",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "continuous_take_uses_phases_not_shot_labels",
+      "prompt": "V6 check: continuous take uses phases not shot labels.",
+      "expected_output": "Handles continuous take uses phases not shot labels according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuous take uses phases not shot labels",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "multishot_uses_shot_labels_not_continuous_take",
+      "prompt": "V6 check: multishot uses shot labels not continuous take.",
+      "expected_output": "Handles multishot uses shot labels not continuous take according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: multishot uses shot labels not continuous take",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "screen_direction_preserved",
+      "prompt": "V6 check: screen direction preserved.",
+      "expected_output": "Handles screen direction preserved according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: screen direction preserved",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "physical_contact_has_consequence_chain",
+      "prompt": "V6 check: physical contact has consequence chain.",
+      "expected_output": "Handles physical contact has consequence chain according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: physical contact has consequence chain",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "abstract_mood_has_visible_evidence",
+      "prompt": "V6 check: abstract mood has visible evidence.",
+      "expected_output": "Handles abstract mood has visible evidence according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: abstract mood has visible evidence",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "camera_has_start_path_and_endpoint",
+      "prompt": "V6 check: camera has start path and endpoint.",
+      "expected_output": "Handles camera has start path and endpoint according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: camera has start path and endpoint",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "2d_prompt_rejects_live_action_lens_language",
+      "prompt": "V6 check: 2d prompt rejects live action lens language.",
+      "expected_output": "Handles 2d prompt rejects live action lens language according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: 2d prompt rejects live action lens language",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "continuation_excludes_completed_action",
+      "prompt": "V6 check: continuation excludes completed action.",
+      "expected_output": "Handles continuation excludes completed action according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuation excludes completed action",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "continuation_excludes_reserved_future_action",
+      "prompt": "V6 check: continuation excludes reserved future action.",
+      "expected_output": "Handles continuation excludes reserved future action according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: continuation excludes reserved future action",
+      "skills_expected_to_activate": [
+        "seedance-continuation"
+      ],
+      "critical": true,
+      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "seamless_continuation"
+    },
+    {
+      "id": "prompt_budget_is_surface_specific",
+      "prompt": "V6 check: prompt budget is surface specific.",
+      "expected_output": "Handles prompt budget is surface specific according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: prompt budget is surface specific",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "internal_json_not_emitted_to_seedance",
+      "prompt": "V6 check: internal json not emitted to seedance.",
+      "expected_output": "Handles internal json not emitted to seedance according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: internal json not emitted to seedance",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": true,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "compression_preserves_reference_contracts",
+      "prompt": "V6 check: compression preserves reference contracts.",
+      "expected_output": "Handles compression preserves reference contracts according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: compression preserves reference contracts",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "four_shot_mode_requires_verified_profile",
+      "prompt": "V6 check: four shot mode requires verified profile.",
+      "expected_output": "Handles four shot mode requires verified profile according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: four shot mode requires verified profile",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "i2v_does_not_redundantly_redescribe_image",
+      "prompt": "V6 check: i2v does not redundantly redescribe image.",
+      "expected_output": "Handles i2v does not redundantly redescribe image according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: i2v does not redundantly redescribe image",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "standalone"
+    },
+    {
+      "id": "r2v_reference_roles_do_not_bleed",
+      "prompt": "V6 check: r2v reference roles do not bleed.",
+      "expected_output": "Handles r2v reference roles do not bleed according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: r2v reference roles do not bleed",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "standalone"
+    },
+    {
+      "id": "sequence_prompt_contains_only_current_clip",
+      "prompt": "V6 check: sequence prompt contains only current clip.",
+      "expected_output": "Handles sequence prompt contains only current clip according to the sequence-state architecture.",
+      "assertions": [
+        "preserves sequence lineage and current clip scope",
+        "does not invent unsupported surface facts or deterministic guarantees",
+        "keeps exact reference tags unchanged when present"
+      ],
+      "failure_mode": "v6 regression: sequence prompt contains only current clip",
+      "skills_expected_to_activate": [
+        "seedance-sequence"
+      ],
+      "critical": false,
+      "state_fixture": null,
+      "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
+      "forbidden_behaviors": [
+        "writing a continuation without accepted source evidence",
+        "starting from planned state when observed state differs",
+        "replaying completed beats",
+        "performing reserved future beats",
+        "normalizing exact reference tags",
+        "emitting unsupported platform guarantees"
+      ],
+      "required_output_sections": [
+        "classification",
+        "current clip contract",
+        "natural-language prompt or source request"
+      ],
+      "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
+      "expected_sequence_relation": "sequence_first_clip"
     }
   ]
 }

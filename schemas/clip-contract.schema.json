@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Emily2040/seedance-2.0/schemas/clip-contract.schema.json",
+  "title": "Seedance Clip Contract",
+  "type": "object",
+  "required": [
+    "project_id",
+    "clip_id",
+    "parent_clip_id",
+    "sequence_index",
+    "narrative_job",
+    "target_duration_sec",
+    "generation_mode",
+    "shot_structure",
+    "already_happened",
+    "this_clip_only",
+    "reserved_for_later",
+    "planned_start_state",
+    "planned_end_state",
+    "continuity_locks",
+    "allowed_changes",
+    "status"
+  ],
+  "properties": {
+    "project_id": {"type": "string"},
+    "clip_id": {"type": "string"},
+    "parent_clip_id": {"type": ["string", "null"]},
+    "sequence_index": {"type": "integer", "minimum": 1},
+    "narrative_job": {"type": "string"},
+    "target_duration_sec": {"type": ["number", "null"]},
+    "generation_mode": {"type": "string"},
+    "shot_structure": {"enum": ["compact_single_take", "phased_single_take", "dense_multishot", "first_last_frame_transition", "video_edit_contract"]},
+    "already_happened": {"type": "array", "items": {"type": "string"}},
+    "this_clip_only": {"type": "array", "items": {"type": "string"}},
+    "reserved_for_later": {"type": "array", "items": {"type": "string"}},
+    "planned_start_state": {"type": "object"},
+    "planned_end_state": {"type": "object"},
+    "continuity_locks": {"type": "array"},
+    "allowed_changes": {"type": "array"},
+    "status": {"enum": ["planned", "ready", "generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]}
+  }
+}

@@ -8,8 +8,8 @@ tags:
   - chinese-prompt
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -21,6 +21,8 @@ metadata:
 # seedance-prompt-short
 
 Compress Seedance prompts without losing the production signal. A short prompt still needs mode, subject, action, camera, light, sound when useful, and constraints. Remove filler before removing physical details.
+
+When sequence state is present, compression must preserve continuity locks, exact reference tags, actual opening state, current clip action, endpoint, completed beat exclusions, and reserved future beats. Do not compress away the words that keep a continuation from replaying completed action or leaking future action.
 
 ## Intent
 
@@ -37,6 +39,7 @@ Preserve in this order:
 5. Physical light source or atmosphere.
 6. Audio cue or silence instruction.
 7. Safety, IP, or continuity constraint.
+8. Sequence state clauses: actual opening state, continuity locks, completed beats, and reserved beats.
 
 Delete generic adjectives, duplicate style labels, obvious background details, secondary camera moves, and secondary actions before deleting preservation constraints.
 

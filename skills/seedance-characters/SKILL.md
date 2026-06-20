@@ -9,8 +9,8 @@ tags:
   - consistency
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -61,6 +61,10 @@ Hands and faces degrade under complex choreography. Keep hands visible but simpl
 ## Likeness Rule
 
 For real-person likeness, do not infer consent from an uploaded asset. Treat portrait, face, and voice workflows as authorization-dependent and surface-specific. If authorization is unclear, rewrite to an original character archetype while preserving the scene function.
+
+## Sequence State
+
+When sequence state is present, inherit wardrobe, hair, screen geography, eyeline, pose, emotional state, current clip scope, continuity locks, exact reference tags, and reserved future beats. Canonical identity references control identity; accepted footage controls transient opening state. Do not let a motion or continuity source overwrite immutable character locks.
 
 ## Output Contract
 

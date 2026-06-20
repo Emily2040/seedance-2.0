@@ -12,10 +12,10 @@
 
 An agent operating system for Seedance 2.0 filmmaking — text, image, video, and reference to video<br>with native audio, IP-safe rewrites, and source-dated platform facts in six languages.
 
-[![Version](https://img.shields.io/badge/version-5.5.2-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
-[![Sub-skills](https://img.shields.io/badge/sub--skills-24-4A4438?style=flat-square&labelColor=14110B)](#skill-map)
-[![References](https://img.shields.io/badge/references-47-4A4438?style=flat-square&labelColor=14110B)](#reference-library)
-[![Evals](https://img.shields.io/badge/evals-61-4A4438?style=flat-square&labelColor=14110B)](#validation)
+[![Version](https://img.shields.io/badge/version-6.0.0-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
+[![Sub-skills](https://img.shields.io/badge/sub--skills-26-4A4438?style=flat-square&labelColor=14110B)](#skill-map)
+[![References](https://img.shields.io/badge/references-56-4A4438?style=flat-square&labelColor=14110B)](#reference-library)
+[![Evals](https://img.shields.io/badge/evals-108-4A4438?style=flat-square&labelColor=14110B)](#validation)
 [![License](https://img.shields.io/badge/license-MIT-4A4438?style=flat-square&labelColor=14110B)](LICENSE)
 
 [Start here](#start-here) · [Skill map](#skill-map) · [Reference library](#reference-library) · [Visual gallery](#visual-gallery) · [Install](#install)
@@ -26,7 +26,7 @@ Author: [Iamemily2050 (@iamemily2050)](https://github.com/Emily2040) · [Instagr
 
 Platform context: [ByteDance Seedance 2.0](https://seed.bytedance.com/en/seedance2_0) · Dreamina · Jimeng · Doubao · [Volcengine Ark](https://www.volcengine.com/docs/82379/2291680?lang=zh) · [BytePlus ModelArk](https://docs.byteplus.com/en/docs/ModelArk/2291680) · [Runway Seedance 2](https://docs.dev.runwayml.com/guides/seedance/) · fal
 
-Updated: **2026-06-12** · **v5.5.2 deep-proofread release: every file swept, every weight uniform**
+Updated: **2026-06-20** · **v6.0.0 sequence-state architecture and prompt compiler**
 
 ---
 
@@ -54,6 +54,20 @@ This skill package turns Seedance 2.0 work into a repeatable assistant workflow:
 - Diagnoses failed outputs with concrete repair levers: camera, lighting, motion, reference role, duration, framing, audio, or safety wording.
 - Ships validation scripts, eval cases, source data, and design checks so maintainers can review changes before release.
 
+## Making Videos Longer Than One Generation
+
+Do not blindly ask the skill to extend the original prompt. A continuation must be based on accepted generated footage because Seedance may not end exactly where the original prompt expected.
+
+1. Describe the complete idea and how it ends.
+2. The skill divides it into connected clips.
+3. Generate Clip 01.
+4. Return the generated clip or its final frame.
+5. The skill records what actually happened.
+6. It writes Clip 02 from the real ending.
+7. Repeat until the planned final outcome is reached.
+
+The project state is the source of truth. The clip contract is the current production task. The prompt is a compiled instruction for only that task. Accepted generated footage determines what happens next.
+
 ## Professional Filmmaker Scope
 
 This package is designed for working film and commercial teams, not only for casual prompt writing. It can help an agent produce the artifact the role actually needs:
@@ -76,6 +90,8 @@ For these requests, the skill should not stop at a single prompt. It should retu
 | User situation | Load first | Output |
 |---|---|---|
 | “I have a vague idea.” | [`seedance-interview`](skills/seedance-interview/SKILL.md) | A focused creative brief and next prompt path. |
+| “This is a longer story / make it three connected clips.” | [`seedance-sequence`](skills/seedance-sequence/SKILL.md) | Full story spine, continuity bible, sequence map, Clip 01 contract, and Clip 01 prompt only. |
+| “Continue this video / make the next part.” | [`seedance-continuation`](skills/seedance-continuation/SKILL.md) | A source-gated continuation from accepted footage or a request for the missing clip/final frame. |
 | “I know the scene I want.” | [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | A production-ready Seedance prompt. |
 | “Make it short and strong.” | [`seedance-prompt-short`](skills/seedance-prompt-short/SKILL.md) | A compressed 30–100 word prompt. |
 | “I have an image/video/audio reference.” | [`reference-workflow`](references/reference-workflow.md) | A role map for every reference asset. |
@@ -162,6 +178,8 @@ Concept art for the system, generated and curated. Every image is paired with se
 |---|---|
 | [`seedance-interview`](skills/seedance-interview/SKILL.md) | The idea is vague, undeveloped, or needs creative direction. |
 | [`seedance-interview-short`](skills/seedance-interview-short/SKILL.md) | The user wants a fast brief, not a long interview. |
+| [`seedance-sequence`](skills/seedance-sequence/SKILL.md) | The request is a long story, connected clip set, campaign sequence, or multi-generation scene. |
+| [`seedance-continuation`](skills/seedance-continuation/SKILL.md) | The user wants to continue, extend, repair a tail, bridge known states, or re-anchor accepted footage. |
 | [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | The user needs a complete prompt from a clear concept. |
 | [`seedance-prompt-short`](skills/seedance-prompt-short/SKILL.md) | The prompt must be compressed for stronger Seedance performance. |
 | [`seedance-camera`](skills/seedance-camera/SKILL.md) | Camera behavior, lens feel, shot scale, or movement must be specified. |
@@ -207,6 +225,15 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`capability-map.md`](references/capability-map.md) | Design into model strengths and around known limits before prompting. |
 | [`model-mechanics.md`](references/model-mechanics.md) | Why the rules work: eight mechanisms of the generator, novel-case derivation, mechanism-indexed diagnosis. |
 | [`retake-protocol.md`](references/retake-protocol.md) | The iteration economy: take triage, the one-variable rule, attempt budgets, cost awareness, the shot log. |
+| [`sequence-project-state.md`](references/sequence-project-state.md) | Stateful project model, canon reconciliation, visual state fields, and Project State Capsule. |
+| [`continuation-handoff.md`](references/continuation-handoff.md) | Accepted-source continuation gate, observed state capture, continuation types, and beat exclusions. |
+| [`prompt-compiler.md`](references/prompt-compiler.md) | Compiles project state and current clip contract into one natural-language prompt. |
+| [`reference-transfer-contract.md`](references/reference-transfer-contract.md) | Exact tag preservation, reference role separation, and transfer/ignore clauses. |
+| [`surface-prompt-profiles.md`](references/surface-prompt-profiles.md) | Surface-specific duration, prompt budget, reference role, timeline, edit, extension, and audio constraints. |
+| [`event-density.md`](references/event-density.md) | Clip-scope firewall for completed, current, reserved, and do-not-show-yet beats. |
+| [`continuity-qc.md`](references/continuity-qc.md) | Boundary checks for immutable and transient continuity across accepted clips. |
+| [`failure-atlas.md`](references/failure-atlas.md) | Sequence and continuation failure diagnoses with one primary repair variable. |
+| [`dense-storyboard-mode.md`](references/dense-storyboard-mode.md) | Dense multishot, phased single-take, and 2D storyboard contracts. |
 | [`allocation-model.md`](references/allocation-model.md) | Where one generation spends its fidelity budget: identity vs motion vs scene density. |
 | [`multishot-grammar.md`](references/multishot-grammar.md) | Shot labels, the shots-times-seconds budget, and cut grammar inside one generation. |
 | [`2d-anime-grammar.md`](references/2d-anime-grammar.md) | Cel/anime medium grammar: layers, burst-vs-held motion, the no-lens rule. |
@@ -294,6 +321,15 @@ python scripts/eval_schema_check.py --strict
 python scripts/design_audit.py --strict
 python scripts/source_registry_check.py --strict
 python scripts/vocab_schema_check.py --strict
+python scripts/project_state_check.py --strict
+python scripts/continuity_chain_check.py --strict
+python scripts/behavior_contract_check.py --strict
+python scripts/sequence_eval_check.py --strict
+python scripts/generation_run_check.py --strict
+python scripts/prompt_lint.py --self-test --strict
+python -m unittest discover -s tests -v
+python -m compileall scripts tests
+git diff --check
 ```
 
 The CI workflow runs the same checks on push and pull request.
@@ -308,7 +344,7 @@ The README must stay readable in GitHub mobile, dark mode, and narrow widths. SV
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v5.5.2**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v6.0.0**.
 
 ## License
 

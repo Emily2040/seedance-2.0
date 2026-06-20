@@ -1,6 +1,6 @@
 # Prompt Examples
 
-Use these examples as patterns, not fixed scripts. Preserve reference tags exactly and keep final prompts under 2000 characters. Each example includes the mode and the reason the prompt is stable.
+Use these examples as patterns, not fixed scripts. Preserve reference tags exactly and keep final prompts under the verified active-surface prompt budget. Each example includes the mode and the reason the prompt is stable.
 
 ## T2V Product Launch
 

@@ -46,3 +46,7 @@ Describe technique, era, and palette — never a studio, franchise, or living ar
 | Motion feels floaty or rotoscoped | ask for snappy bursts "on twos," held frames between beats, smears on fast arcs |
 | Faces melt during fast action | put the speed into lines, smears, and background scroll instead of facial detail; cut to a held impact frame |
 | Style flickers between shots | repeat the exact medium line in every shot of a multi-shot prompt; keep one palette phrase constant |
+
+## Sequence Boundary [heuristic]
+
+For connected 2D clips, preserve character sheets, palette, line weight, layer roles, screen direction, and open motion. Use observed final layout from the accepted clip as the next opening layout. Do not switch to photographic lens or sensor language when writing continuation prompts.

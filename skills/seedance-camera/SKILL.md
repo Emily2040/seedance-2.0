@@ -8,8 +8,8 @@ tags:
   - cinematography
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -57,6 +57,10 @@ For complex camera movement, a video reference often works better than a long ve
 ## Conflict Rule
 
 If the user gives several incompatible moves, choose one primary camera move and put the rest into optional variants. If the shot needs multiple beats, recommend splitting into separate clips or a time-segmented prompt.
+
+## Sequence State
+
+When sequence state is present, inherit the observed camera phase, screen direction, current clip scope, continuity locks, exact reference tags, and reserved future beats before choosing a move. A continuation camera phrase must begin from the accepted source frame or observed end state; do not restart a pan, focus pull, or tracking move unless an intentional next shot declares the reset.
 
 ## Output Contract
 

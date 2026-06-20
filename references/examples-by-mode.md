@@ -77,3 +77,11 @@ These examples are original structures distilled from public multilingual practi
 ### Russian Safe Suspense
 
 `Постановочная сцена напряжения без графики: взрослый оригинальный персонаж отступает от закрытой двери, роняет ключи и замирает. Camera: locked medium shot. Lighting: warm practical plus blue window rim. Sound: key drop, breath, no music.`
+
+## Sequence Continuation Example
+
+`[Video 1] is the accepted previous clip and controls the actual opening state only. @Image 1 preserves the original traveler identity. Begin from the observed final frame: the traveler is two steps from the open rear door, still moving left-to-right. Complete those two steps, enter the rear seat, and close the door. Do not replay the terminal exit. Do not show the car departing yet.`
+
+## Standalone Non-Overplanning Example
+
+`[Image1] is the watch reference; preserve logo, case geometry, dial markings, and strap exactly. A narrow warm strip light sweeps once across the glass. Camera stays locked in a macro product angle. Sound: one soft tick at the final highlight.`

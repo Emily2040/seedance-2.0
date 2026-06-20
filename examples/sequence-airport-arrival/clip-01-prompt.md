@@ -1,0 +1,3 @@
+# Clip 01 Prompt
+
+Begin at the airport terminal doors in light rain. The original traveler from @Image 1, wearing the same charcoal coat and pulling a small black suitcase, exits into the curbside crowd and moves left-to-right toward a black sedan with its rear passenger door already open. Camera tracks beside her at walking speed, keeping the open door ahead in frame. Cool rain reflections and taxi lights stay consistent. This clip only covers the terminal exit and approach to the open door; do not show her entering the car and do not let the vehicle depart. Stop when she reaches the open rear door.

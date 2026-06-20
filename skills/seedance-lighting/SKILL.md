@@ -8,8 +8,8 @@ tags:
   - atmosphere
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -51,6 +51,10 @@ Name color temperature only when it matters: warm tungsten, cool moonlight, gree
 ## Failure Fixes
 
 If an output looks flat, add a motivated key source, rim separation, and one material-specific highlight. If it looks over-processed, remove broad style claims and specify softer contrast. If flicker or lighting jumps appear, make the light source stable and remove competing transitions.
+
+## Sequence State
+
+When sequence state is present, inherit persistent practical sources, key direction, lighting phase, current clip scope, continuity locks, exact reference tags, and reserved future beats. Do not reset day/night, practical lamps, or weather light unless the transition or allowed changes explicitly permit it.
 
 ## Output Contract
 

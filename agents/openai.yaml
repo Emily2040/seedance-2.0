@@ -2,7 +2,7 @@ interface:
   display_name: "Seedance 2.0 Skill OS"
   short_description: "Professional Seedance video prompting"
   brand_color: "#0EA5E9"
-  default_prompt: "Use $seedance-20 to turn this video idea into a professional Seedance prompt with reference roles and delivery checks."
+  default_prompt: "Use $seedance-20 to turn this video idea into a professional Seedance prompt or stateful connected-clip sequence with reference roles and delivery checks."
 
 policy:
   allow_implicit_invocation: true

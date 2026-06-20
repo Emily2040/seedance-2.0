@@ -35,3 +35,9 @@ For an unbroken take, say so: "single continuous take, no cuts" — otherwise a 
 | A shot's action skipped/compressed | fewer shots · raise duration / `auto` · one action per shot |
 | Cut lands mid-action | end each shot's sentence on the completed beat; let the next shot open the new one |
 | Atmosphere breaks between shots | declare the persisting effect once for the whole piece: "thin mist throughout, every shot" (全程薄雾) |
+
+## Sequence Boundary
+
+Multi-shot grammar describes cuts inside one generation. Sequence-state planning describes multiple connected generations. Do not paste future clip prompts into the current multishot prompt. If a beat belongs to a later generation, mark it reserved and leave it out.
+
+Dense multishot prompts use shot labels and endpoints. Continuous takes use phases and no hard cuts. Do not mix those contracts.

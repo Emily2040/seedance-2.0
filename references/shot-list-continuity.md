@@ -73,3 +73,16 @@ Track these anchors across shots:
 - Keep wardrobe, product orientation, screen direction, and light direction stable unless the story explicitly changes them.
 - If a prompt creates a good performance but bad product/logo, edit or composite the product layer rather than regenerating the whole shot.
 - If a shot fails three times, simplify the shot contract or split the action into two clips.
+
+## Sequence-State Handoff
+
+For stateful sequences, replace a loose continuity ledger with clip lineage:
+
+- `project_id`, `clip_id`, and `parent_clip_id`;
+- planned start and planned end state;
+- observed start and observed end state after review;
+- completed beats, current clip beats, and reserved future beats;
+- continuity locks and allowed changes;
+- transition in, transition out, open motion vectors, and handoff requirements.
+
+Finalize only the current unresolved clip prompt. Later shot cards stay provisional until the preceding accepted take is reviewed.

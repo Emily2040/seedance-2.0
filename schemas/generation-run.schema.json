@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Emily2040/seedance-2.0/schemas/generation-run.schema.json",
+  "title": "Seedance Generation Run Record",
+  "type": "object",
+  "required": [
+    "run_id",
+    "project_id",
+    "clip_id",
+    "surface",
+    "prompt_version",
+    "input_mode",
+    "reference_tags",
+    "prompt",
+    "result_status",
+    "is_synthetic_fixture"
+  ],
+  "properties": {
+    "run_id": {"type": "string"},
+    "project_id": {"type": "string"},
+    "clip_id": {"type": "string"},
+    "surface": {"type": "string"},
+    "prompt_version": {"type": "string"},
+    "input_mode": {"type": "string"},
+    "reference_tags": {"type": "array", "items": {"type": "string"}},
+    "prompt": {"type": "string"},
+    "result_status": {"enum": ["not_run_fixture", "submitted", "generated", "reviewed", "accepted", "rejected"]},
+    "is_synthetic_fixture": {"type": "boolean"}
+  }
+}

@@ -42,6 +42,8 @@ Identity fidelity, motion boldness, and scene density compete for the same gener
 
 ## Pre-write checklist [heuristic]
 
+For sequence projects, allocate the current clip before allocating the full story. The full story owns objective and final outcome; the current clip owns one action, one endpoint, and the continuity locks needed for the next handoff. Future beats are not part of the current prompt budget.
+
 1. What is this shot for — identity, motion, or world?
 2. Which references carry fidelity so the text does not have to?
 3. What is deliberately economized, and is that written as a constraint?

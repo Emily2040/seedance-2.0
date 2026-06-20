@@ -1,0 +1,228 @@
+{
+  "schema_version": "6.0.0",
+  "state_revision": 1,
+  "project_id": "seq_observed_deviation",
+  "project_mode": "sequence_project",
+  "surface": {
+    "name": "unknown",
+    "profile": "conservative_generic",
+    "verified_at": null
+  },
+  "clip_budget_sec": null,
+  "prompt_budget": null,
+  "story": {
+    "logline": "A courier unlocks a rooftop case before a signal flare.",
+    "story_promise": "A guarded delivery reveals a signal device.",
+    "objective": "Get the courier to the case and reveal the device.",
+    "initial_condition": "Courier reaches a rooftop door.",
+    "final_outcome": "The signal device lights safely inside the open case.",
+    "target_duration_sec": 30,
+    "tone": "precise suspense",
+    "medium": "live_action"
+  },
+  "world_bible": {
+    "location": "wet rooftop service area"
+  },
+  "reference_registry": [
+    {
+      "tag": "[Image1]",
+      "role": "courier identity",
+      "preserve_exact_tag": true
+    }
+  ],
+  "beats": [
+    {
+      "beat_id": "beat_unlock_case",
+      "description": "Courier unlocks the case.",
+      "narrative_function": "access",
+      "status": "current",
+      "assigned_clip_id": "clip_01",
+      "dependencies": []
+    },
+    {
+      "beat_id": "beat_open_case",
+      "description": "Courier opens the case.",
+      "narrative_function": "reveal setup",
+      "status": "planned",
+      "assigned_clip_id": "clip_02",
+      "dependencies": [
+        "beat_unlock_case"
+      ]
+    },
+    {
+      "beat_id": "beat_signal_lights",
+      "description": "Signal device lights inside the case.",
+      "narrative_function": "payoff",
+      "status": "planned",
+      "assigned_clip_id": "clip_03",
+      "dependencies": [
+        "beat_open_case"
+      ]
+    }
+  ],
+  "clips": [
+    {
+      "clip_id": "clip_01",
+      "parent_clip_id": null,
+      "sequence_index": 1,
+      "prompt_version": "6.0.0",
+      "generation_mode": "I2V",
+      "source_clip_tag": null,
+      "status": "ready",
+      "narrative_job": "Unlock the rooftop case.",
+      "already_happened": [],
+      "this_clip_only": [
+        "beat_unlock_case"
+      ],
+      "reserved_for_later": [
+        "beat_open_case",
+        "beat_signal_lights"
+      ],
+      "planned_start_state": {
+        "location": "wet rooftop service area",
+        "reference_tags": [
+          "[Image1]"
+        ]
+      },
+      "planned_end_state": {
+        "location": "wet rooftop service area",
+        "reference_tags": [
+          "[Image1]"
+        ]
+      },
+      "observed_start_state": null,
+      "observed_end_state": null,
+      "continuity_locks": [
+        "courier identity",
+        "case identity",
+        "reference_tags"
+      ],
+      "allowed_changes": [
+        "case latch may open"
+      ],
+      "continuity_breaks": [],
+      "accepted_deviations": [],
+      "transition_in": "first clip",
+      "transition_out": "case unlocked, not opened",
+      "open_motion_vectors": [],
+      "handoff_requirements": [
+        "do not open case in Clip 01"
+      ],
+      "extension_depth": 0
+    },
+    {
+      "clip_id": "clip_02",
+      "parent_clip_id": "clip_01",
+      "sequence_index": 2,
+      "prompt_version": "6.0.0",
+      "generation_mode": "V2V",
+      "source_clip_tag": "[Video1]",
+      "status": "planned",
+      "narrative_job": "Open the unlocked case.",
+      "already_happened": [
+        "beat_unlock_case"
+      ],
+      "this_clip_only": [
+        "beat_open_case"
+      ],
+      "reserved_for_later": [
+        "beat_signal_lights"
+      ],
+      "planned_start_state": {
+        "location": "wet rooftop service area",
+        "reference_tags": [
+          "[Image1]"
+        ],
+        "prop_owner": "courier"
+      },
+      "planned_end_state": {
+        "location": "wet rooftop service area",
+        "reference_tags": [
+          "[Image1]"
+        ],
+        "prop_owner": "courier",
+        "pose": "case open"
+      },
+      "observed_start_state": null,
+      "observed_end_state": null,
+      "continuity_locks": [
+        "courier identity",
+        "case identity",
+        "reference_tags"
+      ],
+      "allowed_changes": [
+        "case may open"
+      ],
+      "continuity_breaks": [],
+      "accepted_deviations": [],
+      "transition_in": "provisional after Clip 01 acceptance",
+      "transition_out": "case open, signal not lit",
+      "open_motion_vectors": [
+        "case lid opens"
+      ],
+      "handoff_requirements": [
+        "do not finalize until Clip 01 is accepted"
+      ],
+      "extension_depth": 1
+    },
+    {
+      "clip_id": "clip_03",
+      "parent_clip_id": "clip_02",
+      "sequence_index": 3,
+      "prompt_version": "6.0.0",
+      "generation_mode": "V2V",
+      "source_clip_tag": "[Video2]",
+      "status": "planned",
+      "narrative_job": "Light the signal device inside the open case.",
+      "already_happened": [
+        "beat_unlock_case",
+        "beat_open_case"
+      ],
+      "this_clip_only": [
+        "beat_signal_lights"
+      ],
+      "reserved_for_later": [],
+      "planned_start_state": {
+        "location": "wet rooftop service area",
+        "reference_tags": [
+          "[Image1]"
+        ],
+        "prop_owner": "courier",
+        "pose": "case open"
+      },
+      "planned_end_state": {
+        "location": "wet rooftop service area",
+        "reference_tags": [
+          "[Image1]"
+        ],
+        "prop_owner": "courier",
+        "pose": "watching lit signal device"
+      },
+      "observed_start_state": null,
+      "observed_end_state": null,
+      "continuity_locks": [
+        "courier identity",
+        "case identity",
+        "reference_tags"
+      ],
+      "allowed_changes": [
+        "signal light may activate"
+      ],
+      "continuity_breaks": [],
+      "accepted_deviations": [],
+      "transition_in": "provisional after Clip 02 acceptance",
+      "transition_out": "signal lit",
+      "open_motion_vectors": [
+        "signal pulse stabilizes"
+      ],
+      "handoff_requirements": [
+        "do not finalize until Clip 02 is accepted"
+      ],
+      "extension_depth": 2
+    }
+  ],
+  "take_history": [],
+  "current_clip_id": "clip_01",
+  "canon_revision": 1,
+  "updated_at": "2026-06-20"
+}

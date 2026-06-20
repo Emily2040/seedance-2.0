@@ -15,6 +15,7 @@ These are practitioner patterns gathered from public community material. Treat t
 7. Prefer edit, extend, or segment replacement over regenerating a whole clip when only one beat fails.
 8. For continuation, save the returned last frame when the surface supports it and use it as the next first-frame anchor.
 9. If an audio reference should control timing, mute competing reference videos before upload or explicitly lower their role to camera/motion only.
+10. For sequences, write down the observed final state before asking for the next prompt; do not assume the planned endpoint occurred.
 
 ## Prompt Discipline
 
@@ -35,6 +36,7 @@ These are practitioner patterns gathered from public community material. Treat t
 - Real-person faces, voices, celebrity likeness, and protected characters.
 - Long script-like prompts that ask for too many cuts, locations, and character turns in one generation.
 - Extension chains without a last-frame anchor; quality and continuity can degrade across retries.
+- Sequence chains where completed beats, reserved beats, or exact reference tags are not logged.
 
 ## Safe Hidden Trick
 

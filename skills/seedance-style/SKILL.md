@@ -9,8 +9,8 @@ tags:
   - ip-safe
   - seedance-20
 metadata:
-  version: "5.5.2"
-  updated: "2026-06-12"
+  version: "6.0.0"
+  updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -62,6 +62,10 @@ Field-observed from Chinese practice: realism styles stabilize when the prompt n
 | Studio commercial | `controlled reflections, clean background, polished material detail, zero handheld motion` |
 
 The flaw vocabulary is the style: faux-UGC that looks too clean reads as fake twice over.
+
+## Sequence State
+
+When sequence state is present, inherit medium grammar, current clip scope, continuity locks, exact reference tags, canonical design, accepted transient state, and reserved future beats. Style may color the clip, but it cannot change identity, wardrobe, product design, surface profile, or events reserved for later.
 
 ## Output Contract
 
