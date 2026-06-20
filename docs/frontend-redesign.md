@@ -1,24 +1,24 @@
-# Frontend Redesign
+# V6 Front Page Design
 
 The repository does not currently contain a standalone web app. The public frontend is the GitHub README, generated bitmap hero/infographic assets, and SVG support diagrams.
 
-## v5.4.5 Design Goals
+## V6 Design Goals
 
-- Lead with a real cinematic production-control hero instead of generic abstract graphics.
-- Show Seedance's practical range: references, first/last-frame continuity, product reveal, timeline control, audio, and camera direction.
+- Lead with the v6 sequence-state promise: one story state, one current clip contract, one compiled Seedance prompt.
+- Make the README useful to native English, Chinese, Japanese, and Korean readers before they reach the install section.
+- Show Seedance's practical range: references, first/last-frame continuity, continuation, product reveal, timeline control, audio, and camera direction.
 - Use generated cinematic infographics for the operating-system overview, skill map, skill capability map, CDN delivery map, reference role map, production delivery map, and QC stack.
 - Allow text-rich infographics when the text is large, corrected, visually balanced, and repeated in nearby searchable Markdown.
 - Keep SVG assets as support diagrams, not the primary emotional surface.
 - Validate README completeness, gallery coverage, PNG dimensions, and asset presence with `scripts/design_audit.py`.
 
-## v5.2 Design Goals
+## Native Reader Requirements
 
-- Replace collapsed one-line Markdown with readable sections.
-- Put the workflow selector near the top.
-- Use dark/light hero assets with accessible SVG metadata.
-- Show the skill constellation visually, then provide tables for navigation.
-- Keep platform status source-aware instead of hardcoding stale claims.
-- Validate design quality with `scripts/design_audit.py`.
+- The first screen must say the project is current v6 work.
+- The README must include visible Chinese, Japanese, and Korean copy, not only English labels saying those languages exist.
+- Native-language rows must link to active skill files and active vocabulary references, not migrated legacy files.
+- Reference tags such as `[Image1]`, `[Video1]`, `[Audio1]`, `@图1`, and `@视频1` must be shown exactly so readers do not translate them away.
+- Localization guidance must keep subtitles, legal copy, and market copy in post-production unless the user explicitly asks for simple on-screen generated text.
 
 ## Assets
 
@@ -46,6 +46,6 @@ The repository does not currently contain a standalone web app. The public front
 - Inspect every generated text image; reject garbled words, ugly typography, poor contrast, or placeholder-looking panels before commit.
 - Keep equivalent Markdown explanation beside every text-rich image so the repo remains accessible and searchable.
 
-## v5.4.8 Editorial Redesign
+## V6 Editorial System
 
 The masthead moved from generated bitmap art to a hand-built editorial system: serif display over monospace specification labels, warm ink/paper themes with a single amber accent, film sprocket and viewfinder line work, and zero gradients. `assets/hero-dark.svg` and `assets/hero-light.svg` are served through a `prefers-color-scheme` picture element so the hero matches the viewer's GitHub theme; `assets/skill-map.svg` was rebuilt as a specification diagram (gates -> root -> clusters -> reference library -> validation). Badges were unified to flat-square ink/amber. Generated bitmaps - the hero shots and text-rich infographics, including assets/infographic-cdn-delivery-map.png - remain in the curated Visual Gallery with searchable alt text, plus the operating-system art relocated from the body. Tokens live in `references/frontend-design-system.md`.

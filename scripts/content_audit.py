@@ -38,7 +38,6 @@ IGNORE_PREFIXES = [
 ]
 
 IGNORE_FILES = {
-    "V5_2_APPLY_MANIFEST.md",
     "CHANGELOG.md",
 }
 

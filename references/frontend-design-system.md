@@ -29,7 +29,7 @@ This repository has no application frontend. The user-facing frontend is the Git
 - Every major section should answer a user decision: what is it, where do I start, what skills exist, how do I validate, what changed.
 - Bitmap hero art should avoid watermarks and tiny text. Text-rich infographic labels must also be represented in Markdown for accessibility and search.
 
-## Editorial Design Tokens (v5.4.8)
+## Editorial Design Tokens (v6 front page)
 
 The front page uses a studio spec-sheet system. Apply these tokens to every hand-built vector asset; never reintroduce gradients, glow blobs, or multi-hue accent ramps.
 

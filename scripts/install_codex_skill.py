@@ -16,7 +16,6 @@ IGNORE_NAMES = {
     ".seedance_backups",
     "__pycache__",
     "docs",
-    "V5_2_APPLY_MANIFEST.md",
 }
 IGNORE_PATTERNS = ["*.pyc", "*.pyo", "*.tmp", "*.log", "*.png", "*.jpg", "*.jpeg", "*.psd"]
 

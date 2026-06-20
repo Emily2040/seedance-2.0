@@ -35,6 +35,8 @@ Safe language mixing means:
 
 ## Chinese-English Patterns
 
+Native Chinese readers can start from the role of each reference, then write one visible action and one camera move. Keep imported reference tags literal even inside Chinese sentences.
+
 **Official-style role formula**
 
 `@图1锁定原创角色身份与服装；@图2仅参考雨夜街道氛围；@视频1仅参考 slow lateral tracking，不复制人物、地点或品牌。原创角色穿过湿润站台，停在一盏闪烁灯下。Camera: locked medium-wide, 35mm lens, one slow side track. Sound: rain, footsteps, no music.`
@@ -49,6 +51,8 @@ Safe language mixing means:
 
 ## Japanese-English Patterns
 
+Native Japanese readers should keep identity, costume, frame layout, motion endpoint, and post-production text handling explicit. Avoid vague quality words unless they are decomposed into camera, light, material, and action.
+
 **Portrait micro-performance**
 
 `[Image1]の人物の顔、髪型、衣装、背景構図を保持。動きは小さく：一度まばたきし、視線を少し下げ、最後に控えめに微笑む。Camera: locked medium close-up, no reframing. Lighting: soft window light from frame right. Sound: quiet room tone.`
@@ -62,6 +66,8 @@ Safe language mixing means:
 `Character A faces camera in a locked medium close-up and softly says, "もう一度だけ。" Keep head still during the line, small mouth movement, no dramatic turn. Lighting: warm interior practical, cool rain reflection on wall.`
 
 ## Korean-English Patterns
+
+Native Korean readers should separate subject lock, camera movement, lighting, audio, and textless delivery. Short dialogue works best when the camera is locked and the head movement stays minimal.
 
 **Melodrama micro-expression**
 

@@ -17,6 +17,7 @@ All notable changes to this project are documented here.
 - Root routing now runs a Sequence Gate before the Mode Gate and requires accepted source footage or an observed final state before continuation prompts.
 - Interview, prompt, short-prompt, troubleshooting, camera, motion, characters, audio, lighting, style, and recipe skills now inherit sequence state, continuity locks, completed beats, reserved future beats, and exact reference tags when present.
 - README, skill map, reference library, validation commands, agent compatibility notes, eval rubric, JSON schema reference, and CI workflow now reflect v6.0.0.
+- README now includes native-reader start paths for Chinese, Japanese, and Korean users, with language-specific links into the active vocabulary and example system.
 - Prompt budget guidance is surface-specific instead of treating any character count as universal.
 
 ## [5.5.2] — 2026-06-12
