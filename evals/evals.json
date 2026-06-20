@@ -1,5 +1,5 @@
 {
-  "version": "6.0.0",
+  "version": "6.0.1",
   "updated": "2026-06-20",
   "cases": [
     {
@@ -326,6 +326,70 @@
       "skills_expected_to_activate": [
         "seedance-vocab-ko",
         "seedance-motion"
+      ]
+    },
+    {
+      "id": "japanese_examples_safe_rewrite",
+      "prompt": "Give me native Japanese Seedance examples, then rewrite a protected character request safely.",
+      "expected_output": "Japanese examples labeled safe/needs-owned-reference/rewrite-required with a safer original-character Japanese variant.",
+      "assertions": [
+        "activates Japanese examples not only vocabulary",
+        "labels example risk",
+        "removes protected identity in Japanese"
+      ],
+      "failure_mode": "Japanese support limited to literal translation",
+      "skills_expected_to_activate": [
+        "seedance-examples-ja",
+        "seedance-copyright"
+      ]
+    },
+    {
+      "id": "korean_examples_safe_rewrite",
+      "prompt": "Give me native Korean Seedance examples, then rewrite a celebrity-like prompt safely.",
+      "expected_output": "Korean examples labeled safe/needs-owned-reference/rewrite-required with a safer original-character Korean variant.",
+      "assertions": [
+        "activates Korean examples not only vocabulary",
+        "labels example risk",
+        "removes celebrity or real-person identity in Korean"
+      ],
+      "failure_mode": "Korean support limited to literal translation",
+      "skills_expected_to_activate": [
+        "seedance-examples-ko",
+        "seedance-copyright"
+      ]
+    },
+    {
+      "id": "cjk_native_reader_front_page",
+      "prompt": "Audit the front page for native Chinese, Japanese, and Korean readers.",
+      "expected_output": "README links to full zh/ja/ko guides, active CJK vocab skills, and active Japanese/Korean/Chinese example skills.",
+      "assertions": [
+        "front page links docs/README.zh.md docs/README.ja.md docs/README.ko.md",
+        "front page exposes seedance-examples-ja and seedance-examples-ko",
+        "does not rely on migrated legacy files for native reader support"
+      ],
+      "failure_mode": "front page only says multilingual in English",
+      "skills_expected_to_activate": [
+        "seedance-vocab-zh",
+        "seedance-vocab-ja",
+        "seedance-vocab-ko"
+      ]
+    },
+    {
+      "id": "cjk_sequence_continuation_localized",
+      "prompt": "Prepare Clip 02 continuation wording in Chinese, Japanese, and Korean from accepted footage.",
+      "expected_output": "Localized continuation phrasing that starts from accepted observed end state, excludes replayed actions, preserves reference tags, and keeps subtitles/copy in post.",
+      "assertions": [
+        "uses accepted footage as source of truth in all three languages",
+        "excludes completed and future beats",
+        "preserves reference tags unchanged",
+        "keeps localized subtitles and copy for post-production"
+      ],
+      "failure_mode": "localized continuation replays old beats or translates reference tags",
+      "skills_expected_to_activate": [
+        "seedance-continuation",
+        "seedance-vocab-zh",
+        "seedance-vocab-ja",
+        "seedance-vocab-ko"
       ]
     },
     {

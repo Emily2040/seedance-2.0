@@ -12,15 +12,15 @@
 
 An agent operating system for Seedance 2.0 filmmaking — text, image, video, and reference to video<br>with native audio, IP-safe rewrites, source-dated platform facts, and native reader paths for English, 中文, 日本語, and 한국어.
 
-[![Version](https://img.shields.io/badge/version-6.0.0-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
-[![Sub-skills](https://img.shields.io/badge/sub--skills-26-4A4438?style=flat-square&labelColor=14110B)](#skill-map)
+[![Version](https://img.shields.io/badge/version-6.0.1-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
+[![Sub-skills](https://img.shields.io/badge/sub--skills-28-4A4438?style=flat-square&labelColor=14110B)](#skill-map)
 [![References](https://img.shields.io/badge/references-56-4A4438?style=flat-square&labelColor=14110B)](#reference-library)
-[![Evals](https://img.shields.io/badge/evals-108-4A4438?style=flat-square&labelColor=14110B)](#validation)
+[![Evals](https://img.shields.io/badge/evals-112-4A4438?style=flat-square&labelColor=14110B)](#validation)
 [![License](https://img.shields.io/badge/license-MIT-4A4438?style=flat-square&labelColor=14110B)](LICENSE)
 
 [Start here](#start-here) · [Skill map](#skill-map) · [Reference library](#reference-library) · [Visual gallery](#visual-gallery) · [Install](#install)
 
-English · [中文](#native-language-start--多语言入门--多言語スタート--다국어-시작) · [日本語](#native-language-start--多语言入门--多言語スタート--다국어-시작) · [한국어](#native-language-start--多语言入门--多言語スタート--다국어-시작)
+English · [中文](docs/README.zh.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md)
 
 </div>
 
@@ -28,20 +28,20 @@ Author: [Iamemily2050 (@iamemily2050)](https://github.com/Emily2040) · [Instagr
 
 Platform context: [ByteDance Seedance 2.0](https://seed.bytedance.com/en/seedance2_0) · Dreamina · Jimeng · Doubao · [Volcengine Ark](https://www.volcengine.com/docs/82379/2291680?lang=zh) · [BytePlus ModelArk](https://docs.byteplus.com/en/docs/ModelArk/2291680) · [Runway Seedance 2](https://docs.dev.runwayml.com/guides/seedance/) · fal
 
-Updated: **2026-06-20** · **v6.0.0 sequence-state architecture and prompt compiler**
+Updated: **2026-06-20** · **v6.0.1 CJK native-reader expansion and v6 audit**
 
 ---
 
 ## Native Language Start / 多语言入门 / 多言語スタート / 다국어 시작
 
-Seedance 2.0 Skill OS is English-readable, but v6 is also designed for native Chinese, Japanese, and Korean prompt work. Keep reference tags exactly as written (`[Image1]`, `[Video1]`, `[Audio1]`, `@图1`, `@视频1`) in every language.
+Seedance 2.0 Skill OS is English-readable, but v6.0.1 gives Chinese, Japanese, and Korean readers first-class entry points, active example skills, and native prompt guidance. Keep reference tags exactly as written (`[Image1]`, `[Video1]`, `[Audio1]`, `@图1`, `@视频1`) in every language.
 
 | Language | Start path | Native reader note |
 |---|---|---|
 | English | [`seedance-prompt`](skills/seedance-prompt/SKILL.md), [`seedance-sequence`](skills/seedance-sequence/SKILL.md), [`references/vocab/en.md`](references/vocab/en.md) | Use precise production English: one visible beat, one camera move, real light, and clear reference roles. |
-| 中文 | [`seedance-vocab-zh`](skills/seedance-vocab-zh/SKILL.md), [`seedance-examples-zh`](skills/seedance-examples-zh/SKILL.md), [`references/vocab/zh.md`](references/vocab/zh.md) | 中文用户可从角色锁定、首尾帧、运镜、动作节奏开始；提示词要短、具体、保留参考标签，不把字幕交给模型生成。 |
-| 日本語 | [`seedance-vocab-ja`](skills/seedance-vocab-ja/SKILL.md), [`references/vocab/ja.md`](references/vocab/ja.md), [`multilingual-community-examples`](references/multilingual-community-examples.md#japanese-english-patterns) | 日本語では、人物の同一性、衣装、構図、動きの終点を明確に書き、字幕や広告コピーは後処理で追加します。 |
-| 한국어 | [`seedance-vocab-ko`](skills/seedance-vocab-ko/SKILL.md), [`references/vocab/ko.md`](references/vocab/ko.md), [`multilingual-community-examples`](references/multilingual-community-examples.md#korean-english-patterns) | 한국어 프롬프트는 인물 고정, 카메라 움직임, 조명, 사운드를 짧게 분리하고 자막과 문구는 편집 단계에서 넣습니다. |
+| 中文 | [`中文指南`](docs/README.zh.md), [`seedance-vocab-zh`](skills/seedance-vocab-zh/SKILL.md), [`seedance-examples-zh`](skills/seedance-examples-zh/SKILL.md), [`references/vocab/zh.md`](references/vocab/zh.md) | 中文用户可从角色锁定、首尾帧、运镜、动作节奏开始；提示词要短、具体、保留参考标签，不把字幕交给模型生成。 |
+| 日本語 | [`日本語ガイド`](docs/README.ja.md), [`seedance-vocab-ja`](skills/seedance-vocab-ja/SKILL.md), [`seedance-examples-ja`](skills/seedance-examples-ja/SKILL.md), [`references/vocab/ja.md`](references/vocab/ja.md) | 日本語では、人物の同一性、衣装、構図、動きの終点を明確に書き、字幕や広告コピーは後処理で追加します。 |
+| 한국어 | [`한국어 가이드`](docs/README.ko.md), [`seedance-vocab-ko`](skills/seedance-vocab-ko/SKILL.md), [`seedance-examples-ko`](skills/seedance-examples-ko/SKILL.md), [`references/vocab/ko.md`](references/vocab/ko.md) | 한국어 프롬프트는 인물 고정, 카메라 움직임, 조명, 사운드를 짧게 분리하고 자막과 문구는 편집 단계에서 넣습니다. |
 
 For longer stories in any language, start with [`seedance-sequence`](skills/seedance-sequence/SKILL.md). For the next part of an accepted clip, use [`seedance-continuation`](skills/seedance-continuation/SKILL.md) and update the observed final state before writing the next prompt.
 
@@ -61,8 +61,8 @@ This skill package turns Seedance 2.0 work into a repeatable assistant workflow:
 - Keeps model and platform claims source-dated so API, pricing, region, quota, and model-ID details are not guessed.
 - Plans into model strengths before drafting: a capability map, a fidelity-allocation model, and a working model of the generator's mechanics that explains why every rule works.
 - Runs the shoot like a producer after generation: five-verdict take triage, one-variable retakes, attempt budgets, and cost-aware drafting.
-- Provides native-reader front-page paths plus deeper multilingual cinematic vocabulary in English, 中文, 日本語, 한국어, Spanish, and Russian, including role binding, first/last-frame phrasing, edit/extend wording, safety wording, and audio cues.
-- Adds original community-informed examples for Chinese-English, Russian-English, Japanese-English, Korean-English, and Spanish-English prompt structures.
+- Provides native-reader front-page paths plus deeper multilingual cinematic vocabulary in English, 中文, 日本語, 한국어, Spanish, and Russian, including role binding, first/last-frame phrasing, edit/extend wording, safety wording, audio cues, continuation wording, and post-production text handling.
+- Adds original community-informed examples for Chinese, Japanese, Korean, Russian-English, and Spanish-English prompt structures.
 - Adds professional filmmaker workflows for treatment-to-shot-list planning, shot contracts, continuity ledgers, ACES/color handoff, audio post, subtitles/localization, aspect-ratio variants, campaign cutdowns, delivery/QC, and client review packets.
 - Handles safe false-positive repairs by clarifying benign production context, not by hiding unsafe intent.
 - Rewrites unsafe celebrity, protected IP, private-person, brand, logo, song, or voice requests into safer creative equivalents.
@@ -120,9 +120,9 @@ For these requests, the skill should not stop at a single prompt. It should retu
 | “This needs subtitles, dubbing, color, sound, or QC.” | [`delivery-qc`](references/delivery-qc.md) | Post, localization, audio, color, and delivery checks. |
 | “I need API, Runway, pricing, model ID, or production workflow guidance.” | [`api-workflow`](references/api-workflow.md) | A source-gated operational checklist. |
 | “Is this Seedance Pro/Fast/V2?” | [`model-name-map`](references/model-name-map.md) | Source-dated naming and surface caveats. |
-| “I read or prompt in Chinese.” | [`seedance-vocab-zh`](skills/seedance-vocab-zh/SKILL.md), [`seedance-examples-zh`](skills/seedance-examples-zh/SKILL.md) | 中文角色锁定、首尾帧、运镜、动作、音频和安全改写路径。 |
-| “I read or prompt in Japanese.” | [`seedance-vocab-ja`](skills/seedance-vocab-ja/SKILL.md), [`references/vocab/ja.md`](references/vocab/ja.md) | 日本語の映画表現、参照ロール、動き、照明、音声、テキストレス納品の書き方。 |
-| “I read or prompt in Korean.” | [`seedance-vocab-ko`](skills/seedance-vocab-ko/SKILL.md), [`references/vocab/ko.md`](references/vocab/ko.md) | 한국어 카메라, 조명, 동작, 사운드, 안전한 참조 역할 작성법. |
+| “I read or prompt in Chinese.” | [`中文指南`](docs/README.zh.md), [`seedance-vocab-zh`](skills/seedance-vocab-zh/SKILL.md), [`seedance-examples-zh`](skills/seedance-examples-zh/SKILL.md) | 中文角色锁定、首尾帧、运镜、动作、音频和安全改写路径。 |
+| “I read or prompt in Japanese.” | [`日本語ガイド`](docs/README.ja.md), [`seedance-vocab-ja`](skills/seedance-vocab-ja/SKILL.md), [`seedance-examples-ja`](skills/seedance-examples-ja/SKILL.md) | 日本語の映画表現、参照ロール、動き、照明、音声、テキストレス納品の書き方。 |
+| “I read or prompt in Korean.” | [`한국어 가이드`](docs/README.ko.md), [`seedance-vocab-ko`](skills/seedance-vocab-ko/SKILL.md), [`seedance-examples-ko`](skills/seedance-examples-ko/SKILL.md) | 한국어 카메라, 조명, 동작, 사운드, 안전한 참조 역할 작성법. |
 | “I want Russian/Spanish or mixed-language prompt examples.” | [`multilingual-community-examples`](references/multilingual-community-examples.md) | Safe community-informed structures and false-positive repair patterns. |
 | “I am installing or reviewing this as an agent skill.” | [`agent-compatibility`](references/agent-compatibility.md) | Codex/Agent Skills structure and distribution notes. |
 
@@ -230,6 +230,8 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`seedance-vocab-es`](skills/seedance-vocab-es/SKILL.md) | Spanish cinematic vocabulary is needed. |
 | [`seedance-vocab-ru`](skills/seedance-vocab-ru/SKILL.md) | Russian cinematic vocabulary is needed. |
 | [`seedance-examples-zh`](skills/seedance-examples-zh/SKILL.md) | Chinese working examples or example-safe rewrites are needed. |
+| [`seedance-examples-ja`](skills/seedance-examples-ja/SKILL.md) | Japanese working examples, continuation examples, textless localization patterns, or safe rewrites are needed. |
+| [`seedance-examples-ko`](skills/seedance-examples-ko/SKILL.md) | Korean working examples, continuation examples, textless localization patterns, or safe rewrites are needed. |
 
 ## Reference Library
 
@@ -362,7 +364,7 @@ The README must stay readable in GitHub mobile, dark mode, and narrow widths. SV
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v6.0.0**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v6.0.1**.
 
 ## License
 

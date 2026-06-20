@@ -2,7 +2,25 @@
 
 All notable changes to this project are documented here.
 
+Current active release: **6.0.1**. Older entries below are preserved as release history, not active version guidance.
+
+## [6.0.1] — 2026-06-20
+
+### Added
+
+- Added full native-reader entry docs for Chinese, Japanese, and Korean: `docs/README.zh.md`, `docs/README.ja.md`, and `docs/README.ko.md`.
+- Added `seedance-examples-ja` and `seedance-examples-ko` so Japanese and Korean users have active example/rewrite skills, not only vocabulary translation.
+- Added CJK sequence/continuation, accepted-footage, textless-localization, and safety rewrite phrases to the active Chinese, Japanese, and Korean vocabulary references.
+- Added eval coverage for the CJK front page, Japanese examples, Korean examples, and localized CJK continuation behavior.
+
+### Changed
+
+- Bumped active release metadata, README badges, eval metadata, validator expectations, and example prompt versions to v6.0.1.
+- Tightened README routing so Chinese, Japanese, and Korean readers start from native docs and active skills rather than migrated legacy references.
+
 ## [6.0.0] — 2026-06-20
+
+Historical base v6 sequence-compiler release.
 
 ### Added
 

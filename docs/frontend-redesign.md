@@ -5,7 +5,7 @@ The repository does not currently contain a standalone web app. The public front
 ## V6 Design Goals
 
 - Lead with the v6 sequence-state promise: one story state, one current clip contract, one compiled Seedance prompt.
-- Make the README useful to native English, Chinese, Japanese, and Korean readers before they reach the install section.
+- Make the README useful to native English, Chinese, Japanese, and Korean readers before they reach the install section, including full native-reader docs and active example skills.
 - Show Seedance's practical range: references, first/last-frame continuity, continuation, product reveal, timeline control, audio, and camera direction.
 - Use generated cinematic infographics for the operating-system overview, skill map, skill capability map, CDN delivery map, reference role map, production delivery map, and QC stack.
 - Allow text-rich infographics when the text is large, corrected, visually balanced, and repeated in nearby searchable Markdown.
@@ -17,6 +17,7 @@ The repository does not currently contain a standalone web app. The public front
 - The first screen must say the project is current v6 work.
 - The README must include visible Chinese, Japanese, and Korean copy, not only English labels saying those languages exist.
 - Native-language rows must link to active skill files and active vocabulary references, not migrated legacy files.
+- Japanese and Korean must have active example-skill routes equal in status to Chinese examples.
 - Reference tags such as `[Image1]`, `[Video1]`, `[Audio1]`, `@图1`, and `@视频1` must be shown exactly so readers do not translate them away.
 - Localization guidance must keep subtitles, legal copy, and market copy in post-production unless the user explicitly asks for simple on-screen generated text.
 

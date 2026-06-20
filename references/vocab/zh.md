@@ -75,6 +75,29 @@ Use this reference for Chinese Seedance prompt wording, role binding, and compac
 【参考】[Image1] 锁定主体身份；[Video1] 仅参考运镜；[Audio1] 仅参考节奏
 ```
 
+## Sequence and Continuation Phrases
+
+Use these when the Chinese prompt is part of a v6 sequence project, continuation, or localized delivery workflow.
+
+| Function | Chinese | English meaning |
+|---|---|---|
+| Role | `本项目状态以已接受视频为准` | accepted footage is the project truth |
+| Role | `从上一段真实结尾继续` | continue from the actual previous ending |
+| Role | `不要重演上一段动作` | do not replay the previous action |
+| Role | `本段只拍当前任务` | this clip shows only the current task |
+| Role | `后续剧情暂不出现` | future story beats do not appear yet |
+| FirstLastFrame | `以上一段尾帧为起点` | use previous final frame as starting point |
+| FirstLastFrame | `以新尾帧状态收束` | settle into the new final state |
+| Motion | `保持上一段开放动作方向` | preserve previous open motion vector |
+| Motion | `动作从静止状态开始` | action starts from a still state |
+| Editing | `作为 Clip 02 的接续提示词` | continuation prompt for Clip 02 |
+| Editing | `只修复尾部漂移，不改前半段` | repair only tail drift, not the first half |
+| Constraint | `已完成动作不得重复` | completed actions must not repeat |
+| Constraint | `未发生内容不得提前出现` | unshown future events must not appear early |
+| Text | `画面保持无文字，字幕后期添加` | keep image textless; subtitles added in post |
+| Text | `中文标题和法务文案在剪辑中添加` | Chinese titles and legal copy added in edit |
+| Safety | `保留创意功能，替换为原创身份` | preserve creative function with original identity |
+
 ## Slop Traps
 
 社区共识：抽象的"感觉词"会让模型无法判断该强调哪个元素。把感觉词拆解成制造这种感觉的物理元素——材质、光线、色彩、空气——画面立即变稳。

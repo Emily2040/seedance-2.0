@@ -10,7 +10,7 @@ tags:
   - safety
   - seedance-20
 metadata:
-  version: "6.0.0"
+  version: "6.0.1"
   updated: "2026-06-20"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"

@@ -9,14 +9,14 @@ from pathlib import Path
 
 EXPECTED_SKILLS = [
     "seedance-antislop", "seedance-audio", "seedance-camera", "seedance-characters", "seedance-continuation",
-    "seedance-copyright", "seedance-examples-zh", "seedance-filter", "seedance-interview",
+    "seedance-copyright", "seedance-examples-ja", "seedance-examples-ko", "seedance-examples-zh", "seedance-filter", "seedance-interview",
     "seedance-interview-short", "seedance-lighting", "seedance-motion", "seedance-pipeline",
     "seedance-prompt", "seedance-prompt-short", "seedance-recipes", "seedance-style",
     "seedance-sequence", "seedance-troubleshoot", "seedance-vfx", "seedance-vocab-en", "seedance-vocab-es", "seedance-vocab-ja",
     "seedance-vocab-ko", "seedance-vocab-ru", "seedance-vocab-zh",
 ]
 
-EXPECTED_VERSION = "6.0.0"
+EXPECTED_VERSION = "6.0.1"
 
 REQUIRED_REFERENCES = [
     "references/api-status.md",
@@ -141,6 +141,10 @@ REQUIRED_FILES = [
     "assets/hero-light.svg",
     "assets/skill-map.svg",
     "docs/frontend-redesign.md",
+    "docs/v6-release-readiness.md",
+    "docs/README.zh.md",
+    "docs/README.ja.md",
+    "docs/README.ko.md",
 ]
 
 REQUIRED_FIELDS = ["name", "description", "license", "user-invocable", "tags", "metadata"]

@@ -63,6 +63,29 @@ Use this reference for Korean Seedance prompt wording, role binding, and compact
 
 `[Image1]은 오리지널 인물을 고정한다. [Video1]은 카메라 움직임만 참고하고 인물, 장소, 브랜드는 복사하지 않는다. [Audio1]은 템포와 분위기만 참고한다.`
 
+## Sequence and Continuation Phrases
+
+Use these when the Korean prompt is part of a v6 sequence project, continuation, or localized delivery workflow.
+
+| Function | Korean | English meaning |
+|---|---|---|
+| Role | `승인된 영상을 프로젝트의 기준으로 삼는다` | accepted footage is the project truth |
+| Role | `이전 실제 끝 상태에서 이어진다` | continue from the actual previous ending |
+| Role | `이전 동작을 반복하지 않는다` | do not replay the previous action |
+| Role | `이번 클립은 현재 작업만 보여준다` | this clip shows only the current task |
+| Role | `뒤의 전개는 아직 보여주지 않는다` | future story beats do not appear yet |
+| FirstLastFrame | `이전 클립의 마지막 프레임을 시작점으로 사용` | use previous final frame as starting point |
+| FirstLastFrame | `새로운 마지막 자세로 멈춘다` | settle into the new final pose |
+| Motion | `이전 열린 움직임 방향을 유지` | preserve previous open motion vector |
+| Motion | `정지 상태에서 움직임을 시작` | action starts from a still state |
+| Editing | `Clip 02 이어가기 프롬프트` | continuation prompt for Clip 02 |
+| Editing | `끝부분 드리프트만 수정하고 앞부분은 유지` | repair only tail drift, not the first half |
+| Constraint | `완료된 동작은 반복하지 않는다` | completed actions must not repeat |
+| Constraint | `아직 일어나지 않은 내용은 먼저 보여주지 않는다` | unshown future events must not appear early |
+| Text | `화면 안 글자는 넣지 않고 자막은 후반 작업에서 추가` | keep image textless; subtitles added in post |
+| Text | `한국어 카피와 법적 문구는 편집에서 추가` | Korean copy and legal text added in edit |
+| Safety | `창작 기능만 유지하고 오리지널 인물로 대체` | preserve creative function with original identity |
+
 ## Slop Traps
 
 커뮤니티 공통 결론: 추상적인 품질 단어는 모델이 어떤 요소를 강조해야 할지 판단하지 못하게 만들어 출력을 불안정하게 한다. 느낌 단어는 그 느낌을 만드는 물리 요소(카메라 동사+속도+시점, 광원+방향+행동)로 분해한다.

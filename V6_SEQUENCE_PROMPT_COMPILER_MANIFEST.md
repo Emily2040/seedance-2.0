@@ -1,6 +1,15 @@
 # V6 Sequence Prompt Compiler Manifest
 
+## Current Patch
+
+- Active package version: `6.0.1`.
+- Patch scope: native Chinese, Japanese, and Korean reader support; Japanese/Korean example skills; v6 release-surface audit.
+- Current expected active sub-skills: 28.
+- Current expected eval cases: 112.
+
 ## Baseline
+
+This section records the inspected historical baseline for the original v6 migration. It is not the current active release number.
 
 - Repository: `Emily2040/seedance-2.0`
 - Baseline commit inspected: `94906cd`
@@ -79,7 +88,7 @@
 
 ## Migrations
 
-- Version moved from `5.5.2` to `6.0.0` across active skill metadata, README, eval metadata, and validator expectations.
+- Version moved from `5.5.2` to the active v6 line across active skill metadata, README, eval metadata, and validator expectations.
 - Expected sub-skills increased from 24 to 26.
 - Required references increased from 47 to 56.
 - Evals increased from 61 to 108.
@@ -109,7 +118,7 @@ git diff --check
 
 Final full-suite run on 2026-06-20:
 
-- `python scripts/validate_skills.py --strict`: pass; validated root plus 26 sub-skills and required v6.0.0 files.
+- `python scripts/validate_skills.py --strict`: pass for the original sequence compiler release. Re-run for the current v6.0.1 patch before merge.
 - `python scripts/content_audit.py --strict`: pass; active content clean, migrated archived warnings remain warning-only.
 - `python scripts/eval_schema_check.py --strict`: pass; 108 eval cases.
 - `python scripts/design_audit.py --strict`: pass.

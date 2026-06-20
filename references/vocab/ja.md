@@ -63,6 +63,29 @@ Use this reference for Japanese Seedance prompt wording, role binding, and compa
 
 `[Image1]でオリジナル人物を固定する。[Video1]はカメラの動きのみ参照し、人物・場所・ブランドはコピーしない。[Audio1]はテンポと雰囲気のみ参照する。`
 
+## Sequence and Continuation Phrases
+
+Use these when the Japanese prompt is part of a v6 sequence project, continuation, or localized delivery workflow.
+
+| Function | Japanese | English meaning |
+|---|---|---|
+| Role | `採用済み動画をプロジェクトの正史にする` | accepted footage is the project truth |
+| Role | `前の実際の終点から続ける` | continue from the actual previous ending |
+| Role | `前の動作を繰り返さない` | do not replay the previous action |
+| Role | `このクリップでは現在のタスクだけを見せる` | this clip shows only the current task |
+| Role | `後の展開はまだ見せない` | future story beats do not appear yet |
+| FirstLastFrame | `前クリップの最後のフレームを開始点にする` | use previous final frame as starting point |
+| FirstLastFrame | `新しい終点の姿勢で止まる` | settle into the new final pose |
+| Motion | `前の開いた動きの方向を保つ` | preserve previous open motion vector |
+| Motion | `静止状態から動き始める` | action starts from a still state |
+| Editing | `Clip 02の続き用プロンプト` | continuation prompt for Clip 02 |
+| Editing | `終端のズレだけを修正し、前半は変えない` | repair only tail drift, not the first half |
+| Constraint | `完了した動作を繰り返さない` | completed actions must not repeat |
+| Constraint | `未発生の内容を先に出さない` | unshown future events must not appear early |
+| Text | `画面内の文字は入れず、字幕は後処理で追加` | keep image textless; subtitles added in post |
+| Text | `日本語コピーと法務文言は編集で追加` | Japanese copy and legal text added in edit |
+| Safety | `創作上の役割だけ残し、オリジナル人物に置き換える` | preserve creative function with original identity |
+
 ## Slop Traps
 
 コミュニティの共通認識：抽象的な形容詞は、モデルがどの要素を強調すべきか判断できず、出力を不安定にする。感覚語は、その感覚を生む物理要素（動作動詞＋速度＋視点、光源＋方向＋挙動）に分解する。
