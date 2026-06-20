@@ -132,7 +132,9 @@ Seedance platform behavior changes quickly. Before making factual claims about A
 
 As of 2026-06-20, public official sources describe Seedance 2.0 as supporting text, image, audio, and video inputs. Official launch and model-card material says references can include up to 9 images, 3 video clips, and 3 audio clips.
 
-Volcengine's May 29 docs keep `doubao-seedance-2-0-260128` and `doubao-seedance-2-0-fast-260128` visible as current Ark model IDs and document first/last-frame role usage on that surface. Runway documents `seedance2` with 5-15 second duration and optional image, video, and audio references.
+Volcengine and BytePlus docs now expose Seedance 2.0 Mini as a surface-specific model lane. Treat `Seedance V2 Mini` as shorthand for Seedance 2.0 Mini only when the active surface confirms it. Current source-visible IDs include `doubao-seedance-2-0-mini-260615` on Volcengine and `dreamina-seedance-2-0-mini-260615` on BytePlus.
+
+Volcengine docs also keep `doubao-seedance-2-0-260128` and `doubao-seedance-2-0-fast-260128` visible as Ark model IDs and document first/last-frame role usage on that surface. Runway documents `seedance2` with 5-15 second duration and optional image, video, and audio references.
 
 Third-party provider/router pages tracked as of 2026-06-20 include EvoLink, OpenRouter, Kie.ai, PiAPI, LaoZhang, Runware, ModelsLab, AI/ML API, MuAPI, SeeGen, and Segmind.
 
@@ -146,7 +148,7 @@ The v6 release line keeps a dated research layer for safer data mining, multilin
 
 - [`research-2026-05-30.md`](references/research-2026-05-30.md) records official and field-observed signals.
 - [`platform-surface-matrix.md`](references/platform-surface-matrix.md) separates model capability from Dreamina/Jimeng, Volcengine/Ark, BytePlus, ComfyUI, and provider/router behavior.
-- [`model-name-map.md`](references/model-name-map.md) prevents `Seedance 2.0`, `Seedance 2.0 Fast`, `Seedance V2`, and ambiguous Pro labels from being mixed together.
+- [`model-name-map.md`](references/model-name-map.md) prevents `Seedance 2.0`, `Seedance 2.0 Fast`, `Seedance 2.0 Mini`, `Seedance V2`, and ambiguous Pro labels from being mixed together.
 - [`community-source-methodology.md`](references/community-source-methodology.md) explains how to mine public prompt corpora without copying unsafe examples.
 - [`multilingual-community-examples.md`](references/multilingual-community-examples.md) captures safe mixed-language and localized prompt structures from community pattern mining.
 - [`pro-filmmaking-standards.md`](references/pro-filmmaking-standards.md) adds industry workflow boundaries for shot lists, continuity, color, audio, localization, and delivery.

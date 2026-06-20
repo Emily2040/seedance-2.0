@@ -10,6 +10,11 @@ Current active release: **6.0.1**. Older entries below are preserved as release 
 
 - Added source-gated provider/router coverage for EvoLink, OpenRouter, Kie.ai, PiAPI, LaoZhang, Runware, ModelsLab, AI/ML API, MuAPI, SeeGen, and Segmind, while keeping them labeled as third-party or router surfaces rather than official ByteDance behavior.
 - Added a China-facing provider-search boundary that separates official ByteDance/Volcengine/BytePlus/Doubao/Jimeng/Jianying surfaces from workflow hosts, Chinese-language blogs, and business-partner news that should not be treated as public API providers without provider-owned docs.
+- Added official source-gated Seedance 2.0 Mini naming, including the Volcengine `doubao-seedance-2-0-mini-260615` and BytePlus `dreamina-seedance-2-0-mini-260615` surface IDs, plus the shorthand rule for "Seedance V2 Mini".
+
+### Fixed
+
+- Kept Runway coverage on stable Models, API Changelog, and help links, and documented that the Seedance-specific guide path can be visible in indexed content while direct live HTTP checks return 404.
 
 ## [6.0.1] — 2026-06-20
 

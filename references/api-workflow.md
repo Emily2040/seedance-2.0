@@ -36,7 +36,9 @@ Use this reference for Seedance 2.0 operational planning on Volcengine, BytePlus
 
 ## Provider Notes
 
-Volcengine docs are the current source for `doubao-seedance-2-0-260128`, `doubao-seedance-2-0-fast-260128`, first/last-frame roles, and Ark task flow. Quote prices only with date and caveat.
+Volcengine docs are the current source for `doubao-seedance-2-0-260128`, `doubao-seedance-2-0-fast-260128`, `doubao-seedance-2-0-mini-260615`, first/last-frame roles, and Ark task flow. The Mini ID was still trial-gated through June 22, 2026 in the official notice checked on June 20. Quote prices only with date and caveat.
+
+BytePlus docs are the current source for `dreamina-seedance-2-0-mini-260615` and the `dreamina-seedance-2.0-mini` pricing-row label. Treat those as BytePlus-specific; recheck Model Playground/API access, duration, resolution, and price before implementation.
 
 Runway docs are the current source for Runway's `seedance2` API surface, `runway://` uploads, duration, reference-count rules, and SDK caveats. Do not copy Runway field names into Volcengine examples or vice versa.
 

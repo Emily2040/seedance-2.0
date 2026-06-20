@@ -1,7 +1,7 @@
 # Seedance 2.0 API and Platform Status
 
 last_verified: 2026-06-20
-confidence: public-source snapshot as of the verification date; per-section dates apply where noted (additional provider/router and China-facing search recorded 2026-06-20, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
+confidence: public-source snapshot as of the verification date; per-section dates apply where noted (Seedance 2.0 Mini, additional provider/router, and China-facing search recorded 2026-06-20, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
 
 ## Confirmed From Public Sources
 
@@ -13,13 +13,14 @@ confidence: public-source snapshot as of the verification date; per-section date
 - The arXiv model card is useful for model-family context, including 4-15 second audio-video generation, native 480p/720p framing in the paper, and a Fast variant.
 - Volcengine/Ark docs publish Seedance 2.0 tutorial and video-generation API navigation, including create/query/list/cancel-delete task flows, but exact schemas, prices, model IDs, regions, and limits must be rechecked live.
 - Volcengine's model-list page was observed updated on 2026-05-29.
-- Volcengine's Seedance 2.0 tutorial was observed updated on 2026-05-29 and still listed `doubao-seedance-2-0-260128` and `doubao-seedance-2-0-fast-260128`.
+- Volcengine's Seedance 2.0 tutorial now lists the Mini trial notice and `doubao-seedance-2-0-mini-260615` alongside the earlier `doubao-seedance-2-0-260128` and `doubao-seedance-2-0-fast-260128` model IDs.
 - Volcengine's general video-generation tutorial was observed updated on 2026-05-29 and is the current first-party place to recheck task lifecycle, first/last-frame roles, return-last-frame, web-search tools, and file/reference combinations.
 - Volcengine's prompt guide was observed updated on 2026-05-15 and reinforces multimodal reference prompting.
 - Volcengine's pricing page was observed updated on 2026-05-28. Quote Volcengine prices only with surface, date, currency, model/resolution/duration context, and a recheck warning. Keep the stronger no-quote caveat for JavaScript-rendered BytePlus pages that are not live-verified.
 - A Volcengine developer-community article says Seedance 2.0 API service is online and mentions portrait/copyright safety standards, face verification, portrait authorization, virtual portrait assets, and BytePlus overseas API service. Treat this as official ecosystem/news evidence, not the API contract.
 - Public BytePlus pages may be JavaScript-rendered in static fetches. Do not quote Seedance 2.0 BytePlus pricing or model IDs from such pages without live official verification.
-- Runway's official Seedance 2 API guide documents model `seedance2`, 5-15 second duration, image/video/audio references, upload handling through `runway://`, audio-combination rules, and SDK-type lag for `referenceAudio`.
+- Runway's official Models, API Changelog, and help pages list Seedance 2.0/Seedance 2.0 Fast on the Runway surface. The older Seedance-specific guide path can appear in indexed/browser content, but direct live HTTP checks returned 404 on 2026-06-20, so do not treat that path as a stable primary link until it returns a successful status.
+- BytePlus ModelArk docs now list Dreamina Seedance 2.0 Mini, `dreamina-seedance-2-0-mini-260615`, and pricing rows for `dreamina-seedance-2.0-mini`. Treat the hyphenated ID and dotted pricing label as surface-specific BytePlus names, not canonical names for every provider.
 - Additional provider/router pages visible on 2026-06-20 include EvoLink, OpenRouter, Kie.ai, PiAPI, LaoZhang, Runware, ModelsLab, AI/ML API, MuAPI, SeeGen, and Segmind. Treat them as surface-specific access routes, not official ByteDance/Volcengine/BytePlus contracts.
 - China-facing searches on 2026-06-20 confirm the strongest sources remain official ByteDance Seed, Volcengine Ark, BytePlus ModelArk, Doubao, Jimeng/Jianying, and CapCut/Jianying surfaces. Chinese-language workflow posts, business-partner news, or hosted ComfyUI workflows are not public API providers unless they publish provider-owned API docs.
 - Partner workflow docs such as ComfyUI expose T2V, R2V, and FLF2V workflow vocabulary, but those docs are surface-specific.
@@ -60,6 +61,16 @@ Primary sources (the arXiv model card and the ByteDance Seed page) state Seedanc
 **Prompting:** prose direction; `Shot 1:/Shot 2:` labels for multi-shot; r2v docs also accept timestamp pacing phrases as secondary hints. **Fast tier:** official fal docs give fast endpoints the same schema and multi-shot support; field reports still favor the Standard tier for multi-shot, slow motion, and dolly moves — treat that as field guidance, not provider doc.
 **No dedicated extend endpoint** — extend is a Dreamina-app feature. To continue a clip on fal, prefer reference-to-video with the previous clip as a video reference (keeps motion and audio context); chaining image-to-video from the previous clip's last frame is the fallback.
 
+## Seedance 2.0 Mini *(recorded 2026-06-20)*
+
+Official Volcengine and BytePlus docs now expose Seedance 2.0 Mini as a lighter Seedance 2.0 series lane. Use the canonical public wording `Seedance 2.0 Mini`, not `Seedance V2 Mini`, unless quoting a user or wrapper label.
+
+- **Volcengine Ark:** visible model ID `doubao-seedance-2-0-mini-260615`. Volcengine's notice says that from June 15 to June 22, 2026, it is available only through the console experience center with concurrency limited to 1, and that API support is expected after June 22 Beijing time. Recheck this after June 22 before giving API instructions.
+- **BytePlus ModelArk:** visible model ID `dreamina-seedance-2-0-mini-260615`; BytePlus docs describe the same June 15-June 22, 2026 trial-window limitation through Model Playground. BytePlus pricing pages also show a `dreamina-seedance-2.0-mini` row and state 1080p is not supported for that row. Recheck pricing live before quoting numbers.
+- **Dreamina/CapCut web:** official Dreamina page describes Seedance 2.0 Mini as faster/lower-cost and available in Dreamina. Treat its workflow claims as Dreamina web-surface behavior, not an API schema.
+
+Do not confuse Seedance Mini IDs with `doubao-seed-2-0-mini-*`, which belongs to the non-Seedance Seed/Doubao model naming lane.
+
 ## Additional Provider/Router Surfaces *(recorded 2026-06-20)*
 
 These are third-party or router surfaces. They are useful for integration planning, but each one can rename modes, alter schemas, hide fields, change pricing, or impose its own moderation and account rules.
@@ -83,6 +94,7 @@ Use this wording unless newer primary sources say otherwise:
 
 - Use `Seedance 2.0` for the official video model line.
 - Use `Seedance 2.0 Fast` only when the active surface exposes a Fast variant.
+- Use `Seedance 2.0 Mini` only when the active surface exposes the Mini lane; treat `Seedance V2 Mini` as shorthand, not canonical naming.
 - Use `seedance2` only for Runway's API surface.
 - Use provider/router model IDs only on that provider's surface, for example EvoLink's `seedance-2.0-text-to-video`, OpenRouter's `bytedance/seedance-2.0`, PiAPI task types, or Runware's `bytedance:seedance@2.0`.
 - Do not call `Seedance 2.0 Pro` the official video-model name without a current source. Treat it as ambiguous wrapper or community wording.
@@ -133,10 +145,13 @@ Real-person face, portrait, and voice workflows require authorization, legal/eth
 - https://www.volcengine.com/docs/82379/1544106?lang=zh
 - https://developer.volcengine.com/articles/7628567056649125942
 - https://docs.byteplus.com/en/docs/ModelArk/2291680
+- https://docs.byteplus.com/en/docs/ModelArk/1520757
+- https://docs.byteplus.com/en/docs/ModelArk/1544106
 - https://docs.byteplus.com/en/docs/ModelArk/1099320
 - https://fal.ai/models/bytedance/seedance-2.0/text-to-video
 - https://fal.ai/models/bytedance/seedance-2.0/image-to-video
 - https://fal.ai/models/bytedance/seedance-2.0/reference-to-video
+- https://docs.dev.runwayml.com/assets/inputs/
 - https://evolink.ai/seedance-2-0
 - https://openrouter.ai/bytedance/seedance-2.0
 - https://kie.ai/seedance-2-0
