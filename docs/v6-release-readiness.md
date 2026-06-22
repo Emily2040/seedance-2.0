@@ -4,7 +4,7 @@ Use this document when checking the active front page before merge.
 
 ## Current Release Surface
 
-- README badge, update line, changelog pointer, eval metadata, validator expectations, examples, and active skill metadata must show `6.0.1`.
+- README badge, update line, changelog pointer, eval metadata, validator expectations, examples, and active skill metadata must show `6.1.0`.
 - Active docs should describe v6 sequence-state architecture, prompt compiler behavior, and multilingual reader paths.
 - Historical version details belong in older `CHANGELOG.md` entries, `references/migrated/`, or Git history, not the active README surface.
 

@@ -9,8 +9,8 @@ tags:
   - brief
   - seedance-20
 metadata:
-  version: "6.0.1"
-  updated: "2026-06-20"
+  version: "6.1.0"
+  updated: "2026-06-22"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -71,6 +71,12 @@ Translate everyday answers into production language inside the brief - never out
 | cute | camera low at subject height, bright soft light, small bouncy motions |
 | dreamy | drifting camera, haze and glow, slow motion on a single beat |
 
+## Direct the Scene, Don't Decorate It
+
+The feeling answer is not a style label to sprinkle on; it is the input to a directorial decision. Load `[ref:directing-engine]` and run the Director's Read silently on the idea: what is the scene doing (function and turn), whose experience are we in, who holds power, and what is felt but unsaid. From the genre, the chosen feeling, any reference look the user loves, and where it will be watched, set one directorial voice for the whole project and keep it. Then every scene gets a coherent setup - camera, lens, light, blocking, performance, and sound all serving one intention - rather than a generic "cinematic" look. Write the result into the brief in director language; never quiz the user about voice, lenses, or ratios.
+
+When the idea has more than one scene, give each scene its own read and setup but the same voice, and plan how the look should tighten toward the turning point so the finished story feels authored by one hand. Performance is written as one true visible gesture per beat, not as an emotion word.
+
 ## Propose, Then Adjust
 
 After one round of answers - or zero rounds, if the idea is already rich - stop asking and show:
@@ -85,14 +91,14 @@ Reacting to a draft is easier than answering questions: a non-expert says "yes, 
 
 1. Build a safe draft premise immediately from the user input.
 2. Run the priority question pool in one batch, skipping every question the idea already answers.
-3. Identify the genre path: product, lifestyle, drama, music video, landscape, commercial, animation, UGC, or experimental.
+3. Identify the genre path: product, lifestyle, drama, music video, landscape, commercial, animation, UGC, or experimental. With `[ref:directing-engine]`, derive one directorial voice from that path plus the chosen feeling, reference look, and surface, and run the Director's Read on each scene to fix its intention and coherent setup.
 4. If the user is a filmmaker, agency, producer, editor, localization team, or client-review owner, load `[ref:pro-filmmaking-standards]` and collect deliverables, territory, aspect ratio, approval owner, rights, and post/delivery needs.
 5. If the idea is a sequence project, load `[skill:seedance-sequence]` and output a full-story mini-treatment, final story outcome, sequence beat map, continuity bible, first clip contract, first clip prompt, provisional future intent cards, and Project State Capsule.
 6. For standalone work, propose the mini-treatment with switchable assumptions, adjust on reaction, end with a concise creative brief, and route to `[skill:seedance-prompt]`, `[skill:seedance-prompt-short]`, or `[skill:seedance-pipeline]`.
 
 ## Output Contract
 
-Return: mini-treatment in plain language, assumptions with one-word switches, concept summary, production phase, reference asset request, core scene, mood, camera intent, sound intent, safety/rights notes, deliverables if known, and next prompt path.
+Return: mini-treatment in plain language, assumptions with one-word switches, concept summary, production phase, reference asset request, the chosen directorial voice, each scene's intention and coherent setup (camera, light, blocking, performance, sound), core scene, mood, camera intent, sound intent, safety/rights notes, deliverables if known, and next prompt path.
 
 For a sequence project, return the sequence output contract from `[skill:seedance-sequence]`. For a standalone request, retain the concise existing workflow and do not over-plan.
 

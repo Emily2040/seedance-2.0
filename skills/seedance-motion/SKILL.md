@@ -9,8 +9,8 @@ tags:
   - physics
   - seedance-20
 metadata:
-  version: "6.0.1"
-  updated: "2026-06-20"
+  version: "6.1.0"
+  updated: "2026-06-22"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -23,7 +23,7 @@ metadata:
 
 Use physical verbs and consequences. Motion should be observable on screen, timed within the clip, and assigned to a subject or object. Prefer one strong action with a visible endpoint over several vague actions competing for attention.
 
-Load `[ref:reference-workflow]` for video-motion references, `[ref:shot-list-continuity]` for action handoffs across shots, and `[ref:examples-by-mode]` for safe edit, extend, and R2V patterns.
+Load `[ref:reference-workflow]` for video-motion references, `[ref:shot-list-continuity]` for action handoffs across shots, `[ref:examples-by-mode]` for safe edit, extend, and R2V patterns, and `[ref:directing-engine]` when motion is performance: translate the scene's emotion into one true visible gesture per beat - a playable action with an objective and subtext - instead of an emotion word the model cannot render.
 
 ## Intent
 

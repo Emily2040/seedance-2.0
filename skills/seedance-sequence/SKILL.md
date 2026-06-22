@@ -9,8 +9,8 @@ tags:
   - prompt-compiler
   - seedance-20
 metadata:
-  version: "6.0.1"
-  updated: "2026-06-20"
+  version: "6.1.0"
+  updated: "2026-06-22"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -23,7 +23,7 @@ metadata:
 
 Use this when the user's idea is larger than one reliable generation, when connected clips are requested, or when the user says continue, extend, next part, part two, next scene, or make it longer. Plan globally, generate locally: the skill plans the whole story, but compiles only the next unresolved clip.
 
-Load `[ref:sequence-project-state]`, `[ref:continuation-handoff]`, `[ref:prompt-compiler]`, `[ref:surface-prompt-profiles]`, `[ref:event-density]`, and `[ref:continuity-qc]`. Load `[ref:reference-transfer-contract]` when references are present and `[ref:dense-storyboard-mode]` when the request contains many shots or animation panels.
+Load `[ref:sequence-project-state]`, `[ref:continuation-handoff]`, `[ref:prompt-compiler]`, `[ref:surface-prompt-profiles]`, `[ref:event-density]`, and `[ref:continuity-qc]`. Load `[ref:reference-transfer-contract]` when references are present and `[ref:dense-storyboard-mode]` when the request contains many shots or animation panels. Load `[ref:directing-engine]` to set one directorial voice for the whole story and plan the long-form spine so the look is authored by one hand across every clip.
 
 ## Intent
 
@@ -46,7 +46,7 @@ If the surface is unknown, use a conservative generic profile. Do not invent a d
 ## Build Process
 
 1. Establish the story promise and final outcome before Clip 01.
-2. Identify the character, product, or narrative objective.
+2. Identify the character, product, or narrative objective, and with `[ref:directing-engine]` set one directorial voice for the whole project and plan the long-form spine - how shot scale, camera movement, light contrast, and sound should progress from open to climax to release, and which single clip breaks the pattern to mark the turn.
 3. Extract ordered beats and assign each beat a status: planned, current, completed, omitted, or replaced.
 4. Divide beats into generation-sized clips using the active surface budget or conservative assumption.
 5. Give every clip one narrative job and one completed endpoint.
@@ -59,7 +59,7 @@ Use beginner-friendly language. It is valid to say: "This idea needs three conne
 
 ## Sequence Map Fields
 
-Each clip card must include `clip_id`, `sequence_index`, `parent_clip_id`, `narrative_job`, `target_duration_sec`, `generation_mode`, `shot_structure`, `already_happened`, `this_clip_only`, `reserved_for_later`, `planned_start_state`, `planned_end_state`, `transition_in`, `transition_out`, `continuity_locks`, `allowed_changes`, and `status`.
+Each clip card must include `clip_id`, `sequence_index`, `parent_clip_id`, `narrative_job`, `target_duration_sec`, `generation_mode`, `shot_structure`, `already_happened`, `this_clip_only`, `reserved_for_later`, `planned_start_state`, `planned_end_state`, `transition_in`, `transition_out`, `continuity_locks`, `allowed_changes`, `arc_position`, and `status`. The `arc_position` (open, rising, turn, climax, or release) records where the clip sits on the directorial spine so its scale, movement, light, and sound trends inherit the project voice.
 
 Clip 01 can plan "exit terminal and reach open car door" with the endpoint "subject beside the open rear door" while reserving "entering the car" and "vehicle departure" for later clips. Do not paste all planned clips into one generation prompt.
 
@@ -70,7 +70,7 @@ For a new sequence, return:
 1. Project summary.
 2. Story spine.
 3. Final outcome.
-4. World and continuity bible.
+4. World and continuity bible, including the chosen directorial voice and the long-form look spine (how scale, movement, light, and sound progress, and which clip breaks the pattern).
 5. Sequence map.
 6. Clip 01 contract.
 7. Clip 01 final Seedance prompt in natural language.

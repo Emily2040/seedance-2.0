@@ -8,8 +8,8 @@ tags:
   - safe-rewrite
   - seedance-20
 metadata:
-  version: "6.0.1"
-  updated: "2026-06-20"
+  version: "6.1.0"
+  updated: "2026-06-22"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"

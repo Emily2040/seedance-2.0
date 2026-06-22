@@ -2,18 +2,31 @@
 
 All notable changes to this project are documented here.
 
-Current active release: **6.0.1**. Older entries below are preserved as release history, not active version guidance.
+Current active release: **6.1.0**. Older entries below are preserved as release history, not active version guidance.
 
 ## Unreleased
 
+_No unreleased changes._
+
+## [6.1.0] — 2026-06-22
+
 ### Added
+
+- Added `references/directing-engine.md`: a directorial reasoning layer above the camera, lighting, motion, and character lookup tables. It reads a scene's dramatic function (function, turn, POV, power, subtext), names one intention, and derives a single coherent setup where camera, lens, light, blocking, performance, and sound all reinforce that intention instead of stacking generic "cinematic" descriptors.
+- Added a Director's Voice model with six IP-safe functional style archetypes so a project keeps one consistent directorial hand, plus a long-form look spine that progresses scale, movement, light, and sound across connected clips and marks the single clip that breaks the pattern at the story turn.
+- Added performance direction that converts emotion into one true visible gesture per beat, plays subtext through contradiction, and a coherence test that rejects unmotivated technique.
+- Added two eval cases: `directing_scene_coherence` and `directorial_voice_across_sequence`.
+
+### Changed
+
+- Wired the directing engine into the operating loop and load map of the root skill and into `seedance-interview`, `seedance-interview-short`, `seedance-prompt`, `seedance-camera`, `seedance-lighting`, `seedance-motion`, `seedance-characters`, `seedance-sequence`, and `seedance-continuation`, so scene direction, performance, and a single directorial voice flow from interview through prompt to long-form continuation. Added an `arc_position` field to the sequence clip card.
+- Bumped active release metadata, README badges, reference library, eval metadata, and validator expectations to v6.1.0 (28 sub-skills, 57 references, 114 eval cases).
+
+### Carried forward from v6.0.x maintenance
 
 - Added source-gated provider/router coverage for EvoLink, OpenRouter, Kie.ai, PiAPI, LaoZhang, Runware, ModelsLab, AI/ML API, MuAPI, SeeGen, and Segmind, while keeping them labeled as third-party or router surfaces rather than official ByteDance behavior.
 - Added a China-facing provider-search boundary that separates official ByteDance/Volcengine/BytePlus/Doubao/Jimeng/Jianying surfaces from workflow hosts, Chinese-language blogs, and business-partner news that should not be treated as public API providers without provider-owned docs.
 - Added official source-gated Seedance 2.0 Mini naming, including the Volcengine `doubao-seedance-2-0-mini-260615` and BytePlus `dreamina-seedance-2-0-mini-260615` surface IDs, plus the shorthand rule for "Seedance V2 Mini".
-
-### Fixed
-
 - Restored the Runway Seedance-specific API guide as a primary source alongside stable Models, API Changelog, Inputs, and help links, with a checker caveat for raw HTTP status inconsistencies.
 
 ## [6.0.1] — 2026-06-20
@@ -47,7 +60,7 @@ Historical base v6 sequence-compiler release.
 - Root routing now runs a Sequence Gate before the Mode Gate and requires accepted source footage or an observed final state before continuation prompts.
 - Interview, prompt, short-prompt, troubleshooting, camera, motion, characters, audio, lighting, style, and recipe skills now inherit sequence state, continuity locks, completed beats, reserved future beats, and exact reference tags when present.
 - README, skill map, reference library, validation commands, agent compatibility notes, eval rubric, JSON schema reference, and CI workflow now reflect v6.0.0.
-- README now includes native-reader start paths for Chinese, Japanese, and Korean users, with language-specific links into the active vocabulary and example system.
+- README introduces native-reader start paths, beginning with Chinese, that link into the active vocabulary and example system; full Japanese and Korean parity (native docs and example skills) followed in v6.0.1.
 - Prompt budget guidance is surface-specific instead of treating any character count as universal.
 
 ## [5.5.2] — 2026-06-12

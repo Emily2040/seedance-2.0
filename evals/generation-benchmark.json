@@ -1,5 +1,5 @@
 {
-  "benchmark_version": "6.0.1",
+  "benchmark_version": "6.1.0",
   "updated": "2026-06-20",
   "note": "Synthetic benchmark fixtures for structure validation only; they are not production generation results.",
   "cases": [

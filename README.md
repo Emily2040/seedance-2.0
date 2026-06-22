@@ -12,10 +12,10 @@
 
 An agent operating system for Seedance 2.0 filmmaking — text, image, video, and reference to video<br>with native audio, IP-safe rewrites, source-dated platform facts, and native reader paths for English, 中文, 日本語, and 한국어.
 
-[![Version](https://img.shields.io/badge/version-6.0.1-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
+[![Version](https://img.shields.io/badge/version-6.1.0-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
 [![Sub-skills](https://img.shields.io/badge/sub--skills-28-4A4438?style=flat-square&labelColor=14110B)](#skill-map)
-[![References](https://img.shields.io/badge/references-56-4A4438?style=flat-square&labelColor=14110B)](#reference-library)
-[![Evals](https://img.shields.io/badge/evals-112-4A4438?style=flat-square&labelColor=14110B)](#validation)
+[![References](https://img.shields.io/badge/references-57-4A4438?style=flat-square&labelColor=14110B)](#reference-library)
+[![Evals](https://img.shields.io/badge/evals-114-4A4438?style=flat-square&labelColor=14110B)](#validation)
 [![License](https://img.shields.io/badge/license-MIT-4A4438?style=flat-square&labelColor=14110B)](LICENSE)
 
 [Start here](#start-here) · [Skill map](#skill-map) · [Reference library](#reference-library) · [Visual gallery](#visual-gallery) · [Install](#install)
@@ -28,13 +28,13 @@ Author: [Iamemily2050 (@iamemily2050)](https://github.com/Emily2040) · [Instagr
 
 Platform context: [ByteDance Seedance 2.0](https://seed.bytedance.com/en/seedance2_0) · Dreamina · Jimeng · Doubao · [Volcengine Ark](https://www.volcengine.com/docs/82379/2291680?lang=zh) · [BytePlus ModelArk](https://docs.byteplus.com/en/docs/ModelArk/2291680) · [Runway Seedance 2](https://docs.dev.runwayml.com/guides/models/) · fal · provider/router surfaces tracked in [`platform-surface-matrix.md`](references/platform-surface-matrix.md)
 
-Updated: **2026-06-20** · **v6.0.1 CJK native-reader expansion and v6 audit**
+Updated: **2026-06-22** · **v6.1.0 directing engine: motivated scene direction and one directorial voice across a story**
 
 ---
 
 ## Native Language Start / 多语言入门 / 多言語スタート / 다국어 시작
 
-Seedance 2.0 Skill OS is English-readable, but v6.0.1 gives Chinese, Japanese, and Korean readers first-class entry points, active example skills, and native prompt guidance. Keep reference tags exactly as written (`[Image1]`, `[Video1]`, `[Audio1]`, `@图1`, `@视频1`) in every language.
+Seedance 2.0 Skill OS is English-readable, but the v6 line gives Chinese, Japanese, and Korean readers first-class entry points, active example skills, and native prompt guidance. Keep reference tags exactly as written (`[Image1]`, `[Video1]`, `[Audio1]`, `@图1`, `@视频1`) in every language.
 
 | Language | Start path | Native reader note |
 |---|---|---|
@@ -56,6 +56,7 @@ The repository gives an AI assistant a public, auditable operating system for Se
 This skill package turns Seedance 2.0 work into a repeatable assistant workflow:
 
 - Routes vague ideas into short creative interviews instead of premature prompt dumps.
+- Directs each scene before drafting: reads its dramatic function, sets one directorial voice, and makes camera, light, blocking, performance, and sound serve a single intention instead of a generic "cinematic" look - and holds that voice across every clip of a long story.
 - Writes full or compressed prompts for T2V, I2V, V2V, R2V, FLF2V, edit, extend, audio-aware, and first/last-frame workflows.
 - Separates every reference asset by role: identity, environment, motion, camera rhythm, audio tempo, style, or endpoint.
 - Keeps model and platform claims source-dated so API, pricing, region, quota, and model-ID details are not guessed.
@@ -108,6 +109,7 @@ For these requests, the skill should not stop at a single prompt. It should retu
 | “This is a longer story / make it three connected clips.” | [`seedance-sequence`](skills/seedance-sequence/SKILL.md) | Full story spine, continuity bible, sequence map, Clip 01 contract, and Clip 01 prompt only. |
 | “Continue this video / make the next part.” | [`seedance-continuation`](skills/seedance-continuation/SKILL.md) | A source-gated continuation from accepted footage or a request for the missing clip/final frame. |
 | “I know the scene I want.” | [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | A production-ready Seedance prompt. |
+| “Make it actually feel directed, not just cinematic.” | [`directing-engine`](references/directing-engine.md) | One intention per scene, a coherent camera/light/blocking/performance/sound setup, and one directorial voice across the story. |
 | “Make it short and strong.” | [`seedance-prompt-short`](skills/seedance-prompt-short/SKILL.md) | A compressed 30–100 word prompt. |
 | “I have an image/video/audio reference.” | [`reference-workflow`](references/reference-workflow.md) | A role map for every reference asset. |
 | “Use this as first frame and that as final frame.” | [`first-last-frame-guide`](references/first-last-frame-guide.md) | A continuous transition with endpoint locks. |
@@ -249,6 +251,7 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`agent-compatibility.md`](references/agent-compatibility.md) | Agent Skills structure, Codex compatibility, and packaging notes. |
 | [`api-workflow.md`](references/api-workflow.md) | Volcengine, BytePlus, Runway, provider/router APIs, async task, reference-file, pricing, and production workflow checklist. |
 | [`capability-map.md`](references/capability-map.md) | Design into model strengths and around known limits before prompting. |
+| [`directing-engine.md`](references/directing-engine.md) | Read the scene, choose one intention, make every instrument cohere, hold one directorial voice, and shape the look across a long story. |
 | [`model-mechanics.md`](references/model-mechanics.md) | Why the rules work: eight mechanisms of the generator, novel-case derivation, mechanism-indexed diagnosis. |
 | [`retake-protocol.md`](references/retake-protocol.md) | The iteration economy: take triage, the one-variable rule, attempt budgets, cost awareness, the shot log. |
 | [`sequence-project-state.md`](references/sequence-project-state.md) | Stateful project model, canon reconciliation, visual state fields, and Project State Capsule. |
@@ -370,7 +373,7 @@ The README must stay readable in GitHub mobile, dark mode, and narrow widths. SV
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v6.0.1**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v6.1.0**.
 
 ## License
 

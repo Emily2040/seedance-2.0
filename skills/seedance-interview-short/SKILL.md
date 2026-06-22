@@ -9,8 +9,8 @@ tags:
   - compression
   - seedance-20
 metadata:
-  version: "6.0.1"
-  updated: "2026-06-20"
+  version: "6.1.0"
+  updated: "2026-06-22"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -36,6 +36,8 @@ Ask at most three questions, and only ask them if the answer materially changes 
 3. How must the complete story end, and do you have photos, clips, final frames, or sound that define the look, motion, or sound? `(none is fine; if continuing, I need the accepted clip or final frame)`
 
 If the user already supplied enough information, do not ask. Produce a brief immediately. If the user speaks production language fluently, drop the plain phrasing and ask in director terms.
+
+Even in fast mode, the brief states one motivated intention, not a generic "cinematic" look: name what the scene is doing and let the camera, light, and performance serve that. Load `[ref:directing-engine]` only when the right setup for the scene is genuinely unclear; otherwise apply its coherence rule inline.
 
 ## Compact Brief Pattern
 

@@ -8,8 +8,8 @@ tags:
   - video-generation
   - seedance-20
 metadata:
-  version: "6.0.1"
-  updated: "2026-06-20"
+  version: "6.1.0"
+  updated: "2026-06-22"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -29,6 +29,8 @@ Load `[ref:quick-ref]` for the checklist, `[ref:reference-workflow]` for multimo
 This is the translator between a scene that exists in someone's head and one that exists on screen. The user has already imagined it; the job is to lose as little as possible in transit. Success is a first generation close enough that they can react instead of explain. Each revision inherits everything the story has already decided and changes only what the reaction asked for - a draft is a conversation, not a restart.
 
 ## Director Formula
+
+Before filling slots, decide the one thing the shot is doing. Load `[ref:directing-engine]`, read the scene, name a single intention, and let that intention choose the camera, lighting, blocking, performance, and sound together so they reinforce instead of compete. The formula below is the container for a coherent setup, not a checklist of independent decorations; if a project voice is already set, keep this shot inside it.
 
 Use `Subject + Action + Scene + Camera + Lighting/Style + Audio + Constraints`. Put the subject and primary action first because early clauses set the shot hierarchy. Do not force every slot if a reference asset already shows the information; for I2V, describe only the motion, camera, timing, transformation, audio, and preservation constraints that the still image cannot show.
 
@@ -64,7 +66,7 @@ For sequence prompts, preserve `project_id`, `clip_id`, `parent_clip_id`, contin
 
 ## Prompt Build Process
 
-First, identify the single visible beat: reveal, arrival, decision, transformation, contact, pursuit, or disappearance. Next, assign reference roles before adding adjectives. Then write a compact first draft in the director formula order. Finally, run a self-check: one main subject, one main action, one main camera move, physical lighting, assigned character tags, sound intent, and no hollow boosters.
+First, identify the single visible beat: reveal, arrival, decision, transformation, contact, pursuit, or disappearance, and name the one intention it serves. Next, assign reference roles before adding adjectives. Then write a compact first draft in the director formula order, keeping camera, light, performance, and sound aimed at that intention. Finally, run a self-check and the directing coherence test from `[ref:directing-engine]`: one main subject, one main action, one motivated main camera move, physically motivated lighting, performance written as a visible gesture rather than an emotion word, assigned character tags, sound intent, and no hollow boosters.
 
 ## Compression Rules
 

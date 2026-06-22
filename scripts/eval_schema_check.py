@@ -119,6 +119,8 @@ REQUIRED_IDS = {
     "i2v_does_not_redundantly_redescribe_image",
     "r2v_reference_roles_do_not_bleed",
     "sequence_prompt_contains_only_current_clip",
+    "directing_scene_coherence",
+    "directorial_voice_across_sequence",
 }
 
 

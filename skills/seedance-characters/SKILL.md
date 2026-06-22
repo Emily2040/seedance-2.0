@@ -9,8 +9,8 @@ tags:
   - consistency
   - seedance-20
 metadata:
-  version: "6.0.1"
-  updated: "2026-06-20"
+  version: "6.1.0"
+  updated: "2026-06-22"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"
@@ -23,7 +23,7 @@ metadata:
 
 Use this for identity, consistency, multi-character blocking, wardrobe continuity, hand safety, expression control, and likeness-sensitive character guidance. Character prompting must remove ambiguity before adding style.
 
-Load `[ref:shot-list-continuity]` when character identity, wardrobe, props, eyeline, screen direction, or emotional state must survive across multiple shots.
+Load `[ref:shot-list-continuity]` when character identity, wardrobe, props, eyeline, screen direction, or emotional state must survive across multiple shots. Load `[ref:directing-engine]` to direct performance: give each character a playable objective, show subtext through contradiction between word and action, and keep one performance register consistent with the project's directorial voice.
 
 ## Intent
 

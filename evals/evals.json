@@ -1,6 +1,6 @@
 {
-  "version": "6.0.1",
-  "updated": "2026-06-20",
+  "version": "6.1.0",
+  "updated": "2026-06-22",
   "cases": [
     {
       "id": "vague_idea_interview",
@@ -2520,6 +2520,39 @@
       ],
       "expected_prompt_architecture": "project state -> current clip contract -> natural-language prompt for current clip only",
       "expected_sequence_relation": "sequence_first_clip"
+    },
+    {
+      "id": "directing_scene_coherence",
+      "prompt": "Make this feel cinematic: a woman reads a letter and realizes her brother isn't coming home.",
+      "expected_output": "A motivated, coherent shot design driven by one named intention, not a generic cinematic look.",
+      "assertions": [
+        "names one intention the scene serves",
+        "camera lighting blocking performance and sound all reinforce that one intention",
+        "performance written as a visible gesture rather than an emotion word",
+        "rejects generic cinematic boosters"
+      ],
+      "failure_mode": "decorating with cinematic adjectives instead of directing the scene",
+      "skills_expected_to_activate": [
+        "seedance-prompt",
+        "seedance-camera",
+        "seedance-lighting"
+      ]
+    },
+    {
+      "id": "directorial_voice_across_sequence",
+      "prompt": "Plan a 45-second short film in connected clips about a kid learning to ride a bike, and keep it feeling like one director made it.",
+      "expected_output": "A sequence plan that sets one directorial voice and a long-form look spine applied across every clip.",
+      "assertions": [
+        "sets one directorial voice for the whole project",
+        "plans how scale movement light and sound progress across clips",
+        "marks one clip as the pattern break for the turn",
+        "compiles only the first clip and keeps later clips provisional"
+      ],
+      "failure_mode": "per-clip look drift with no consistent directorial hand",
+      "skills_expected_to_activate": [
+        "seedance-sequence",
+        "seedance-interview"
+      ]
     }
   ]
 }
