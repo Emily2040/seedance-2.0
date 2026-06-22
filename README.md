@@ -10,7 +10,7 @@
 
 **Direct the model. Don't micro-manage the frame.**
 
-An agent operating system for Seedance 2.0 filmmaking — text, image, video, and reference to video<br>with native audio, IP-safe rewrites, source-dated platform facts, and native reader paths for English, 中文, 日本語, and 한국어.
+An agent that directs Seedance 2.0 like a filmmaker — reading each scene before it writes the prompt.<br>Text, image, video, and reference to video with native audio, IP-safe rewrites, source-dated platform facts, and native reader paths for English, 中文, 日本語, and 한국어.
 
 [![Version](https://img.shields.io/badge/version-6.1.0-E2A75E?style=flat-square&labelColor=14110B)](#changelog)
 [![Sub-skills](https://img.shields.io/badge/sub--skills-28-4A4438?style=flat-square&labelColor=14110B)](#skill-map)
@@ -31,6 +31,16 @@ Platform context: [ByteDance Seedance 2.0](https://seed.bytedance.com/en/seedanc
 Updated: **2026-06-22** · **v6.1.0 directing engine: motivated scene direction and one directorial voice across a story**
 
 ---
+
+## Direct the scene, don't decorate it
+
+Most tools ask the model for a "cinematic look." A director asks what the scene is *doing* — then makes the camera, lens, light, blocking, performance, and sound all serve one intention, in a single recognizable voice, across an entire story.
+
+The v6.1.0 [**directing engine**](references/directing-engine.md) encodes that judgment. It reads a scene's dramatic function — the turn, the point of view, the power, the subtext — names one intention, and derives a coherent setup instead of stacking adjectives.
+
+It then holds one directorial voice across every short clip of a long story, and ships with **35 worked derivations** — product, music video, horror, anime, action, comedy, documentary, high fashion, sci-fi, and more — each shown end to end.
+
+> A reveal is not lit, framed, blocked, or performed like a goodbye. The engine refuses the generic answer and derives the specific one.
 
 ## Native Language Start / 多语言入门 / 多言語スタート / 다국어 시작
 
