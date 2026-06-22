@@ -38,6 +38,10 @@ Most tools ask the model for a "cinematic look." A director asks what the scene 
 
 The v6.1.0 [**directing engine**](references/directing-engine.md) encodes that judgment. It reads a scene's dramatic function — the turn, the point of view, the power, the subtext — names one intention, and derives a coherent setup instead of stacking adjectives.
 
+**Ask for "cinematic":** `epic cinematic shot of a woman reading a letter, emotional, beautiful lighting`
+
+**Direct it:** `Medium close-up, eye-level; she lowers the letter and her hands go still as a slow push-in arrives; soft window light behind her keeps her face plain; near-silence with one chair scrape — the realization lands in the stilled hands, not a word.`
+
 It then holds one directorial voice across every short clip of a long story, and ships with **35 worked derivations** — product, music video, horror, anime, action, comedy, documentary, high fashion, sci-fi, and more — each shown end to end.
 
 > A reveal is not lit, framed, blocked, or performed like a goodbye. The engine refuses the generic answer and derives the specific one.
