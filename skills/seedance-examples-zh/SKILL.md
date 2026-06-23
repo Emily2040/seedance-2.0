@@ -61,4 +61,4 @@ If the prompt contains protected names, translate the intent into original descr
 
 ## Output Contract
 
-Return the Chinese example, label, risk note, and a safer Chinese variant if needed.
+Return the Chinese example, label, risk note, and safer Chinese variant when needed. Keep final Seedance prompt text natural-language unless the user asks for structured output.

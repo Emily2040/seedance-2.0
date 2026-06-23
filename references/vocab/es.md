@@ -33,7 +33,7 @@ Use this reference for Spanish Seedance prompt wording, role binding, and compac
 | Lighting | `halo frío de luna` | cool moon rim light |
 | Lighting | `luz volumétrica atravesando niebla fina` | volumetric light through mist |
 | Lighting | `asfalto mojado reflejando neón` | wet pavement reflects neon |
-| Motion | `la niebla se abre alrededor de los pasos` | fog parts around footsteps |
+| Motion | `la niebla se dispersa alrededor de los pasos` | fog spreads around footsteps |
 | Motion | `las gotas se unen y descienden` | droplets merge and slide down |
 | Motion | `gira lentamente la cabeza y se detiene` | slow head turn and stop |
 | Motion | `la tela se mueve de forma natural con el gesto` | fabric moves naturally with action |

@@ -318,7 +318,7 @@ Each example runs the same procedure: read, intention, voice, coherent setup, pe
 
 - **Idea:** "arriving at a mountain village."
 - **Read.** Function: share the awe of arrival. Turn: travel to arrival. POV: the traveler's. Power: the landscape. Subtext: discovery.
-- **Intention:** make the audience feel they arrived too. **Voice:** expressive naturalist.
+- **Intention:** make the audience feel they arrived too. **Voice:** observational naturalist with expressive accents.
 - **Setup:** a reveal move from a foreground element to the wide vista; warm motivated light; layered depth; one human for scale; ambient wind and distant life.
 - **Performance:** the traveler steps into frame and stops, taking it in.
 - **Prompt:** `A reveal move pushes past a stone wall to a wide mountain village in warm low light; a traveler steps into frame and stops to take it in, giving the vista scale; layered depth into haze, ambient wind and faint village sounds; keep the human as the anchor and the reveal motivated.`
@@ -336,7 +336,7 @@ Each example runs the same procedure: read, intention, voice, coherent setup, pe
 
 - **Idea:** "she reads the text that changes everything."
 - **Read.** Function: a fast vertical reversal with a cliffhanger. Turn: ordinary to shock. POV: hers. Power: the revelation. Subtext: nothing will be the same.
-- **Intention:** make the audience need the next clip. **Voice:** kinetic intimate, vertical.
+- **Intention:** make the audience need the next clip. **Voice:** kinetic visceral, vertical and tight.
 - **Setup:** tight vertical framing; a fast push to a held close-up on the reaction; a hard light shift on the reveal; a sound sting, then cut on the beat; two or three labeled beats.
 - **Performance:** the face does it - neutral, then the freeze, then the held breath.
 - **Prompt:** `Vertical tight framing on Character A glancing at a phone; a fast push lands on a held close-up as her expression freezes, a hard light shift hits on the reveal, and a sound sting drops as we cut on the held breath; keep the face stable; this is the cliffhanger beat, reserve the consequence for the next clip.`
@@ -408,7 +408,7 @@ Each example runs the same procedure: read, intention, voice, coherent setup, pe
 
 - **Idea:** "a toddler discovers bubbles in the garden."
 - **Read.** Function: delight and wonder. Turn: curiosity to joy. POV: the child's. Power: the magic of the moment. Subtext: pure first-time wonder.
-- **Intention:** make the audience smile with the child. **Voice:** bright soft naturalist.
+- **Intention:** make the audience smile with the child. **Voice:** observational naturalist, bright and soft.
 - **Setup:** camera low at child height; bright soft daylight; a gentle follow; bouncy small motions; a warm pastel feel; light ambient giggles.
 - **Performance:** small bouncy motions - the reach, the pop, the laugh, the wobble.
 - **Prompt:** `Camera low at toddler height in a sunny garden; a child reaches for floating bubbles, pops one, and laughs while wobbling on small feet; bright soft daylight, warm gentle palette, a soft follow that keeps her centered; ambient giggles and a light breeze; keep the face stable and the motions small and bouncy.`
@@ -435,7 +435,7 @@ Each example runs the same procedure: read, intention, voice, coherent setup, pe
 
 - **Idea:** "a cat watches rain from a windowsill."
 - **Read.** Function: cozy companionship. Turn: stillness to a flick of attention. POV: the owner's affection. Power: the cat's serenity. Subtext: quiet contentment.
-- **Intention:** make the audience feel cozy. **Voice:** intimate naturalist.
+- **Intention:** make the audience feel cozy. **Voice:** intimate minimalist.
 - **Setup:** camera at the cat's level; soft window light; shallow focus; a locked or tiny drift; rain ambient; warm.
 - **Performance:** a slow blink, an ear flick, the tail tip curling as a raindrop tracks the glass.
 - **Prompt:** `Camera at sill level beside a cat watching rain through a window; soft cool window light, shallow focus, a tiny drift; the cat slow-blinks, flicks an ear, and its tail tip curls as a raindrop tracks down the glass; gentle rain ambient; keep the cat stable and the motion small.`

@@ -35,7 +35,7 @@ This skill exists so that a person who arrives with a feeling leaves with a film
 8. Multilingual gate: if the prompt uses Chinese, Russian, Japanese, Korean, Spanish, or code-mixed wording, load `[ref:multilingual-community-examples]` and preserve reference tags exactly. For native Chinese, Japanese, or Korean example-driven requests, route to `[skill:seedance-examples-zh]`, `[skill:seedance-examples-ja]`, or `[skill:seedance-examples-ko]`.
 9. Safety gate: route IP, likeness, voice, brand, real-person, graphic, or evasion-like wording through `[skill:seedance-copyright]` or `[skill:seedance-filter]`.
 10. Direction: before drafting any scene, load `[ref:directing-engine]` to read what the scene is doing (function, turn, POV, power, subtext), set or inherit one directorial voice, and derive a single coherent setup - camera, lens, light, blocking, performance, and sound all serving one intention - instead of picking a "cinematic look".
-11. Prompt build: route to `[skill:seedance-interview]`, `[skill:seedance-prompt]`, `[skill:seedance-prompt-short]`, `[skill:seedance-sequence]`, `[skill:seedance-continuation]`, or a domain skill for camera, motion, audio, characters, VFX, style, recipes, or pipeline.
+11. Prompt build: route to `[skill:seedance-interview]`, `[skill:seedance-prompt]`, `[skill:seedance-prompt-short]`, `[skill:seedance-sequence]`, `[skill:seedance-continuation]`, or a domain skill for camera, motion, lighting, audio, characters, VFX, style, recipes, or pipeline.
 12. Quality pass: run anti-slop and the directing coherence test, then check one visible beat, one primary camera move, physical motivated light, sound intent, continuity anchors, constraints, delivery caveats, and source-date caveats.
 13. Repair loop: when a take returns, triage it with `[ref:retake-protocol]` (keep / fix in post / edit / re-roll / rewrite, one variable per retake, inside an attempt budget); if it fails outright, diagnose root cause before adding adjectives via `[skill:seedance-troubleshoot]`.
 
@@ -82,7 +82,7 @@ Sequence invariants:
 | Chinese examples or safe Chinese rewrites | `[skill:seedance-examples-zh]`, `[skill:seedance-vocab-zh]`, `[ref:vocab/zh]` |
 | Japanese examples or safe Japanese rewrites | `[skill:seedance-examples-ja]`, `[skill:seedance-vocab-ja]`, `[ref:vocab/ja]` |
 | Korean examples or safe Korean rewrites | `[skill:seedance-examples-ko]`, `[skill:seedance-vocab-ko]`, `[ref:vocab/ko]` |
-| Russian/Spanish or mixed-language examples | `[ref:multilingual-community-examples]`, language vocab reference |
+| Russian/Spanish or mixed-language examples | `[skill:seedance-vocab-ru]`, `[skill:seedance-vocab-es]`, `[ref:multilingual-community-examples]` |
 | Slop-heavy or filter-tripping English wording | `[skill:seedance-vocab-en]`, `[skill:seedance-antislop]` |
 | Bad result | `[skill:seedance-troubleshoot]` |
 | A take came back: keep, fix in post, edit, re-roll, or rewrite | `[ref:retake-protocol]` |

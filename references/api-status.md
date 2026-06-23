@@ -1,7 +1,7 @@
 # Seedance 2.0 API and Platform Status
 
 last_verified: 2026-06-20
-confidence: public-source snapshot as of the verification date; per-section dates apply where noted (Seedance 2.0 Mini, additional provider/router, and China-facing search recorded 2026-06-20, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
+confidence: public-source snapshot as of the verification date; per-section dates apply where noted (Seedance 2.0 Mini, additional provider/router, and China-facing search recorded 2026-06-20, platform safeguards and resolution recorded 2026-06-14, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
 
 ## Confirmed From Public Sources
 
@@ -135,7 +135,7 @@ Real-person face, portrait, and voice workflows require authorization, legal/eth
 - https://seed.bytedance.com/en/blog/seedance-2-0-official-launch
 - https://replicate.com/bytedance/seedance-2.0
 - https://variety.com/2026/film/news/paramount-disney-bytedance-cease-and-desist-seedance-ai-infringement-ip-1236663663/
-- https://www.cnbc.com/2026/02/16/bytedance-safegaurds-seedance-ai-copyright-disney-mpa-netflix-paramount-sony-universal.html
+- https://www.cnbc.com/2026/02/16/bytedance-safeguards-seedance-ai-copyright-disney-mpa-netflix-paramount-sony-universal.html
 - https://arxiv.org/abs/2604.14148
 - https://www.volcengine.com/docs/82379/1330310?redirect=1&lang=zh
 - https://www.volcengine.com/docs/82379/1520757?lang=zh

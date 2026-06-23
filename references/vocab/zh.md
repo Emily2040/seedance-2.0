@@ -28,7 +28,7 @@ Use this reference for Chinese Seedance prompt wording, role binding, and compac
 | Camera | `手持镜头，轻微呼吸晃动` | handheld shot with slight breathing sway |
 | Shot | `中近景` | medium close-up |
 | Shot | `宽幅远景` | wide establishing shot |
-| Shot | `三分之二侧脸` | three-quarter profile |
+| Shot | `四分之三侧脸` | three-quarter profile |
 | Lens | `长焦压缩空间` | telephoto compression |
 | Lens | `广角空间感` | wide-angle spatial feel |
 | Lens | `焦点从模糊过渡到清晰` | focus resolves from blur to sharpness |
