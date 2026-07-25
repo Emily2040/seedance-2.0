@@ -22,6 +22,30 @@ Prompt pattern:
 
 `Shot: [size/angle/lens feel]. Camera starts [composition], [one movement] at [speed] while [subject action], ending on [clear endpoint]. Preserve [fragile anchors].`
 
+## Ending Profiles
+
+`[clear endpoint]` is not one thing. Pick the ending by what happens to the clip **next**, then write the last beat to deliver it. Choosing before drafting is what stops a clip that has to be extended from resolving into stillness, and a clip that has to stand alone from trailing off mid-gesture.
+
+| Profile | Final state | Use when |
+|---|---|---|
+| Resolve | action completes, motion settles, result readable | standalone clips, demos, anything that has to feel finished |
+| Extension anchor | motion, gaze, camera, and ambience still directionally live | the next clip continues this shot — see `[ref:continuation-handoff]` |
+| Loop seam | position, motion phase, exposure, and audio can rejoin the opening | social loops, ambient backgrounds, hero product spins |
+| Hero hold | subject stable, unobstructed, and legible long enough to read | products, logos, packshots, anything a viewer must actually see |
+| Edit point | visual and audio land on a clean boundary | the clip is a cut, insert, or replacement in a larger edit |
+| Reveal or punch | the peak intentionally lands on the final frame | scares, jokes, title handoffs, transformation payoffs |
+
+**A good ending is not always a moving ending — and where it is, the motion has to be the right motion.** Two profiles need movement through the final frame and two are damaged by it:
+
+- **Extension anchor:** motion continues and stays directionally live, because the next clip picks it up.
+- **Loop seam:** motion continues and must be *phase-matched* to the opening — same velocity, same point in the cycle. A hero product spin that decelerates to a stop hitches just as visibly as one whose phase is wrong. Stopping is a defect here, not a safe default.
+- **Hero hold** and **reveal or punch:** trailing motion blurs the thing the viewer came to read, or softens the beat the clip was built for. Settle.
+- **Resolve** and **edit point:** settle, cleanly.
+
+So the error is not motion as such; it is *unmatched* motion — movement at the final frame that nothing downstream consumes. Adding drift by reflex to make an ending feel alive is the more common mistake than ending too still, but prescribing stillness everywhere breaks loops.
+
+Two consequences worth stating. An extension anchor must leave `open motion` explicit, because that is what the next clip opens from. A loop seam must match the opening state on all four of position, motion phase, exposure, and audio — three out of four reads as a visible jump.
+
 ## Shot Size Use
 
 | Shot size | Use for | Seedance caution |
