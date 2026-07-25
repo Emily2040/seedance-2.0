@@ -41,6 +41,10 @@ Use this reference for Korean Seedance prompt wording, role binding, and compact
 | VFX | `푸른 전기 아크가 가장자리를 따라 흐른다` | blue arcs crawl along the edge |
 | VFX | `빛줄기가 재질 표면을 지나간다` | light sweep crosses material surface |
 | Audio | `짧고 명확한 한마디 대사` | one short clear spoken line |
+| Audio | `대사는 해요체로` | dialogue in polite 해요체 |
+| Audio | `대사는 합니다체로, 격식 있게` | dialogue in formal 합니다체 |
+| Audio | `대사는 반말로, 편하게` | dialogue in plain 반말 |
+| Audio | `두 인물 사이의 말투 관계를 유지` | keep the speech-level relationship between the two characters |
 | Audio | `음악 없이 낮은 환경음만` | no music, low ambience only |
 | Audio | `대사 중에는 카메라를 고정` | locked camera during dialogue |
 | Audio | `발소리가 박자에 맞는다` | footsteps hit the beat |
@@ -92,6 +96,31 @@ Field-observed and under-tested as of 2026; test per surface, never promise resu
 
 - Keep to one short line, about one breath; treat Korean as the weaker tier until tested on the active surface.
 - For reliable Korean voice, prefer a voice reference (attach the spoken line so the model lip-syncs to it) or plan a post-dub.
+
+## Speech Level (말투)
+
+Korean has no neutral register. Every spoken line commits to a speech level, so leaving it unstated does not avoid the decision - it hands it to the model. Declare one.
+
+This is a budget decision as well as a characterization one. The reliable-sync budget in `[ref:audio-guide]` is counted in syllables, and the same sentence costs a different number of them at each level:
+
+| 같은 뜻 (same meaning) | 반말 → 해요체 → 합니다체, 음절 수 (syllable count) |
+|---|---|
+| thank you | 고마워 (3) → 고마워요 (4) → 감사합니다 (5) |
+| it's done | 끝났어 (3) → 끝났어요 (4) → 끝났습니다 (5) |
+| I don't know | 몰라 (2) → 몰라요 (3) → 모릅니다 (4) |
+| come here | 이리 와 (3) → 이리 오세요 (5) → 이리 오십시오 (6) |
+
+합니다체 runs roughly 1.5-2x the syllables of 반말 for identical content. On a language already flagged as the weaker sync tier, an unconsidered formal register can spend the whole budget on politeness endings.
+
+Choosing:
+
+- **합니다체** - news, announcements, corporate and public-facing VO, a subordinate addressing a superior. Most formal, most syllables.
+- **해요체** - the safe default for a single-line commercial or a stranger-to-stranger exchange. Polite without the full formal cost.
+- **반말** - close friends, family, a character speaking to a child, internal monologue. Shortest, and wrong to a Korean viewer if the relationship does not license it.
+
+With two speakers, the pair of levels *is* the relationship: senior to junior in 반말 answered in 해요체 reads as a hierarchy, both in 해요체 reads as peers or strangers. Keep each character's level consistent across a sequence - drifting between levels mid-project reads as a translation error, not a character choice, and it is the kind of continuity that no frame-level QC catches.
+
+If the user has not stated a level and the relationship does not imply one, ask once rather than defaulting silently; it is one question and it changes both the performance and the syllable budget.
 
 ## Slop Traps
 

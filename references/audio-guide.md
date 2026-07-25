@@ -31,6 +31,8 @@ Two budgets matter, and people confuse them. The acoustic budget is how many wor
 
 Past the reliable-sync budget, especially in non-English, use the voice-reference lip-sync path below or plan a post-dub.
 
+One budget trap is language-specific: **Korean has no neutral register**, and the speech level chosen for a line changes its syllable count. 감사합니다 (5 syllables) and 고마워 (3) are the same thanks at different levels, and 합니다체 runs roughly 1.5-2x 반말 across a line. On a tier already flagged as under-tested, picking the formal register by reflex can spend the budget on politeness endings rather than content. Decide the level deliberately - see Speech Level in `[ref:vocab/ko]`.
+
 ## Dialogue
 
 - Keep lines short, preferably one sentence per speaker turn.

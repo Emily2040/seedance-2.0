@@ -8,6 +8,8 @@ Current active release: **6.6.0**. Older entries below are preserved as release 
 
 ### Added
 
+- Added **Speech Level (말투)** to `vocab/ko`: Korean has no neutral register, so an unstated level is a decision handed to the model rather than a decision avoided. Documents 합니다체 / 해요체 / 반말 with syllable costs for identical sentences (합니다체 runs roughly 1.5-2x 반말), when each applies, and why the pair of levels between two speakers encodes the relationship and must stay consistent across a sequence. Five `Audio` vocabulary rows declare the level in a prompt, and `audio-guide` now names the register as a syllable-budget trap where the reliable-sync budget is defined.
+
 - Added an **Authority Order** to the root skill: nine tiers resolving what wins when two gates give opposite instructions, with defaults ranked last, same-tier tiebreaks, and the rule that a constraint is classified by the dimension it governs rather than by who asked for it.
 - Added **Ending Profiles** to `cinematography-shot-language`: six named profiles (resolve, extension anchor, loop seam, hero hold, edit point, reveal or punch) chosen by what consumes the clip next, so an extension anchor stays directionally live and a loop seam is phase-matched to its opening.
 - Added an **Inspection Honesty** rule to `agent-compatibility`, `continuation-handoff`, and `seedance-continuation`: media inspection is a client capability, not a property of this skill. A state the agent was told rather than saw is recorded as reported — `observation_confidence: low`, `requires_user_confirmation: true`, unverified categories in `uncertainties` — instead of entering project canon as fact.
