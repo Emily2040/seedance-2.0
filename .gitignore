@@ -11,3 +11,7 @@ __pycache__/
 # Local audit outputs
 *.tmp
 *.log
+
+# Model-in-the-loop evaluator output. Ledgers record prompts, model responses,
+# and judgments, so they are treated as sensitive and never committed.
+eval-runs/
