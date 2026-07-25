@@ -1,0 +1,25 @@
+{
+  "note": "Maps every schema in schemas/ to the instances it must accept. scripts/schema_check.py fails when a schema has no entry here, so adding a schema without an example is not possible.",
+  "instances": {
+    "clip-contract.schema.json": [
+      "examples/sequence-airport-arrival/clip-01-contract.json",
+      "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
+    ],
+    "generation-run.schema.json": [
+      "validation/fixtures/generation-run.valid.json"
+    ],
+    "project-state.schema.json": [
+      "examples/sequence-airport-arrival/project-state.json",
+      "examples/sequence-observed-deviation/project-state-before.json",
+      "examples/sequence-observed-deviation/project-state-after.json",
+      "examples/standalone-clip/project-state.json"
+    ],
+    "prompt-spec.schema.json": [
+      "validation/fixtures/prompt-spec.valid.json"
+    ],
+    "take-review.schema.json": [
+      "examples/sequence-airport-arrival/clip-01-take-review.json",
+      "examples/sequence-observed-deviation/take-review.json"
+    ]
+  }
+}
