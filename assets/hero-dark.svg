@@ -1,58 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" role="img" aria-labelledby="title desc">
-  <title>Seedance 2.0 Skill OS</title>
-  <desc>Editorial masthead on warm black: a high-contrast serif Seedance 2.0 wordmark above a calligraphic script Skill OS line, separated from the tagline by a fine rule and a single amber lozenge, with a monospace eyebrow kicker, a 21:9 viewfinder frame, timecode, and film sprocket and waveform details.</desc>
-  <defs>
-    <style>
-      .display{font:400 96px Didot,'Bodoni MT','Hoefler Text',Baskerville,'Palatino Linotype',Georgia,'Times New Roman',serif;fill:#EDE6D6;letter-spacing:-1.5px}
-      .display-i{font:italic 400 96px Didot,'Bodoni MT','Hoefler Text',Baskerville,'Palatino Linotype',Georgia,'Times New Roman',serif;fill:#EDE6D6;letter-spacing:-1.5px}
-      .script{font:400 88px 'Snell Roundhand','Apple Chancery','Gabriola','Segoe Script','Brush Script MT',cursive;fill:#EDE6D6;letter-spacing:0}
-      .tagline{font:italic 400 23px Didot,'Bodoni MT','Hoefler Text',Baskerville,'Palatino Linotype',Georgia,'Times New Roman',serif;fill:#9A917D;letter-spacing:0.5px}
-      .eyebrow{font:400 13px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#E2A75E;letter-spacing:7px}
-      .spec{font:400 13px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#9A917D;letter-spacing:3px}
-      .spec-bright{font:400 13px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#EDE6D6;letter-spacing:3px}
-      .tiny{font:400 11px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#9A917D;letter-spacing:2px}
-      .tiny-amber{font:400 11px ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;fill:#E2A75E;letter-spacing:2px}
-      .hair{stroke:#2E2A22;stroke-width:1}
-      .mark{stroke:#E2A75E;stroke-width:2;fill:none}
-      .wave{stroke:#9A917D;stroke-width:1.5}
-      .rule{stroke:#9A917D;stroke-width:1}
-    </style>
-  </defs>
-
-  <rect width="1200" height="470" fill="#100E0A"/>
-
-  <g fill="#1F1B14"><rect x="84" y="16" width="22" height="14" rx="3"/><rect x="148" y="16" width="22" height="14" rx="3"/><rect x="212" y="16" width="22" height="14" rx="3"/><rect x="276" y="16" width="22" height="14" rx="3"/><rect x="340" y="16" width="22" height="14" rx="3"/><rect x="404" y="16" width="22" height="14" rx="3"/><rect x="468" y="16" width="22" height="14" rx="3"/><rect x="532" y="16" width="22" height="14" rx="3"/><rect x="596" y="16" width="22" height="14" rx="3"/><rect x="660" y="16" width="22" height="14" rx="3"/><rect x="724" y="16" width="22" height="14" rx="3"/><rect x="788" y="16" width="22" height="14" rx="3"/><rect x="852" y="16" width="22" height="14" rx="3"/><rect x="916" y="16" width="22" height="14" rx="3"/><rect x="980" y="16" width="22" height="14" rx="3"/><rect x="1044" y="16" width="22" height="14" rx="3"/></g>
-  <line x1="72" y1="46" x2="1128" y2="46" class="hair"/>
-
-  <line x1="74" y1="118" x2="102" y2="118" stroke="#E2A75E" stroke-width="2"/>
-  <text x="116" y="123" class="eyebrow">INTENT-FIRST AI FILMMAKING</text>
-
-  <text x="70" y="224" class="display">Seedance 2.0</text>
-  <text x="70" y="330" class="script">Skill OS<tspan fill="#E2A75E">.</tspan></text>
-
-  <g>
-    <rect x="76" y="362" width="9" height="9" transform="rotate(45 80.5 366.5)" fill="#E2A75E"/>
-    <line x1="96" y1="366" x2="330" y2="366" class="rule"/>
-  </g>
-  <text x="74" y="404" class="tagline">Direct the model — don't micro-manage the frame.</text>
-
-  <g>
-    <path class="mark" d="M790 104 h28 M790 104 v24"/>
-    <path class="mark" d="M1128 104 h-28 M1128 104 v24"/>
-    <path class="mark" d="M790 300 h28 M790 300 v-24"/>
-    <path class="mark" d="M1128 300 h-28 M1128 300 v-24"/>
-    <line x1="959" y1="192" x2="959" y2="212" stroke="#9A917D" stroke-width="1"/>
-    <line x1="949" y1="202" x2="969" y2="202" stroke="#9A917D" stroke-width="1"/>
-    <text x="838" y="96" class="tiny-amber">REC</text>
-    <circle cx="824" cy="91" r="4" fill="#E2A75E"/>
-    <text x="1058" y="96" class="tiny">21:9</text>
-    <text x="790" y="328" class="tiny">SHOT 1 / 3</text>
-    <text x="1014" y="328" class="tiny">00:00:15:00</text>
-  </g>
-  <g class="wave"><line x1="790.0" y1="357.0" x2="790.0" y2="367.0"/><line x1="800.4" y1="353.0" x2="800.4" y2="371.0"/><line x1="810.8" y1="359.0" x2="810.8" y2="365.0"/><line x1="821.2" y1="351.0" x2="821.2" y2="373.0"/><line x1="831.6" y1="356.0" x2="831.6" y2="368.0"/><line x1="842.0" y1="360.0" x2="842.0" y2="364.0"/><line x1="852.4" y1="352.0" x2="852.4" y2="372.0"/><line x1="862.8" y1="355.0" x2="862.8" y2="369.0"/><line x1="873.2" y1="350.0" x2="873.2" y2="374.0"/><line x1="883.6" y1="358.0" x2="883.6" y2="366.0"/><line x1="894.0" y1="354.0" x2="894.0" y2="370.0"/><line x1="904.4" y1="359.0" x2="904.4" y2="365.0"/><line x1="914.8" y1="351.5" x2="914.8" y2="372.5"/><line x1="925.2" y1="356.5" x2="925.2" y2="367.5"/><line x1="935.6" y1="353.5" x2="935.6" y2="370.5"/><line x1="946.0" y1="357.5" x2="946.0" y2="366.5"/><line x1="956.4" y1="355.5" x2="956.4" y2="368.5"/><line x1="966.8" y1="350.5" x2="966.8" y2="373.5"/><line x1="977.2" y1="358.5" x2="977.2" y2="365.5"/><line x1="987.6" y1="352.5" x2="987.6" y2="371.5"/><line x1="998.0" y1="359.5" x2="998.0" y2="364.5"/><line x1="1008.4" y1="354.5" x2="1008.4" y2="369.5"/><line x1="1018.8" y1="356.0" x2="1018.8" y2="368.0"/><line x1="1029.2" y1="351.0" x2="1029.2" y2="373.0"/><line x1="1039.6" y1="358.0" x2="1039.6" y2="366.0"/><line x1="1050.0" y1="354.0" x2="1050.0" y2="370.0"/><line x1="1060.4" y1="357.0" x2="1060.4" y2="367.0"/><line x1="1070.8" y1="352.0" x2="1070.8" y2="372.0"/><line x1="1081.2" y1="359.0" x2="1081.2" y2="365.0"/><line x1="1091.6" y1="353.0" x2="1091.6" y2="371.0"/><line x1="1102.0" y1="356.5" x2="1102.0" y2="367.5"/><line x1="1112.4" y1="355.0" x2="1112.4" y2="369.0"/><line x1="1122.8" y1="357.5" x2="1122.8" y2="366.5"/></g>
-  <text x="790" y="402" class="tiny">NATIVE AUDIO</text>
-
-  <line x1="72" y1="430" x2="1128" y2="430" class="hair"/>
-  <text x="74" y="454" class="spec-bright">ROUTE · VERIFY · DIRECT · DELIVER</text>
-  <text x="1128" y="454" text-anchor="end" class="spec">T2V · I2V · V2V · R2V · FLF2V</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img">
+<title>Seedance 2.0 Skill OS</title>
+<desc>Editorial masthead: the wordmark Seedance 2.0 Skill OS above the line "Direct the model, don't micro-manage the frame", with a specification strip listing generation modes, the route-verify-direct-deliver pipeline, and supported reading languages.</desc>
+<rect width="1200" height="470" fill="#100E0A"/>
+<text x="76" y="86" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="13" letter-spacing="6.5" fill="#9A917D">INTENT-FIRST AI FILMMAKING</text>
+<line x1="76" y1="108" x2="1124" y2="108" stroke="#2E2A22" stroke-width="1"/>
+<line x1="76" y1="103" x2="76" y2="113" stroke="#2E2A22" stroke-width="1"/>
+<text x="76" y="243" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="104" fill="#EDE6D6">Seedance 2.0</text>
+<text x="76" y="313" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="62" fill="#E2A75E">Skill OS</text>
+<text x="1124" y="240" text-anchor="end" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="25" font-style="italic" fill="#9A917D">Direct the model.</text>
+<text x="1124" y="274" text-anchor="end" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="25" font-style="italic" fill="#9A917D">Don&apos;t micro-manage the frame.</text>
+<line x1="76" y1="358" x2="1124" y2="358" stroke="#2E2A22" stroke-width="1"/>
+<text x="76" y="389" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#9A917D">MODES</text>
+<text x="76" y="414" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#EDE6D6">T2V · I2V · V2V · R2V · FLF2V</text>
+<text x="425" y="389" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#9A917D">PIPELINE</text>
+<text x="425" y="414" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#EDE6D6">Route · Verify · Direct · Deliver</text>
+<text x="775" y="389" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#9A917D">READS</text>
+<text x="775" y="414" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#EDE6D6">EN · 中文 · 日本語 · 한국어 · ES · RU</text>
 </svg>

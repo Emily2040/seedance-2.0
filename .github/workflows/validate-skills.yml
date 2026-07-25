@@ -40,6 +40,8 @@ jobs:
         run: python scripts/eval_schema_check.py --strict
       - name: Audit frontend README and SVG assets
         run: python scripts/design_audit.py --strict
+      - name: Check the masthead matches its generator
+        run: python scripts/build_hero.py --check
       - name: Validate source freshness and claim labels
         run: python scripts/source_registry_check.py --strict
       - name: Validate multilingual vocabulary schema
