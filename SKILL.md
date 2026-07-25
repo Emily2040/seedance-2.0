@@ -68,6 +68,12 @@ The gates above will contradict each other. When they do, resolve in this order,
 8. **Style, palette, atmosphere, decorative detail.**
 9. **This skill's own defaults.** The first thing to give up, not the last.
 
+**Which tier a constraint sits in is decided by what it controls, not by who asked for it.** One requirement often touches several tiers at once: "`@Video1` must supply this camera path" is a user must-have, a reference contract, and camera logic simultaneously. Classify it by the dimension it governs — camera, tier 7 — so that if the borrowed path hides the contact the shot exists to show, legibility at tier 6 still wins. Classifying by origin instead would collapse every user sentence into tier 3 and the order would decide nothing.
+
+Being a user requirement does something different, and narrower: **it forbids dropping the constraint quietly.** When a user's request loses to a higher tier, say what you changed and why — "the borrowed camera path hid the moment of contact, so the crane is shallower; the timing is unchanged." The user can then lift it deliberately by naming the trade ("keep that path even if the action reads less clearly"), which moves it to tier 3 as a genuine non-negotiable. An unstated preference is not that.
+
+Within one tier, prefer the constraint that is verified over the one that is inferred, and the one the user stated over the one this skill assumed. If they are still tied, ask rather than pick.
+
 The common failures are inversions: style wording that quietly breaks an identity lock, a camera move that outranks the action it exists to reveal, or a repo default overriding something the user actually asked for.
 
 ## Sequence Gate
