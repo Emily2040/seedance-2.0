@@ -9,13 +9,26 @@ from pathlib import Path
 
 
 SKILL_NAME = "seedance-20"
+
+# Kept out of the installed payload because they are development-only and
+# network-capable. eval_run.py contacts a model provider and reads
+# ANTHROPIC_API_KEY; nothing in skills/ or references/ invokes it, so an
+# install has no use for it and shipping it would put a credential-reading
+# script inside every agent that loads this skill. eval-runs/ holds its output.
+# tests/test_install_payload.py enforces this.
+DEV_ONLY_NAMES = {
+    "eval_run.py",
+    "eval-runs",
+    "tests",
+}
+
 IGNORE_NAMES = {
     ".git",
     ".github",
     ".pytest_cache",
     ".seedance_backups",
     "__pycache__",
-}
+} | DEV_ONLY_NAMES
 IGNORE_PATTERNS = ["*.pyc", "*.pyo", "*.tmp", "*.log", "*.png", "*.jpg", "*.jpeg", "*.psd"]
 
 
