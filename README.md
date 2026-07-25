@@ -395,6 +395,26 @@ git diff --check
 
 The CI workflow runs the same checks on push and pull request. These are deterministic and offline — they prove the package is well-formed.
 
+### Source freshness
+
+Whether `references/source-registry.md` is stale depends on today's date, not on
+the change being tested, so it is not asked per pull request — that would fail
+unrelated work on a calendar boundary. It is asked in two places instead:
+
+| Where | Behaviour |
+|---|---|
+| Release checklist above | `--enforce-freshness` blocks a release on a registry older than 30 days |
+| `source-freshness-review.yml` | Runs Mondays 09:00 UTC on the default branch and reports clean, drifting (past 14 days), or stale (past 30) |
+
+Drift and staleness are tracked in a single automatically maintained issue. It
+opens when the registry first drifts, is refreshed in place each week rather
+than re-notifying, and closes itself once the registry is back inside the
+window.
+
+The scheduled job never edits the registry. Re-stamping `last_verified` without
+actually re-reading the upstream sources would record a verification that never
+happened, so refreshing it is deliberately a human step.
+
 To prove the package is also *good*, run the model-in-the-loop harness, which sends each eval case through the real skill content and scores the response against the case's assertions using [`eval-rubric.md`](references/eval-rubric.md):
 
 ```bash

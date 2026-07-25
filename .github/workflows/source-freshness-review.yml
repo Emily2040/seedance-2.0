@@ -1,0 +1,195 @@
+name: source-freshness-review
+
+# Staleness of references/source-registry.md is a real signal, but it is a
+# property of the calendar rather than of any commit. Enforcing it inside
+# validate-skills.yml made unrelated pull requests fail on a date boundary, so
+# the question is asked here instead: on a schedule, against the default
+# branch, where the answer means "a human should re-verify the sources" rather
+# than "this change is broken".
+#
+# Neither job edits the registry. Re-stamping last_verified without actually
+# re-reading the upstream sources would assert a verification that did not
+# happen, which is what the registry exists to prevent.
+
+on:
+  schedule:
+    # Mondays at 09:00 UTC. The warning threshold is 14 days and the failure
+    # threshold is 30, so a weekly cadence surfaces a drifting registry at
+    # least twice before it is considered stale.
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-freshness-review
+  cancel-in-progress: false
+
+jobs:
+  # Runs repository code, so it holds no write scope of any kind.
+  review:
+    # Scheduled workflows only ever run on the default branch, but this keeps
+    # a manual dispatch from reporting a feature branch as the source of truth.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPYCACHEPREFIX: /tmp/seedance-pycache
+    outputs:
+      state: ${{ steps.review.outputs.state }}
+      report_b64: ${{ steps.review.outputs.report_b64 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Review source freshness
+        id: review
+        shell: bash
+        run: |
+          set -uo pipefail
+          # `shell: bash` already runs with -e, so guard the call rather than
+          # reading $? afterwards: a bare failure would abort the step before
+          # the summary is written.
+          status=0
+          python scripts/source_registry_check.py --strict --enforce-freshness \
+            > /tmp/freshness.txt 2>&1 || status=$?
+          cat /tmp/freshness.txt
+
+          # The checker warns before it fails: 14 days drifting, 30 days stale.
+          # Exit status alone cannot tell a clean registry from a drifting one,
+          # and reporting drift as "no action needed" would waste the early
+          # warning this schedule exists to deliver.
+          warned=0
+          grep -q '^WARNINGS:' /tmp/freshness.txt && warned=1
+
+          if [[ $status -ne 0 ]]; then
+            state=stale
+          elif [[ $warned -eq 1 ]]; then
+            state=drifting
+          else
+            state=clean
+          fi
+
+          # Bound what crosses into the privileged job.
+          test "$(wc -c < /tmp/freshness.txt)" -le 16384
+          {
+            echo "state=$state"
+            echo "report_b64=$(base64 -w0 /tmp/freshness.txt)"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "# Source freshness review"
+            echo
+            case "$state" in
+              clean)
+                echo "References are within the freshness window. No action needed."
+                ;;
+              drifting)
+                echo "**references/source-registry.md is drifting.**"
+                echo
+                echo "Still inside the freshness window, so nothing is blocked yet."
+                echo "Re-verifying now avoids a release being blocked later."
+                ;;
+              stale)
+                echo "**references/source-registry.md needs re-verification.**"
+                echo
+                echo "The release checklist will refuse to pass until this is resolved."
+                ;;
+            esac
+            echo
+            echo '```'
+            cat /tmp/freshness.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Holds issues: write, so it deliberately checks out nothing and runs no
+  # repository code. Its only inputs are the bounded outputs above.
+  alert:
+    needs: review
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      STATE: ${{ needs.review.outputs.state }}
+      REPORT_B64: ${{ needs.review.outputs.report_b64 }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      ISSUE_TITLE: "Source registry needs re-verification"
+    steps:
+      - name: Open, refresh, or close the tracking issue
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$STATE" in
+            clean|drifting|stale) ;;
+            *) echo "unexpected state: $STATE" >&2; exit 1 ;;
+          esac
+
+          printf '%s' "$REPORT_B64" | base64 --decode > /tmp/report.txt
+          test "$(wc -c < /tmp/report.txt)" -le 16384
+
+          # One tracking issue, found by exact title and bot authorship, so a
+          # weekly run refreshes it instead of opening a new one every Monday.
+          gh issue list --repo "$REPO" --state open --limit 100 \
+            --json number,title,author > /tmp/issues.json
+          number="$(jq -r --arg t "$ISSUE_TITLE" '
+            [ .[]
+              | select(.title == $t)
+              | select(.author.login == "github-actions" or .author.login == "app/github-actions")
+            ] | .[0].number // empty' /tmp/issues.json)"
+
+          if [[ "$STATE" == clean ]]; then
+            if [[ -n "$number" ]]; then
+              gh issue close "$number" --repo "$REPO" \
+                --comment "The source registry is inside the freshness window again. Closing automatically; no evidence was changed by this job."
+            fi
+            exit 0
+          fi
+
+          {
+            if [[ "$STATE" == stale ]]; then
+              echo "\`references/source-registry.md\` is **stale**. The release checklist"
+              echo "(\`source_registry_check.py --strict --enforce-freshness\`) will refuse to"
+              echo "pass until this is resolved."
+            else
+              echo "\`references/source-registry.md\` is **drifting**. Nothing is blocked yet;"
+              echo "re-verifying now avoids a release being blocked later."
+            fi
+            echo
+            echo '```'
+            cat /tmp/report.txt
+            echo '```'
+            echo
+            echo "## What to do"
+            echo
+            echo "1. Re-read the upstream sources listed in \`references/source-registry.md\`."
+            echo "2. Correct any claim that changed, and re-stamp the rows you actually checked."
+            echo "3. Update \`last_verified\` **only** for sources you genuinely re-read."
+            echo
+            echo "Editing the date without re-reading the sources records a verification that"
+            echo "never happened. A stale-but-honest registry is more useful than a fresh-looking"
+            echo "one nobody checked."
+            echo
+            # Brace the expansion: the trailing markdown underscore would
+            # otherwise be read as part of the variable name.
+            echo "_Refreshed automatically each Monday; closes itself once the registry is back"
+            echo "inside the window. Last run: ${RUN_URL}_"
+          } > /tmp/issue-body.md
+
+          if [[ -n "$number" ]]; then
+            # Edit rather than comment: the weekly refresh should not generate a
+            # notification every Monday for a condition already being tracked.
+            gh issue edit "$number" --repo "$REPO" --body-file /tmp/issue-body.md
+          else
+            gh issue create --repo "$REPO" \
+              --title "$ISSUE_TITLE" --body-file /tmp/issue-body.md
+          fi
