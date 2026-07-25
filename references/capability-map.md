@@ -15,11 +15,23 @@ A row below being marked [official] answers one question, not four. Keep these a
 
 The practical rule: never promise a deliverable on the strength of a capability claim alone, and never treat a provider's example as evidence that the result will obey it. A returned take is evidence about that take. It is not proof of the model's internals, and not a promise about the next one.
 
+The rows below are compressed for scanning, so a single `[official]` label sits over several claims at different layers. Split the row before relying on it. The multi-shot row reads:
+
+| Element | Layer | Actually established by |
+|---|---|---|
+| multi-shot in one call | model capability | provider docs |
+| `Shot 1:/2:/3:` labels | request syntax | provider docs, **surface-specific** — Chinese surfaces use a `【时间轴】` timeline instead, see `multishot-grammar.md` |
+| Standard tier | surface access | practitioner reports, **not** provider docs |
+| 10–15s or `auto` | surface access | provider docs |
+| shots × seconds budget | heuristic | a planning default to test, not a documented limit |
+
+One row, four layers, and two different evidence grades. The provenance label on a row is the strongest claim in it, never a guarantee about every element — which is why the tier claims below carry their own `[field]` marker.
+
 ## Design INTO these
 
 | Capability | Extraction move |
 |---|---|
-| Multi-shot in one call [official] | `Shot 1:/2:/3:` labels · one action + one camera each · Standard tier · 10–15s/`auto` · shots×seconds budget |
+| Multi-shot in one call [official] | `Shot 1:/2:/3:` labels · one action + one camera each · Standard tier [field] · 10–15s/`auto` · shots×seconds budget |
 | Native synced audio [official] | name specific sounds; dialogue as a natural quoted line on-screen; short lines; clean front face ref; SFX>music>dialogue — test dialogue first |
 | Role-separated references [official] | per-asset role **+ exclusion** ("motion only, no appearance") |
 | Motion transfer via @Video [official/field] | donor clip for choreography/camera rhythm + identity @Image |
@@ -27,7 +39,7 @@ The practical rule: never promise a deliverable on the strength of a capability 
 | First/last frame [official] | lock endpoints; prompt initiate→travel→resolve; transformations & match-cuts |
 | Literal camera verbs [official] | one motivated move per shot |
 | Physics [official claim] | physical verbs & consequences, not pose adjectives |
-| Slow motion [official] | Standard tier; on the single key action |
+| Slow motion [official] | Standard tier [field]; on the single key action |
 | Transformation [field] | endpoint states + the persisting carrier; hard cases → FLF decomposition |
 | 2D/anime [field] | medium grammar: cel over painted bg, sakuga vs held frames, impact frames/speed lines/smears; no lens/DOF talk — full grammar in `[ref:2d-anime-grammar]` |
 | Formats & `auto` [official] | 21:9 for cinema; `auto` sizes duration to complexity |
