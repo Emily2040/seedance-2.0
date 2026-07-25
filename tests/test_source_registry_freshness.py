@@ -90,5 +90,29 @@ class CommandLineBehaviourTests(unittest.TestCase):
         self.assertIn("--enforce-freshness", result.stdout)
 
 
+class ReleaseChecklistTests(unittest.TestCase):
+    """Relaxing per-pull-request validation only holds if release still enforces.
+
+    Without this, dropping the gate from CI would quietly leave no enforced
+    caller anywhere, and a stale registry would pass every documented check.
+    """
+
+    readme = Path(__file__).resolve().parents[1] / "README.md"
+
+    def test_release_checklist_enforces_freshness(self) -> None:
+        lines = [
+            line.strip()
+            for line in self.readme.read_text(encoding="utf-8").splitlines()
+            if "source_registry_check.py" in line
+        ]
+        self.assertTrue(lines, "README must document the source-registry check")
+        for line in lines:
+            self.assertIn(
+                "--enforce-freshness",
+                line,
+                "the documented release check must fail on a stale registry",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

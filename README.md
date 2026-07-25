@@ -368,14 +368,17 @@ Several of these clients share the `.agents/skills/` convention — Codex, Googl
 
 ## Validation
 
-Run these checks before every release:
+Run these checks before every release. The source-registry check runs with
+`--enforce-freshness` here so a stale registry blocks a release; per-pull-request
+validation deliberately omits the flag, because staleness depends on the calendar
+rather than on the change under test.
 
 ```bash
 python scripts/validate_skills.py --strict
 python scripts/content_audit.py --strict
 python scripts/eval_schema_check.py --strict
 python scripts/design_audit.py --strict
-python scripts/source_registry_check.py --strict
+python scripts/source_registry_check.py --strict --enforce-freshness
 python scripts/vocab_schema_check.py --strict
 python scripts/project_state_check.py --strict
 python scripts/continuity_chain_check.py --strict
