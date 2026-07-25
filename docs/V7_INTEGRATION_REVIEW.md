@@ -4,7 +4,7 @@
 **Real tip:** `agent/v7-audio-multishot-v2` @ `512b5fe` — 25 commits ahead of `main`, 297 files, +56,325 / −1,343
 **Verdict:** the research is sound and the engineering is strong, but the stack is **not mergeable as-is**. One mechanical blocker (CI is red today) and one strategic blocker (incomplete + duplicated contract surface). Both are fixable without discarding the work.
 
-> **Remediation status.** The P0 findings that apply to `main` — §3 and §6 item 0 — are fixed: the wall-clock staleness gate no longer fails pull-request validation, enforcement moved to the release checklist and a weekly scheduled job. The findings about the V7 stack itself (§6 items 1–10) are **not implemented**; they have to land on `agent/v7-audio-multishot-v2`, where those files live. Dates and failure counts below are as observed on 2026-07-25 and are kept as a point-in-time record rather than rewritten, because they are the evidence for the conclusions.
+> **Remediation status.** Of the P0 findings that apply to `main` — §3 and §6 item 0 — two parts are **on `main` now**: the wall-clock staleness gate no longer fails pull-request validation, and `--enforce-freshness` blocks a stale registry in the release checklist. A **weekly scheduled review job is not on `main`**; it ships in a companion pull request, and until that merges there is no automated alert between releases. The findings about the V7 stack itself (§6 items 1–10) are **not implemented**; they have to land on `agent/v7-audio-multishot-v2`, where those files live. Dates and failure counts below are as observed on 2026-07-25 and are kept as a point-in-time record rather than rewritten, because they are the evidence for the conclusions.
 
 ---
 
@@ -174,7 +174,7 @@ Captures are researcher-written paraphrases. The sha256 proves the paraphrase ha
 
 **P0 — unblock CI (no safety lost)**
 
-0. ~~**Fix `main` first, independently of V7.**~~ **Implemented.** `source_registry_check.py` had `main` red since 2026-07-21. The >30-day staleness condition is now a warning by default, with `--enforce-freshness` preserving the hard failure for scheduled review and release, and a weekly scheduled job asking the question where it belongs. The adjacent drift check stays fatal because it compares two checked-in dates and is reproducible on any day. `last_verified` was deliberately **not** bumped — that would assert a re-verification that did not happen.
+0. ~~**Fix `main` first, independently of V7.**~~ **Implemented.** `source_registry_check.py` had `main` red since 2026-07-21. The >30-day staleness condition is now a warning by default, with `--enforce-freshness` preserving the hard failure in the release checklist. A weekly scheduled job that asks the question between releases is a separate pull request and is **not yet on `main`**. The adjacent drift check stays fatal because it compares two checked-in dates and is reproducible on any day. `last_verified` was deliberately **not** bumped — that would assert a re-verification that did not happen.
 1. Drop `--enforce-freshness` from `validate-skills.yml`. Structural validation stays; `--release` still blocks on `:expired`; the daily workflow still raises the review PR.
 2. Make expiry non-fatal under `--preview-candidate`; stamp `evidence_expired: true` into the output, which already carries `preview` and `evidence_expires_at`. Keep the hard fail for activation.
 3. Pin `today` inside the `_self_test()` paths so self-tests are hermetic. The functions already thread a `today` parameter end-to-end — the self-tests simply don't pass it. Negative tests already pin their dates and are unaffected.
@@ -202,6 +202,6 @@ It should not be merged today. Recommended path: apply P0 (about half a day, mec
 
 The single most important lesson: **freshness policy must never gate build correctness.** A test that passes on Monday and fails on Saturday with no code change is not a test — it is a scheduled outage.
 
-That lesson applies to the repository as a whole, not just to V7. When this review was written `main` had been red since 2026-07-21 for exactly this reason — before the review began, and unrelated to V7. **That half is now fixed**: staleness no longer gates per-pull-request validation, and enforcement moved to the release checklist and a weekly scheduled job.
+That lesson applies to the repository as a whole, not just to V7. When this review was written `main` had been red since 2026-07-21 for exactly this reason — before the review began, and unrelated to V7. **That half is now fixed**: staleness no longer gates per-pull-request validation, and enforcement moved to the release checklist. Scheduled monitoring between releases is a separate pull request still in flight.
 
 What remains is the V7 half. The stack did not invent the pattern; it inherited it and made it fire four times faster, across six tools instead of one. Fixing it there is §6 items 1–4.
