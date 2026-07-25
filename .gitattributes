@@ -1,0 +1,11 @@
+# Normalize to LF in the repository. The validation suite compares JSON and
+# Markdown byte-for-byte, so a CRLF checkout on Windows would otherwise change
+# file contents and fail checks for reasons unrelated to the change under test.
+* text=auto eol=lf
+
+# Never touch binary assets.
+*.gif binary
+*.jpeg binary
+*.jpg binary
+*.png binary
+*.webp binary
