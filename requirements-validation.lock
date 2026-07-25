@@ -1,0 +1,27 @@
+# Validation-only dependencies for scripts/schema_check.py.
+#
+# Pinned for the CI environment: Linux x86-64, CPython 3.11 (see
+# .github/workflows/validate-skills.yml). rpds-py ships per-platform compiled
+# wheels, so this hash set is specific to that pair; installing it on macOS or
+# a different Python minor version will fail the hash check. Every other
+# package here is a pure-Python wheel.
+#
+# The skill package itself never needs these. Nothing under skills/,
+# references/, or scripts/ that ships to users imports jsonschema.
+#
+# To refresh: python3.11 -m pip install --dry-run --report - jsonschema
+
+--only-binary=:all:
+
+attrs==26.1.0 \
+    --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
+jsonschema==4.26.0 \
+    --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
+jsonschema-specifications==2025.9.1 \
+    --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe
+referencing==0.37.0 \
+    --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231
+rpds-py==2026.6.3 \
+    --hash=sha256:9c1255b302953c86a486b81d330d5ee1d5bd937691ce271b6be0ef0e299eaab7
+typing_extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

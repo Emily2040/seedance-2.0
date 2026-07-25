@@ -1,0 +1,12 @@
+{
+  "run_id": "run_fixture_airport_clip01",
+  "project_id": "seq_airport_arrival",
+  "clip_id": "clip_01",
+  "surface": "unspecified-fixture-surface",
+  "prompt_version": "v1",
+  "input_mode": "t2v",
+  "reference_tags": [],
+  "prompt": "Fixture record only. No generation was submitted and no provider was contacted; this exists so generation-run.schema.json is executed by scripts/schema_check.py.",
+  "result_status": "not_run_fixture",
+  "is_synthetic_fixture": true
+}

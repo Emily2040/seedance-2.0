@@ -1,0 +1,25 @@
+{
+  "project_id": "seq_airport_arrival",
+  "clip_id": "clip_02",
+  "prompt_version": "v1",
+  "sequence_relation": "seamless_continuation",
+  "generation_mode": "i2v",
+  "reference_roles": [
+    {
+      "role": "opening_frame",
+      "note": "Accepted final frame of clip_01, used only to continue motion."
+    }
+  ],
+  "opening_state_source": "observed_end_state",
+  "current_clip_action": "She keeps walking along the arrivals corridor and slows as the exit doors come into view.",
+  "endpoint": "She stops just short of the doors, bag still on her shoulder.",
+  "completed_beat_exclusions": [
+    "stepping off the escalator",
+    "checking the arrivals board"
+  ],
+  "reserved_future_exclusions": [
+    "walking out of the terminal",
+    "entering a vehicle"
+  ],
+  "natural_language_prompt": "Fixture record only. Continues from the observed end state of clip_01: she walks along the arrivals corridor and slows as the exit doors come into view, stopping just short of them with her bag still on her shoulder. Do not replay stepping off the escalator or checking the arrivals board, and do not leave the terminal."
+}
