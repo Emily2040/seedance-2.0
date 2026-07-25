@@ -6,6 +6,27 @@ Current active release: **6.6.0**. Older entries below are preserved as release 
 
 ## Unreleased
 
+### Added
+
+- Added an **Authority Order** to the root skill: nine tiers resolving what wins when two gates give opposite instructions, with defaults ranked last, same-tier tiebreaks, and the rule that a constraint is classified by the dimension it governs rather than by who asked for it.
+- Added **Ending Profiles** to `cinematography-shot-language`: six named profiles (resolve, extension anchor, loop seam, hero hold, edit point, reveal or punch) chosen by what consumes the clip next, so an extension anchor stays directionally live and a loop seam is phase-matched to its opening.
+- Added an **Inspection Honesty** rule to `agent-compatibility`, `continuation-handoff`, and `seedance-continuation`: media inspection is a client capability, not a property of this skill. A state the agent was told rather than saw is recorded as reported — `observation_confidence: low`, `requires_user_confirmation: true`, unverified categories in `uncertainties` — instead of entering project canon as fact.
+- Added `scripts/schema_check.py`: executes every shipped JSON Schema against declared fixture instances in `validation/schema-instances.json`, rejects duplicate JSON keys, and requires each schema to carry at least one instance. Wired into CI and the release checklist.
+- Added `scripts/build_hero.py`: generates `assets/hero-dark.svg` and `assets/hero-light.svg` from one geometry so the two themes cannot drift apart, with a `--check` drift gate in CI.
+- Added `.github/workflows/source-freshness-review.yml`: a Monday schedule that classifies the registry clean, drifting, or stale and maintains a single tracking issue. The privileged job checks out nothing; the job that runs repository code is read-only.
+- Added `tests/test_install_payload.py`: performs a real install and AST-parses every shipped `.py` for network imports and credential-shaped literals, with a sentinel test proving the scan actually detects a violation.
+- Added `.gitattributes` so a Windows checkout cannot fail validation on line endings.
+
+### Changed
+
+- Split capability claims in `capability-map` into four separately-verified layers — model capability, surface access, request syntax, and returned adherence — because a single "supported" cell conflated things that fail for different reasons.
+- Stopped the wall-clock freshness gate from failing unrelated pull requests. `source_registry_check.py` now warns past 14 days and errors past 30 only under the new `--enforce-freshness` flag, which the release checklist and the scheduled job pass. The drift check between two checked-in dates stays fatal, since it cannot be triggered by the calendar alone.
+- Hardened the validation workflow: actions pinned to commit SHAs, `permissions: contents: read`, a cancel-in-progress concurrency group, and no committed bytecode.
+- Excluded the live evaluator (`eval_run.py`, `eval-runs/`, `tests/`) from the installed skill payload, and made `SECURITY.md` describe it accurately rather than implying it was never shipped.
+- Retired the viewfinder masthead for a call-sheet one; `frontend-design-system` now explicitly retires sprocket strips, viewfinder marks, crosshairs, timecode, record dots, aspect badges, and waveform ticks.
+- Made `requirements-validation.lock` installable off the CI runner by covering CPython 3.11-3.13 on Linux, macOS, and Windows.
+- Kept the conservative routing path open when the active surface is unknown: the agent withholds the platform claim rather than stopping the planning work.
+
 ### Fixed
 
 - Native-level proofreading pass across all six languages. Chinese: 编钟余震 -> 余音 (aftershock -> lingering resonance), 湿地 (wetland) -> 潮湿地面/湿润地面/湿滑地面 for "wet ground" (3 files), the missed 三分之二 -> 四分之三 three-quarter angle in the community-examples file, 表面 -> 平台 (surface translationese), 轮廓 -> 剪影 (silhouette), 后退揭示镜头 -> 镜头后拉揭示空间, 宽幅远景 -> 远景定场镜头 (establishing shot), a missing 仅 to match its "only" gloss, and full-width quotes in two Chinese sentences. Japanese: the same fraction bug 三分の二 -> 四分の三, 主体 -> 被写体 (photographic subject), 実用照明 -> プラクティカルライト (practical light, 2 files), 開示 -> 種明かし（リビール） (cinematic reveal), two grammar repairs, 開いた動き -> 進行中の動き, 顔を向けて -> 振り向いて, 日本語入口 -> 日本語の入り口, だけで止めず -> だけにとどめず, 電気の弧 -> 電気アーク. Korean: 실용 조명 -> 프랙티컬 조명 (practical light, 4 files), 천천히 돌리 인 -> 느린 돌리 인, 머리 회전 -> 고개를 돌리지 않고, 중간 샷/중간 클로즈업 -> 미디엄 샷/미디엄 클로즈업, 주체 -> 피사체, a particle-spacing fix, 영화같은 -> 영화 같은, register fix 마세요 -> 마십시오, 멀리 -> 멀리서, 낮은 앵글 -> 로우 앵글, 틸앤오렌지 -> 틸 앤 오렌지, and one unstacked modifier. Spanish: bloqueo -> puesta en escena (film blocking, not blockage), caen en el pulso -> siguen el pulso. Russian: макро-крупный план -> макросъемка крупным планом, and one stray ё normalized to the file's е-style.
