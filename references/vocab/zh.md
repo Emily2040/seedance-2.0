@@ -1,5 +1,7 @@
 # Chinese Vocabulary
 
+**Script variant: Simplified Chinese (简体中文, zh-Hans), mainland terminology.** Every phrase below is written for the mainland surfaces this skill targets. See Script Variant before using any of it in a Traditional-script deliverable.
+
 Use this reference for Chinese Seedance prompt wording, role binding, and compact prompt compression. Keep reference tags unchanged: `@Image1`, `@Video1`, and `@Audio1` stay literal.
 
 | Function | Chinese | English meaning |
@@ -50,6 +52,9 @@ Use this reference for Chinese Seedance prompt wording, role binding, and compac
 | Audio | `对白期间镜头固定` | locked camera during dialogue |
 | Audio | `脚步声卡点` | footsteps hit the beat |
 | Text | `不要新增字幕、水印或无关文字` | no new subtitles, watermark, or unrelated text |
+| Text | `交付字幕使用简体中文` | deliver subtitles in Simplified Chinese |
+| Text | `交付字幕使用繁體中文（台灣）` | deliver subtitles in Traditional Chinese (Taiwan) |
+| Text | `交付字幕使用繁體中文（香港）` | deliver subtitles in Traditional Chinese (Hong Kong) |
 | Editing | `接着拍` | continue the shot |
 | Editing | `延长 5 秒` | extend by five seconds |
 | Editing | `只替换失败片段` | replace only the failed segment |
@@ -105,6 +110,39 @@ Field-observed from 2026 community testing (即梦官方手册解读、知乎、
 - 台词格式：角色名 + 动作 + 冒号 + 引号内台词。Count characters/syllables, not "words"; keep to one short clause.
 - 唇形同步在部分界面默认关闭（如即梦需勾选“启用唇形同步”）- confirm it is enabled before blaming the prompt.
 - Inline audio tags are field-reported on some surfaces: 在台词末尾加方括号提示音色与音效，例如 `"领旨" [低沉男声][编钟余音]`。Surface-specific; verify before relying on it.
+
+## Script Variant (简繁)
+
+"Chinese" is not one script. This file is Simplified (zh-Hans); a deliverable for 台灣, 香港, or 澳門 needs Traditional (zh-Hant). Leaving it undeclared means the mainland variant ships to a Traditional-script audience by default, which reads as a foreign cut rather than a localized one.
+
+**Prompt script and delivery script are separate decisions.** The surfaces this skill targets (即梦/Dreamina、豆包、火山方舟) are mainland-trained, and Simplified is the safer prompt language — `[ref:audio-guide]` ranks Mandarin the strongest lip-sync tier on that basis. The audience-facing text is a different question. Prompting in Simplified while delivering Traditional subtitles is a legitimate and common combination; conflating the two either weakens the prompt or ships the wrong script to the viewer.
+
+Where it bites hardest is exactly where this repo is already weakest. Hands-on tests report 字幕乱码 (garbled subtitles), and every vocab file's standing advice is to keep the frame textless and add subtitles in post - so the variant is primarily a **delivery** parameter, set on the post/subtitle path rather than requested from the model.
+
+**Do not convert by find-and-replace.** Several Simplified characters map to more than one Traditional character by meaning, and a naive pass produces text that is wrong rather than merely foreign:
+
+| 简体 | 繁體 — 按意思分化 |
+|---|---|
+| 头发 (hair) | 頭髮，不是 頭發 |
+| 皇后 (queen) | 皇后，不是 皇後 |
+| 干燥 (dry) / 干活 (to work) | 乾燥 / 幹活 |
+| 里面 (inside) / 三里 (li, distance) | 裡面 / 三里 |
+| 松开 (loosen) / 松树 (pine) | 鬆開 / 松樹 |
+
+头发 → 頭髮 matters here specifically: hair is a named continuity anchor in the reference workflow, so it turns up in prompts and in take notes.
+
+Vocabulary also differs beyond the characters, so a correct script conversion can still read as the wrong region:
+
+| 简体（中国大陆） | 繁體（台灣 / 香港） |
+|---|---|
+| 视频 | 影片（台）／影片、短片（港） |
+| 屏幕 | 螢幕 |
+| 质量 | 品質 |
+| 信息 | 資訊 |
+| 网络 | 網路（台）／網絡（港） |
+| 摄像机 | 攝影機 |
+
+Record the variant with the delivery target, not the prompt, and keep it fixed for the life of a project - a sequence that switches variants between clips has the same continuity problem as one that switches wardrobe.
 
 ## Slop Traps
 
