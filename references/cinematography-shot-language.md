@@ -35,7 +35,14 @@ Prompt pattern:
 | Edit point | visual and audio land on a clean boundary | the clip is a cut, insert, or replacement in a larger edit |
 | Reveal or punch | the peak intentionally lands on the final frame | scares, jokes, title handoffs, transformation payoffs |
 
-**A good ending is not always a moving ending.** Trailing motion is the right answer only for the extension anchor, and it actively hurts the other five: it blurs a hero hold, breaks a loop seam, and softens a punch. Ending on continued movement by reflex is the more common error than ending too still.
+**A good ending is not always a moving ending — and where it is, the motion has to be the right motion.** Two profiles need movement through the final frame and two are damaged by it:
+
+- **Extension anchor:** motion continues and stays directionally live, because the next clip picks it up.
+- **Loop seam:** motion continues and must be *phase-matched* to the opening — same velocity, same point in the cycle. A hero product spin that decelerates to a stop hitches just as visibly as one whose phase is wrong. Stopping is a defect here, not a safe default.
+- **Hero hold** and **reveal or punch:** trailing motion blurs the thing the viewer came to read, or softens the beat the clip was built for. Settle.
+- **Resolve** and **edit point:** settle, cleanly.
+
+So the error is not motion as such; it is *unmatched* motion — movement at the final frame that nothing downstream consumes. Adding drift by reflex to make an ending feel alive is the more common mistake than ending too still, but prescribing stillness everywhere breaks loops.
 
 Two consequences worth stating. An extension anchor must leave `open motion` explicit, because that is what the next clip opens from. A loop seam must match the opening state on all four of position, motion phase, exposure, and audio — three out of four reads as a visible jump.
 
