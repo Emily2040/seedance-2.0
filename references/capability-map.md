@@ -2,6 +2,19 @@
 
 *What Seedance 2.0 is best at, how to extract each strength, and what to design around. Load before prompt planning. Labels: [official] = ByteDance/fal/Ark docs · [field] = practitioner-reported · [heuristic] = default to test. Last verified 2026-06-09. The mechanics behind these rows live in `model-mechanics.md`.*
 
+## Four layers, verified separately
+
+A row below being marked [official] answers one question, not four. Keep these apart, because provider documentation routinely establishes one and says nothing about the rest:
+
+| Layer | The question it answers | What a source can prove |
+|---|---|---|
+| Model capability | can the model do this at all? | a model-level doc can describe a modality without saying which product exposes it |
+| Surface access | does this surface, in this operation, expose it? | availability is per operation; a sibling operation on the same surface proves nothing |
+| Request syntax | how is it expressed in the request? | an example demonstrates an authored form; it does not make that form universal |
+| Returned adherence | did the output actually follow it? | only an observed take answers this, and one take is an observation, not a guarantee |
+
+The practical rule: never promise a deliverable on the strength of a capability claim alone, and never treat a provider's example as evidence that the result will obey it. A returned take is evidence about that take. It is not proof of the model's internals, and not a promise about the next one.
+
 ## Design INTO these
 
 | Capability | Extraction move |
