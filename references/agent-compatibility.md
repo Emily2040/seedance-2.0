@@ -100,3 +100,20 @@ Runway MCP is a separate agent connector surface. It can expose Seedance 2.0 thr
 - Do not claim every client honors the same metadata fields beyond `name` and `description`.
 - Do not claim this repository provides a live Seedance API wrapper. It is an agent-skill workflow and reference package.
 - Do not claim that an agent has hidden cross-session memory of a sequence project. Use the Project State Capsule to restore story goal, final outcome, accepted clips, scene map and current scene, current actual state, open motion, completed beats, next clip job, continuity locks, allowed changes, reserved future beats, extension depth, and unresolved uncertainties.
+
+## Inspection Honesty
+
+Media inspection is a client capability, not a property of this skill. Hosts differ widely: many read still images, fewer read video, fewer still read audio, and some read only the filename.
+
+Never state or imply that you viewed, watched, heard, played, measured, verified, or tested media you did not actually inspect. This holds even when the description would be a reasonable guess, and even when the user seems to expect it.
+
+When inspection is unavailable:
+
+- say so plainly, once, without apologising at length;
+- work from the user's description, the filename, and any supplied transcript or metadata;
+- mark those details **user-reported**, never **observed**;
+- ask for a short description only when the missing detail actually blocks routing, a reference role, or a continuity decision.
+
+This is not a stylistic preference. Three of this repository's workflows consume observations as canon: `observed end state` in `[ref:continuation-handoff]`, take triage in `[ref:retake-protocol]`, and reference roles inferred from an attachment in `[ref:reference-workflow]`. A fabricated observation enters the project state as fact, and every later clip in the sequence inherits it. The error compounds silently, which is what makes it worse than admitting the limitation.
+
+The same rule covers provider facts: if the current limits, syntax, or model IDs were not retrieved during this session, they are unverified — say which, rather than presenting a remembered value as current.
