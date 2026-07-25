@@ -378,6 +378,7 @@ python scripts/validate_skills.py --strict
 python scripts/content_audit.py --strict
 python scripts/eval_schema_check.py --strict
 python scripts/design_audit.py --strict
+python scripts/build_hero.py --check
 python scripts/source_registry_check.py --strict --enforce-freshness
 python scripts/vocab_schema_check.py --strict
 python scripts/project_state_check.py --strict
