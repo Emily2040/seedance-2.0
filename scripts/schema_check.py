@@ -120,8 +120,11 @@ def main() -> int:
 
     if Draft202012Validator is None:
         print(
-            "schema check requires jsonschema; install it with\n"
-            "  python -m pip install --require-hashes --requirement requirements-validation.lock",
+            "schema check requires jsonschema.\n"
+            "  python -m pip install --require-hashes --requirement requirements-validation.lock\n"
+            "The lock covers CPython 3.11-3.13 on Linux, macOS, and Windows. On a platform\n"
+            "it does not cover, install jsonschema>=4.26 by any means you trust and re-run;\n"
+            "this checker needs the library, not that particular lock file.",
             file=sys.stderr,
         )
         return 2
