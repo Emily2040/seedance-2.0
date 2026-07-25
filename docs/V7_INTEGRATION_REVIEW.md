@@ -4,6 +4,8 @@
 **Real tip:** `agent/v7-audio-multishot-v2` @ `512b5fe` — 25 commits ahead of `main`, 297 files, +56,325 / −1,343
 **Verdict:** the research is sound and the engineering is strong, but the stack is **not mergeable as-is**. One mechanical blocker (CI is red today) and one strategic blocker (incomplete + duplicated contract surface). Both are fixable without discarding the work.
 
+> **Remediation status.** The P0 findings that apply to `main` — §3 and §6 item 0 — are implemented in the pull request stack this document ships with (`main` → freshness determinism → workflow hardening → scheduled freshness review). The findings about the V7 stack itself (§6 items 1–10) are **not yet implemented**; they have to land on `agent/v7-audio-multishot-v2`, where those files live. Dates and failure counts below are as observed on 2026-07-25 and are kept as a point-in-time record.
+
 ---
 
 ## 1. What was actually built
@@ -172,7 +174,7 @@ Captures are researcher-written paraphrases. The sha256 proves the paraphrase ha
 
 **P0 — unblock CI (no safety lost)**
 
-0. **Fix `main` first, independently of V7.** `source_registry_check.py` has had `main` red since 2026-07-21. Convert the >30-day staleness condition from an error into a warning (or move it to a scheduled job, exactly as recommended for V7 below). Do **not** simply bump `last_verified` — that asserts a re-verification that did not happen.
+0. ~~**Fix `main` first, independently of V7.**~~ **Implemented.** `source_registry_check.py` had `main` red since 2026-07-21. The >30-day staleness condition is now a warning by default, with `--enforce-freshness` preserving the hard failure for scheduled review and release, and a weekly scheduled job asking the question where it belongs. The adjacent drift check stays fatal because it compares two checked-in dates and is reproducible on any day. `last_verified` was deliberately **not** bumped — that would assert a re-verification that did not happen.
 1. Drop `--enforce-freshness` from `validate-skills.yml`. Structural validation stays; `--release` still blocks on `:expired`; the daily workflow still raises the review PR.
 2. Make expiry non-fatal under `--preview-candidate`; stamp `evidence_expired: true` into the output, which already carries `preview` and `evidence_expires_at`. Keep the hard fail for activation.
 3. Pin `today` inside the `_self_test()` paths so self-tests are hermetic. The functions already thread a `today` parameter end-to-end — the self-tests simply don't pass it. Negative tests already pin their dates and are unaffected.
