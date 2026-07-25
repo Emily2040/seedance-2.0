@@ -202,4 +202,6 @@ It should not be merged today. Recommended path: apply P0 (about half a day, mec
 
 The single most important lesson: **freshness policy must never gate build correctness.** A test that passes on Monday and fails on Saturday with no code change is not a test — it is a scheduled outage.
 
-That lesson applies to the repository as a whole, not just to V7. `main` is red today for exactly this reason, and it was red before this review began. Worth fixing there first — the V7 stack simply made an existing pattern fire faster.
+That lesson applies to the repository as a whole, not just to V7. When this review was written `main` had been red since 2026-07-21 for exactly this reason — before the review began, and unrelated to V7. **That half is now fixed**: staleness no longer gates per-pull-request validation, enforcement moved to the release checklist and a weekly scheduled job, and the pull requests carrying those changes are the ones this document ships with.
+
+What remains is the V7 half. The stack did not invent the pattern; it inherited it and made it fire four times faster, across six tools instead of one. Fixing it there is §6 items 1–4.
