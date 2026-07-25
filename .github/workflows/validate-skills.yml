@@ -3,13 +3,33 @@ name: validate-seedance-skill
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+# The validation suite only reads the tree. Withholding every other scope means
+# a compromised dependency or script cannot push, open pull requests, or
+# publish packages with this token.
+permissions:
+  contents: read
+
+# A newer push to the same ref makes an in-flight run obsolete.
+concurrency:
+  group: validate-skills-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      # validate_skills.py fails when it finds committed bytecode. Keeping
+      # __pycache__ out of the tree stops any step that imports a module from
+      # changing the result of a later step.
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPYCACHEPREFIX: /tmp/seedance-pycache
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # Actions are pinned to commit SHAs: a tag is mutable, so `@v4` silently
+      # changes what executes here. The trailing comment tracks the release.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
       - name: Validate skill metadata and required files
