@@ -10,6 +10,10 @@ from pathlib import Path
 REQUIRED_LABELS = ["confirmed", "volatile", "field-observed", "unverified", "internal"]
 REQUIRED_OFFICIAL_MARKERS = ["seed.bytedance.com", "volcengine.com", "arxiv.org", "runwayml.com"]
 
+# Wall-clock staleness thresholds for references/source-registry.md.
+STALE_WARN_DAYS = 14
+STALE_ERROR_DAYS = 30
+
 
 def parse_date(text: str) -> date | None:
     try:
@@ -18,10 +22,38 @@ def parse_date(text: str) -> date | None:
         return None
 
 
+def freshness_findings(
+    verified: date, today: date, enforce: bool
+) -> tuple[list[str], list[str]]:
+    """Classify how stale `last_verified` is.
+
+    Staleness depends on the wall clock, so an unchanged commit changes verdict
+    as days pass. Reporting it as an error would make every unrelated pull
+    request fail on a calendar boundary, so it is a warning unless enforcement
+    is requested explicitly (scheduled review or release).
+    """
+    age = (today - verified).days
+    if age <= STALE_WARN_DAYS:
+        return [], []
+    message = f"source-registry.md last_verified is {age} days old"
+    if age > STALE_ERROR_DAYS and enforce:
+        return [message], []
+    return [], [message]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", nargs="?", default=".")
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--enforce-freshness",
+        action="store_true",
+        help=(
+            "fail when source-registry.md last_verified is older than "
+            f"{STALE_ERROR_DAYS} days; intended for scheduled review and release, "
+            "not for per-pull-request validation"
+        ),
+    )
     args = parser.parse_args()
 
     root = Path(args.repo).resolve()
@@ -39,11 +71,11 @@ def main() -> int:
         else:
             verified = parse_date(match.group(1))
             if verified:
-                age = (date.today() - verified).days
-                if age > 30:
-                    errors.append(f"source-registry.md last_verified is {age} days old")
-                elif age > 14:
-                    warnings.append(f"source-registry.md last_verified is {age} days old")
+                stale_errors, stale_warnings = freshness_findings(
+                    verified, date.today(), args.enforce_freshness
+                )
+                errors.extend(stale_errors)
+                warnings.extend(stale_warnings)
 
         for label in REQUIRED_LABELS:
             if f"`{label}`" not in text:
@@ -86,7 +118,9 @@ def main() -> int:
                     if source.get("source_type", "").startswith("community") and source.get("confidence") == "high":
                         warnings.append(f"community source `{source.get('id')}` should rarely be high confidence")
 
-    # Freshness gate: volatile platform references must not drift far behind api-status.md.
+    # Internal-consistency gate: volatile platform references must not drift far behind
+    # api-status.md. This compares two checked-in dates, so its verdict depends only on
+    # repository content and never on the wall clock. It stays a hard error.
     api_status = root / "references" / "api-status.md"
     if api_status.exists():
         anchor_match = re.search(r"^last_verified:\s*(\d{4}-\d{2}-\d{2})$", api_status.read_text(encoding="utf-8"), re.M)
