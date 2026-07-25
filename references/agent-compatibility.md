@@ -111,8 +111,12 @@ When inspection is unavailable:
 
 - say so plainly, once, without apologising at length;
 - work from the user's description, the filename, and any supplied transcript or metadata;
-- mark those details **user-reported**, never **observed**;
+- record those details as reported rather than seen, using the fields the take-review contract already carries: `observation_confidence: low`, `requires_user_confirmation: true`, and every unverified category named in `uncertainties`;
 - ask for a short description only when the missing detail actually blocks routing, a reference role, or a continuity decision.
+
+This does not block a valid take review. `observed_end_state` stays populated — a sequence cannot continue without it, and `project_state_check.py` rejects an accepted clip that lacks it. What changes is that a state you were told rather than saw never travels at `medium` or `high` confidence, and it carries an explicit confirmation flag, so the next clip inherits a marked assumption instead of a fact.
+
+Note the honest limit of that arrangement: `observation_confidence` is a confidence axis, not a provenance one, so "I saw it, but the frame was ambiguous" and "I never saw it" both land on `low`. The pairing with `requires_user_confirmation` and `uncertainties` distinguishes them in practice. A dedicated provenance field would be cleaner and is worth considering, but it changes a shipped schema, its checker, and its fixtures, so it belongs in its own reviewed change rather than being smuggled in here.
 
 This is not a stylistic preference. Three of this repository's workflows consume observations as canon: `observed end state` in `[ref:continuation-handoff]`, take triage in `[ref:retake-protocol]`, and reference roles inferred from an attachment in `[ref:reference-workflow]`. A fabricated observation enters the project state as fact, and every later clip in the sequence inherits it. The error compounds silently, which is what makes it worse than admitting the limitation.
 
