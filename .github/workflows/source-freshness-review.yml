@@ -57,11 +57,27 @@ jobs:
             > /tmp/freshness.txt 2>&1 || status=$?
           cat /tmp/freshness.txt
 
+          # The checker warns before it fails: 14 days drifting, 30 days stale.
+          # Exit status alone cannot tell a clean registry from a drifting one,
+          # and reporting drift as "no action needed" would waste the early
+          # warning this schedule exists to deliver.
+          warned=0
+          grep -q '^WARNINGS:' /tmp/freshness.txt && warned=1
+
           {
             echo "# Source freshness review"
             echo
-            if [[ $status -eq 0 ]]; then
+            if [[ $status -eq 0 && $warned -eq 0 ]]; then
               echo "References are within the freshness window. No action needed."
+              echo
+              echo '```'
+              cat /tmp/freshness.txt
+              echo '```'
+            elif [[ $status -eq 0 ]]; then
+              echo "**references/source-registry.md is drifting.**"
+              echo
+              echo "Still inside the freshness window, so nothing is blocked yet."
+              echo "Re-verifying now avoids a release being blocked later."
               echo
               echo '```'
               cat /tmp/freshness.txt
