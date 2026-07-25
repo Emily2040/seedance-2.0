@@ -72,9 +72,20 @@ The renderer itself is provably correct and deterministic — only the date gate
 
 The remaining claims (30-day TTL) **expire 2026-08-10**. Fixing only the six expired claims buys 16 days.
 
-### Impact on `main`
+### Impact on `main` — and the same bug is already there
 
-`main` has no `research/` or `tools/` directory, 17 CI steps, and 6 passing tests — it is green and cannot fail this way. **Merging the V7 stack today takes `main` from green to red immediately.**
+`main` has no `research/` or `tools/` directory, so it cannot fail from *evidence* expiry. But **`main` is already red for the same underlying reason**, discovered when this review's own PR ran CI:
+
+```
+Source registry errors:
+- source-registry.md last_verified is 35 days old
+```
+
+`scripts/source_registry_check.py` hard-fails when `references/source-registry.md`'s `last_verified` is more than 30 days old. It reads `2026-06-20`, so `main` went red on **2026-07-21** and has been red for four days. Verified by running the check on a pristine `main` checkout — it is not caused by any change in this branch.
+
+So the time-bomb pattern is **not a V7 invention**. V7 inherited it and amplified it: 30-day wall-clock staleness on `main` became a 7-day TTL enforced across six tools. Merging V7 today would add a second, faster-firing instance of a failure mode the repository already has.
+
+**This also exposes the perverse incentive.** The cheapest way to make either gate green is to edit the date — to assert that sources were re-verified when nobody looked at them. A gate whose easiest fix is falsifying the evidence record actively undermines the honesty the evidence registry exists to protect. That date should not be bumped without a real re-verification pass.
 
 ### Root design error
 
@@ -161,6 +172,7 @@ Captures are researcher-written paraphrases. The sha256 proves the paraphrase ha
 
 **P0 — unblock CI (no safety lost)**
 
+0. **Fix `main` first, independently of V7.** `source_registry_check.py` has had `main` red since 2026-07-21. Convert the >30-day staleness condition from an error into a warning (or move it to a scheduled job, exactly as recommended for V7 below). Do **not** simply bump `last_verified` — that asserts a re-verification that did not happen.
 1. Drop `--enforce-freshness` from `validate-skills.yml`. Structural validation stays; `--release` still blocks on `:expired`; the daily workflow still raises the review PR.
 2. Make expiry non-fatal under `--preview-candidate`; stamp `evidence_expired: true` into the output, which already carries `preview` and `evidence_expires_at`. Keep the hard fail for activation.
 3. Pin `today` inside the `_self_test()` paths so self-tests are hermetic. The functions already thread a `today` parameter end-to-end — the self-tests simply don't pass it. Negative tests already pin their dates and are unaffected.
@@ -187,3 +199,5 @@ The V7 stack is **high-quality work built on a correct and valuable insight**. T
 It should not be merged today. Recommended path: apply P0 (about half a day, mechanical), then P1.5 — collapse the v1/v2 duplication — then merge the evidence registry and surface profiles as a single reviewed PR, leaving activation to a later, deliberate change.
 
 The single most important lesson: **freshness policy must never gate build correctness.** A test that passes on Monday and fails on Saturday with no code change is not a test — it is a scheduled outage.
+
+That lesson applies to the repository as a whole, not just to V7. `main` is red today for exactly this reason, and it was red before this review began. Worth fixing there first — the V7 stack simply made an existing pattern fire faster.
