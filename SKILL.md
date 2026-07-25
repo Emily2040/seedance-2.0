@@ -54,6 +54,28 @@ Leave the fast lane the instant the request earns a gate: IP/likeness/brand/safe
     For interaction-heavy or fragile shots, write the visible chain in order - initial state, trigger, decisive change, response, follow-through, local endpoint - and name which of those the camera actually covers. Keep subject, prop, camera, and environmental motion under separate owners: a subject can reach its endpoint while rain keeps falling, a fan keeps turning, or the camera stays open for a handoff. Treat the chain as authored planning and review criteria; it describes what the shot should show, and is never evidence about the model's internals or a claim of physical accuracy.
 13. Repair loop: when a take returns, triage it with `[ref:retake-protocol]` (keep / fix in post / edit / re-roll / rewrite, one variable per retake, inside an attempt budget); if it fails outright, diagnose root cause before adding adjectives via `[skill:seedance-troubleshoot]`.
 
+## Authority Order
+
+The gates above will contradict each other. When they do, resolve in this order, highest first. A lower rule never silently overrides a higher one; when one is sacrificed, say which and why.
+
+1. **Safety, rights, consent, platform policy.** Never traded away, never worked around.
+2. **Verified limits of the active surface operation.** A request the surface rejects is not a prompt.
+3. **The user's explicit must-haves.** Their stated non-negotiables outrank every default below.
+4. **Reference contracts** — what each asset must supply, preserve, and never transfer.
+5. **Continuity** — identity, space, time, prop ownership, audio state.
+6. **Physical causality and action legibility.** A beat the viewer cannot read has not happened.
+7. **Camera and editorial logic.**
+8. **Style, palette, atmosphere, decorative detail.**
+9. **This skill's own defaults.** The first thing to give up, not the last.
+
+**Which tier a constraint sits in is decided by what it controls, not by who asked for it.** One requirement often touches several tiers at once: "`@Video1` must supply this camera path" is a user must-have, a reference contract, and camera logic simultaneously. Classify it by the dimension it governs — camera, tier 7 — so that if the borrowed path hides the contact the shot exists to show, legibility at tier 6 still wins. Classifying by origin instead would collapse every user sentence into tier 3 and the order would decide nothing.
+
+Being a user requirement does something different, and narrower: **it forbids dropping the constraint quietly.** When a user's request loses to a higher tier, say what you changed and why — "the borrowed camera path hid the moment of contact, so the crane is shallower; the timing is unchanged." The user can then lift it deliberately by naming the trade ("keep that path even if the action reads less clearly"), which moves it to tier 3 as a genuine non-negotiable. An unstated preference is not that.
+
+Within one tier, prefer the constraint that is verified over the one that is inferred, and the one the user stated over the one this skill assumed. If they are still tied, ask rather than pick.
+
+The common failures are inversions: style wording that quietly breaks an identity lock, a camera move that outranks the action it exists to reveal, or a repo default overriding something the user actually asked for.
+
 ## Sequence Gate
 
 For a sequence project, do not write Clip 01 until these are known: story objective, final story outcome, ordered major beats grouped into scenes, active surface or conservative surface assumption, clip budget, current clip narrative job and felt intent, and current clip completed endpoint.
