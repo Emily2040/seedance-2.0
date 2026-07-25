@@ -50,7 +50,9 @@ Before writing any continuation prompt, require:
 
 If the source is unavailable, say: "I have the story plan, but I do not have the actual ending of the previous generation. Upload the clip or its final frame - `python scripts/extract_last_frame.py <take>` pulls the final frame locally - or describe exactly what is visible at the end. I should not invent the continuation state."
 
-Once a frame or clip is attached, run the Observation Fast Path from `[ref:continuation-handoff]`: the agent fills the observation record from what is visible and asks only about what the attachment cannot show (for a still: open motion, camera movement phase, audio phase). Never hand the sensing work back to the user when the pixels are already in hand.
+Once a frame or clip is attached **and this client can actually open it**, run the Observation Fast Path from `[ref:continuation-handoff]`: the agent fills the observation record from what is visible and asks only about what the attachment cannot show (for a still: open motion, camera movement phase, audio phase). Never hand the sensing work back to the user when the pixels are genuinely in hand.
+
+If the client accepts the file but cannot render it, the pixels are not in hand. Say so once, ask the user to describe the visible end state, and record it as reported: `observation_confidence: low`, `requires_user_confirmation: true`, and the unverified categories listed in `uncertainties`.
 
 Do not hide this uncertainty by writing a speculative prompt.
 
