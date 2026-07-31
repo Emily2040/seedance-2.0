@@ -13,7 +13,11 @@ CI gate:
 
 ```bash
 export ANTHROPIC_API_KEY=...
-python scripts/eval_run.py --run --ledger evals/eval-run-ledger.md --stamp <ISO-date>
+python scripts/eval_run.py --ledger evals/eval-run-ledger.md --stamp <ISO-date>
+
+export MINIMAX_API_KEY=...
+python scripts/eval_run.py --provider minimax --region global_en \
+  --ledger evals/eval-run-ledger.md --stamp <ISO-date>
 ```
 
 The harness, for each case, builds a responder context from the real skill content
@@ -27,7 +31,7 @@ The offline wiring is checked in CI via `python scripts/eval_run.py --self-test`
 
 ## Latest scored run
 
-_Not yet scored live in this environment (no `ANTHROPIC_API_KEY` available offline)._
+_Not yet scored live in this environment (no live provider credential is available offline)._
 Run the command above to populate the table below; the harness overwrites this
 file with per-case scores and a pass/fail verdict against the rubric thresholds.
 

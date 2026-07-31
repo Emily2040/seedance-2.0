@@ -445,8 +445,15 @@ happened, so refreshing it is deliberately a human step.
 To prove the package is also *good*, run the model-in-the-loop harness, which sends each eval case through the real skill content and scores the response against the case's assertions using [`eval-rubric.md`](references/eval-rubric.md):
 
 ```bash
-export ANTHROPIC_API_KEY=...   # required for a live scored pass
-python scripts/eval_run.py --run --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+export ANTHROPIC_API_KEY=...
+python scripts/eval_run.py --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+
+# MiniMax uses MiniMax-M3 by default; MiniMax-M2.7 is also supported.
+export MINIMAX_API_KEY=...
+python scripts/eval_run.py --provider minimax --region global_en \
+  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 \
+  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
 ```
 
 This is the quality gate, not a shape gate, so it lives outside offline CI; the latest scored run is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).

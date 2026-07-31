@@ -95,7 +95,10 @@ class InstallPayloadTests(unittest.TestCase):
         """Guard against the scan passing because it detects nothing at all."""
         tree = ast.parse((ROOT / "scripts/eval_run.py").read_text(encoding="utf-8"))
         self.assertTrue(imported_modules(tree) & NETWORK_MODULES)
-        self.assertIn("ANTHROPIC_API_KEY", credential_env_reads(tree))
+        self.assertEqual(
+            credential_env_reads(tree),
+            {"ANTHROPIC_API_KEY", "MINIMAX_API_KEY"},
+        )
 
     def test_the_skill_itself_is_still_installed(self) -> None:
         """Guard against the exclusion list quietly gutting the install."""
