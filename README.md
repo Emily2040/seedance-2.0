@@ -346,7 +346,13 @@ python scripts/install_codex_skill.py --dest ~/.claude/skills
 python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
-The command copies the repository to `<dest>/seedance-20` and prints where it landed. Add `--force` only to replace an install that already exists — it deletes the previous copy first, so it is not the flag to start with. Restart your client afterwards so `seedance-20` appears in its skill list.
+The command stages and validates the repository before promoting it to
+`<dest>/seedance-20`, then prints where it landed. Concurrent installers
+sharing that destination are serialized. Add `--force` only to replace a
+complete existing install; an interrupted or otherwise incomplete managed
+install is repaired automatically. During replacement, the previous copy
+remains available for rollback until the validated stage is promoted. Restart
+your client afterwards so `seedance-20` appears in its skill list.
 
 Installs skip the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator — an agent needs the skill text, not the artwork. The gallery links in an installed copy's README therefore resolve only in this repository.
 
