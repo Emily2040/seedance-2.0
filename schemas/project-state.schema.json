@@ -126,7 +126,7 @@
       ],
       "properties": {
         "clip_id": {"type": "string"},
-        "parent_clip_id": {"type": ["string", "null"]},
+        "parent_clip_id": {"type": ["string", "null"], "minLength": 1, "pattern": "\\S"},
         "scene_id": {"type": "string"},
         "sequence_index": {"type": "integer", "minimum": 1},
         "prompt_version": {"type": "string"},

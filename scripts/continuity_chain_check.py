@@ -5,6 +5,8 @@ import argparse
 import json
 from pathlib import Path
 
+from lineage_contract import classify_parent_id, parent_link_mode
+
 
 IMMUTABLE_KEYS = [
     "canonical_identity_id",
@@ -61,23 +63,32 @@ def validate(path: Path, root: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     for clip in data.get("clips", []):
-        parent_id = clip.get("parent_clip_id")
-        if not parent_id:
+        parent_kind, parent_id = classify_parent_id(clip)
+        if parent_kind == "root":
+            continue
+        if parent_kind == "invalid":
+            errors.append(
+                f"{rel}: clip {clip.get('clip_id')} parent_clip_id must be null or a non-empty string"
+            )
             continue
         parent = clips.get(parent_id)
         if not parent:
             errors.append(f"{rel}: clip {clip['clip_id']} parent {parent_id} missing")
             continue
-        if clip.get("status") == "planned" and parent.get("status") not in {"accepted", "accepted_with_deviation"}:
+        link_mode = parent_link_mode(clip, parent)
+        if link_mode == "provisional":
             continue
-        if parent.get("status") not in {"accepted", "accepted_with_deviation"}:
-            errors.append(f"{rel}: clip {clip['clip_id']} parent {parent_id} is not accepted")
+        if link_mode == "unusable_status":
+            errors.append(
+                f"{rel}: clip {clip['clip_id']} parent {parent_id} status "
+                f"{parent.get('status')!r} is not usable"
+            )
+            continue
+        if link_mode == "missing_observed_end_state":
+            errors.append(f"{rel}: parent {parent_id} missing observed_end_state")
             continue
         end_state = parent.get("observed_end_state")
         start_state = clip.get("planned_start_state")
-        if not end_state:
-            errors.append(f"{rel}: parent {parent_id} missing observed_end_state")
-            continue
         if not start_state:
             errors.append(f"{rel}: clip {clip['clip_id']} missing planned_start_state")
             continue

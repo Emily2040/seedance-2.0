@@ -35,7 +35,7 @@ Before writing any continuation prompt, require:
 
 - `project_id`;
 - current `clip_id`;
-- valid `parent_clip_id`;
+- exact, non-empty `parent_clip_id` naming an `accepted` or `accepted_with_deviation` clip with an observed end state;
 - `scene_id`, and whether the next clip stays inside the scene or crosses a scene boundary;
 - full-story objective;
 - final story outcome;
