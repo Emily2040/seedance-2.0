@@ -13,10 +13,27 @@ schema cannot be added without an example that proves what it accepts.
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
+
+if __package__:
+    from .strict_json import (
+        diagnostic_json_path,
+        diagnostic_path,
+        diagnostic_text,
+        load_json as strict_load_json,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        diagnostic_json_path,
+        diagnostic_path,
+        diagnostic_text,
+        load_json as strict_load_json,
+        validate_repo_input_path,
+    )
 
 try:
     from jsonschema import Draft202012Validator, FormatChecker
@@ -28,26 +45,12 @@ MANIFEST = Path("validation/schema-instances.json")
 SCHEMA_DIR = Path("schemas")
 
 
-def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    """json.loads keeps the last duplicate key; a silent overwrite in a schema
-    or fixture would hide the very drift this check exists to catch."""
-    seen: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in seen:
-            raise ValueError(f"duplicate object key: {key!r}")
-        seen[key] = value
-    return seen
-
-
-def load_json(path: Path) -> Any:
-    text = path.read_text(encoding="utf-8")
-    if text.startswith("﻿"):
-        raise ValueError("UTF-8 BOM is not permitted")
-    return json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+def load_json(path: Path, root: Path | None = None) -> Any:
+    return strict_load_json(path, expected_type=dict, root=root)
 
 
 def pointer(error: Any) -> str:
-    return "/" + "/".join(str(part) for part in error.absolute_path)
+    return diagnostic_json_path(error.absolute_path)
 
 
 def check(root: Path) -> list[str]:
@@ -57,7 +60,7 @@ def check(root: Path) -> list[str]:
     if not manifest_path.exists():
         return [f"missing {MANIFEST.as_posix()}"]
     try:
-        manifest = load_json(manifest_path)
+        manifest = load_json(manifest_path, root=root)
     except ValueError as exc:
         return [f"{MANIFEST.as_posix()}: {exc}"]
 
@@ -66,48 +69,74 @@ def check(root: Path) -> list[str]:
         return [f"{MANIFEST.as_posix()}: 'instances' must be an object"]
 
     schema_dir = root / SCHEMA_DIR
+    if os.path.lexists(schema_dir):
+        try:
+            schema_dir = validate_repo_input_path(root, schema_dir)
+        except ValueError as exc:
+            return [f"{SCHEMA_DIR.as_posix()}: {exc}"]
     on_disk = {path.name for path in sorted(schema_dir.glob("*.schema.json"))}
 
     for name in sorted(on_disk - declared.keys()):
+        safe_name = diagnostic_text(name)
         errors.append(
-            f"schemas/{name} has no entry in {MANIFEST.as_posix()}; "
+            f"schemas/{safe_name} has no entry in {MANIFEST.as_posix()}; "
             "declare at least one instance it must accept"
         )
     for name in sorted(declared.keys() - on_disk):
-        errors.append(f"{MANIFEST.as_posix()} declares schemas/{name}, which does not exist")
+        errors.append(
+            f"{MANIFEST.as_posix()} declares schemas/{diagnostic_text(name)}, "
+            "which does not exist"
+        )
 
     for name in sorted(on_disk & declared.keys()):
         schema_path = schema_dir / name
+        safe_name = diagnostic_text(name)
         try:
-            schema = load_json(schema_path)
+            schema = load_json(schema_path, root=root)
         except ValueError as exc:
-            errors.append(f"schemas/{name}: {exc}")
+            errors.append(f"schemas/{safe_name}: {exc}")
             continue
 
         try:
             Draft202012Validator.check_schema(schema)
         except Exception as exc:  # jsonschema raises SchemaError
-            errors.append(f"schemas/{name}: not a valid Draft 2020-12 schema: {exc}")
+            errors.append(
+                f"schemas/{safe_name}: not a valid Draft 2020-12 schema: "
+                f"{diagnostic_text(exc)}"
+            )
             continue
 
         instances = declared[name]
         if not isinstance(instances, list) or not instances:
-            errors.append(f"{MANIFEST.as_posix()}: schemas/{name} must declare a non-empty list")
+            errors.append(
+                f"{MANIFEST.as_posix()}: schemas/{safe_name} must declare a non-empty list"
+            )
             continue
 
         validator = Draft202012Validator(schema, format_checker=FormatChecker())
         for relative in instances:
+            if not isinstance(relative, str):
+                errors.append(
+                    f"schemas/{safe_name}: declared instance path must be a string"
+                )
+                continue
+            safe_relative = diagnostic_path(relative)
             instance_path = root / relative
             if not instance_path.exists():
-                errors.append(f"schemas/{name}: declared instance {relative} does not exist")
+                errors.append(
+                    f"schemas/{safe_name}: declared instance {safe_relative} does not exist"
+                )
                 continue
             try:
-                instance = load_json(instance_path)
+                instance = load_json(instance_path, root=root)
             except ValueError as exc:
-                errors.append(f"{relative}: {exc}")
+                errors.append(f"{safe_relative}: {exc}")
                 continue
             for error in sorted(validator.iter_errors(instance), key=lambda e: list(e.absolute_path)):
-                errors.append(f"{relative} against schemas/{name}: {pointer(error)}: {error.message}")
+                errors.append(
+                    f"{safe_relative} against schemas/{safe_name}: {pointer(error)}: "
+                    f"{diagnostic_text(error.message)}"
+                )
 
     return errors
 
@@ -133,7 +162,7 @@ def main() -> int:
     if errors:
         print("Schema execution errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
 
     print("Schema check passed: every schema executed against its declared instances.")

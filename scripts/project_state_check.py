@@ -2,8 +2,23 @@
 from __future__ import annotations
 
 import argparse
-import json
+import os
 from pathlib import Path
+
+if __package__:
+    from .strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json as strict_load_json,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json as strict_load_json,
+        validate_repo_input_path,
+    )
 
 
 REQUIRED_PROJECT_FIELDS = {
@@ -49,8 +64,8 @@ REQUIRED_TAKE_REVIEW_FIELDS = {
 ACCEPTED = {"accepted", "accepted_with_deviation"}
 
 
-def load_json(path: Path) -> object:
-    return json.loads(path.read_text(encoding="utf-8"))
+def load_json(path: Path, root: Path) -> object:
+    return strict_load_json(path, expected_type=dict, root=root)
 
 
 def check_required(obj: dict, required: set[str], label: str, errors: list[str]) -> None:
@@ -59,19 +74,38 @@ def check_required(obj: dict, required: set[str], label: str, errors: list[str])
         errors.append(f"{label}: missing fields: {', '.join(missing)}")
 
 
-def sequence_paths(root: Path) -> list[Path]:
+def repository_directory(
+    root: Path,
+    relative: str,
+    errors: list[str],
+) -> Path | None:
+    path = root / relative
+    if not os.path.lexists(path):
+        return None
+    try:
+        validated = validate_repo_input_path(root, path)
+    except ValueError as exc:
+        errors.append(f"{diagnostic_path(relative)}: {exc}")
+        return None
+    if not validated.is_dir():
+        errors.append(f"{diagnostic_path(relative)}: repository input is not a directory")
+        return None
+    return validated
+
+
+def sequence_paths(examples: Path | None) -> list[Path]:
     paths = []
-    for path in (root / "examples").rglob("*.json") if (root / "examples").exists() else []:
+    for path in examples.rglob("*.json") if examples is not None else []:
         if "project-state" in path.name:
             paths.append(path)
     return sorted(paths)
 
 
 def validate_project(path: Path, root: Path) -> list[str]:
-    rel = path.relative_to(root).as_posix()
+    rel = diagnostic_path(path.relative_to(root))
     errors: list[str] = []
     try:
-        data = load_json(path)
+        data = load_json(path, root=root)
     except Exception as exc:
         return [f"{rel}: invalid JSON: {exc}"]
     if not isinstance(data, dict):
@@ -215,16 +249,18 @@ def main() -> int:
 
     root = Path(args.repo).resolve()
     errors: list[str] = []
-    paths = sequence_paths(root)
+    examples = repository_directory(root, "examples", errors)
+    schemas = repository_directory(root, "schemas", errors)
+    paths = sequence_paths(examples)
     if not paths:
         errors.append("missing project-state examples")
     for path in paths:
         errors.extend(validate_project(path, root))
 
-    for path in sorted((root / "examples").rglob("*.json")) if (root / "examples").exists() else []:
-        rel = path.relative_to(root).as_posix()
+    for path in sorted(examples.rglob("*.json")) if examples is not None else []:
+        rel = diagnostic_path(path.relative_to(root))
         try:
-            obj = load_json(path)
+            obj = load_json(path, root=root)
         except Exception as exc:
             errors.append(f"{rel}: invalid JSON: {exc}")
             continue
@@ -243,18 +279,20 @@ def main() -> int:
             if obj.get("verdict") == "reject" and obj.get("accepted_deviations"):
                 errors.append(f"{rel}: rejected take must not accept deviations")
 
-    for schema in (root / "schemas").glob("*.schema.json") if (root / "schemas").exists() else []:
+    for schema in schemas.glob("*.schema.json") if schemas is not None else []:
         try:
-            load_json(schema)
+            load_json(schema, root=root)
         except Exception as exc:
-            errors.append(f"{schema.relative_to(root).as_posix()}: invalid JSON: {exc}")
+            errors.append(
+                f"{diagnostic_path(schema.relative_to(root))}: invalid JSON: {exc}"
+            )
 
     if errors:
         print("Project state errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
-    print(f"Project state check passed: {len(paths)} project states.")
+    print(diagnostic_text(f"Project state check passed: {len(paths)} project states."))
     return 0
 
 

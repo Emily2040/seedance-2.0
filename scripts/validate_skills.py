@@ -2,11 +2,31 @@
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import re
+import stat
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+if __package__:
+    from .strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        load_jsonl,
+        read_repo_text,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        load_jsonl,
+        read_repo_text,
+        validate_repo_input_path,
+    )
 
 EXPECTED_SKILLS = [
     "seedance-antislop", "seedance-audio", "seedance-camera", "seedance-characters", "seedance-continuation",
@@ -87,6 +107,8 @@ REQUIRED_FILES = [
     "CHANGELOG.md",
     "V6_SEQUENCE_PROMPT_COMPILER_MANIFEST.md",
     "scripts/validate_skills.py",
+    "scripts/__init__.py",
+    "scripts/strict_json.py",
     "scripts/content_audit.py",
     "scripts/eval_schema_check.py",
     "scripts/eval_run.py",
@@ -225,8 +247,15 @@ def metadata_value(frontmatter: str, key: str) -> str | None:
 
 
 def validate_skill(path: Path, root: Path, errors: list[str], warnings: list[str]) -> None:
-    rel = path.relative_to(root).as_posix()
-    text = path.read_text(encoding="utf-8")
+    rel = diagnostic_path(path.relative_to(root))
+    try:
+        path = validate_repo_input_path(root, path)
+        if not stat.S_ISREG(path.stat().st_mode):
+            raise ValueError("skill input is not a regular file")
+        text = read_repo_text(root=root, path=path)
+    except (OSError, UnicodeError, ValueError) as exc:
+        errors.append(f"{rel}: cannot read skill: {diagnostic_text(exc)}")
+        return
     try:
         frontmatter, body = split_frontmatter(text)
     except Exception as exc:
@@ -243,7 +272,10 @@ def validate_skill(path: Path, root: Path, errors: list[str], warnings: list[str
 
     name = value_for(frontmatter, "name")
     if path != root / "SKILL.md" and path.name == "SKILL.md" and path.parent.name.startswith("seedance-") and name != path.parent.name:
-        errors.append(f"{rel}: name `{name}` does not match folder `{path.parent.name}`")
+        errors.append(
+            f"{rel}: name `{diagnostic_text(name)}` does not match folder "
+            f"`{diagnostic_text(path.parent.name)}`"
+        )
 
     if path != root / "SKILL.md":
         if metadata_value(frontmatter, "parent") != "seedance-20":
@@ -273,25 +305,90 @@ def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
 
+    def read_required_text(rel: str, label: str) -> str | None:
+        """Read only a previously validated in-repository regular path."""
+
+        path = root / rel
+        try:
+            path = validate_repo_input_path(root, path)
+            if not stat.S_ISREG(path.stat().st_mode):
+                raise ValueError("required input is not a regular file")
+            return read_repo_text(root=root, path=path)
+        except (OSError, UnicodeError, ValueError) as exc:
+            errors.append(
+                f"{diagnostic_path(rel)}: cannot inspect {label}: "
+                f"{diagnostic_text(exc)}"
+            )
+            return None
+
+    valid_required_paths: set[str] = set()
     for rel in REQUIRED_FILES + REQUIRED_REFERENCES:
-        if not (root / rel).exists():
-            errors.append(f"missing required file: {rel}")
+        path = root / rel
+        if not os.path.lexists(path):
+            errors.append(f"missing required file: {diagnostic_path(rel)}")
+            continue
+        try:
+            validated = validate_repo_input_path(root, path)
+            if not stat.S_ISREG(validated.stat().st_mode):
+                raise ValueError("required input is not a regular file")
+        except (OSError, ValueError) as exc:
+            errors.append(f"{diagnostic_path(rel)}: {diagnostic_text(exc)}")
+            continue
+        valid_required_paths.add(rel)
+
+    structured_inputs: dict[str, object] = {}
+    for rel in REQUIRED_FILES:
+        path = root / rel
+        if rel not in valid_required_paths:
+            continue
+        try:
+            if path.suffix == ".json":
+                structured_inputs[rel] = load_json(path, expected_type=dict, root=root)
+            elif path.suffix == ".jsonl":
+                structured_inputs[rel] = load_jsonl(path, expected_type=dict, root=root)
+        except (OSError, ValueError) as exc:
+            errors.append(
+                f"{diagnostic_path(rel)} parse error: {diagnostic_text(exc)}"
+            )
 
     skill_root = root / "skills"
-    dirs = sorted(path.name for path in skill_root.glob("seedance-*") if path.is_dir()) if skill_root.exists() else []
+    dirs: list[str] = []
+    if os.path.lexists(skill_root):
+        try:
+            validate_repo_input_path(root, skill_root)
+            for path in skill_root.glob("seedance-*"):
+                try:
+                    validated = validate_repo_input_path(root, path)
+                except (OSError, ValueError) as exc:
+                    errors.append(
+                        f"{diagnostic_path(path.relative_to(root))}: "
+                        f"{diagnostic_text(exc)}"
+                    )
+                    continue
+                if stat.S_ISDIR(validated.stat().st_mode):
+                    dirs.append(path.name)
+            dirs.sort()
+        except (OSError, ValueError) as exc:
+            errors.append(f"skills: {diagnostic_text(exc)}")
     missing = sorted(set(EXPECTED_SKILLS) - set(dirs))
     extra = sorted(set(dirs) - set(EXPECTED_SKILLS))
     if missing:
-        errors.append("missing expected skill dirs: " + ", ".join(missing))
+        errors.append(
+            "missing expected skill dirs: "
+            + ", ".join(diagnostic_text(name) for name in missing)
+        )
     if extra:
-        warnings.append("extra skill dirs: " + ", ".join(extra))
+        warnings.append(
+            "extra skill dirs: "
+            + ", ".join(diagnostic_text(name) for name in extra)
+        )
 
-    validate_skill(root / "SKILL.md", root, errors, warnings)
+    if "SKILL.md" in valid_required_paths:
+        validate_skill(root / "SKILL.md", root, errors, warnings)
     for name in EXPECTED_SKILLS:
         path = root / "skills" / name / "SKILL.md"
-        if path.exists():
+        if os.path.lexists(path):
             validate_skill(path, root, errors, warnings)
-
 
     # Only bytecode git actually tracks is a finding. Importing any module here
     # writes __pycache__, so flagging it on sight failed for anyone who ran the
@@ -300,30 +397,23 @@ def main() -> int:
     # workflow sets PYTHONDONTWRITEBYTECODE.
     tracked = tracked_files(root)
 
-    def is_committed(rel: str) -> bool:
-        return rel in tracked if tracked is not None else False
+    # Inspect the index instead of walking the checkout: a repository must not
+    # be able to redirect this validator through an untrusted directory link.
+    for raw_rel in sorted(tracked or ()):
+        pure = PurePosixPath(raw_rel)
+        if raw_rel.startswith(".seedance_backups/"):
+            continue
+        if pure.suffix == ".pyc":
+            errors.append(
+                "compiled Python cache must not be committed: "
+                f"{diagnostic_path(raw_rel)}"
+            )
 
-    pycache = root / "scripts" / "__pycache__"
-    if pycache.exists() and any(
-        is_committed(item.relative_to(root).as_posix())
-        for item in pycache.rglob("*")
-        if item.is_file()
-    ):
-        errors.append("scripts/__pycache__ must not be committed")
-    for pyc in root.rglob("*.pyc"):
-        rel = pyc.relative_to(root).as_posix()
-        if not rel.startswith(".seedance_backups/") and is_committed(rel):
-            errors.append(f"compiled Python cache must not be committed: {rel}")
-
-    eval_path = root / "evals" / "evals.json"
-    if eval_path.exists():
-        try:
-            data = json.loads(eval_path.read_text(encoding="utf-8"))
-            cases = data.get("cases", [])
-            if len(cases) < 16:
-                errors.append("evals/evals.json must contain at least 16 cases")
-        except Exception as exc:
-            errors.append(f"evals/evals.json parse error: {exc}")
+    data = structured_inputs.get("evals/evals.json")
+    if isinstance(data, dict):
+        cases = data.get("cases", [])
+        if not isinstance(cases, list) or len(cases) < 16:
+            errors.append("evals/evals.json must contain at least 16 cases")
 
     for rel in [
         "scripts/validate_skills.py",
@@ -339,52 +429,73 @@ def main() -> int:
         "scripts/behavior_contract_check.py",
         "scripts/sequence_eval_check.py",
         "scripts/generation_run_check.py",
-    "scripts/extract_last_frame.py",
+        "scripts/extract_last_frame.py",
     ]:
-        path = root / rel
-        if path.exists():
-            line_count = len(path.read_text(encoding="utf-8").splitlines())
+        if rel in valid_required_paths:
+            script_text = read_required_text(rel, "script")
+            if script_text is None:
+                continue
+            line_count = len(script_text.splitlines())
             if line_count < 20:
-                errors.append(f"{rel}: script appears collapsed or incomplete ({line_count} lines)")
+                errors.append(
+                    f"{diagnostic_path(rel)}: script appears collapsed or incomplete "
+                    f"({line_count} lines)"
+                )
 
-    installer = root / "scripts" / "install_codex_skill.py"
-    if installer.exists():
-        installer_text = installer.read_text(encoding="utf-8")
-        if re.search(r"IGNORE_NAMES\s*=\s*{[^}]*[\"']docs[\"']", installer_text, re.S):
+    if "scripts/install_codex_skill.py" in valid_required_paths:
+        installer_text = read_required_text(
+            "scripts/install_codex_skill.py", "installer"
+        )
+        if installer_text is not None and re.search(
+            r"IGNORE_NAMES\s*=\s*{[^}]*[\"']docs[\"']", installer_text, re.S
+        ):
             errors.append("scripts/install_codex_skill.py must include docs/ because README links native zh/ja/ko guides")
 
-    openai_yaml = root / "agents" / "openai.yaml"
-    if openai_yaml.exists():
-        yaml_text = openai_yaml.read_text(encoding="utf-8")
-        for required in [
-            'display_name: "Seedance 2.0 Skill OS"',
-            'short_description: "Professional Seedance video prompting"',
-            'default_prompt: "Use $seedance-20',
-            "allow_implicit_invocation: true",
-        ]:
-            if required not in yaml_text:
-                errors.append(f"agents/openai.yaml missing `{required}`")
+    if "agents/openai.yaml" in valid_required_paths:
+        yaml_text = read_required_text("agents/openai.yaml", "agent manifest")
+        if yaml_text is not None:
+            for required in [
+                'display_name: "Seedance 2.0 Skill OS"',
+                'short_description: "Professional Seedance video prompting"',
+                'default_prompt: "Use $seedance-20',
+                "allow_implicit_invocation: true",
+            ]:
+                if required not in yaml_text:
+                    errors.append(f"agents/openai.yaml missing `{required}`")
 
-    disclosure = root / "references" / "progressive-disclosure.md"
-    if disclosure.exists():
-        disclosure_text = disclosure.read_text(encoding="utf-8")
-        for needed in ("directing-engine.md", "directing-engine-genre-library.md"):
-            if needed not in disclosure_text:
-                errors.append(f"progressive-disclosure.md must document the heavy reference {needed}")
+    if "references/progressive-disclosure.md" in valid_required_paths:
+        disclosure_text = read_required_text(
+            "references/progressive-disclosure.md", "disclosure guide"
+        )
+        if disclosure_text is not None:
+            for needed in (
+                "directing-engine.md",
+                "directing-engine-genre-library.md",
+            ):
+                if needed not in disclosure_text:
+                    errors.append(
+                        "progressive-disclosure.md must document the heavy "
+                        f"reference {needed}"
+                    )
 
     if warnings:
         print("WARNINGS:")
         for warning in warnings:
-            print(f"- {warning}")
+            print(diagnostic_text(f"- {warning}"))
         print()
 
     if errors:
         print("ERRORS:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
 
-    print(f"Validated root plus {len(EXPECTED_SKILLS)} sub-skills and required v{EXPECTED_VERSION} files.")
+    print(
+        diagnostic_text(
+            f"Validated root plus {len(EXPECTED_SKILLS)} sub-skills and "
+            f"required v{EXPECTED_VERSION} files."
+        )
+    )
     return 0
 
 

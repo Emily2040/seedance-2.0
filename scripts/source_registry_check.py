@@ -2,10 +2,27 @@
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import re
 from datetime import date
 from pathlib import Path
+
+if __package__:
+    from .strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        read_repo_text,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        read_repo_text,
+        validate_repo_input_path,
+    )
 
 REQUIRED_LABELS = ["confirmed", "volatile", "field-observed", "unverified", "internal"]
 REQUIRED_OFFICIAL_MARKERS = ["seed.bytedance.com", "volcengine.com", "arxiv.org", "runwayml.com"]
@@ -60,11 +77,22 @@ def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
 
+    references = root / "references"
+    if os.path.lexists(references):
+        try:
+            validate_repo_input_path(root, references)
+        except ValueError as exc:
+            errors.append(f"references: {exc}")
+
     registry = root / "references" / "source-registry.md"
-    if not registry.exists():
+    if not os.path.lexists(registry):
         errors.append("missing references/source-registry.md")
     else:
-        text = registry.read_text(encoding="utf-8")
+        try:
+            text = read_repo_text(root=root, path=registry)
+        except ValueError as exc:
+            errors.append(f"references/source-registry.md: {exc}")
+            text = ""
         match = re.search(r"^last_verified:\s*(\d{4}-\d{2}-\d{2})$", text, re.M)
         if not match:
             errors.append("source-registry.md missing last_verified: YYYY-MM-DD")
@@ -103,7 +131,7 @@ def main() -> int:
         errors.append("missing data/sources.seedance-2026-05-30.json")
     else:
         try:
-            data = json.loads(data_path.read_text(encoding="utf-8"))
+            data = load_json(data_path, expected_type=dict, root=root)
         except Exception as exc:
             errors.append(f"source data JSON parse error: {exc}")
         else:
@@ -122,8 +150,17 @@ def main() -> int:
     # api-status.md. This compares two checked-in dates, so its verdict depends only on
     # repository content and never on the wall clock. It stays a hard error.
     api_status = root / "references" / "api-status.md"
-    if api_status.exists():
-        anchor_match = re.search(r"^last_verified:\s*(\d{4}-\d{2}-\d{2})$", api_status.read_text(encoding="utf-8"), re.M)
+    if os.path.lexists(api_status):
+        try:
+            api_status_text = read_repo_text(root=root, path=api_status)
+        except ValueError as exc:
+            errors.append(f"references/api-status.md: {exc}")
+            api_status_text = ""
+        anchor_match = re.search(
+            r"^last_verified:\s*(\d{4}-\d{2}-\d{2})$",
+            api_status_text,
+            re.M,
+        )
         anchor = parse_date(anchor_match.group(1)) if anchor_match else None
         if anchor:
             freshness_critical = [
@@ -132,9 +169,19 @@ def main() -> int:
             ]
             for name in freshness_critical:
                 ref = root / "references" / name
-                if not ref.exists():
+                if not os.path.lexists(ref):
                     continue
-                parsed = [parse_date(d) for d in re.findall(r"\d{4}-\d{2}-\d{2}", ref.read_text(encoding="utf-8"))]
+                try:
+                    ref_text = read_repo_text(root=root, path=ref)
+                except ValueError as exc:
+                    errors.append(
+                        f"{diagnostic_path(ref.relative_to(root))}: {exc}"
+                    )
+                    continue
+                parsed = [
+                    parse_date(d)
+                    for d in re.findall(r"\d{4}-\d{2}-\d{2}", ref_text)
+                ]
                 parsed = [d for d in parsed if d]
                 if not parsed:
                     continue
@@ -148,13 +195,13 @@ def main() -> int:
     if warnings:
         print("WARNINGS:")
         for warning in warnings:
-            print(f"- {warning}")
+            print(diagnostic_text(f"- {warning}"))
         print()
 
     if errors:
         print("Source registry errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
 
     print("Source registry check passed.")

@@ -2,8 +2,23 @@
 from __future__ import annotations
 
 import argparse
-import json
+import os
 from pathlib import Path
+
+if __package__:
+    from .strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        validate_repo_input_path,
+    )
 
 
 IMMUTABLE_KEYS = [
@@ -29,8 +44,8 @@ TRANSIENT_KEYS = [
 ]
 
 
-def load(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+def load(path: Path, root: Path) -> dict:
+    return load_json(path, expected_type=dict, root=root)
 
 
 def has_allowance(clip: dict, key: str) -> bool:
@@ -55,8 +70,8 @@ def state_value(state: dict | None, key: str):
 
 
 def validate(path: Path, root: Path) -> tuple[list[str], list[str]]:
-    rel = path.relative_to(root).as_posix()
-    data = load(path)
+    rel = diagnostic_path(path.relative_to(root))
+    data = load(path, root=root)
     clips = {clip["clip_id"]: clip for clip in data.get("clips", [])}
     errors: list[str] = []
     warnings: list[str] = []
@@ -102,22 +117,42 @@ def main() -> int:
     root = Path(args.repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
-    for path in sorted((root / "examples").rglob("*project-state*.json")) if (root / "examples").exists() else []:
-        e, w = validate(path, root)
+    examples = root / "examples"
+    if os.path.lexists(examples):
+        try:
+            examples = validate_repo_input_path(root, examples)
+        except ValueError as exc:
+            errors.append(f"examples: {exc}")
+            examples = None
+    else:
+        examples = None
+    for path in (
+        sorted(examples.rglob("*project-state*.json"))
+        if examples is not None
+        else []
+    ):
+        try:
+            e, w = validate(path, root)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            errors.append(
+                f"{diagnostic_path(path.relative_to(root))}: "
+                f"invalid project state: {exc}"
+            )
+            continue
         errors.extend(e)
         warnings.extend(w)
     if warnings:
         print("Continuity warnings:")
         for warning in warnings:
-            print(f"- {warning}")
+            print(diagnostic_text(f"- {warning}"))
         print()
     if errors or (args.strict and warnings):
         print("Continuity errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         if args.strict:
             for warning in warnings:
-                print(f"- {warning}")
+                print(diagnostic_text(f"- {warning}"))
         return 1
     print("Continuity chain check passed.")
     return 0

@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
+
+if __package__:
+    from .strict_json import diagnostic_text, load_json
+else:
+    from strict_json import diagnostic_text, load_json
 
 
 REQUIRED_SEQUENCE_IDS = {
@@ -76,9 +80,9 @@ def main() -> int:
     path = root / "evals" / "evals.json"
     errors: list[str] = []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = load_json(path, expected_type=dict, root=root)
     except Exception as exc:
-        print(f"Invalid eval JSON: {exc}")
+        print(diagnostic_text(f"Invalid eval JSON: {exc}"))
         return 1
     cases = data.get("cases", [])
     by_id = {case.get("id"): case for case in cases if isinstance(case, dict)}
@@ -100,9 +104,13 @@ def main() -> int:
     if errors:
         print("Sequence eval errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
-    print(f"Sequence eval check passed: {len(REQUIRED_SEQUENCE_IDS)} sequence cases.")
+    print(
+        diagnostic_text(
+            f"Sequence eval check passed: {len(REQUIRED_SEQUENCE_IDS)} sequence cases."
+        )
+    )
     return 0
 
 

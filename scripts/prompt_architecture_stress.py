@@ -36,6 +36,11 @@ import re
 import statistics
 from pathlib import Path
 
+if __package__:
+    from .strict_json import diagnostic_path, diagnostic_text, load_json
+else:
+    from strict_json import diagnostic_path, diagnostic_text, load_json
+
 # ---------------------------------------------------------------- vocabularies
 
 # references/anti-slop-lexicon.md - the six slop classes.
@@ -269,7 +274,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    corpus = json.loads(Path(args.corpus).read_text(encoding="utf-8"))
+    root = Path(__file__).resolve().parents[1]
+    corpus_argument = Path(args.corpus)
+    corpus_path = (
+        corpus_argument if corpus_argument.is_absolute() else root / corpus_argument
+    )
+    try:
+        corpus = load_json(corpus_path, expected_type=list, root=root)
+    except (OSError, ValueError) as exc:
+        print(
+            diagnostic_text(
+                f"Invalid prompt corpus {diagnostic_path(corpus_path)}: {exc}"
+            )
+        )
+        return 1
     results = [score_prompt(r) for r in corpus]
     if args.out:
         Path(args.out).write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -279,17 +297,18 @@ def main() -> int:
         arms.setdefault(r["arm"], []).append(r)
 
     dim_names = ["opening_authority", "length_fit", "slop_free", "coverage", "structure", "ref_integrity"]
-    print(f"Corpus: {len(results)} prompts across {len(arms)} arms\n")
+    print(diagnostic_text(f"Corpus: {len(results)} prompts across {len(arms)} arms"))
+    print()
     header = f"{'arm':<22}{'n':>4}{'overall':>9}" + "".join(f"{d[:9]:>11}" for d in dim_names)
-    print(header)
-    print("-" * len(header))
+    print(diagnostic_text(header))
+    print(diagnostic_text("-" * len(header)))
     for arm in sorted(arms, key=lambda a: -statistics.mean(x["overall"] for x in arms[a])):
         rs = arms[arm]
         row = f"{arm:<22}{len(rs):>4}{statistics.mean(x['overall'] for x in rs):>9.2f}"
         for d in dim_names:
             vals = [x["dims"][d]["score"] for x in rs if d in x["dims"]]
             row += f"{statistics.mean(vals):>11.2f}" if vals else f"{'-':>11}"
-        print(row)
+        print(diagnostic_text(row))
 
     print("\nRelease gate (eval-rubric.md: no dimension below 3, average >= 3.5)")
     for arm in sorted(arms):
@@ -301,7 +320,12 @@ def main() -> int:
             if vals and statistics.mean(vals) < 3.0:
                 weak.append(f"{d}={statistics.mean(vals):.2f}")
         verdict = "PASS" if avg >= 3.5 and not weak else "FAIL"
-        print(f"  {arm:<22} avg={avg:.2f}  {verdict}" + (f"  weak: {', '.join(weak)}" if weak else ""))
+        print(
+            diagnostic_text(
+                f"  {arm:<22} avg={avg:.2f}  {verdict}"
+                + (f"  weak: {', '.join(weak)}" if weak else "")
+            )
+        )
 
     print("\nPer-mode overall (skill_formula arm)")
     modes: dict[str, list[float]] = {}
@@ -309,13 +333,23 @@ def main() -> int:
         if r["arm"] == "skill_formula":
             modes.setdefault(r["mode"], []).append(r["overall"])
     for m in sorted(modes, key=lambda m: statistics.mean(modes[m])):
-        print(f"  {m:<8} n={len(modes[m]):<3} {statistics.mean(modes[m]):.2f}")
+        print(
+            diagnostic_text(
+                f"  {m:<8} n={len(modes[m]):<3} "
+                f"{statistics.mean(modes[m]):.2f}"
+            )
+        )
 
     worst = sorted((r for r in results if r["arm"] == "skill_formula"), key=lambda r: r["overall"])[:8]
     print("\nWeakest skill-formula prompts")
     for r in worst:
         bad = [f"{k}={v['score']} ({v['note']})" for k, v in r["dims"].items() if v["score"] < 3]
-        print(f"  {r['id']:<8} {r['overall']:.2f}  {r['brief'][:44]:<44} {'; '.join(bad)[:90]}")
+        print(
+            diagnostic_text(
+                f"  {r['id']:<8} {r['overall']:.2f}  "
+                f"{r['brief'][:44]:<44} {'; '.join(bad)[:90]}"
+            )
+        )
 
     if args.strict:
         doctrine = [r for r in results if r["arm"] == "skill_formula"]
@@ -329,10 +363,21 @@ def main() -> int:
             and statistics.mean(vals) < 3.0
         ]
         if avg < 3.5 or weak:
-            print(f"\nskill_formula misses the release bar: avg={avg:.2f}"
-                  + (f", weak dimensions: {', '.join(weak)}" if weak else ""))
+            print()
+            print(
+                diagnostic_text(
+                    f"skill_formula misses the release bar: avg={avg:.2f}"
+                    + (f", weak dimensions: {', '.join(weak)}" if weak else "")
+                )
+            )
             return 1
-        print(f"\nskill_formula holds the release bar (avg={avg:.2f}, no dimension below 3).")
+        print()
+        print(
+            diagnostic_text(
+                f"skill_formula holds the release bar "
+                f"(avg={avg:.2f}, no dimension below 3)."
+            )
+        )
     return 0
 
 

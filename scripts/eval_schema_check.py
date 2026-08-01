@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
+
+if __package__:
+    from .strict_json import diagnostic_text, load_json
+else:
+    from strict_json import diagnostic_text, load_json
 
 REQUIRED = ["id", "prompt", "expected_output", "assertions", "skills_expected_to_activate", "failure_mode"]
 REQUIRED_IDS = {
@@ -142,15 +146,16 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
-    path = Path(args.repo) / "evals" / "evals.json"
+    root = Path(args.repo).resolve()
+    path = root / "evals" / "evals.json"
     if not path.exists():
         print("Missing evals/evals.json")
         return 1
 
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = load_json(path, expected_type=dict, root=root)
     except Exception as exc:
-        print(f"Invalid JSON: {exc}")
+        print(diagnostic_text(f"Invalid JSON: {exc}"))
         return 1
 
     cases = data.get("cases")
@@ -183,10 +188,10 @@ def main() -> int:
     if errors:
         print("Eval schema errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
 
-    print(f"Eval schema passed: {len(cases)} cases.")
+    print(diagnostic_text(f"Eval schema passed: {len(cases)} cases."))
     return 0
 
 
