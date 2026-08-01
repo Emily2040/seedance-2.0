@@ -2,6 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Emily2040/seedance-2.0/schemas/project-state.schema.json",
   "title": "Seedance Sequence Project State",
+  "description": "Structural and record-local validation only. Graph-wide lineage semantics require project_state_check.py and continuity_chain_check.py.",
+  "$comment": "JSON Schema cannot enforce clip-id uniqueness, parent existence, self-parent rejection, parent-before-child ordering, cycle freedom, or parent status/endpoint usability. Run both semantic validators.",
   "type": "object",
   "required": [
     "schema_version",
@@ -78,7 +80,7 @@
         "anchor_source": {"type": "array", "items": {"type": "string"}},
         "max_chain_depth": {"type": "integer", "minimum": 0, "maximum": 3},
         "audio_plan": {"type": "string"},
-        "assigned_clip_ids": {"type": "array", "items": {"type": "string"}},
+        "assigned_clip_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "transition_out": {"type": "string"},
         "status": {"enum": ["planned", "current", "completed", "omitted", "replaced"]}
       }
@@ -124,8 +126,8 @@
         "extension_depth"
       ],
       "properties": {
-        "clip_id": {"type": "string"},
-        "parent_clip_id": {"type": ["string", "null"], "minLength": 1, "pattern": "\\S"},
+        "clip_id": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+        "parent_clip_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 256, "pattern": "\\S"},
         "scene_id": {"type": "string"},
         "sequence_index": {"type": "integer", "minimum": 1},
         "prompt_version": {"type": "string"},
@@ -133,7 +135,7 @@
         "source_clip_tag": {"type": ["string", "null"]},
         "status": {"enum": ["planned", "ready", "generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]},
         "narrative_job": {"type": "string"},
-        "felt_intent": {"type": "string", "minLength": 1},
+        "felt_intent": {"type": "string", "minLength": 1, "pattern": "\\S"},
         "already_happened": {"type": "array", "items": {"type": "string"}},
         "this_clip_only": {"type": "array", "items": {"type": "string"}},
         "reserved_for_later": {"type": "array", "items": {"type": "string"}},
@@ -165,6 +167,28 @@
             "properties": {
               "parent_clip_id": {"type": "string", "minLength": 1, "pattern": "\\S"}
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {"enum": ["accepted", "accepted_with_deviation"]}
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "observed_end_state": {"type": "object", "minProperties": 1}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "rejected"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {"observed_end_state": {"type": "null"}}
           }
         }
       ]

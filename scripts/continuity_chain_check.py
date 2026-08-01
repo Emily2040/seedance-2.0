@@ -4,7 +4,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from lineage_contract import analyze_lineage, load_project_document
+from lineage_contract import (
+    analyze_lineage,
+    bound_validation_diagnostics,
+    load_project_document,
+)
+from strict_json import bound_diagnostics
 
 
 IMMUTABLE_KEYS = [
@@ -55,7 +60,7 @@ def validate(path: Path, root: Path) -> tuple[list[str], list[str]]:
     data, rel, errors = load_project_document(path, root)
     warnings: list[str] = []
     if data is None:
-        return errors, warnings
+        return bound_validation_diagnostics(errors, rel), warnings
     lineage = analyze_lineage(data.get("clips"), rel)
     errors.extend(lineage.errors)
     for clip, parent in lineage.accepted_links:
@@ -75,7 +80,10 @@ def validate(path: Path, root: Path) -> tuple[list[str], list[str]]:
             b = state_value(start_state, key)
             if a is not None and b is not None and a != b and not has_allowance(clip, key):
                 warnings.append(f"{rel}: transient {key} changes from {a!r} to {b!r} without allowance")
-    return errors, warnings
+    return (
+        bound_validation_diagnostics(errors, rel),
+        bound_validation_diagnostics(warnings, rel),
+    )
 
 
 def main() -> int:
@@ -90,6 +98,8 @@ def main() -> int:
         e, w = validate(path, root)
         errors.extend(e)
         warnings.extend(w)
+    warnings = bound_diagnostics(warnings, "additional continuity warnings omitted")
+    errors = bound_diagnostics(errors, "additional continuity errors omitted")
     if warnings:
         print("Continuity warnings:")
         for warning in warnings:

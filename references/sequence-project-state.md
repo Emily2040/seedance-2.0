@@ -42,6 +42,12 @@ Clip lineage fields: `clip_id`, `parent_clip_id`, `scene_id`, `sequence_index`, 
 
 `parent_clip_id` may be absent or `null` only for a topological root/re-anchor whose `sequence_index` is 1. Every later clip must carry an exact, non-empty parent ID; an empty or whitespace-only string is never a root. A `planned` child may retain a provisional graph edge only to a `planned`, `ready`, `accepted`, or `accepted_with_deviation` predecessor. That provisional edge is planning data, not permission to generate from unaccepted output. Before the child advances beyond `planned`, its parent must be `accepted` or `accepted_with_deviation` and must carry a non-empty `observed_end_state`. `generated`, `reviewed`, `repair`, and `rejected` parents are unusable; wait for acceptance, repair/re-anchor, or remove the edge. Rejected footage is never a parent in either the provisional or executable graph.
 
+Every `accepted` or `accepted_with_deviation` clip, including a terminal clip with no children, must carry a non-empty object in `observed_end_state`. A rejected clip must set that field to `null`. Clip and parent IDs are limited to 256 characters so malformed records cannot turn a validation message into an unbounded output channel.
+
+### Validation boundary
+
+The JSON Schemas validate document structure and invariants that belong to one record. They cannot prove graph-wide facts: unique `clip_id` values, parent existence, self-parent rejection, parent-before-child ordering, cycle freedom, scene/beat references, or whether a referenced parent has an executable status and observed endpoint. Schema success is therefore not graph validation. Before a project state is accepted, handed off, installed as an example, or released, run all three checks: `schema_check.py`, `project_state_check.py`, and `continuity_chain_check.py`. The latter two are mandatory semantic validators, not optional lint.
+
 ## Visual State
 
 Track only what matters and do not invent unclear details.

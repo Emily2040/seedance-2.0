@@ -393,6 +393,12 @@ Every check is offline. Exactly one of them, `schema_check.py`, needs a
 third-party library, so install the hash-pinned lock first — on a clean checkout
 that step otherwise stops the run:
 
+`schema_check.py` proves structure and record-local constraints; it does not and
+cannot prove graph-wide lineage. `project_state_check.py` and
+`continuity_chain_check.py` are mandatory alongside it for duplicate IDs,
+parent existence and order, cycles, and executable parent-state continuity.
+Passing the schema alone is never a valid release or handoff gate.
+
 ```bash
 python -m pip install --require-hashes --requirement requirements-validation.lock
 ```

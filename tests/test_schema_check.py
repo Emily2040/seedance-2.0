@@ -202,6 +202,138 @@ class ExecutionTests(unittest.TestCase):
                 invalid_contract["sequence_index"] = invalid
                 self.assertTrue(list(contract_validator.iter_errors(invalid_contract)))
 
+    def test_raw_decimal_tokens_keep_exact_integer_semantics(self) -> None:
+        for token, should_pass in (("1.0", True), ("1.0000000000000001", False)):
+            with self.subTest(token=token), tempfile.TemporaryDirectory() as tmp:
+                repo = self._copy_repo(tmp)
+                target = repo / "examples/sequence-observed-deviation/project-state-before.json"
+                raw = target.read_text("utf-8")
+                original = '"sequence_index": 1'
+                self.assertIn(original, raw)
+                target.write_text(raw.replace(original, f'"sequence_index": {token}', 1), "utf-8")
+                errors = schema_check.check(repo)
+                if should_pass:
+                    self.assertEqual(errors, [])
+                else:
+                    self.assertTrue(
+                        any("sequence_index" in error and "integer" in error for error in errors),
+                        errors,
+                    )
+
+    def test_duplicate_parent_key_is_rejected_before_schema_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._copy_repo(tmp)
+            target = repo / "examples/sequence-observed-deviation/project-state-before.json"
+            raw = target.read_text("utf-8")
+            original = '"parent_clip_id": null'
+            replacement = '"parent_clip_id": null, "parent_clip_id": "laundered"'
+            self.assertIn(original, raw)
+            target.write_text(raw.replace(original, replacement, 1), "utf-8")
+            errors = schema_check.check(repo)
+            self.assertTrue(
+                any("duplicate object key: 'parent_clip_id'" in error for error in errors),
+                errors,
+            )
+
+    def test_project_schema_rejects_invalid_status_and_terminal_endpoint_shapes(self) -> None:
+        schema = schema_check.load_json(ROOT / "schemas/project-state.schema.json")
+        validator = schema_check.Draft202012Validator(schema)
+        base = json.loads(
+            (ROOT / "examples/sequence-observed-deviation/project-state-before.json").read_text(
+                "utf-8"
+            )
+        )
+
+        for invalid_status in ([], {}, "Accepted", " accepted", "accepted "):
+            with self.subTest(status=invalid_status):
+                data = json.loads(json.dumps(base))
+                data["clips"][2]["status"] = invalid_status
+                self.assertTrue(list(validator.iter_errors(data)))
+
+        for endpoint in (None, {}):
+            with self.subTest(accepted_endpoint=endpoint):
+                data = json.loads(json.dumps(base))
+                terminal = data["clips"][2]
+                terminal["status"] = "accepted"
+                terminal["observed_end_state"] = endpoint
+                self.assertTrue(list(validator.iter_errors(data)))
+
+        rejected_with_object = json.loads(json.dumps(base))
+        rejected_with_object["clips"][2]["status"] = "rejected"
+        rejected_with_object["clips"][2]["observed_end_state"] = {}
+        self.assertTrue(list(validator.iter_errors(rejected_with_object)))
+
+    def test_clip_contract_schema_enforces_local_status_and_endpoint_invariants(self) -> None:
+        schema = schema_check.load_json(ROOT / "schemas/clip-contract.schema.json")
+        self.assertIn("Structural and record-local", schema["description"])
+        validator = schema_check.Draft202012Validator(schema)
+        base = json.loads(
+            (ROOT / "examples/sequence-airport-arrival/clip-01-contract.json").read_text(
+                "utf-8"
+            )
+        )
+
+        accepted_without_endpoint = json.loads(json.dumps(base))
+        accepted_without_endpoint["status"] = "accepted"
+        self.assertTrue(list(validator.iter_errors(accepted_without_endpoint)))
+
+        accepted_with_endpoint = json.loads(json.dumps(accepted_without_endpoint))
+        accepted_with_endpoint["observed_end_state"] = {"pose": "held"}
+        self.assertEqual(list(validator.iter_errors(accepted_with_endpoint)), [])
+
+        rejected_without_endpoint = json.loads(json.dumps(base))
+        rejected_without_endpoint["status"] = "rejected"
+        self.assertTrue(list(validator.iter_errors(rejected_without_endpoint)))
+
+        rejected_with_null_endpoint = json.loads(json.dumps(rejected_without_endpoint))
+        rejected_with_null_endpoint["observed_end_state"] = None
+        self.assertEqual(list(validator.iter_errors(rejected_with_null_endpoint)), [])
+
+        for invalid_status in ([], {}, "Accepted", "accepted "):
+            with self.subTest(status=invalid_status):
+                data = json.loads(json.dumps(base))
+                data["status"] = invalid_status
+                self.assertTrue(list(validator.iter_errors(data)))
+
+        later_with_unknown_parent = json.loads(json.dumps(base))
+        later_with_unknown_parent["sequence_index"] = 2
+        later_with_unknown_parent["parent_clip_id"] = "not_visible_to_single_record_schema"
+        self.assertEqual(list(validator.iter_errors(later_with_unknown_parent)), [])
+
+    def test_schemas_bound_clip_and_parent_identifiers(self) -> None:
+        huge_id = "x" * 257
+        project_schema = schema_check.load_json(ROOT / "schemas/project-state.schema.json")
+        project_validator = schema_check.Draft202012Validator(project_schema)
+        project = json.loads(
+            (ROOT / "examples/sequence-observed-deviation/project-state-before.json").read_text(
+                "utf-8"
+            )
+        )
+        project["clips"][2]["clip_id"] = huge_id
+        self.assertTrue(list(project_validator.iter_errors(project)))
+
+        contract_schema = schema_check.load_json(ROOT / "schemas/clip-contract.schema.json")
+        contract_validator = schema_check.Draft202012Validator(contract_schema)
+        contract = json.loads(
+            (ROOT / "examples/sequence-airport-arrival/clip-02-continuation-contract.json").read_text(
+                "utf-8"
+            )
+        )
+        contract["parent_clip_id"] = huge_id
+        self.assertTrue(list(contract_validator.iter_errors(contract)))
+
+    def test_schema_checker_bounds_huge_identifier_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._copy_repo(tmp)
+            target = repo / "examples/sequence-observed-deviation/project-state-before.json"
+            data = json.loads(target.read_text("utf-8"))
+            data["clips"][2]["clip_id"] = "x" * 1_000_000
+            target.write_text(json.dumps(data), encoding="utf-8")
+            errors = schema_check.check(repo)
+            self.assertTrue(errors)
+            self.assertLessEqual(max(map(len, errors)), 1024)
+            self.assertLessEqual(sum(map(len, errors)), 16384)
+
     def test_schema_requiring_a_field_no_example_has_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = self._copy_repo(tmp)
