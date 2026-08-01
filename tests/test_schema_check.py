@@ -10,7 +10,6 @@ something breaks.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -105,21 +104,16 @@ class ExecutionTests(unittest.TestCase):
 class DependencyTests(unittest.TestCase):
     def test_missing_dependency_fails_rather_than_skipping(self) -> None:
         """A silent skip would let CI report success while validating nothing."""
-        child_env = os.environ.copy()
-        child_env.update(
-            PYTHONPATH="",
-            PYTHONDONTWRITEBYTECODE="1",
-            PYTHONNOUSERSITE="1",
-        )
+        # Isolated mode ignores PYTHON* environment settings, while -S omits
+        # third-party site-packages. The child still inherits OS prerequisites
+        # such as SystemRoot, so Python itself can initialize on Windows.
         result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/schema_check.py"), str(ROOT)],
+            [sys.executable, "-I", "-S", str(ROOT / "scripts/schema_check.py"), str(ROOT)],
             capture_output=True,
             text=True,
-            env=child_env,
         )
-        self.assertIn(result.returncode, (0, 2), result.stdout + result.stderr)
-        if result.returncode == 2:
-            self.assertIn("requires jsonschema", result.stderr)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("requires jsonschema", result.stderr)
 
 
 if __name__ == "__main__":
