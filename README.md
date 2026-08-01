@@ -366,9 +366,9 @@ For manual installation, copy this repository into the skill directory used by y
 |---|---|
 | Claude Code | `~/.claude/skills/seedance-20/` (personal) or `.claude/skills/seedance-20/` (project) — both via `scripts/install_codex_skill.py --dest` |
 | Codex | `.agents/skills/seedance-20/` or `~/.codex/skills/seedance-20/` via `scripts/install_codex_skill.py` |
-| Google Antigravity | `.agents/skills/seedance-20/` (workspace) or `~/.gemini/antigravity-cli/skills/seedance-20/` (global) |
+| Google Antigravity | `.agents/skills/seedance-20/` (workspace) or `~/.gemini/config/skills/seedance-20/` (global across Antigravity products) |
 | OpenClaw | workspace `skills/seedance-20/` or `~/.openclaw/skills/seedance-20/` via `openclaw skills install` (ClawHub-compatible; skills already carry `openclaw:` metadata) |
-| Hermes Agent | project `skills/seedance-20/` or `~/.hermes/skills/seedance-20/` via `hermes skills install` |
+| Hermes Agent | `~/.hermes/skills/seedance-20/` (primary); a project `skills/seedance-20/` directory is discovered only after its parent is added to `skills.external_dirs` in `~/.hermes/config.yaml` |
 | Gemini CLI-style workspace | `.gemini/skills/seedance-20/` |
 | GitHub Copilot workspace | `.github/skills/seedance-20/` |
 | Cursor workspace | `.cursor/skills/seedance-20/` |
