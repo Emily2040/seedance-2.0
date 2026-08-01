@@ -125,6 +125,30 @@ class OutlinedTypeTests(unittest.TestCase):
             self.assertTrue(prov.get(field), f"provenance is missing {field}")
         self.assertIn("Open Font License", prov["license"])
 
+    def test_the_generator_can_run_from_a_clean_checkout(self) -> None:
+        """The fonts it reads must be tracked, or the documented path is fiction."""
+        import build_masthead_outlines as gen
+
+        for font in (gen.ROMAN, gen.ITALIC):
+            with self.subTest(font=font.name):
+                self.assertTrue(font.exists(), f"{font.name} is not in the repository")
+        self.assertTrue((ROOT / "assets/fonts/OFL.txt").exists(), "OFL text must ship with the fonts")
+        self.assertEqual(gen.TARGET, ROOT / "assets/masthead-outlines.json",
+                         "the generator must write the asset the masthead actually reads")
+
+    def test_declared_font_families_must_be_monospace(self) -> None:
+        """A denylist of serif names passes Arial and bare generics."""
+        import design_audit
+
+        for bad in ('<text font-family="serif">x</text>',
+                    '<text font-family="Arial">x</text>',
+                    '<style>.a{font:400 15px Georgia,serif}</style>'):
+            with self.subTest(svg=bad):
+                self.assertTrue(design_audit.font_family_findings("t.svg", bad))
+        self.assertEqual(
+            design_audit.font_family_findings("t.svg", '<text font-family="ui-monospace, monospace">x</text>'), []
+        )
+
     def test_every_run_the_masthead_uses_is_present(self) -> None:
         glyphs = build_hero.glyphs()
         for key in ("wordmark", "skill_os", "tagline_1", "tagline_2"):

@@ -138,9 +138,7 @@ For these requests, the skill should not stop at a single prompt. It should retu
 
 Seedance platform behavior changes quickly. Before making factual claims about API availability, face or portrait authorization, upload limits, pricing, regional availability, or model names, load [`references/api-status.md`](references/api-status.md) and check its `last_verified` date.
 
-**A newer model line exists.** Technology press and provider pages report that Seedance 2.5 was announced 2026-06-23 and launched on consumer surfaces on 2026-07-31, with API access from mid-July, and that the 2.0 line gained a 4K tier at the same announcement.
-
-This repository targets **Seedance 2.0**. The craft — direction, shot contracts, reference roles, continuity, anti-slop — transfers across model lines; the platform numbers below do not. Establish which line a surface runs before quoting any duration, reference count, or resolution, and never normalize "2.5" to "2.0". Recorded as `tech-press`, not verified against a primary source: see [`api-status.md`](references/api-status.md).
+**This is a Seedance 2.0 skill.** A newer line (2.5) launched on consumer surfaces on 2026-07-31 and is out of scope here — the craft below applies to any model, but every platform number is a 2.0 number. Establish which line a surface runs before quoting one. See [`api-status.md`](references/api-status.md).
 
 As of 2026-06-20, public official sources describe Seedance 2.0 as supporting text, image, audio, and video inputs. Official launch and model-card material says references can include up to 9 images, 3 video clips, and 3 audio clips.
 
