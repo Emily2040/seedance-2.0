@@ -226,6 +226,15 @@ class PayloadManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "duplicate payload path"):
                 installer.load_payload_manifest(root)
 
+    def test_manifest_rejects_archive_only_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), ["references/migrated/README.md"])
+            archive = root / "references" / "migrated" / "README.md"
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            archive.write_text("historical comparison only\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "archive-only path cannot be installed"):
+                installer.load_payload_manifest(root)
+
     def test_manifest_rejects_missing_declared_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.minimal_repo(Path(tmp), ["references/missing.md"])
