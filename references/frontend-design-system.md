@@ -44,6 +44,10 @@ The result should look meticulously crafted — the product of deep expertise an
 - Tables should have real newlines.
 - Every major section should answer a user decision: what is it, where do I start, what skills exist, how do I validate, what changed.
 - Bitmap hero art should avoid watermarks and tiny text. Text-rich infographic labels must also be represented in Markdown for accessibility and search.
+- **The README body obeys the same law as the assets.** One left spine; nothing centered. A `<div align="center">` above the fold is the costume of every template README, and it contradicts "centre nothing" the moment the masthead ends.
+- **No badge chrome.** shields.io rows are the most ubiquitous element on GitHub - the exact opposite of an ownable page - and count badges bake staleness into the front page the same way baked counts do in vector assets. Version, license, and date are typographic facts on one quiet line; the CI badge earns its place only if it reports live state, not a number someone must remember to update.
+- **The masthead speaks once.** No H1 or bold tagline restating what the wordmark and its alt text already say; the first Markdown text on the page is the sentence the masthead does not contain. Repeating the title within one screen is the opposite of editorial confidence.
+- **Release prose lives in the changelog.** The front page carries the version, the date, and a link - not a paragraph of shipped features that duplicates `CHANGELOG.md` and goes stale beside it.
 
 ## Editorial Design Tokens (v6 front page)
 

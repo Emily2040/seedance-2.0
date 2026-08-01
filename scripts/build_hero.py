@@ -74,40 +74,46 @@ def build(theme: str) -> str:
         'generation modes, the route-verify-direct-deliver pipeline, and supported reading languages.</desc>')
     add(f'<rect width="{W}" height="{H}" fill="{c["bg"]}"/>')
 
-    # Eyebrow, sitting on the spine.
-    add(f'<text x="{M}" y="86" font-family="{MONO}" font-size="13" letter-spacing="6.5" '
-        f'fill="{c["muted"]}">INTENT-FIRST AI FILMMAKING</text>')
+    # Eyebrow, sitting on the spine. Three words of philosophy set as a field
+    # label - not a market category. "AI FILMMAKING" said what every product in
+    # the space says; an eyebrow that could open a competitor's page is not an
+    # eyebrow, it is filler.
+    add(f'<text x="{M}" y="84" font-family="{MONO}" font-size="13" letter-spacing="6.5" '
+        f'fill="{c["muted"]}">INTENT BEFORE FRAMES</text>')
 
     # First hairline. A single registration tick marks the spine.
-    add(f'<line x1="{M}" y1="108" x2="{RIGHT}" y2="108" stroke="{c["hairline"]}" stroke-width="1"/>')
-    add(f'<line x1="{M}" y1="103" x2="{M}" y2="113" stroke="{c["hairline"]}" stroke-width="1"/>')
+    add(f'<line x1="{M}" y1="106" x2="{RIGHT}" y2="106" stroke="{c["hairline"]}" stroke-width="1"/>')
+    add(f'<line x1="{M}" y1="101" x2="{M}" y2="111" stroke="{c["hairline"]}" stroke-width="1"/>')
 
     # Wordmark. One family, two sizes; the amber falls on the second line only.
-    # A calligraphic face was tried here and dropped: no script font ships on
-    # Linux or most Windows installs, so it silently degraded to plain serif and
-    # the "single flourish" was invisible to most readers. A design that only
-    # exists on the author's machine is not a design.
-    add(f'<text x="{M}" y="243" font-family="{SERIF}" font-size="104" fill="{c["fg"]}">Seedance 2.0</text>')
-    add(f'<text x="{M}" y="313" font-family="{SERIF}" font-size="62" fill="{c["accent"]}">Skill OS</text>')
+    # Scale is the luxury: the first line owns its band of the canvas alone, so
+    # nothing shares its vertical zone and nothing competes with it. A
+    # calligraphic face was tried here and dropped: no script font ships on
+    # Linux or most Windows installs, so it silently degraded to plain serif
+    # and the "single flourish" was invisible to most readers. A design that
+    # only exists on the author's machine is not a design.
+    add(f'<text x="{M}" y="252" font-family="{SERIF}" font-size="126" fill="{c["fg"]}">Seedance 2.0</text>')
+    add(f'<text x="{M}" y="332" font-family="{SERIF}" font-size="64" fill="{c["accent"]}">Skill OS</text>')
 
-    # Tagline, right-aligned against the opposite margin so the eye returns
-    # across the wordmark rather than stacking beneath it. Two sentences,
-    # matching the README verbatim; a trailing em dash broke badly here.
-    add(f'<text x="{RIGHT}" y="240" text-anchor="end" font-family="{SERIF}" font-size="25" '
+    # Tagline, right-aligned against the opposite margin, seated on the Skill OS
+    # band so its second baseline registers with the amber baseline - one shared
+    # datum across the width of the page instead of two texts floating apart.
+    # Two sentences; a trailing em dash broke badly here.
+    add(f'<text x="{RIGHT}" y="298" text-anchor="end" font-family="{SERIF}" font-size="25" '
         f'font-style="italic" fill="{c["muted"]}">Direct the model.</text>')
-    add(f'<text x="{RIGHT}" y="274" text-anchor="end" font-family="{SERIF}" font-size="25" '
+    add(f'<text x="{RIGHT}" y="332" text-anchor="end" font-family="{SERIF}" font-size="25" '
         f'font-style="italic" fill="{c["muted"]}">Don&apos;t micro-manage the frame.</text>')
 
     # Second hairline, then the specification strip.
-    add(f'<line x1="{M}" y1="358" x2="{RIGHT}" y2="358" stroke="{c["hairline"]}" stroke-width="1"/>')
+    add(f'<line x1="{M}" y1="366" x2="{RIGHT}" y2="366" stroke="{c["hairline"]}" stroke-width="1"/>')
 
     col = M
     step = (RIGHT - M) / len(FIELDS)
     for label, value in FIELDS:
         x = round(col)
-        add(f'<text x="{x}" y="389" font-family="{MONO}" font-size="10.5" letter-spacing="3.4" '
+        add(f'<text x="{x}" y="396" font-family="{MONO}" font-size="10.5" letter-spacing="3.4" '
             f'fill="{c["muted"]}">{label}</text>')
-        add(f'<text x="{x}" y="414" font-family="{SERIF}" font-size="17" fill="{c["fg"]}">{value}</text>')
+        add(f'<text x="{x}" y="421" font-family="{SERIF}" font-size="17" fill="{c["fg"]}">{value}</text>')
         col += step
 
     add("</svg>")

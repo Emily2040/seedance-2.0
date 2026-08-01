@@ -2,18 +2,18 @@
 <title>Seedance 2.0 Skill OS</title>
 <desc>Editorial masthead: the wordmark Seedance 2.0 Skill OS above the line "Direct the model, don't micro-manage the frame", with a specification strip listing generation modes, the route-verify-direct-deliver pipeline, and supported reading languages.</desc>
 <rect width="1200" height="470" fill="#F7F3EA"/>
-<text x="76" y="86" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="13" letter-spacing="6.5" fill="#6F6757">INTENT-FIRST AI FILMMAKING</text>
-<line x1="76" y1="108" x2="1124" y2="108" stroke="#D8D0BE" stroke-width="1"/>
-<line x1="76" y1="103" x2="76" y2="113" stroke="#D8D0BE" stroke-width="1"/>
-<text x="76" y="243" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="104" fill="#1C1914">Seedance 2.0</text>
-<text x="76" y="313" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="62" fill="#A86F24">Skill OS</text>
-<text x="1124" y="240" text-anchor="end" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="25" font-style="italic" fill="#6F6757">Direct the model.</text>
-<text x="1124" y="274" text-anchor="end" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="25" font-style="italic" fill="#6F6757">Don&apos;t micro-manage the frame.</text>
-<line x1="76" y1="358" x2="1124" y2="358" stroke="#D8D0BE" stroke-width="1"/>
-<text x="76" y="389" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#6F6757">MODES</text>
-<text x="76" y="414" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#1C1914">T2V · I2V · V2V · R2V · FLF2V</text>
-<text x="425" y="389" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#6F6757">PIPELINE</text>
-<text x="425" y="414" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#1C1914">Route · Verify · Direct · Deliver</text>
-<text x="775" y="389" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#6F6757">READS</text>
-<text x="775" y="414" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#1C1914">EN · 中文 · 日本語 · 한국어 · ES · RU</text>
+<text x="76" y="84" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="13" letter-spacing="6.5" fill="#6F6757">INTENT BEFORE FRAMES</text>
+<line x1="76" y1="106" x2="1124" y2="106" stroke="#D8D0BE" stroke-width="1"/>
+<line x1="76" y1="101" x2="76" y2="111" stroke="#D8D0BE" stroke-width="1"/>
+<text x="76" y="252" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="126" fill="#1C1914">Seedance 2.0</text>
+<text x="76" y="332" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="64" fill="#A86F24">Skill OS</text>
+<text x="1124" y="298" text-anchor="end" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="25" font-style="italic" fill="#6F6757">Direct the model.</text>
+<text x="1124" y="332" text-anchor="end" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="25" font-style="italic" fill="#6F6757">Don&apos;t micro-manage the frame.</text>
+<line x1="76" y1="366" x2="1124" y2="366" stroke="#D8D0BE" stroke-width="1"/>
+<text x="76" y="396" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#6F6757">MODES</text>
+<text x="76" y="421" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#1C1914">T2V · I2V · V2V · R2V · FLF2V</text>
+<text x="425" y="396" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#6F6757">PIPELINE</text>
+<text x="425" y="421" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#1C1914">Route · Verify · Direct · Deliver</text>
+<text x="775" y="396" font-family="ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3.4" fill="#6F6757">READS</text>
+<text x="775" y="421" font-family="Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, &apos;Palatino Linotype&apos;, Georgia, serif" font-size="17" fill="#1C1914">EN · 中文 · 日本語 · 한국어 · ES · RU</text>
 </svg>
