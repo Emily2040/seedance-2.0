@@ -66,10 +66,12 @@ def run_ffmpeg(ffmpeg: str, clip: Path, out: Path, first: bool) -> int:
     if first:
         cmd = [ffmpeg, "-y", "-i", str(clip), "-frames:v", "1", "-q:v", "2", str(out)]
     else:
-        # Seek from end-of-file, then keep overwriting one output image so the
-        # final decoded frame wins - robust across container duration quirks.
-        cmd = [ffmpeg, "-y", "-sseof", "-0.5", "-i", str(clip), "-update", "1",
-               "-frames:v", "1", "-q:v", "2", str(out)]
+        # Decode the stream through EOF and overwrite the same image for every
+        # decoded frame.  ``-frames:v 1`` must not be used here: it stops at the
+        # first frame after a seek instead of allowing the true final frame to
+        # win.  Full decoding also avoids depending on container duration or
+        # keyframe-seek accuracy.
+        cmd = [ffmpeg, "-y", "-i", str(clip), "-update", "1", "-q:v", "2", str(out)]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0 or not out.exists() or out.stat().st_size == 0:
         sys.stderr.write(proc.stderr[-800:] + "\n")
