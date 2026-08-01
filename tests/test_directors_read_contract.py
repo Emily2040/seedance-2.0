@@ -41,6 +41,17 @@ def copy_route_contract(destination: Path) -> None:
         shutil.copy2(ROOT / rel, target)
 
 
+def directors_read_case_errors(cases: list[dict]) -> list[str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        target = root / "validation" / "fixtures" / "directors-read-cases.json"
+        target.parent.mkdir(parents=True)
+        target.write_text(json.dumps(cases), encoding="utf-8")
+        errors: list[str] = []
+        behavior.validate_directors_read_cases(root, errors)
+        return errors
+
+
 class DirectorsReadContractTests(unittest.TestCase):
     def test_one_canonical_contract_routes_every_prompt_path(self) -> None:
         errors: list[str] = []
@@ -137,6 +148,100 @@ class DirectorsReadContractTests(unittest.TestCase):
                 self.assertIsNone(case["directors_read"], case["id"])
                 self.assertTrue(case["utility_intent"].strip(), case["id"])
                 self.assertIn("no invented", case["refusal"].lower(), case["id"])
+
+    def test_generic_narrative_read_cannot_pass_on_presence_alone(self) -> None:
+        cases = json.loads(
+            (ROOT / "validation/fixtures/directors-read-cases.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        generic = next(case for case in cases if case["id"] == "silent-breakup")
+        generic["directors_read"] = {
+            field: "Something happens."
+            for field in FIELDS
+        }
+        generic["compiled_carriers"] = "The camera shows something happening."
+
+        errors = directors_read_case_errors(cases)
+
+        self.assertTrue(
+            any(
+                "creative specificity" in error
+                or "reuses the same content" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_narrative_carriers_must_carry_behavior_and_specific_detail(self) -> None:
+        cases = json.loads(
+            (ROOT / "validation/fixtures/directors-read-cases.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        generic = next(case for case in cases if case["id"] == "silent-breakup")
+        generic["compiled_carriers"] = (
+            "A locked camera observes an empty hallway while distant traffic continues."
+        )
+
+        errors = directors_read_case_errors(cases)
+
+        self.assertTrue(
+            any("visible suppressed behavior" in error for error in errors),
+            errors,
+        )
+        self.assertTrue(
+            any("non-transferable detail" in error for error in errors),
+            errors,
+        )
+
+    def test_specificity_tokenizer_is_not_limited_to_space_delimited_english(self) -> None:
+        for text in (
+            "她把裂开的车票压在颤抖的拇指下面",
+            "彼女は震える親指で破れた切符を隠す",
+            "그녀는 떨리는 엄지로 찢어진 표를 가린다",
+            "เธอซ่อนตั๋วขาดไว้ใต้นิ้วโป้งที่สั่น",
+        ):
+            with self.subTest(text=text):
+                self.assertGreaterEqual(len(behavior.creative_terms(text)), 3)
+
+    def test_default_ignorables_cannot_disguise_generic_filler(self) -> None:
+        self.assertEqual(
+            behavior.creative_terms("some\u034fthing hap\u2060pens"),
+            set(),
+        )
+
+    def test_case_fixture_wrong_shapes_are_diagnostic_not_exceptions(self) -> None:
+        original = json.loads(
+            (ROOT / "validation/fixtures/directors-read-cases.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        mutations = (
+            ("unhashable id", "id", []),
+            ("wrong brief type", "brief", {}),
+            ("wrong carrier type", "compiled_carriers", ["visible", "words"]),
+        )
+        for label, field, value in mutations:
+            cases = json.loads(json.dumps(original))
+            cases[0][field] = value
+            with self.subTest(label=label):
+                self.assertTrue(directors_read_case_errors(cases))
+
+    def test_specificity_check_ignores_invalid_carriers_after_type_diagnostic(self) -> None:
+        fields = {
+            field: f"specific authored choice number {index} with visible evidence"
+            for index, field in enumerate(FIELDS)
+        }
+
+        errors = behavior.creative_specificity_errors(
+            fields,
+            ["valid visible carrier", {}],
+            label="malformed carrier",
+            carrier_fields=("visible suppressed behavior",),
+        )
+
+        self.assertIsInstance(errors, list)
 
 
 if __name__ == "__main__":
