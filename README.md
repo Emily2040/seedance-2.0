@@ -420,6 +420,15 @@ python -m compileall scripts tests
 git diff --check
 ```
 
+`prompt_architecture_stress.py` is a deterministic failure gate, not a creativity
+or originality judge. In strict mode, every applicable dimension on every
+`skill_formula` case must score at least 3, the arm average must remain at least
+3.5, and materially different briefs may not reuse duplicate or near-duplicate
+prompts. Its mechanical checks cover shooting-brief structure, brief-specific
+traceability beyond generic production words, explicit camera/light/sound/action
+contradictions, and repetition or padding patterns. Comparative creative quality
+still requires blinded model evaluation and native-language human review.
+
 The CI workflow runs this same list on push and pull request, with the one deliberate difference noted above: it omits `--enforce-freshness`. These checks are deterministic and offline — they prove the package is well-formed.
 
 ### Source freshness
