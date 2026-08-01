@@ -6,7 +6,11 @@ Current active release: **6.7.0**. Older entries below are preserved as release 
 
 ## Unreleased
 
-Nothing yet.
+### Fixed
+
+- Made frame extraction refuse an existing output by default and reserve new
+  output paths atomically, so concurrent agents cannot silently replace one
+  another's frame. Replacing an output now requires an explicit `--force`.
 
 ## [6.7.0] — 2026-08-01
 
