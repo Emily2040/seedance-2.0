@@ -11,13 +11,29 @@ Seedance 2.0 Skill OS es un agent skill que dirige Seedance 2.0 como lo haría u
 
 Instala el repositorio como **una** skill raíz llamada `seedance-20`; sus sub-skills y references se cargan solas por ruta relativa.
 
-**Codex (trae un instalador de un solo comando)**
+**Primero, consigue los archivos.** Cada comando de abajo se ejecuta dentro de una copia local:
 
 ```bash
-python scripts/install_codex_skill.py --force
+git clone https://github.com/Emily2040/seedance-2.0.git
+cd seedance-2.0
 ```
 
-Copia el repo a `~/.codex/skills/seedance-20` (o `$CODEX_HOME/skills/seedance-20`). Reinicia Codex y luego llama a `$seedance-20`.
+¿Sin `git`? Usa **Code → Download ZIP** en la página del repositorio, descomprime y entra en la carpeta.
+
+**Después, instálalo.** El instalador no es solo para Codex: `--dest` elige el directorio de skills que lee tu cliente:
+
+```bash
+# Codex (por defecto ~/.codex/skills)
+python scripts/install_codex_skill.py
+
+# Claude Code (instalación personal, en todos los proyectos)
+python scripts/install_codex_skill.py --dest ~/.claude/skills
+
+# Instalación local al proyecto, cualquier cliente
+python scripts/install_codex_skill.py --dest .claude/skills
+```
+
+Imprime dónde quedó instalada. Reinicia tu cliente y llama a `seedance-20`. Añade `--force` solo para reemplazar una instalación existente: borra la copia anterior primero.
 
 **Instalar desde GitHub (si tu cliente lo permite por URL)**
 

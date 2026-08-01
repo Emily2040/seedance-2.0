@@ -11,13 +11,29 @@ Seedance 2.0 Skill OS 는 형용사를 늘어놓는 대신 영화감독처럼 Se
 
 이 저장소를 `seedance-20` 이라는 **하나의** 루트 스킬로 설치합니다. 하위 스킬과 references 는 상대 경로로 자동으로 불러옵니다.
 
-**Codex (원커맨드 설치 스크립트 제공)**
+**먼저 파일을 받으세요.** 아래 명령은 모두 로컬 사본 안에서 실행합니다:
 
 ```bash
-python scripts/install_codex_skill.py --force
+git clone https://github.com/Emily2040/seedance-2.0.git
+cd seedance-2.0
 ```
 
-저장소를 `~/.codex/skills/seedance-20`(또는 `$CODEX_HOME/skills/seedance-20`)로 복사합니다. Codex 를 다시 시작한 뒤 `$seedance-20`로 불러오세요.
+`git` 이 없다면 저장소 페이지의 **Code → Download ZIP** 을 쓰고, 압축을 푼 뒤 그 폴더로 `cd` 하세요.
+
+**그다음 설치합니다.** 이 설치 스크립트는 Codex 전용이 아닙니다. `--dest` 로 클라이언트가 읽는 skills 디렉터리를 지정하세요:
+
+```bash
+# Codex (기본값 ~/.codex/skills)
+python scripts/install_codex_skill.py
+
+# Claude Code (개인 설치, 모든 프로젝트에서 사용)
+python scripts/install_codex_skill.py --dest ~/.claude/skills
+
+# 프로젝트 단위 설치, 모든 클라이언트
+python scripts/install_codex_skill.py --dest .claude/skills
+```
+
+설치 위치가 출력됩니다. 클라이언트를 다시 시작한 뒤 `seedance-20` 을 불러오세요. `--force` 는 기존 설치를 교체할 때만 붙입니다 — 이전 사본을 먼저 지웁니다.
 
 **GitHub 에서 설치 (저장소 URL 설치를 지원하는 클라이언트)**
 

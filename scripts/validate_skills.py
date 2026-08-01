@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -155,6 +156,24 @@ REQUIRED_FILES = [
 REQUIRED_FIELDS = ["name", "description", "license", "user-invocable", "tags", "metadata"]
 
 
+def tracked_files(root: Path) -> set[str] | None:
+    """Repository-relative paths git tracks, or None outside a git checkout.
+
+    None means the question "is this committed?" has no answer here - an
+    unpacked ZIP has no index - so callers treat nothing as committed.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"],
+            capture_output=True,
+            timeout=15,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return {part.decode("utf-8", "replace") for part in proc.stdout.split(b"\0") if part}
+
+
 def split_frontmatter(text: str) -> tuple[str, str]:
     text = text.lstrip("\ufeff")
     lines = text.splitlines()
@@ -274,12 +293,26 @@ def main() -> int:
             validate_skill(path, root, errors, warnings)
 
 
+    # Only bytecode git actually tracks is a finding. Importing any module here
+    # writes __pycache__, so flagging it on sight failed for anyone who ran the
+    # tests before the validators - the files are gitignored and were never
+    # committed, but the error said they were. CI never saw it because the
+    # workflow sets PYTHONDONTWRITEBYTECODE.
+    tracked = tracked_files(root)
+
+    def is_committed(rel: str) -> bool:
+        return rel in tracked if tracked is not None else False
+
     pycache = root / "scripts" / "__pycache__"
-    if pycache.exists():
+    if pycache.exists() and any(
+        is_committed(item.relative_to(root).as_posix())
+        for item in pycache.rglob("*")
+        if item.is_file()
+    ):
         errors.append("scripts/__pycache__ must not be committed")
     for pyc in root.rglob("*.pyc"):
         rel = pyc.relative_to(root).as_posix()
-        if not rel.startswith(".seedance_backups/"):
+        if not rel.startswith(".seedance_backups/") and is_committed(rel):
             errors.append(f"compiled Python cache must not be committed: {rel}")
 
     eval_path = root / "evals" / "evals.json"

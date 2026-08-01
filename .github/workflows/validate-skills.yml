@@ -66,6 +66,8 @@ jobs:
         run: python scripts/generation_run_check.py --strict
       - name: Lint compiled prompts
         run: python scripts/prompt_lint.py --self-test --strict
+      - name: Stress-test the prompt architecture
+        run: python scripts/prompt_architecture_stress.py --strict
       - name: Check eval harness wiring (offline)
         run: python scripts/eval_run.py --self-test --strict
       - name: Check frame-extraction tool wiring (offline)

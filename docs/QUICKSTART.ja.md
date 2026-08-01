@@ -11,13 +11,29 @@ Seedance 2.0 Skill OS は、形容詞を並べるのではなく、映画監督�
 
 このリポジトリを `seedance-20` という**ひとつの**ルートスキルとして入れます。サブスキルと references は相対パスで自動的に読み込まれます。
 
-**Codex（ワンコマンドのインストーラーあり）**
+**まずファイルを取得します。** 以下のコマンドはすべてローカルコピーの中で実行します:
 
 ```bash
-python scripts/install_codex_skill.py --force
+git clone https://github.com/Emily2040/seedance-2.0.git
+cd seedance-2.0
 ```
 
-リポジトリを `~/.codex/skills/seedance-20`（または `$CODEX_HOME/skills/seedance-20`）へコピーします。Codex を再起動してから `$seedance-20` を呼び出してください。
+`git` がなければリポジトリページの **Code → Download ZIP** を使い、展開してそのフォルダに `cd` してください。
+
+**次にインストールします。** このインストーラーは Codex 専用ではありません。`--dest` でクライアントが読む skills ディレクトリを指定します:
+
+```bash
+# Codex（既定は ~/.codex/skills）
+python scripts/install_codex_skill.py
+
+# Claude Code（個人インストール、全プロジェクトで利用可）
+python scripts/install_codex_skill.py --dest ~/.claude/skills
+
+# プロジェクト単位のインストール（任意のクライアント）
+python scripts/install_codex_skill.py --dest .claude/skills
+```
+
+インストール先が表示されます。クライアントを再起動して `seedance-20` を呼び出してください。`--force` は既存のインストールを置き換えるときだけ付けます（先に古いコピーを削除します）。
 
 **GitHub から入れる（リポジトリ URL 指定に対応したクライアントの場合）**
 

@@ -11,13 +11,29 @@ Seedance 2.0 Skill OS 是一个 agent skill：它像导演一样调度 Seedance 
 
 把整个仓库当作**一个**名为 `seedance-20` 的根技能来装；子技能和参考资料会按相对路径自动加载。
 
-**Codex（有一键脚本）**
+**第一步：先把文件拿到本地。** 下面每条命令都要在仓库目录里运行：
 
 ```bash
-python scripts/install_codex_skill.py --force
+git clone https://github.com/Emily2040/seedance-2.0.git
+cd seedance-2.0
 ```
 
-脚本会把仓库复制到 `~/.codex/skills/seedance-20`（或 `$CODEX_HOME/skills/seedance-20`）。重启 Codex，再输入 `$seedance-20` 调用。
+没装 `git` 就用仓库页面的 **Code → Download ZIP**，解压后 `cd` 进去。
+
+**第二步：安装。** 这个脚本不只支持 Codex；用 `--dest` 指定你的客户端扫描的 skills 目录即可：
+
+```bash
+# Codex（默认 ~/.codex/skills）
+python scripts/install_codex_skill.py
+
+# Claude Code（个人安装，所有项目可用）
+python scripts/install_codex_skill.py --dest ~/.claude/skills
+
+# 任意客户端，装到当前项目
+python scripts/install_codex_skill.py --dest .claude/skills
+```
+
+脚本会打印安装位置。重启客户端后调用 `seedance-20`。只有在覆盖已有安装时才加 `--force`——它会先删掉旧副本。
 
 **从 GitHub 安装（客户端支持仓库地址时）**
 
