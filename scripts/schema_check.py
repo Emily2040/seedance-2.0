@@ -45,8 +45,20 @@ MANIFEST = Path("validation/schema-instances.json")
 SCHEMA_DIR = Path("schemas")
 
 
-def load_json(path: Path, root: Path | None = None) -> Any:
-    return strict_load_json(path, expected_type=dict, root=root)
+def load_json(
+    path: Path,
+    root: Path | None = None,
+    *,
+    expected_type: type[Any] | tuple[type[Any], ...] | None = None,
+) -> Any:
+    """Load strict JSON without inventing a top-level schema constraint.
+
+    Draft 2020-12 permits boolean schemas, and an instance may be any JSON
+    value.  Callers that own a narrower contract, such as this repository's
+    schema manifest, must request it explicitly.
+    """
+
+    return strict_load_json(path, expected_type=expected_type, root=root)
 
 
 def pointer(error: Any) -> str:
@@ -60,7 +72,7 @@ def check(root: Path) -> list[str]:
     if not manifest_path.exists():
         return [f"missing {MANIFEST.as_posix()}"]
     try:
-        manifest = load_json(manifest_path, root=root)
+        manifest = load_json(manifest_path, root=root, expected_type=dict)
     except ValueError as exc:
         return [f"{MANIFEST.as_posix()}: {exc}"]
 

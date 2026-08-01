@@ -274,6 +274,39 @@ class StrictLoaderTests(unittest.TestCase):
                     ):
                         load_json(linked, expected_type=dict, root=root)
 
+    @unittest.skipIf(os.name == "nt" or not hasattr(os, "mkfifo"), "POSIX FIFO semantics")
+    def test_posix_fifo_is_rejected_without_waiting_for_a_writer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            fifo = root / "payload.json"
+            os.mkfifo(fifo)
+            probe = "\n".join(
+                [
+                    "import sys",
+                    f"sys.path.insert(0, {str(ROOT / 'scripts')!r})",
+                    "from pathlib import Path",
+                    "from strict_json import StrictJSONError, load_json",
+                    "try:",
+                    f"    load_json(Path({str(fifo)!r}), expected_type=dict, root=Path({str(root)!r}))",
+                    "except StrictJSONError as exc:",
+                    "    print(exc)",
+                    "    raise SystemExit(0)",
+                    "raise SystemExit(3)",
+                ]
+            )
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-B", "-c", probe],
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                )
+            except subprocess.TimeoutExpired:
+                self.fail("FIFO read blocked waiting for a writer")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("not a regular file", result.stdout)
+
     @unittest.skipUnless(os.name == "nt", "Windows junction semantics")
     def test_windows_directory_junction_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

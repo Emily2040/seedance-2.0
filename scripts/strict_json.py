@@ -452,6 +452,11 @@ def _read_bounded(path: Path, label: str, *, root: Path | None = None) -> bytes:
 
     checked = validate_repo_input_path(root, path) if root is not None else path
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+    # A FIFO opened read-only can wait forever for a writer before ``fstat``
+    # gets a chance to reject it.  Non-blocking mode is inert for regular
+    # files and makes special files return from ``open`` promptly so the
+    # regular-file boundary below can fail closed.
+    flags |= getattr(os, "O_NONBLOCK", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     descriptor: int | None = None
     try:
