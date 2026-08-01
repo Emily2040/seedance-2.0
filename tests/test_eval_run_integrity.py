@@ -99,15 +99,18 @@ def case_metadata(
     return eval_run.build_expected_case_metadata([case])
 
 
-def valid_verdict(assertions: tuple[str, ...] = ("works",), score: int = 3) -> dict:
+def valid_verdict(
+    criterion_ids: tuple[str, ...] = ("a0", "eo", "fm"),
+    score: int = 3,
+) -> dict:
     return {
         "overall_score": score,
         "pass": True,
         "notes": "ok",
-        "assertion_scores": [
-            {"assertion": assertion, "met": True} for assertion in assertions
-        ],
-        "dimension_scores": [],
+        "criterion_scores": {
+            criterion_id: True for criterion_id in criterion_ids
+        },
+        "dimension_scores": {},
     }
 
 
@@ -327,7 +330,12 @@ class AggregateIntegrityTests(unittest.TestCase):
 
 
 class JudgeIntegrityTests(unittest.TestCase):
-    CASE = {"prompt": "test", "assertions": ["works"]}
+    CASE = {
+        "prompt": "test",
+        "expected_output": "working answer",
+        "assertions": ["works"],
+        "failure_mode": "does not work",
+    }
 
     def test_call_api_rejects_malformed_success_body(self) -> None:
         provider, endpoint, model = eval_run.resolve_provider(
@@ -615,7 +623,7 @@ class JudgeIntegrityTests(unittest.TestCase):
         raw = (
             '{"overall_score":0,"overall_score":3,'
             '"pass":false,"pass":true,"notes":"ambiguous",'
-            '"assertion_scores":[{"assertion":"works","met":true}]}'
+            '"criterion_scores":{"a0":true}}'
         )
         provider, endpoint, _model = eval_run.resolve_provider(
             "anthropic", "global_en", None
@@ -638,8 +646,8 @@ class JudgeIntegrityTests(unittest.TestCase):
     def test_unpaired_surrogate_in_judge_json_is_rejected(self) -> None:
         raw = (
             '{"overall_score":3,"pass":true,"notes":"\\ud800",'
-            '"assertion_scores":[{"assertion":"works","met":true}],'
-            '"dimension_scores":[]}'
+            '"criterion_scores":{"a0":true},'
+            '"dimension_scores":{}}'
         )
         provider, endpoint, _model = eval_run.resolve_provider(
             "anthropic", "global_en", None
@@ -669,7 +677,11 @@ class JudgeIntegrityTests(unittest.TestCase):
                         "overall_score": score,
                         "pass": True,
                         "notes": "looks fine",
-                        "assertion_scores": [{"assertion": "works", "met": True}],
+                        "criterion_scores": {
+                            criterion_id: True
+                            for criterion_id in ("a0", "eo", "fm")
+                        },
+                        "dimension_scores": {},
                     },
                 )
                 self.assertEqual(verdict["overall_score"], 0)
@@ -682,35 +694,39 @@ class JudgeIntegrityTests(unittest.TestCase):
                 "overall_score": 3,
                 "pass": "true",
                 "notes": "wrong type",
-                "assertion_scores": [{"assertion": "works", "met": True}],
+                "criterion_scores": {
+                    criterion_id: True
+                    for criterion_id in ("a0", "eo", "fm")
+                },
+                "dimension_scores": {},
             },
         )
         self.assertEqual(verdict["overall_score"], 0)
         self.assertIs(verdict["pass"], False)
         self.assertIn("pass must be a boolean", verdict["notes"])
 
-    def test_assertion_scores_must_cover_each_assertion_exactly_once(self) -> None:
-        case = {"prompt": "test", "assertions": ["works", "is safe"]}
-        invalid_rows = (
-            [{"assertion": "works", "met": True}],
-            [
-                {"assertion": "works", "met": True},
-                {"assertion": "works", "met": True},
-            ],
-            [
-                {"assertion": "works", "met": True},
-                {"assertion": "is safe", "met": False},
-            ],
+    def test_criterion_scores_must_cover_each_contract_id_exactly_once(self) -> None:
+        case = {
+            "prompt": "test",
+            "expected_output": "working answer",
+            "assertions": ["works", "is safe"],
+            "failure_mode": "does not work",
+        }
+        invalid_scores = (
+            {"a0": True, "eo": True, "fm": True},
+            {"a0": True, "a1": "false", "eo": True, "fm": True},
+            {"a0": True, "a1": False, "eo": True, "fm": True},
         )
-        for assertion_scores in invalid_rows:
-            with self.subTest(assertion_scores=assertion_scores):
+        for criterion_scores in invalid_scores:
+            with self.subTest(criterion_scores=criterion_scores):
                 verdict = eval_run.normalize_verdict(
                     case,
                     {
                         "overall_score": 3,
                         "pass": True,
                         "notes": "trust me",
-                        "assertion_scores": assertion_scores,
+                        "criterion_scores": criterion_scores,
+                        "dimension_scores": {},
                     },
                 )
                 self.assertEqual(verdict["overall_score"], 0)
@@ -720,14 +736,16 @@ class JudgeIntegrityTests(unittest.TestCase):
     def test_required_sections_and_forbidden_behaviors_are_scored_checks(self) -> None:
         case = {
             "prompt": "test",
+            "expected_output": "working answer",
             "assertions": ["works"],
+            "failure_mode": "does not work",
             "required_output_sections": ["Final prompt"],
             "forbidden_behaviors": ["invented dialogue"],
         }
         ordinary_only = eval_run.normalize_verdict(case, valid_verdict())
         self.assertEqual(ordinary_only["overall_score"], 0)
         self.assertFalse(ordinary_only["pass"])
-        self.assertIn("cover every judge check exactly once", ordinary_only["notes"])
+        self.assertIn("cover every judge criterion ID", ordinary_only["notes"])
 
         checks = eval_run.expected_judge_checks(case)
         forbidden_unmet = eval_run.normalize_verdict(
@@ -736,13 +754,11 @@ class JudgeIntegrityTests(unittest.TestCase):
                 "overall_score": 3,
                 "pass": True,
                 "notes": "trust me",
-                "assertion_scores": [
-                    {
-                        "assertion": check,
-                        "met": not check.startswith("[forbidden_behavior_absent]"),
-                    }
+                "criterion_scores": {
+                    check: check != "f0"
                     for check in checks
-                ],
+                },
+                "dimension_scores": {},
             },
         )
         self.assertEqual(forbidden_unmet["overall_score"], 0)
@@ -750,24 +766,36 @@ class JudgeIntegrityTests(unittest.TestCase):
         self.assertIn("pass cannot be true", forbidden_unmet["notes"])
 
     def test_sequence_verdict_requires_every_rubric_dimension(self) -> None:
-        case = {"prompt": "test", "assertions": ["works"], "critical": True}
+        case = {
+            "prompt": "test",
+            "expected_output": "working answer",
+            "assertions": ["works"],
+            "failure_mode": "does not work",
+            "critical": True,
+            "expected_state_delta": "accepted footage updates canon",
+            "expected_prompt_architecture": "state -> contract -> prompt",
+            "expected_sequence_relation": "standalone",
+        }
         verdict = eval_run.normalize_verdict(
             case,
             {
                 "overall_score": 4,
                 "pass": True,
                 "notes": "looks complete",
-                "assertion_scores": [{"assertion": "works", "met": True}],
-                "dimension_scores": [
-                    {"dimension": dimension, "score": 4}
-                    for dimension in eval_run.SEQUENCE_DIMENSIONS[:-1]
-                ],
+                "criterion_scores": {
+                    criterion_id: True
+                    for criterion_id in eval_run.expected_judge_checks(case)
+                },
+                "dimension_scores": {
+                    dimension_id: 4
+                    for dimension_id in eval_run.SEQUENCE_DIMENSION_IDS[:-1]
+                },
             },
         )
 
         self.assertEqual(verdict["overall_score"], 0)
         self.assertFalse(verdict["pass"])
-        self.assertIn("every sequence dimension exactly once", verdict["notes"])
+        self.assertIn("every sequence dimension ID", verdict["notes"])
 
 
 class InputContractTests(unittest.TestCase):

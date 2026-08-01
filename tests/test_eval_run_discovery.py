@@ -121,14 +121,14 @@ def sequence_verdict(case: dict) -> dict:
         "overall_score": 4,
         "pass": True,
         "notes": "complete",
-        "assertion_scores": [
-            {"assertion": check, "met": True}
+        "criterion_scores": {
+            check: True
             for check in eval_run.expected_judge_checks(case)
-        ],
-        "dimension_scores": [
-            {"dimension": dimension, "score": 4}
-            for dimension in eval_run.SEQUENCE_DIMENSIONS
-        ],
+        },
+        "dimension_scores": {
+            dimension_id: 4
+            for dimension_id in eval_run.SEQUENCE_DIMENSION_IDS
+        },
     }
 
 
@@ -214,7 +214,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             ):
                 self.assertNotIn(secret, planner)
                 self.assertNotIn(secret, responder)
-                self.assertNotIn(secret, judge)
+                self.assertIn(secret, judge)
             for judge_only in ("EXPECTED-OUTPUT-SECRET", "JUDGE-ONLY-ASSERTION"):
                 self.assertNotIn(judge_only, planner)
                 self.assertNotIn(judge_only, responder)
@@ -667,7 +667,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
     def test_main_persists_frozen_provenance_and_provider_selection(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            case = base_case()
+            case = base_case(expected_sequence_relation="standalone")
             make_root(root, case)
             snapshot = self.snapshot(root)
             verdict = sequence_verdict(case)
