@@ -76,8 +76,12 @@ plano épico y cinematográfico de una mujer leyendo una carta, emotivo, ilumina
 **Con dirección (fuerte)**
 
 ```
-Plano medio corto, a la altura de los ojos; baja la carta y sus manos se quedan quietas mientras llega un acercamiento lento; una luz de ventana suave le deja el rostro sobrio; casi silencio, con el roce de una silla.
+Una mujer con una chaqueta de lana está sentada a la mesa de la cocina y lee una sola hoja de papel. Sus ojos recorren la misma línea dos veces; después sus manos bajan la hoja a la mesa y se quedan completamente quietas. La cámara mantiene un plano medio corto a la altura de los ojos y se acerca despacio, deteniéndose cuando sus manos paran. Luz de ventana de día nublado desde la izquierda, sin relleno. Sonido: tono de sala, el roce de una silla, luego casi silencio.
 ```
+
+Lee el **orden**, no solo las palabras. El sujeto y lo que está haciendo van **primero**, y la cámara, la luz y el sonido vienen después: el comienzo del prompt es donde el modelo fija de quién es el plano. Empezar por `Plano medio corto, a la altura de los ojos` gasta esa posición en datos de encuadre y deja que el modelo deduzca el sujeto más tarde. El mismo oficio, con peor jerarquía.
+
+La longitud funciona igual: esto son 89 palabras. Para un solo clip, apunta a unas **40–110 palabras**. Mucho más corto y el modelo rellena los huecos por ti; mucho más largo y las frases finales dejan de llegar a la imagen.
 
 ## 5. Dos reglas que te ahorran tomas
 

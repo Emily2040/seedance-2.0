@@ -100,7 +100,10 @@ def main() -> int:
 
     print(f"Installed {SKILL_NAME} to {destination}")
     print(f"Installed payload size: {payload_size(destination)}")
-    print("Restart Codex to pick up new skills.")
+    # --dest sends this into any client's skills directory, so the closing line
+    # cannot name one. Telling a Claude Code user to restart Codex is the kind
+    # of instruction that makes a working install look broken.
+    print("Restart your agent client to pick up new skills.")
     return 0
 
 

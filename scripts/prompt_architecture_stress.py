@@ -60,7 +60,8 @@ CAMERA = re.compile(
     r"pans?|tilts?|cranes?|jibs?|orbits?|arcs?|handheld|steadicam|zooms?|"
     r"track(?:s|ing)?\b|drift(?:s|ing)?|whip pan|rack focus|locked[-\s]?off|"
     r"static|framing|reframe|follows?|settles? (?:on|as|when|square)|"
-    r"camera (?:holds|stays|rises|falls|drifts|settles|moves|sits|starts))\b",
+    r"camera (?:holds?|stays?|rises?|falls?|drifts?|settles?|moves?|sits?|starts?|"
+    r"path|movement|rhythm))\b",
     re.I,
 )
 
@@ -70,14 +71,14 @@ LIGHT = re.compile(
     r"screen glow|monitor glow|daylight|dusk|dawn|golden hour|shaft of light|"
     r"bare bulb|work light|sodium|torch|flashlight|match|lantern|skylight|"
     r"earthlight|earthshine|softbox(?:es)?|ring light|exit sign|forge|burner|"
-    r"glow|lit from|light(?:s|ing)? (?:from|stays|holds|direction)|top light|"
+    r"glow|lit from|lights?|lighting|top light|"
     r"overhead (?:light|fluorescent|tubes)|shadow)\b",
     re.I,
 )
 
 SOUND = re.compile(
     r"\b(sound|audio|ambien\w*|room tone|silence|near-silence|hum|clatter|scrape|"
-    r"footsteps?|rain on|wind|breath|voice|says|dialogue|line:|sfx|music|rumble|"
+    r"footsteps?|rain on|wind|breath\w*|voice|says|dialogue|line:|sfx|music|rumble|"
     r"click|creak|chime|birdsong|traffic|engine|whirr|buzz|drip|splash)\b",
     re.I,
 )
@@ -87,7 +88,7 @@ ENDPOINT = re.compile(
     r"\b(stops?|settles?|lands?|closes?|opens?|halts?|comes to rest|holds? on|"
     r"ends? on|rests?|locks?|finishes|arrives?|turns? to face|meets?|touches?|"
     r"catches?|sets? down|picks? up|steps? through|final frame|last frame|"
-    r"still(?:s)?|goes still|freezes?)\b",
+    r"still(?:s)?|goes still|freezes?|endpoint|comes? to rest|completed?)\b",
     re.I,
 )
 
@@ -102,6 +103,28 @@ STYLE_FIRST = re.compile(r"^\s*(?:a\s+)?(?:cinematic|epic|beautiful|stunning|dra
 REF_TAG = re.compile(r"@(?:Image|Video|Audio|图片|视频|音频)\s?\d+|\[(?:Video|Image|Audio) \d+\]")
 
 REF_MODES = {"I2V", "V2V", "R2V", "FLF2V", "EDIT", "EXTEND"}
+
+# Modes that build on supplied footage. For these the skill's instruction is to
+# describe only what the source cannot supply, so explicitly *preserving* a
+# dimension addresses it exactly as fully as specifying one. Demanding a fresh
+# light source from an edit prompt would score the doctrine's own advice as a
+# defect.
+PRESERVING_MODES = {"I2V", "V2V", "FLF2V", "EDIT", "EXTEND"}
+PRESERVE = {
+    "camera": re.compile(r"\b(keep|preserv\w+|hold|same|unchanged|existing|original)\b[^.;]{0,60}"
+                         r"\b(camera|framing|lens|shot|tracking|move|path|rhythm)\b", re.I),
+    "light": re.compile(r"\b(keep|preserv\w+|hold|same|unchanged|existing|original|do not relight)\b"
+                        r"[^.;]{0,60}\b(light\w*|exposure|grade|key)\b", re.I),
+    "sound": re.compile(r"\b(keep|preserv\w+|hold|same|unchanged|existing|original)\b[^.;]{0,60}"
+                        r"\b(audio|sound|dialogue|bed)\b", re.I),
+}
+
+# A continuation may bind to accepted footage in prose rather than with an asset
+# tag; the surface decides which is available. Both are real contracts.
+PROSE_BINDING = re.compile(
+    r"\b(accepted (?:final frame|clip|footage|take)|observed (?:final frame|end state)|"
+    r"source clip|previous clip|final frame of)\b", re.I,
+)
 
 
 def words(text: str) -> list[str]:
@@ -155,11 +178,21 @@ def score_slop(prompt: str) -> tuple[float, str]:
     return max(0.0, min(4.0, score)), note
 
 
-def score_coverage(prompt: str) -> tuple[float, str]:
-    present, missing = [], []
+def score_coverage(prompt: str, mode: str = "T2V") -> tuple[float, str]:
+    preserving = mode.upper() in PRESERVING_MODES
+    present, missing, kept = [], [], []
     for name, rx in (("camera", CAMERA), ("light", LIGHT), ("sound", SOUND), ("endpoint", ENDPOINT)):
-        (present if rx.search(prompt) else missing).append(name)
-    return len(present), ("all four covered" if not missing else f"missing: {', '.join(missing)}")
+        if rx.search(prompt):
+            present.append(name)
+        elif preserving and name in PRESERVE and PRESERVE[name].search(prompt):
+            present.append(name)
+            kept.append(name)
+        else:
+            missing.append(name)
+    note = "all four addressed" if not missing else f"missing: {', '.join(missing)}"
+    if kept:
+        note += f" (addressed by preservation: {', '.join(kept)})"
+    return len(present), note
 
 
 def score_structure(prompt: str) -> tuple[float, str]:
@@ -189,6 +222,8 @@ def score_refs(prompt: str, mode: str) -> tuple[float, str] | tuple[None, str]:
         return None, "n/a (no reference assets)"
     tags = REF_TAG.findall(prompt)
     if not tags:
+        if PROSE_BINDING.search(prompt):
+            return 3.0, "bound to accepted footage in prose rather than an asset tag"
         return 0.0, "reference mode with no reference binding"
     # A role must be stated for the binding to be a contract, not a mention.
     has_role = re.search(
@@ -208,7 +243,7 @@ def score_prompt(rec: dict) -> dict:
     dims["opening_authority"] = score_opening(p)
     dims["length_fit"] = score_length(p)
     dims["slop_free"] = score_slop(p)
-    dims["coverage"] = score_coverage(p)
+    dims["coverage"] = score_coverage(p, mode)
     dims["structure"] = score_structure(p)
     ref = score_refs(p, mode)
     if ref[0] is not None:
