@@ -10,6 +10,9 @@ for every clip of a long project. This tool removes most of that cost:
   python scripts/extract_last_frame.py takes/clip_02_take1.mp4 --first-frame
   python scripts/extract_last_frame.py takes/clip_02_take1.mp4 --emit-record
 
+Existing output images are preserved by default. Choose another --output path,
+or pass --force only when replacing that exact file is intentional.
+
 The extracted frame becomes (a) the continuation image reference and (b) the
 agent's observation source: attach it and the AGENT fills the observation
 record from what is visible, asking only about what a still can never show
@@ -109,12 +112,53 @@ def self_test() -> int:
     return 0
 
 
+class OutputPolicyError(Exception):
+    """The requested output path cannot be used without risking another file."""
+
+
+def reserve_output(out: Path, *, force: bool) -> bool:
+    """Atomically claim a new output path; return whether a claim was created.
+
+    ``Path.exists()`` followed by FFmpeg would leave a race in which two agents
+    both see a free path and the second silently replaces the first result.
+    Exclusive creation makes exactly one no-force caller the owner. FFmpeg's
+    internal ``-y`` then replaces only that caller's empty reservation.
+    """
+    if not out.parent.is_dir():
+        raise OutputPolicyError(f"output directory not found: {out.parent}")
+    if force:
+        return False
+    try:
+        with out.open("xb"):
+            pass
+    except FileExistsError as exc:
+        raise OutputPolicyError(
+            f"output already exists: {out}\n"
+            "Refusing to replace it. Choose another --output path or re-run with --force."
+        ) from exc
+    except OSError as exc:
+        raise OutputPolicyError(f"cannot reserve output path {out}: {exc}") from exc
+    return True
+
+
+def remove_failed_reservation(out: Path) -> None:
+    try:
+        out.unlink(missing_ok=True)
+    except OSError as exc:
+        print(f"warning: could not remove failed output reservation {out}: {exc}", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Extract the last/first frame of an accepted clip.")
     parser.add_argument("clip", nargs="?", help="path to the accepted take (mp4/mov/webm)")
     parser.add_argument("-o", "--output", help="output image path (default: <clip>.last.png / .first.png)")
     parser.add_argument("--first-frame", action="store_true", help="extract the first frame instead")
     parser.add_argument("--ffmpeg", default=None, help="path to ffmpeg if not on PATH")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="replace an existing output image; default behavior refuses",
+    )
     parser.add_argument("--emit-record", action="store_true", help="print the observation-record skeleton")
     parser.add_argument("--self-test", action="store_true", help="offline wiring check, no ffmpeg or media")
     parser.add_argument("--strict", action="store_true", help="accepted for parity with other validators")
@@ -138,7 +182,22 @@ def main() -> int:
         return 2
     suffix = ".first.png" if args.first_frame else ".last.png"
     out = Path(args.output) if args.output else clip.with_suffix(clip.suffix + suffix)
-    rc = run_ffmpeg(ffmpeg, clip, out, args.first_frame)
+    if out.resolve() == clip.resolve():
+        print(f"output path must differ from the input clip: {out}")
+        return 1
+    try:
+        reserved = reserve_output(out, force=args.force)
+    except OutputPolicyError as exc:
+        print(exc)
+        return 1
+    try:
+        rc = run_ffmpeg(ffmpeg, clip, out, args.first_frame)
+    except BaseException:
+        if reserved:
+            remove_failed_reservation(out)
+        raise
+    if rc != 0 and reserved:
+        remove_failed_reservation(out)
     if rc == 0 and args.emit_record:
         print()
         print(build_record())
