@@ -29,11 +29,11 @@ python scripts/install_codex_skill.py
 # Claude Code (개인 설치, 모든 프로젝트에서 사용)
 python scripts/install_codex_skill.py --dest ~/.claude/skills
 
-# 프로젝트 단위 설치, 모든 클라이언트
-python scripts/install_codex_skill.py --dest .claude/skills
+# 다른 프로젝트에 설치 — 그 프로젝트 디렉터리에서 실행
+python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
-설치 위치가 출력됩니다. 클라이언트를 다시 시작한 뒤 `seedance-20` 을 불러오세요. `--force` 는 기존 설치를 교체할 때만 붙입니다 — 이전 사본을 먼저 지웁니다.
+설치 위치가 출력됩니다. 클라이언트를 다시 시작한 뒤 `seedance-20` 을 불러오세요. `--force` 는 기존 설치를 교체할 때만 붙입니다 — 이전 사본을 먼저 지웁니다. 이 저장소 내부를 가리키는 `--dest` 는 거부됩니다. 소스 트리를 자기 자신 안으로 복사하면 경로 길이 한계에 도달할 때까지 재귀하기 때문입니다.
 
 **GitHub 에서 설치 (저장소 URL 설치를 지원하는 클라이언트)**
 

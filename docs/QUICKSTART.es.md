@@ -29,11 +29,11 @@ python scripts/install_codex_skill.py
 # Claude Code (instalación personal, en todos los proyectos)
 python scripts/install_codex_skill.py --dest ~/.claude/skills
 
-# Instalación local al proyecto, cualquier cliente
-python scripts/install_codex_skill.py --dest .claude/skills
+# Instalar en otro proyecto: ejecuta esto desde ese proyecto
+python /ruta/a/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
-Imprime dónde quedó instalada. Reinicia tu cliente y llama a `seedance-20`. Añade `--force` solo para reemplazar una instalación existente: borra la copia anterior primero.
+Imprime dónde quedó instalada. Reinicia tu cliente y llama a `seedance-20`. Añade `--force` solo para reemplazar una instalación existente: borra la copia anterior primero. Un destino dentro de este repositorio se rechaza: copiar el árbol de fuentes dentro de sí mismo recurre hasta que la longitud de la ruta falla.
 
 **Instalar desde GitHub (si tu cliente lo permite por URL)**
 

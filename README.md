@@ -350,11 +350,13 @@ python scripts/install_codex_skill.py
 # Claude Code — personal install, available in every project
 python scripts/install_codex_skill.py --dest ~/.claude/skills
 
-# Any client — project-local install
-python scripts/install_codex_skill.py --dest .claude/skills
+# Any client — install into another project, run from that project
+python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
 The command copies the repository to `<dest>/seedance-20` and prints where it landed. Add `--force` only to replace an install that already exists — it deletes the previous copy first, so it is not the flag to start with. Restart your client afterwards so `seedance-20` appears in its skill list.
+
+A destination inside this repository is refused rather than attempted: copying the source tree into a directory inside itself recurses until the path length fails. For a project-local install, run the script from the project you are installing into, by absolute path, as above.
 
 This repository keeps dense facts in references so the active skill stays small.
 

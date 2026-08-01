@@ -29,11 +29,11 @@ python scripts/install_codex_skill.py
 # Claude Code（個人インストール、全プロジェクトで利用可）
 python scripts/install_codex_skill.py --dest ~/.claude/skills
 
-# プロジェクト単位のインストール（任意のクライアント）
-python scripts/install_codex_skill.py --dest .claude/skills
+# 別のプロジェクトへインストール（そのプロジェクトで実行）
+python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
-インストール先が表示されます。クライアントを再起動して `seedance-20` を呼び出してください。`--force` は既存のインストールを置き換えるときだけ付けます（先に古いコピーを削除します）。
+インストール先が表示されます。クライアントを再起動して `seedance-20` を呼び出してください。`--force` は既存のインストールを置き換えるときだけ付けます（先に古いコピーを削除します）。このリポジトリ内部を指す `--dest` は拒否されます。ソースツリーを自分自身へコピーすると、パス長の上限に達するまで再帰してしまうためです。
 
 **GitHub から入れる（リポジトリ URL 指定に対応したクライアントの場合）**
 

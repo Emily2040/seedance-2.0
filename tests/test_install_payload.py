@@ -111,5 +111,39 @@ class InstallPayloadTests(unittest.TestCase):
         self.assertTrue((ROOT / "scripts/eval_run.py").exists())
 
 
+class InTreeDestinationTests(unittest.TestCase):
+    """copytree walks the source, so an in-tree destination copies itself.
+
+    `--dest .claude/skills` from the repository root produced
+    .claude/skills/seedance-20/.claude/skills/seedance-20/... - 757 directories
+    and a 4105-character path before it died on ENAMETOOLONG.
+    """
+
+    def test_destination_inside_the_repository_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            installer.assert_destination_outside_source(
+                ROOT / ".claude" / "skills" / installer.SKILL_NAME, ROOT
+            )
+
+    def test_the_repository_root_itself_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            installer.assert_destination_outside_source(ROOT, ROOT)
+
+    def test_a_destination_outside_the_repository_is_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            installer.assert_destination_outside_source(
+                Path(tmp) / "skills" / installer.SKILL_NAME, ROOT
+            )
+
+    def test_the_cli_refuses_without_a_traceback_and_writes_nothing(self) -> None:
+        argv = sys.argv
+        sys.argv = ["install_codex_skill.py", "--dest", str(ROOT / ".claude" / "skills")]
+        try:
+            self.assertEqual(installer.main(), 1)
+        finally:
+            sys.argv = argv
+        self.assertFalse((ROOT / ".claude").exists(), "refused install must create nothing")
+
+
 if __name__ == "__main__":
     unittest.main()

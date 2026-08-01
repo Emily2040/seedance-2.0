@@ -29,11 +29,11 @@ python scripts/install_codex_skill.py
 # Claude Code（个人安装，所有项目可用）
 python scripts/install_codex_skill.py --dest ~/.claude/skills
 
-# 任意客户端，装到当前项目
-python scripts/install_codex_skill.py --dest .claude/skills
+# 装到另一个项目里——请在那个项目目录下运行
+python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
-脚本会打印安装位置。重启客户端后调用 `seedance-20`。只有在覆盖已有安装时才加 `--force`——它会先删掉旧副本。
+脚本会打印安装位置。重启客户端后调用 `seedance-20`。只有在覆盖已有安装时才加 `--force`——它会先删掉旧副本。目标目录若在本仓库内部会被直接拒绝：把源码树复制进它自己会一路递归，直到路径过长而失败。
 
 **从 GitHub 安装（客户端支持仓库地址时）**
 
