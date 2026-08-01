@@ -17,7 +17,7 @@ class ProjectStateTests(unittest.TestCase):
     def run_mutated_project(self, mutate) -> subprocess.CompletedProcess[str]:
         data = json.loads(BASE_PROJECT_STATE.read_text(encoding="utf-8"))
         mutate(data)
-        with tempfile.TemporaryDirectory(prefix="lineage-test-", dir=ROOT) as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="lineage-test-") as temp_dir:
             repo = Path(temp_dir)
             fixture = repo / "examples" / "lineage" / "project-state.json"
             fixture.parent.mkdir(parents=True)

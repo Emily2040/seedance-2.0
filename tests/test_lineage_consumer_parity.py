@@ -28,7 +28,7 @@ class LineageConsumerParityTests(unittest.TestCase):
         return self.validate_raw(json.dumps(data))
 
     def validate_raw(self, raw: str) -> tuple[list[str], list[str]]:
-        with tempfile.TemporaryDirectory(prefix="lineage-parity-", dir=ROOT) as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="lineage-parity-") as temp_dir:
             fixture = Path(temp_dir) / "project-state.json"
             fixture.write_text(raw, encoding="utf-8")
             project_errors = project_state_check.validate_project(fixture, ROOT)
