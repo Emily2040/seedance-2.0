@@ -1,8 +1,10 @@
 # Agent Compatibility
 
-last_verified: 2026-06-12
+last_verified: 2026-08-01
 
 Use this file when reviewing whether this repository is shaped correctly as an Agent Skill package. This is about packaging and agent behavior, not Seedance model capability.
+
+Reviewed 2026-08-01: the packaging contract here is unchanged, and it is deliberately independent of the Seedance model line — a 2.5 launch changes platform facts, not skill-package structure. The install paths in this file are verified by `tests/test_install_payload.py` on every run rather than by this date stamp.
 
 ## Current Agent-Skill Shape
 

@@ -9,6 +9,7 @@ express are actually held.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 import unittest
@@ -90,6 +91,70 @@ class DesignRuleTests(unittest.TestCase):
         for svg in self.svgs():
             self.assertIn("<title>", svg)
             self.assertIn("<desc>", svg)
+
+
+class OutlinedTypeTests(unittest.TestCase):
+    """Display type must not depend on a font the reader may not have.
+
+    The retired stack resolved to Didot only on macOS, a Times clone or the
+    default system serif on Linux, and Palatino on most Windows installs - so
+    the editorial serif the design system specifies was what a minority of
+    readers saw. Outlines remove the dependency entirely.
+    """
+
+    ASSETS = [ROOT / "assets/hero-dark.svg", ROOT / "assets/hero-light.svg", ROOT / "assets/skill-map.svg"]
+    SERIF_NAMES = ("Georgia", "Didot", "Baskerville", "Palatino", "Hoefler", "Bodoni MT", "Times")
+
+    def test_no_shipped_asset_names_a_system_serif(self) -> None:
+        for path in self.ASSETS:
+            svg = path.read_text(encoding="utf-8")
+            for name in self.SERIF_NAMES:
+                with self.subTest(asset=path.name, serif=name):
+                    self.assertNotIn(name, svg)
+
+    def test_display_type_is_outlined(self) -> None:
+        for path in self.ASSETS:
+            with self.subTest(asset=path.name):
+                self.assertIn("<path", path.read_text(encoding="utf-8"))
+
+    def test_outline_provenance_is_recorded(self) -> None:
+        """OFL attribution must travel with the geometry it produced."""
+        data = json.loads((ROOT / "assets/masthead-outlines.json").read_text(encoding="utf-8"))
+        prov = data["provenance"]
+        for field in ("font_family", "font_version", "designer", "license", "license_url", "source"):
+            self.assertTrue(prov.get(field), f"provenance is missing {field}")
+        self.assertIn("Open Font License", prov["license"])
+
+    def test_the_generator_can_run_from_a_clean_checkout(self) -> None:
+        """The fonts it reads must be tracked, or the documented path is fiction."""
+        import build_masthead_outlines as gen
+
+        for font in (gen.ROMAN, gen.ITALIC):
+            with self.subTest(font=font.name):
+                self.assertTrue(font.exists(), f"{font.name} is not in the repository")
+        self.assertTrue((ROOT / "assets/fonts/OFL.txt").exists(), "OFL text must ship with the fonts")
+        self.assertEqual(gen.TARGET, ROOT / "assets/masthead-outlines.json",
+                         "the generator must write the asset the masthead actually reads")
+
+    def test_declared_font_families_must_be_monospace(self) -> None:
+        """A denylist of serif names passes Arial and bare generics."""
+        import design_audit
+
+        for bad in ('<text font-family="serif">x</text>',
+                    '<text font-family="Arial">x</text>',
+                    '<style>.a{font:400 15px Georgia,serif}</style>'):
+            with self.subTest(svg=bad):
+                self.assertTrue(design_audit.font_family_findings("t.svg", bad))
+        self.assertEqual(
+            design_audit.font_family_findings("t.svg", '<text font-family="ui-monospace, monospace">x</text>'), []
+        )
+
+    def test_every_run_the_masthead_uses_is_present(self) -> None:
+        glyphs = build_hero.glyphs()
+        for key in ("wordmark", "skill_os", "tagline_1", "tagline_2"):
+            self.assertIn(key, glyphs)
+            self.assertTrue(glyphs[key]["d"].startswith("M"), f"{key} has no path data")
+            self.assertGreater(glyphs[key]["advance"], 0)
 
 
 if __name__ == "__main__":

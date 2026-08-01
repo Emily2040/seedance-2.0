@@ -1,8 +1,10 @@
 # Field-Observed Tips
 
-last_verified: 2026-05-30
+last_verified: 2026-08-01
 
 These are practitioner patterns gathered from public community material. Treat them as field-observed, not official platform guarantees.
+
+Reviewed 2026-08-01. The patterns below are craft observations about how the model responds to wording, structure, and reference roles — they are not platform-fact claims, so the Seedance 2.5 launch does not invalidate them. It does bound them: they were observed on Seedance 2.0, and a pattern observed on one model line is a hypothesis on another, not a finding. Re-observe before asserting any of this about 2.5.
 
 ## Stable Workflow
 

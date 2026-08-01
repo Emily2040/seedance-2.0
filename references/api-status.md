@@ -1,7 +1,19 @@
 # Seedance 2.0 API and Platform Status
 
-last_verified: 2026-06-20
-confidence: public-source snapshot as of the verification date; per-section dates apply where noted (Seedance 2.0 Mini, additional provider/router, and China-facing search recorded 2026-06-20, platform safeguards and resolution recorded 2026-06-14, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
+last_verified: 2026-08-01
+confidence: public-source snapshot as of the verification date; per-section dates apply where noted (Seedance 2.5 and the 2.0 4K upgrade recorded 2026-08-01 from technology press and provider pages, Seedance 2.0 Mini / additional provider-router / China-facing search recorded 2026-06-20, platform safeguards and resolution recorded 2026-06-14, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
+
+## Scope: This Is a Seedance 2.0 Skill *(recorded 2026-08-01)*
+
+**Everything in this repository describes Seedance 2.0.** A separate, newer line — Seedance 2.5 — launched on consumer surfaces on 2026-07-31 *(tech-press; the primary ByteDance and Volcengine pages were not reachable in this pass)*. This repository does not cover it, does not document its capabilities, and makes no claim about it.
+
+The only rule that matters here is a boundary, and it exists because a user can be on the newer line without saying so:
+
+- **Establish which line the surface runs before quoting any number.** Durations, reference ceilings, resolutions, model IDs, and mode availability in this file are 2.0 values. They are not 2.5 values, and restating them as such would be inventing platform facts.
+- **Craft transfers; platform numbers never do.** Direction, shot contracts, reference-role discipline, continuity, and anti-slop are model-independent and stay correct.
+- **Never normalize "2.5" to "2.0"** — that is exactly how 2.0 numbers get silently applied to a different model. See `[ref:model-name-map]`.
+
+If the user is working on 2.5, say plainly that this skill is built and verified for 2.0, keep the craft guidance, and withhold the platform numbers.
 
 ## Confirmed From Public Sources
 
@@ -25,6 +37,10 @@ confidence: public-source snapshot as of the verification date; per-section date
 - China-facing searches on 2026-06-20 confirm the strongest sources remain official ByteDance Seed, Volcengine Ark, BytePlus ModelArk, Doubao, Jimeng/Jianying, and CapCut/Jianying surfaces. Chinese-language workflow posts, business-partner news, or hosted ComfyUI workflows are not public API providers unless they publish provider-owned API docs.
 - Partner workflow docs such as ComfyUI expose T2V, R2V, and FLF2V workflow vocabulary, but those docs are surface-specific.
 - Recent AV-generation benchmark papers, including AVBench and VABench, are useful for eval vocabulary around audio-video consistency, but they are not Seedance platform-access sources.
+
+## Copyright Dispute — Still Unresolved *(re-checked 2026-08-01)*
+
+The 2026-06-13 record below stands, with one update: reporting through July 2026 indicates the studio cease-and-desist letters remain **unanswered and unresolved in court**, and ByteDance shipped Seedance 2.5 and its API while the dispute was open. Nothing has been settled that would relax this repository's IP posture — the safety gates are not provisional, and the safeguards below are still the live enforcement path.
 
 ## Overseas API Status — Copyright Suspension *(recorded 2026-06-13)*
 

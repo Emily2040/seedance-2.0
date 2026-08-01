@@ -1,14 +1,19 @@
 # Model Name Map
 
-last_verified: 2026-06-20
+last_verified: 2026-08-01
 
-Use this file when a user says "Seedance Pro", "Seedance V2", "Seedance V2 Mini", "Seed2.0 Pro", or wrapper-specific model names.
+Use this file when a user says "Seedance Pro", "Seedance V2", "Seedance V2 Mini", "Seed2.0 Pro", "Seedance 2.5", or wrapper-specific model names.
+
+## Out of Scope: Seedance 2.5
+
+Reviewed 2026-08-01. Seedance 2.5 is a **different model line**, not a Seedance 2.0 variant, and this repository does not cover it. It appears in this file for one reason: normalizing "2.5" to "2.0" is the highest-cost naming error the file can prevent, because it silently applies this skill's 2.0 numbers to a model they were never measured on. Keep the name as the user said it, and withhold the platform numbers.
 
 ## Canonical Names
 
 | Name | Meaning | Guidance |
 |---|---|---|
-| Seedance 2.0 | ByteDance Seed video generation model line | Correct public name for the v2 video model family. Use this as the default wording. |
+| Seedance 2.0 | ByteDance Seed video generation model line | Correct public name for the v2 video model family, and the line this repository targets. Use this as the default wording. |
+| Seedance 2.5 | A different, newer model line — **not covered by this skill** *(launched 2026-07-31, tech-press)* | Keep the name; never normalize to 2.0. Say plainly that this skill is built and verified for 2.0, keep the craft guidance, and withhold every platform number. |
 | Seedance 2.0 Fast | Faster Seedance 2.0 variant reported by official/product and wrapper surfaces | Use for draft, iteration, or low-latency discussion when the active surface exposes it. Recheck exact resolution, duration, and pricing. |
 | Seedance 2.0 Mini | Lighter official Seedance 2.0 series lane exposed on Volcengine, BytePlus, and Dreamina surfaces | Use only when the active surface exposes Mini. Treat `Seedance V2 Mini` as shorthand, not canonical wording. Recheck API availability, duration, resolution, pricing, and account gates live. |
 | Doubao Seedance 2.0 | Volcengine/Doubao-flavored surface naming | Treat as a product/API surface label, not a different creative method. |

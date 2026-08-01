@@ -1,6 +1,8 @@
 # Source Registry
 
-last_verified: 2026-06-20
+last_verified: 2026-08-01
+
+**Reviewed 2026-08-01.** One structural gap was found and is recorded here rather than papered over: this registry's primary-source hierarchy covers the Seedance **2.0** line only, and a newer line (2.5) launched on consumer surfaces 2026-07-31. The 2.5 evidence currently available to this repository is technology press and provider blog posts — `tech-press` grade, below the `confirmed` bar the rows below require — because the primary ByteDance and Volcengine pages were not reachable for direct verification in this pass. Until a primary 2.5 source is read and recorded, treat every 2.5 capability number as unverified. See the Seedance 2.5 section of `[ref:api-status]`.
 
 Use this registry before making factual claims about Seedance 2.0 platform behavior. Prefer primary public sources, attach a verification date, and mark volatile claims as recheck-required. This file is a claim-boundary map, not a guarantee of access on every product surface or region.
 

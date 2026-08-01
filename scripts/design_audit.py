@@ -25,6 +25,35 @@ CORE_BITMAP_ASSETS = [
 ]
 
 
+# Live text in a shipped asset must use the monospace stack and nothing else.
+# Two syntaxes carry a family: the SVG presentation attribute and the CSS
+# `font:` shorthand used inside <style>. Both are collected, because checking
+# only one leaves the other free to reintroduce a platform-dependent face.
+FONT_FAMILY_ATTR = re.compile(r'font-family\s*=\s*"([^"]*)"')
+FONT_SHORTHAND = re.compile(r"font\s*:\s*([^;{}]*)")
+MONOSPACE_MARKER = "ui-monospace"
+
+
+def font_family_findings(rel: str, svg: str) -> list[str]:
+    """Every declared family must be the monospace stack.
+
+    Stated as a requirement rather than a denylist: a list of banned serif
+    names silently passes `font-family="Arial"` or a bare generic, which is
+    exactly the platform-dependent rendering the outlines were adopted to end.
+    """
+    declarations = FONT_FAMILY_ATTR.findall(svg) + FONT_SHORTHAND.findall(svg)
+    if not declarations:
+        return []
+    findings = []
+    for declared in declarations:
+        if MONOSPACE_MARKER not in declared:
+            findings.append(
+                f"{rel} declares a non-monospace font family ({declared.strip()[:60]!r}); "
+                "live text must use the monospace stack and display type must be outlined"
+            )
+    return findings
+
+
 def png_dimensions(path: Path) -> tuple[int, int] | None:
     with path.open("rb") as handle:
         header = handle.read(24)
@@ -155,8 +184,15 @@ def main() -> int:
             errors.append(f"{rel} must not include scripts or external resources")
         if "linearGradient" in svg or "feGaussianBlur" in svg:
             errors.append(f"{rel} must follow the editorial standard: no gradients or blur filters")
-        if "Georgia" not in svg or "ui-monospace" not in svg:
-            errors.append(f"{rel} missing the editorial serif/monospace type stacks")
+        # Display type is outlined, so there is no serif stack left to look for
+        # - that is the point. What must hold instead: every font family the
+        # asset declares is the monospace stack. A denylist of serif names
+        # cannot express that, because it passes anything not on the list
+        # (font-family="Arial", or a bare generic). So resolve each declaration
+        # and require it, rather than guessing at what is forbidden.
+        errors.extend(font_family_findings(rel, svg))
+        if "<path" not in svg:
+            errors.append(f"{rel} has no outlined display type")
 
     if errors:
         print("Design audit errors:")

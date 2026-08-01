@@ -5,7 +5,7 @@ license: MIT
 user-invocable: true
 tags: [seedance]
 metadata:
-  version: "6.6.0"
+  version: "6.7.0"
 ---
 
 # seedance-20
@@ -37,6 +37,8 @@ Leave the fast lane the instant the request earns a gate: IP/likeness/brand/safe
 
    Establish what this client can actually inspect before describing any attachment. Hosts differ: some read images, fewer read video, fewer still read audio. **Never state or imply that you viewed, watched, heard, measured, verified, or tested something you did not.** When a reference or a returned take cannot be inspected, say so plainly, work from the user's description, mark those details as user-reported rather than observed, and ask for a short description only when the missing detail actually blocks routing. This matters most where the repository's own workflows assume observation: `observed end state` in continuation, take triage in `[ref:retake-protocol]`, and any reference role inferred from an attachment. An invented observation corrupts sequence canon, and every later clip inherits it.
 2. Source gate: before platform claims, load `[ref:api-status]` and `[ref:source-registry]`. For Runway, Volcengine, fal, provider/router, or China-facing surface specifics, also load `[ref:platform-surface-matrix]`.
+
+   **This skill is for Seedance 2.0.** A newer line exists and is out of scope; a user may be on it without saying so. Every duration, reference ceiling, resolution, and model ID here is a 2.0 value - never restate one for another line. Craft still applies (direction, shot contracts, reference roles, continuity, anti-slop); the numbers do not. When the line is unknown, write the prompt and withhold the number, exactly as for an unknown surface operation.
 3. Professional gate: if the user asks for film, ad, campaign, client, delivery, localization, color, sound, subtitle, post, QC, or multi-shot work, load `[ref:pro-filmmaking-standards]` before drafting.
 4. Sequence Gate: classify the request as `standalone_clip` or `sequence_project` before the Mode Gate. Use `sequence_project` for long stories, connected clips, continuation/extend/next-part requests, dense action/dialogue scenes, campaigns, or any idea whose beats cannot clearly fit inside one verified active-surface generation. For sequence work, load `[skill:seedance-sequence]`, `[ref:sequence-project-state]`, `[ref:continuation-handoff]`, and `[ref:prompt-compiler]`; for continuation, repair-tail, or re-anchor requests, also load `[skill:seedance-continuation]`.
 5. Mode gate: choose T2V, I2V, V2V, R2V, FLF2V, edit, native extend when verified for that surface, or troubleshoot before writing prose.

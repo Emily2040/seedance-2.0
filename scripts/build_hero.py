@@ -17,15 +17,22 @@ label-over-value fields. No viewfinder chrome, no gradients, no second hue.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-SERIF = (
-    "Didot, &apos;Bodoni MT&apos;, &apos;Hoefler Text&apos;, Baskerville, "
-    "&apos;Palatino Linotype&apos;, Georgia, serif"
-)
+# The display type is vector outlines, not live text. The previous stack
+# (Didot, Bodoni MT, Hoefler Text, Baskerville, Palatino Linotype, Georgia)
+# resolved to a different face on every platform - Didot only on macOS, a
+# Times clone or DejaVu Serif on Linux, Palatino on most Windows installs -
+# so the "high-contrast editorial serif" the design system specifies was
+# what a minority of readers actually saw. That is the same failure the
+# script wordmark was retired for; the stack had it too and outlasted it.
+# Outlines render identically everywhere and depend on no installed font.
+OUTLINES = ROOT / "assets/masthead-outlines.json"
+
 MONO = "ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace"
 
 # Canvas: 1200x470. Margin 76 gives the wordmark room without the strip
@@ -60,10 +67,21 @@ FIELDS = [
 ]
 
 
+def glyphs() -> dict[str, dict]:
+    return json.loads(OUTLINES.read_text(encoding="utf-8"))["glyphs"]
+
+
 def build(theme: str) -> str:
     c = THEMES[theme]
+    g = glyphs()
     o: list[str] = []
     add = o.append
+
+    def outline(key: str, x: float, y: float, fill: str, anchor: str = "start") -> None:
+        """Place an outlined run. `anchor="end"` right-aligns on its advance."""
+        run = g[key]
+        left = x - run["advance"] if anchor == "end" else x
+        add(f'<path transform="translate({left:.2f} {y})" fill="{fill}" d="{run["d"]}"/>')
 
     # title and desc are the first children of a role="img" svg, which is what
     # assistive technology reads; no aria-labelledby indirection needed.
@@ -85,35 +103,33 @@ def build(theme: str) -> str:
     add(f'<line x1="{M}" y1="106" x2="{RIGHT}" y2="106" stroke="{c["hairline"]}" stroke-width="1"/>')
     add(f'<line x1="{M}" y1="101" x2="{M}" y2="111" stroke="{c["hairline"]}" stroke-width="1"/>')
 
-    # Wordmark. One family, two sizes; the amber falls on the second line only.
-    # Scale is the luxury: the first line owns its band of the canvas alone, so
-    # nothing shares its vertical zone and nothing competes with it. A
-    # calligraphic face was tried here and dropped: no script font ships on
-    # Linux or most Windows installs, so it silently degraded to plain serif
-    # and the "single flourish" was invisible to most readers. A design that
-    # only exists on the author's machine is not a design.
-    add(f'<text x="{M}" y="252" font-family="{SERIF}" font-size="126" fill="{c["fg"]}">Seedance 2.0</text>')
-    add(f'<text x="{M}" y="332" font-family="{SERIF}" font-size="64" fill="{c["accent"]}">Skill OS</text>')
+    # Wordmark, as outlines. One family at two sizes; the amber falls on the
+    # second line only. Scale is the luxury: the first line owns its band of
+    # the canvas alone, so nothing shares its vertical zone.
+    outline("wordmark", M, 252, c["fg"])
+    outline("skill_os", M, 332, c["accent"])
 
     # Tagline, right-aligned against the opposite margin, seated on the Skill OS
     # band so its second baseline registers with the amber baseline - one shared
     # datum across the width of the page instead of two texts floating apart.
-    # Two sentences; a trailing em dash broke badly here.
-    add(f'<text x="{RIGHT}" y="298" text-anchor="end" font-family="{SERIF}" font-size="25" '
-        f'font-style="italic" fill="{c["muted"]}">Direct the model.</text>')
-    add(f'<text x="{RIGHT}" y="332" text-anchor="end" font-family="{SERIF}" font-size="25" '
-        f'font-style="italic" fill="{c["muted"]}">Don&apos;t micro-manage the frame.</text>')
+    outline("tagline_1", RIGHT, 298, c["muted"], anchor="end")
+    outline("tagline_2", RIGHT, 332, c["muted"], anchor="end")
 
     # Second hairline, then the specification strip.
     add(f'<line x1="{M}" y1="366" x2="{RIGHT}" y2="366" stroke="{c["hairline"]}" stroke-width="1"/>')
 
+    # Specification fields stay live text: the values carry CJK, which no Latin
+    # outline set can supply. They are set in the monospace stack so that every
+    # remaining live glyph on the canvas belongs to one family - the only serif
+    # here is outlined, so nothing can silently fall back to a system serif.
     col = M
     step = (RIGHT - M) / len(FIELDS)
     for label, value in FIELDS:
         x = round(col)
         add(f'<text x="{x}" y="396" font-family="{MONO}" font-size="10.5" letter-spacing="3.4" '
             f'fill="{c["muted"]}">{label}</text>')
-        add(f'<text x="{x}" y="421" font-family="{SERIF}" font-size="17" fill="{c["fg"]}">{value}</text>')
+        add(f'<text x="{x}" y="421" font-family="{MONO}" font-size="14" letter-spacing="0.4" '
+            f'fill="{c["fg"]}">{value}</text>')
         col += step
 
     add("</svg>")

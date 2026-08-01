@@ -1,6 +1,8 @@
 # Professional Filmmaking Standards
 
-last_verified: 2026-05-30
+last_verified: 2026-08-01
+
+Reviewed 2026-08-01: unchanged. The standards here come from film-industry practice — shot lists, continuity, colour, audio post, localization, delivery QC — and are deliberately independent of which model generated the footage. A new Seedance line does not move them; that is the point of keeping them in a separate file from the platform facts.
 
 Use this reference when Seedance work must support directors, cinematographers, editors, producers, localization teams, commercial agencies, or delivery/QC teams. Treat these standards as workflow guidance, not as a promise that a video-generation surface can render or export every technical deliverable directly.
 

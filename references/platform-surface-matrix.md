@@ -1,8 +1,10 @@
 # Platform Surface Matrix
 
-last_verified: 2026-06-20
+last_verified: 2026-08-01
 
 Seedance 2.0 capability claims must separate the model from the product surface. A feature can be true for the model while still being gated, unavailable, renamed, priced differently, or policy-limited on a specific surface.
+
+**Reviewed 2026-08-01: the matrix now has a model-line axis as well as a surface axis.** Every row below describes **Seedance 2.0**. Seedance 2.5 launched on consumer surfaces on 2026-07-31 with API access reported from mid-July, so a surface named here may now expose either line, or both, under similar product naming. Before reading any row as current, establish which model line the user's surface is running — a 2.0 row is not evidence about 2.5, and the two are reported to differ on duration, reference count, and resolution. See `[ref:api-status]` and `[ref:model-name-map]`.
 
 Access note (2026-06-13): the overseas Seedance 2.0 API is contested following a copyright-driven suspension — see `api-status.md`. Verify live access on any third-party surface before relying on it, and add no surface here without independently confirming it hosts Seedance 2.0.
 

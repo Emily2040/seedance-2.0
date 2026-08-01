@@ -9,8 +9,8 @@ tags:
   - recipes
   - seedance-20
 metadata:
-  version: "6.6.0"
-  updated: "2026-07-04"
+  version: "6.7.0"
+  updated: "2026-08-01"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"
   repository: "https://github.com/Emily2040/seedance-2.0"

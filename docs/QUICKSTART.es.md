@@ -1,6 +1,6 @@
 # Seedance 2.0 Skill OS — Guía rápida
 
-> Versión 6.6.0 · De la instalación a tu primer prompt "con dirección" en unos 5 minutos.
+> Versión 6.7.0 · De la instalación a tu primer prompt "con dirección" en unos 5 minutos.
 > Documentación completa: [README](../README.md).
 
 ## En una frase

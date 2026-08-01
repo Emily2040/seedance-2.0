@@ -29,7 +29,11 @@ IGNORE_NAMES = {
     ".seedance_backups",
     "__pycache__",
 } | DEV_ONLY_NAMES
-IGNORE_PATTERNS = ["*.pyc", "*.pyo", "*.tmp", "*.log", "*.png", "*.jpg", "*.jpeg", "*.psd"]
+# Fonts are build inputs for scripts/build_masthead_outlines.py, which an
+# installed skill never runs - the outlines it produces are already baked into
+# the committed SVGs. Shipping them would add ~340 KB to every install for
+# nothing.
+IGNORE_PATTERNS = ["*.pyc", "*.pyo", "*.tmp", "*.log", "*.png", "*.jpg", "*.jpeg", "*.psd", "*.ttf", "*.otf"]
 
 
 def default_skills_dir() -> Path:

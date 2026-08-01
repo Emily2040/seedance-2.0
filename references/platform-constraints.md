@@ -1,6 +1,8 @@
 # Platform Constraints
 
-last_verified: 2026-05-30
+last_verified: 2026-08-01
+
+Reviewed 2026-08-01 against the Seedance 2.5 launch and the 2.0 4K reports. Nothing in the stable-constraint list below changed: these are 2.0 constraints, and they remain the working assumption for the model line this repository targets. Two cautions were added rather than edits made — a reported 4K tier on 2.0 does not lift the 480p/720p native baseline the model card documents, and none of these numbers may be carried across to Seedance 2.5. See `[ref:api-status]`.
 
 ## Stable constraints
 
