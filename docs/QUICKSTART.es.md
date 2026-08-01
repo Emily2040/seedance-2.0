@@ -11,13 +11,29 @@ Seedance 2.0 Skill OS es un agent skill que dirige Seedance 2.0 como lo haría u
 
 Instala el repositorio como **una** skill raíz llamada `seedance-20`; sus sub-skills y references se cargan solas por ruta relativa.
 
-**Codex (trae un instalador de un solo comando)**
+**Primero, consigue los archivos.** Cada comando de abajo se ejecuta dentro de una copia local:
 
 ```bash
-python scripts/install_codex_skill.py --force
+git clone https://github.com/Emily2040/seedance-2.0.git
+cd seedance-2.0
 ```
 
-Copia el repo a `~/.codex/skills/seedance-20` (o `$CODEX_HOME/skills/seedance-20`). Reinicia Codex y luego llama a `$seedance-20`.
+¿Sin `git`? Usa **Code → Download ZIP** en la página del repositorio, descomprime y entra en la carpeta.
+
+**Después, instálalo.** El instalador no es solo para Codex: `--dest` elige el directorio de skills que lee tu cliente:
+
+```bash
+# Codex (por defecto ~/.codex/skills)
+python scripts/install_codex_skill.py
+
+# Claude Code (instalación personal, en todos los proyectos)
+python scripts/install_codex_skill.py --dest ~/.claude/skills
+
+# Instalar en otro proyecto: ejecuta esto desde ese proyecto
+python /ruta/a/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+```
+
+Imprime dónde quedó instalada. Reinicia tu cliente y llama a `seedance-20`. Añade `--force` solo para reemplazar una instalación existente: borra la copia anterior primero. Un destino dentro de este repositorio se rechaza: copiar el árbol de fuentes dentro de sí mismo recurre hasta que la longitud de la ruta falla.
 
 **Instalar desde GitHub (si tu cliente lo permite por URL)**
 
@@ -60,8 +76,12 @@ plano épico y cinematográfico de una mujer leyendo una carta, emotivo, ilumina
 **Con dirección (fuerte)**
 
 ```
-Plano medio corto, a la altura de los ojos; baja la carta y sus manos se quedan quietas mientras llega un acercamiento lento; una luz de ventana suave le deja el rostro sobrio; casi silencio, con el roce de una silla.
+Una mujer con una chaqueta de lana está sentada a la mesa de la cocina y lee una sola hoja de papel. Sus ojos recorren la misma línea dos veces; después sus manos bajan la hoja a la mesa y se quedan completamente quietas. La cámara mantiene un plano medio corto a la altura de los ojos y se acerca despacio, deteniéndose cuando sus manos paran. Luz de ventana de día nublado desde la izquierda, sin relleno. Sonido: tono de sala, el roce de una silla, luego casi silencio.
 ```
+
+Lee el **orden**, no solo las palabras. El sujeto y lo que está haciendo van **primero**, y la cámara, la luz y el sonido vienen después: el comienzo del prompt es donde el modelo fija de quién es el plano. Empezar por `Plano medio corto, a la altura de los ojos` gasta esa posición en datos de encuadre y deja que el modelo deduzca el sujeto más tarde. El mismo oficio, con peor jerarquía.
+
+La longitud funciona igual: esto son 89 palabras. Para un solo clip, apunta a unas **40–110 palabras**. Mucho más corto y el modelo rellena los huecos por ti; mucho más largo y las frases finales dejan de llegar a la imagen.
 
 ## 5. Dos reglas que te ahorran tomas
 

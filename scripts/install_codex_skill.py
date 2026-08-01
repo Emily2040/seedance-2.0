@@ -68,6 +68,28 @@ def assert_safe_destination(destination: Path, skills_dir: Path) -> None:
         raise ValueError(f"destination must stay inside the skills directory: {resolved_skills_dir}")
 
 
+def assert_destination_outside_source(destination: Path, repo_root: Path) -> None:
+    """Refuse to copy the repository into a directory inside itself.
+
+    shutil.copytree walks the source tree, and the destination is created before
+    the walk reaches it, so an in-tree destination copies itself into itself:
+    .claude/skills/seedance-20/.claude/skills/seedance-20/... until the path
+    length fails, after hundreds of directories. `--dest .claude/skills` run
+    from this repository's own root is the way into it, and installing the
+    repository into itself is never what someone meant.
+    """
+    resolved = destination.resolve()
+    root = repo_root.resolve()
+    if resolved == root or root in resolved.parents:
+        raise ValueError(
+            f"destination is inside the source repository ({root}).\n"
+            f"Copying it into itself would recurse until the path length fails.\n"
+            f"To install into another project, run this script from that project "
+            f"by absolute path:\n"
+            f"    python {root / 'scripts' / 'install_codex_skill.py'} --dest .claude/skills"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Install this repository as a local Codex skill.")
     parser.add_argument(
@@ -86,7 +108,14 @@ def main() -> int:
 
     skills_dir = args.dest.expanduser()
     destination = skills_dir / SKILL_NAME
-    assert_safe_destination(destination, skills_dir)
+    # Reported as a message rather than a traceback: this is the first command a
+    # new user runs, and a stack trace reads as "the tool is broken".
+    try:
+        assert_safe_destination(destination, skills_dir)
+        assert_destination_outside_source(destination, repo_root)
+    except ValueError as exc:
+        print(f"Refusing to install: {exc}")
+        return 1
 
     skills_dir.mkdir(parents=True, exist_ok=True)
     if destination.exists():
@@ -100,7 +129,10 @@ def main() -> int:
 
     print(f"Installed {SKILL_NAME} to {destination}")
     print(f"Installed payload size: {payload_size(destination)}")
-    print("Restart Codex to pick up new skills.")
+    # --dest sends this into any client's skills directory, so the closing line
+    # cannot name one. Telling a Claude Code user to restart Codex is the kind
+    # of instruction that makes a working install look broken.
+    print("Restart your agent client to pick up new skills.")
     return 0
 
 

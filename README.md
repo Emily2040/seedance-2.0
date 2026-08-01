@@ -328,13 +328,35 @@ Client support for Agent Skills is still tool-specific. Codex documents a skill 
 
 Codex scans `.agents/skills` locations from the working directory upward, plus user/admin/system skill locations. A repository root with `SKILL.md` is shaped like a skill folder, but it still needs to be installed/copied under a scanned skills directory or distributed as a plugin for automatic discovery.
 
-This repository now includes `agents/openai.yaml` and a local Codex installer. To install it for this Windows workstation or any local Codex profile, run:
+### Step 1 — get the files
+
+Every install path below runs from inside a local copy of this repository, so start here:
 
 ```bash
-python scripts/install_codex_skill.py --force
+git clone https://github.com/Emily2040/seedance-2.0.git
+cd seedance-2.0
 ```
 
-The installer copies the repository into `$CODEX_HOME/skills/seedance-20` when `CODEX_HOME` is set, otherwise into `~/.codex/skills/seedance-20`. Restart Codex after installation so `$seedance-20` appears in the available skills list.
+Without `git` installed, use the green **Code → Download ZIP** button on the repository page, unzip it, and change into the unzipped folder instead. Nothing else on this page works until one of those two has happened.
+
+### Step 2 — install it into your client
+
+The installer is not Codex-only. It copies the skill into any client that reads a skills directory — point `--dest` at the directory yours scans:
+
+```bash
+# Codex (default: $CODEX_HOME/skills, else ~/.codex/skills)
+python scripts/install_codex_skill.py
+
+# Claude Code — personal install, available in every project
+python scripts/install_codex_skill.py --dest ~/.claude/skills
+
+# Any client — install into another project, run from that project
+python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+```
+
+The command copies the repository to `<dest>/seedance-20` and prints where it landed. Add `--force` only to replace an install that already exists — it deletes the previous copy first, so it is not the flag to start with. Restart your client afterwards so `seedance-20` appears in its skill list.
+
+A destination inside this repository is refused rather than attempted: copying the source tree into a directory inside itself recurses until the path length fails. For a project-local install, run the script from the project you are installing into, by absolute path, as above.
 
 This repository keeps dense facts in references so the active skill stays small.
 
@@ -348,7 +370,7 @@ For manual installation, copy this repository into the skill directory used by y
 
 | Platform | Typical install target (verify in your client) |
 |---|---|
-| Claude Code | `.claude/skills/seedance-20/` |
+| Claude Code | `~/.claude/skills/seedance-20/` (personal) or `.claude/skills/seedance-20/` (project) — both via `scripts/install_codex_skill.py --dest` |
 | Codex | `.agents/skills/seedance-20/` or `~/.codex/skills/seedance-20/` via `scripts/install_codex_skill.py` |
 | Google Antigravity | `.agents/skills/seedance-20/` (workspace) or `~/.gemini/antigravity-cli/skills/seedance-20/` (global) |
 | OpenClaw | workspace `skills/seedance-20/` or `~/.openclaw/skills/seedance-20/` via `openclaw skills install` (ClawHub-compatible; skills already carry `openclaw:` metadata) |
@@ -395,6 +417,7 @@ python scripts/continuity_chain_check.py --strict
 python scripts/behavior_contract_check.py --strict
 python scripts/sequence_eval_check.py --strict
 python scripts/generation_run_check.py --strict
+python scripts/prompt_architecture_stress.py --strict
 python scripts/prompt_lint.py --self-test --strict
 python scripts/eval_run.py --self-test --strict
 python scripts/extract_last_frame.py --self-test --strict

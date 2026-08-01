@@ -34,6 +34,17 @@ Replace empty evaluation language with observable production language. Field-con
 | visually striking | the one frame the viewer remembers, described |
 | trending / viral style | the actual format: vertical, fast hook, caption-safe framing |
 
+## Position Costs More Than Count
+
+Slop is not evenly expensive. Early clauses take a larger share of the conditioning budget (`model-mechanics.md`, mechanism 1: attention is a budget), so the same word costs more at the front of the prompt than at the back. One empty evaluator in the opening clause outranks three in the constraint tail.
+
+Two consequences for drafting:
+
+- **Never let a slop word hold an opening position.** `Cinematic shot of a woman reading a letter` has already spent its most valuable clause before naming what changes on screen.
+- **Give that opening to the subject and its action instead.** This is the same rule the `seedance-prompt` Director Formula states as "put the subject and primary action first"; the lexicon is where it gets enforced.
+
+Public prompting guides for Seedance 2.0 converge on the same practice, describing the opening of the prompt as where the subject and core action get locked in [community, 2026-06]. Treat that as field-observed corroboration of the mechanism, not a platform guarantee — the mechanism is the reason to follow it.
+
 ## Tag Salad Repair
 
 Image-model habits port badly: `girl, sunset, 8K, cinematic, beautiful light, masterpiece, detailed face` gives a video model no action, no camera, no time axis. Rewrite as a brief: `A woman turns from the railing at sunset; the low sun flares behind her hair. Camera: slow push-in to a medium close-up. Sound: wind and distant surf.` One sentence per element beats twenty comma fragments.

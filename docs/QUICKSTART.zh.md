@@ -11,13 +11,29 @@ Seedance 2.0 Skill OS 是一个 agent skill：它像导演一样调度 Seedance 
 
 把整个仓库当作**一个**名为 `seedance-20` 的根技能来装；子技能和参考资料会按相对路径自动加载。
 
-**Codex（有一键脚本）**
+**第一步：先把文件拿到本地。** 下面每条命令都要在仓库目录里运行：
 
 ```bash
-python scripts/install_codex_skill.py --force
+git clone https://github.com/Emily2040/seedance-2.0.git
+cd seedance-2.0
 ```
 
-脚本会把仓库复制到 `~/.codex/skills/seedance-20`（或 `$CODEX_HOME/skills/seedance-20`）。重启 Codex，再输入 `$seedance-20` 调用。
+没装 `git` 就用仓库页面的 **Code → Download ZIP**，解压后 `cd` 进去。
+
+**第二步：安装。** 这个脚本不只支持 Codex；用 `--dest` 指定你的客户端扫描的 skills 目录即可：
+
+```bash
+# Codex（默认 ~/.codex/skills）
+python scripts/install_codex_skill.py
+
+# Claude Code（个人安装，所有项目可用）
+python scripts/install_codex_skill.py --dest ~/.claude/skills
+
+# 装到另一个项目里——请在那个项目目录下运行
+python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+```
+
+脚本会打印安装位置。重启客户端后调用 `seedance-20`。只有在覆盖已有安装时才加 `--force`——它会先删掉旧副本。目标目录若在本仓库内部会被直接拒绝：把源码树复制进它自己会一路递归，直到路径过长而失败。
 
 **从 GitHub 安装（客户端支持仓库地址时）**
 
@@ -60,8 +76,12 @@ https://github.com/Emily2040/seedance-2.0
 **导演（强）**
 
 ```
-中近景，平视；她放下信，双手静止，一记缓慢的推镜迎上来；柔和的窗光让脸保持素净；近乎无声，只有一声椅子的摩擦。
+一位穿羊毛开衫的女人坐在厨房餐桌前，读着一张信纸。她的目光在同一行上走了两遍，随后双手把信纸放到桌面，彻底静止。镜头保持平视中近景，缓慢推近，在她双手停住时停下。左侧阴天窗光压平她的脸，不做补光。声音：室内底噪，一声椅子摩擦，随后近乎无声。
 ```
+
+要看的是**顺序**，不只是词。主体和她正在做的事排在**最前面**，镜头、光、声音跟在后面——因为提示词的开头正是模型锁定「这场戏是谁的」的位置。以 `中近景，平视` 开头，等于把这个位置花在了取景参数上，让模型事后再去推断主体。同样的手艺，层级更弱。
+
+长度同理：写成一份紧凑的拍摄简报，够交代主体、动作、镜头、光和声音即可。中文按**字数**计，不按词数（见 `vocab/zh`）。太短，模型替你补空白；太长，后面的句子就落不到画面上。
 
 ## 5. 两条省素材的铁律
 

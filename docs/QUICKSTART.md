@@ -11,13 +11,29 @@ Seedance 2.0 Skill OS is an agent skill that directs Seedance 2.0 like a filmmak
 
 Install this repository as **one** root skill named `seedance-20`; its sub-skills and references load by relative path.
 
-**Codex (has a one-command installer):**
+**First, get the files.** Every command below runs from inside a local copy:
 
 ```bash
-python scripts/install_codex_skill.py --force
+git clone https://github.com/Emily2040/seedance-2.0.git
+cd seedance-2.0
 ```
 
-This copies the repo to `~/.codex/skills/seedance-20` (or `$CODEX_HOME/skills/seedance-20`). Restart Codex, then call `$seedance-20`.
+No `git`? Use **Code → Download ZIP** on the repository page, unzip, and `cd` into the folder.
+
+**Then install it.** One command works for any client that reads a skills directory — `--dest` picks which one:
+
+```bash
+# Codex (default: ~/.codex/skills)
+python scripts/install_codex_skill.py
+
+# Claude Code (personal install, every project)
+python scripts/install_codex_skill.py --dest ~/.claude/skills
+
+# Install into another project — run from that project
+python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+```
+
+It prints where the skill landed. Restart your client, then call `seedance-20`. Add `--force` only when replacing an existing install — it deletes the old copy first. A destination inside this repository is refused, since copying the tree into itself would recurse until the path length fails.
 
 **Install from GitHub (if your client supports repo-URL install):**
 
@@ -58,8 +74,12 @@ epic cinematic shot of a woman reading a letter, emotional, beautiful lighting, 
 **Directed (strong):**
 
 ```
-Medium close-up, eye-level; she lowers the letter and her hands go still as a slow push-in arrives; soft window light keeps her face plain; near-silence with one chair scrape.
+A woman in a wool cardigan sits at a kitchen table and reads a single sheet of paper. Her eyes track one line twice, then her hands lower the page to the table and go still. Camera holds a medium close-up at eye level and pushes in slowly, settling when her hands stop. Overcast window light from frame left keeps her face plain. Sound: room tone, one chair scrape, then near-silence.
 ```
+
+Read the order, not just the words. The subject and what she is doing come **first**, and the camera, light, and sound follow — because the opening of a prompt is where the model locks in who the shot is about. Leading with `Medium close-up, eye-level` spends that opening on framing metadata and makes the model infer the subject afterwards. Same craft, weaker hierarchy.
+
+Length matters the same way: this is 71 words. Aim for roughly **40–110 words** for a single clip. Much shorter and the model fills the gaps for you; much longer and the later clauses stop landing.
 
 ## 5. Two rules that save takes
 
