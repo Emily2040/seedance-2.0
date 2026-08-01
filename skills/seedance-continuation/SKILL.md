@@ -43,6 +43,7 @@ Before writing any continuation prompt, require:
 - final story outcome;
 - next planned narrative job;
 - next clip `felt_intent` - what the viewer should feel or notice;
+- next clip `directors_read_lane` plus its complete canonical `authoring_state`: the full narrative record and exact visible or audible carriers, or the two-line utility intent and refusal;
 - accepted previous clip or accepted final frame;
 - `observed_end_state`;
 - continuity locks;
@@ -58,7 +59,7 @@ If the client accepts the file but cannot render it, the pixels are not in hand.
 
 Do not hide this uncertainty by writing a speculative prompt.
 
-After the source gate is satisfied and before the next prompt is compiled, classify the current clip with the [Director's Read](../../references/directors-read.md). Narrative, story, and performance continuations complete the canonical ten-field internal read against the observed end state; non-narrative utility, product-only, abstract, VFX, or ambient continuations keep only the two-line utility intent and refusal. Do not add new Project State fields. Translate the read into the current clip's blocking, visible suppressed behavior, non-transferable detail, camera endpoint, light, and sound; never paste the internal labels into final generation prose.
+After the source gate is satisfied and before the next prompt is compiled, classify the current clip with the [Director's Read](../../references/directors-read.md). Narrative, story, and performance continuations persist the complete canonical internal read against the observed end state, label the non-transferable detail as `source_bound` only with an exact source locator or `authored_choice` with a null source, add explicit value endpoints, and store exact prompt carriers. Non-narrative utility, product-only, abstract, VFX, or ambient continuations persist exactly utility intent and non-narrative refusal in `authoring_state`; they do not invent psychology. Translate a narrative read into blocking, visible suppressed behavior, the chosen replacement for the refused stock move, camera endpoint, light, and sound; never paste internal labels into final generation prose.
 
 ## Continuation Types
 
@@ -80,7 +81,7 @@ Crossing a scene boundary defaults to `intentional_next_shot` opening from canon
 
 Accepted observed footage overrides planned state. If the plan says the subject reached the car door but the accepted clip ends two steps away, the next prompt begins two steps away. It does not replay the terminal exit, and it does not assume the subject is inside the car.
 
-Rejected footage never updates canon and never becomes a parent source.
+Rejected footage never updates canon and never becomes a parent source. Pixels can confirm a carrier, not authored psychology. If an accepted deviation changes the turn, preserve the historical planned contract, reconcile the nearest narrative ancestor's `value_after` with the successor's `value_before` across utility inserts, then revise the next obstacle/tactic and carriers before prompt compilation.
 
 Track `extension_depth` as consecutive output-sourced generations since the last canonical re-anchor; it resets to 0 when a clip opens from canonical references. At the scene's `max_chain_depth` (default 2, hard ceiling 3), re-anchor by schedule instead of extending again. Visible drift before the cap is an immediate `reanchor_after_drift`.
 
@@ -91,10 +92,10 @@ Return:
 1. Continuation type.
 2. Source evidence used.
 3. Observed end state.
-4. Next clip contract.
+4. Next clip contract, including the internal authoring handoff when applicable.
 5. Intent echo: one line - "this clip exists so the viewer feels X" - confirmed before generation spends money.
 6. Continuity locks and allowed changes.
 7. Completed beats to exclude.
 8. Reserved future beats to exclude.
-9. Final natural-language Seedance prompt for the current clip only.
+9. Final natural-language Seedance prompt for the current clip only; compile the exact visible or audible carriers, never the internal authoring labels or explanations.
 10. Updated Project State Capsule or a request for missing source evidence.

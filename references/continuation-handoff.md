@@ -12,6 +12,7 @@ Do not write a continuation prompt until these are known:
 - accepted source clip or accepted final frame;
 - observed end state;
 - next clip's `felt_intent` - what the viewer should feel or notice;
+- next clip's explicit `directors_read_lane` and complete canonical `authoring_state`: the full narrative record with inherited `value_before` and exact `prompt_carriers`, or the two-line utility intent and refusal;
 - completed beats;
 - reserved future beats;
 - continuity locks;
@@ -50,6 +51,9 @@ Record:
 - lighting phase;
 - ambience, completed dialogue, active dialogue, music phase, and SFX phase;
 - observation confidence and uncertainties.
+- the next clip's complete internal lane record: all canonical narrative fields, detail provenance, value before/after, and prompt carriers; or exactly utility intent and non-narrative refusal.
+
+The authoring record and the observation record have different epistemic status. A take can show whether a carrier occurred and what visible consequence followed. It cannot reveal objective or contradiction as an observed fact. If accepted footage changes the dramatic turn, preserve the historical planned contract, make an explicit authorial decision in project state, reconcile the nearest narrative ancestor's `value_after` with the successor's `value_before` across any utility inserts, revise the next tactic and carriers, and only then compile the successor prompt.
 
 ## Seamless Versus Next Shot
 
@@ -67,7 +71,7 @@ Use `reanchor_after_drift` when extension depth or visible drift makes the chain
 
 ## Completed And Reserved Beats
 
-Every continuation prompt must exclude completed beats and reserved future beats. If Clip 01 already exited the terminal, Clip 02 must not show the terminal exit again. If vehicle departure is reserved for Clip 03, Clip 02 must stop before departure.
+Every continuation prompt must exclude completed beats and reserved future beats. If Clip 01 already exited the terminal, Clip 02 must not show the terminal exit again. If vehicle departure is reserved for Clip 03, Clip 02 must stop before departure. Carry the authoring state across the same handoff, but emit only its visible or audible `prompt_carriers`; internal labels and explanations never enter the generation prompt.
 
 ## Exact Reference Tags
 

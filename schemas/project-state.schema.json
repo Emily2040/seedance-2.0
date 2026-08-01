@@ -167,7 +167,14 @@
         "source_clip_tag": {"type": ["string", "null"]},
         "status": {"enum": ["planned", "ready", "generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]},
         "narrative_job": {"type": "string"},
-        "felt_intent": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "felt_intent": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "directors_read_lane": {"enum": ["narrative", "non_narrative"]},
+        "authoring_state": {"$ref": "#/$defs/authoring_state"},
+        "contract_authoring_state_snapshots": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/authoring_state_provenance"},
+          "uniqueItems": true
+        },
         "already_happened": {"type": "array", "items": {"type": "string"}},
         "this_clip_only": {"type": "array", "items": {"type": "string"}},
         "reserved_for_later": {"type": "array", "items": {"type": "string"}},
@@ -222,8 +229,135 @@
           "then": {
             "properties": {"observed_end_state": {"type": "null"}}
           }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {"required": ["authoring_state"]},
+              {"required": ["contract_authoring_state_snapshots"]}
+            ]
+          },
+          "then": {
+            "required": ["directors_read_lane", "authoring_state"]
+          }
+        },
+        {
+          "if": {
+            "required": ["directors_read_lane"],
+            "properties": {"directors_read_lane": {"const": "narrative"}}
+          },
+          "then": {
+            "required": ["authoring_state"],
+            "properties": {"authoring_state": {"$ref": "#/$defs/narrative_authoring_state"}}
+          }
+        },
+        {
+          "if": {
+            "required": ["directors_read_lane"],
+            "properties": {"directors_read_lane": {"const": "non_narrative"}}
+          },
+          "then": {
+            "required": ["authoring_state"],
+            "properties": {"authoring_state": {"$ref": "#/$defs/non_narrative_authoring_state"}}
+          }
         }
       ]
+    },
+    "authoring_state_provenance": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "clip_id",
+        "canon_revision",
+        "state_revision",
+        "authoring_state_sha256"
+      ],
+      "properties": {
+        "project_id": {"type": "string", "minLength": 1},
+        "clip_id": {"type": "string", "minLength": 1},
+        "canon_revision": {"type": "integer", "minimum": 1},
+        "state_revision": {"type": "integer", "minimum": 1},
+        "authoring_state_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "authoring_state": {
+      "oneOf": [
+        {"$ref": "#/$defs/narrative_authoring_state"},
+        {"$ref": "#/$defs/non_narrative_authoring_state"}
+      ]
+    },
+    "narrative_authoring_state": {
+      "type": "object",
+      "description": "Complete canonical narrative Director's Read plus explicit value endpoints and auditable prompt carriers.",
+      "required": [
+        "dramatic_function",
+        "turn",
+        "pov",
+        "power_shift",
+        "hidden_want_objective",
+        "obstacle_tactic",
+        "subtext_contradiction",
+        "visible_suppressed_behavior",
+        "non_transferable_detail",
+        "non_transferable_detail_provenance",
+        "non_transferable_detail_source",
+        "stock_solution_refused",
+        "value_before",
+        "value_after",
+        "prompt_carriers"
+      ],
+      "properties": {
+        "dramatic_function": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "turn": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "pov": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "power_shift": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "hidden_want_objective": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "obstacle_tactic": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "subtext_contradiction": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "visible_suppressed_behavior": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "non_transferable_detail": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "non_transferable_detail_provenance": {"enum": ["source_bound", "authored_choice"]},
+        "non_transferable_detail_source": {"type": ["string", "null"]},
+        "stock_solution_refused": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "value_before": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "value_after": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "prompt_carriers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"non_transferable_detail_provenance": {"const": "source_bound"}}},
+          "then": {
+            "properties": {
+              "non_transferable_detail_source": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?:@[A-Za-z][A-Za-z0-9]*(?:[ \\t]+[0-9]+)?|\\[[^\\]\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+\\]|https?://\\S+|(?:file|ref|evidence):\\S+)$"
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"non_transferable_detail_provenance": {"const": "authored_choice"}}},
+          "then": {"properties": {"non_transferable_detail_source": {"const": null}}}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "non_narrative_authoring_state": {
+      "type": "object",
+      "description": "Complete canonical two-line non-narrative Director's Read.",
+      "required": ["utility_intent", "non_narrative_refusal"],
+      "properties": {
+        "utility_intent": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+        "non_narrative_refusal": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"}
+      },
+      "additionalProperties": false
     }
   }
 }

@@ -4,8 +4,37 @@
   "parent_clip_id": "clip_01",
   "scene_id": "scene_01",
   "sequence_index": 2,
-  "narrative_job": "Complete the final two steps, enter the car, and close the rear door.",
-  "felt_intent": "The viewer feels the day close: the shutting door is an exhale.",
+  "narrative_job": "Complete the last two steps, reach the open rear door, enter the car, and close the door.",
+  "felt_intent": "The viewer hears public exposure end when the door thump cuts the curb noise.",
+  "directors_read_lane": "narrative",
+  "authoring_state": {
+    "dramatic_function": "Convert shelter from a visible promise into a boundary she closes herself.",
+    "turn": "Public endurance continues two steps from the car, then curb noise and exposure are cut off by the shut door.",
+    "pov": "The traveler; the camera stays at her wet shoulder until the closed door removes the curb from her sensory field.",
+    "power_shift": "The curb controls her exposure at the start; she controls the boundary when her hand pulls the door shut.",
+    "hidden_want_objective": "Get behind closed glass without giving the curbside crowd a readable release.",
+    "obstacle_tactic": "Two exposed steps and rain on her face invite a visible reaction; she redirects the wiping impulse into folding the tag under the suitcase handle before entering.",
+    "subtext_contradiction": "She accepts shelter through an exact practical gesture while her face continues to deny that she needed it.",
+    "visible_suppressed_behavior": "Her fingers start toward the rain on her cheek, then redirect to fold the creased tag beneath the suitcase handle.",
+    "non_transferable_detail": "A creased paper airline tag looped around the suitcase handle is folded beneath the handle only after the car can shield the action.",
+    "non_transferable_detail_provenance": "authored_choice",
+    "non_transferable_detail_source": null,
+    "stock_solution_refused": "No shoulder drop, backward glance, or relieved smile; replace them with the redirected hand, inward-facing tag, and the door thump cutting curb noise.",
+    "value_before": "shelter is within two steps while public endurance continues",
+    "value_after": "the closed door severs public exposure without a performed release",
+    "prompt_carriers": [
+      "Her fingers start toward the rain on her cheek, then redirect to fold the creased airline tag beneath the suitcase handle.",
+      "She keeps the suitcase upright until the rear door shuts, then turns it so the folded tag faces the seatback.",
+      "The door thump cuts the curb noise while her face and shoulders remain level."
+    ]
+  },
+  "authoring_state_provenance": {
+    "project_id": "seq_airport_arrival",
+    "clip_id": "clip_02",
+    "canon_revision": 2,
+    "state_revision": 2,
+    "authoring_state_sha256": "58b0b8a63c6a4459ae9dff8f6f4aefdc58b8713087494b73ee39044a94fd60d6"
+  },
   "target_duration_sec": null,
   "generation_mode": "V2V",
   "shot_structure": "phased_single_take",
@@ -29,6 +58,7 @@
     "traveler identity",
     "wardrobe",
     "left-to-right travel",
+    "creased paper airline tag",
     "black sedan",
     "rainy curbside"
   ],

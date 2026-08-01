@@ -46,7 +46,7 @@ For every narrative, story, or performance brief, complete all ten fields before
 - `non-transferable detail`: one brief- or reference-bound object, ritual, phrase, location fact, costume fact, sound, or behavior that another generic story could not inherit unchanged.
 - `stock solution refused`: the genre's easiest default move that this beat explicitly will not use.
 
-The non-transferable detail should come from supplied material when available. An authored fictional detail is allowed when the user invited invention, but label it as an authored choice in the internal read; never present it as observed reference evidence, local fact, or user-supplied canon.
+The non-transferable detail should come from supplied material when available. An authored fictional detail is allowed when the user invited invention, but label it as an authored choice in the internal read; never present it as observed reference evidence, local fact, or user-supplied canon. When the read is persisted as sequence state, use `non_transferable_detail_provenance: source_bound` only with a concrete `non_transferable_detail_source` locator registered in project state. Use `authored_choice` with a null source so later agents cannot lose or counterfeit the boundary during compression.
 
 The stock refusal must name a real shortcut, not say only `avoid cliches`. Examples: no tearful close-up and score swell for grief; no speed ramp and impact montage for sport; no floating particles and lens flare for wonder; no orbiting camera and anonymous luxury surface for a product hero. Replace the refused move with a specific behavior, object, timing choice, or shot relationship.
 
@@ -66,7 +66,7 @@ Translate every useful abstraction into something the model can render or play:
 | non-transferable detail | the exact object, ritual, sound, or environment fact preserved in the shot |
 | stock solution refused | a physical exclusion only when needed, paired with the chosen replacement |
 
-Do not paste `dramatic function`, `POV`, `power shift`, `hidden want`, `subtext`, or other read labels into the final generation prompt. Do not tell Seedance that a character `feels conflicted` when the conflict can be carried by behavior. At minimum, the final prompt must preserve the turn, the visible suppressed behavior, and the non-transferable detail as filmable or audible evidence.
+Do not paste `dramatic function`, `POV`, `power shift`, `hidden want`, `subtext`, or other read labels into the final generation prompt. Do not tell Seedance that a character `feels conflicted` when the conflict can be carried by behavior. At minimum, the final prompt must preserve the turn, the visible suppressed behavior, and the non-transferable detail as filmable or audible evidence. The deterministic compiler check proves literal carrier inclusion only; prompt-polarity review and take review decide whether that evidence is actually requested and enacted.
 
 ## Narrative Example: Internal Read to Prompt
 

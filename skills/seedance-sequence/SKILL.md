@@ -58,21 +58,22 @@ Plan scenes before clips. A scene is the re-anchor unit: one location and time e
 ## Build Process
 
 1. Establish the story promise and final outcome before Clip 01.
-2. Classify every scene with the [Director's Read](../../references/directors-read.md). Before any narrative, story, or performance clip is compiled, complete its ten-field internal record, including one non-transferable detail and one stock-solution refusal. For non-narrative utility, product-only, abstract, VFX, or ambient clips, record the two-line utility intent and refusal and do not invent drama. Then use [directing-engine](../../references/directing-engine.md) to set one directorial voice for the whole project when the sequence needs it and plan the long-form spine - how shot scale, camera movement, light contrast, and sound should progress from open to climax to release, and which single clip breaks the pattern to mark the turn.
+2. Classify every clip with the [Director's Read](../../references/directors-read.md) and record its explicit `directors_read_lane` as `narrative` or `non_narrative`; never infer psychology from `story.medium`. This per-clip lane lets utility inserts coexist with performed beats in one sequence. Before any narrative, story, or performance clip is compiled, complete its ten-field internal record, including one non-transferable detail and one stock-solution refusal. For non-narrative utility, product-only, abstract, VFX, or ambient clips, record the two-line utility intent and refusal and do not invent drama. Then use [directing-engine](../../references/directing-engine.md) to set one directorial voice for the whole project when the sequence needs it and plan the long-form spine - how shot scale, camera movement, light contrast, and sound should progress from open to climax to release, and which single clip breaks the pattern to mark the turn.
 3. Extract ordered beats and assign each beat a status: planned, current, completed, omitted, or replaced.
 4. Group beats into scenes: assign each scene one location and time envelope, one `arc_position`, canonical `anchor_source` references, `max_chain_depth` (default 2), and an audio plan.
 5. Divide each scene into generation-sized clips using the active surface budget or conservative assumption; chain clips from accepted footage only inside a scene, and open every scene from canonical references.
-6. Give every clip one narrative job, one `felt_intent` - a single line naming what the viewer should feel or notice, the directing engine's intention made persistent in state - and one completed endpoint. Keep the Director's Read in planning notes rather than adding new Project State fields; compile only its visible or audible carriers.
-7. Define planned opening state, planned ending state, continuity locks, allowed changes, and extension-friendly handoff requirements.
-8. Store later clips as provisional intent cards, not final prompts.
-9. Compile only the first unresolved clip prompt from the current clip contract.
-10. After generation, require the clip or final frame, record observed start/end state, reconcile canon, and only then compile the next prompt.
+6. Give every clip one narrative job, one `felt_intent` - a single line naming what the viewer should feel or notice, the directing engine's intention made persistent in state - and one completed endpoint.
+7. Persist the complete lane record in `authoring_state`. A `narrative` clip keeps every canonical field, labels the non-transferable detail `source_bound` only with an exact source locator or `authored_choice` with a null source, adds genuinely unequal value before/after, and stores exact visible or audible `prompt_carriers`. Its `value_before` must equal the nearest narrative ancestor's `value_after`, walking across utility inserts. A `non_narrative` clip stores exactly `utility_intent` and `non_narrative_refusal`; it never fabricates psychology.
+8. Define planned opening state, planned ending state, continuity locks, allowed changes, and extension-friendly handoff requirements.
+9. Store later clips as provisional intent cards, not final prompts.
+10. Compile only the first unresolved clip prompt from the current clip contract. Emit `prompt_carriers`, never the internal labels or explanations.
+11. After generation, require the clip or final frame, record observed start/end state, reconcile physical and dramatic handoffs, and only then compile the next prompt.
 
 Use beginner-friendly language. It is valid to say: "This idea needs three connected generations. I will plan the complete story now, but finalize one prompt at a time so each new prompt matches what Seedance actually produced."
 
 ## Sequence Map Fields
 
-Each clip card must include `clip_id`, `scene_id`, `sequence_index`, `parent_clip_id`, `narrative_job`, `felt_intent`, `target_duration_sec`, `generation_mode`, `shot_structure`, `already_happened`, `this_clip_only`, `reserved_for_later`, `planned_start_state`, `planned_end_state`, `transition_in`, `transition_out`, `continuity_locks`, `allowed_changes`, `arc_position`, and `status`. The `arc_position` (open, rising, turn, climax, or release) is inherited from the clip's scene and records where it sits on the directorial spine so its scale, movement, light, and sound trends inherit the project voice.
+Each clip card must include `clip_id`, `scene_id`, `sequence_index`, `parent_clip_id`, `narrative_job`, `felt_intent`, `directors_read_lane`, lane-complete `authoring_state`, `target_duration_sec`, `generation_mode`, `shot_structure`, `already_happened`, `this_clip_only`, `reserved_for_later`, `planned_start_state`, `planned_end_state`, `transition_in`, `transition_out`, `continuity_locks`, `allowed_changes`, `arc_position`, and `status`. The `arc_position` (open, rising, turn, climax, or release) is inherited from the clip's scene and records where it sits on the directorial spine so its scale, movement, light, and sound trends inherit the project voice.
 
 Each scene card must include `scene_id`, `scene_index`, `narrative_function`, `arc_position`, `location`, `time_of_day`, `anchor_source`, `max_chain_depth`, `audio_plan`, `assigned_clip_ids`, `transition_out`, and `status`.
 
@@ -87,7 +88,7 @@ For a new sequence, return:
 3. Final outcome.
 4. World and continuity bible, including the chosen directorial voice and the long-form look spine (how scale, movement, light, and sound progress, and which clip breaks the pattern).
 5. Scene map and sequence map.
-6. Clip 01 contract.
+6. Clip 01 contract, including the Director's Read-derived internal authoring handoff and its visible or audible prompt carriers when the clip lane is narrative.
 7. Intent echo: one line - "this clip exists so the viewer feels X" - confirmed before generation spends money.
 8. Clip 01 final Seedance prompt in natural language.
 9. Provisional intent cards for future clips.

@@ -1145,6 +1145,9 @@ class InstallPayloadTests(unittest.TestCase):
             self.assertTrue((payload / "references" / "directors-read.md").exists())
             self.assertTrue((payload / "skills").is_dir())
             self.assertTrue((payload / "validation" / "fixtures" / "directors-read-cases.json").exists())
+            self.assertTrue(
+                (payload / "validation" / "authoring-state-provenance-ledger.json").exists()
+            )
             self.assertGreater(len(list((payload / "scripts").glob("*.py"))), 5)
 
     def test_repository_still_ships_the_evaluator(self) -> None:

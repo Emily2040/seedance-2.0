@@ -21,7 +21,9 @@
     "medium": "live_action"
   },
   "world_bible": {
-    "location": "wet rooftop service area"
+    "location": "wet rooftop service area",
+    "character_specific_object": "short red thread tied around the courier's left glove",
+    "character_specific_object_provenance": "authored_choice"
   },
   "reference_registry": [
     {
@@ -93,6 +95,28 @@
       "status": "accepted_with_deviation",
       "narrative_job": "Unlock the rooftop case.",
       "felt_intent": "The viewer feels focused urgency - practiced hands working against the rain.",
+      "directors_read_lane": "narrative",
+      "authoring_state": {
+        "dramatic_function": "Reconcile the early reveal by making the accepted overrun the new dramatic fact.",
+        "turn": "The sealed case resists the courier, then the forbidden device is exposed one clip early.",
+        "pov": "The courier; the latch action accidentally carries the lid into view and the exposed device arrests the working hand.",
+        "power_shift": "The professional unlock-only rule controls the start; the exposed device controls the paused hand at the accepted endpoint.",
+        "hidden_want_objective": "Verify the forbidden contents before anyone else reaches the roof.",
+        "obstacle_tactic": "The rule says unlock only while the rain-slick lid rises with the latch; let the motion continue and keep the body shielding the case.",
+        "subtext_contradiction": "What can pass as wet hardware overrun is also a choice to know.",
+        "visible_suppressed_behavior": "The courier's hand pauses above the exposed device instead of shutting the lid.",
+        "non_transferable_detail": "A short red thread tied around the courier's left glove remains caught beneath the released latch as the lid rises.",
+        "non_transferable_detail_provenance": "authored_choice",
+        "non_transferable_detail_source": null,
+        "stock_solution_refused": "No astonished reaction or explanatory insert; replace them with the trapped red thread, rising wet lid, and hand that does not shut it.",
+        "value_before": "professional control before forbidden access",
+        "value_after": "the forbidden contents are exposed",
+        "prompt_carriers": [
+          "A short red thread on the courier's left glove catches beneath the released latch.",
+          "The rain-slick lid rises with the latch motion.",
+          "The courier's hand pauses above the exposed device instead of shutting the lid."
+        ]
+      },
       "already_happened": [],
       "this_clip_only": [
         "beat_unlock_case"
@@ -134,6 +158,7 @@
       "continuity_locks": [
         "courier identity",
         "case identity",
+        "red thread on left glove",
         "reference_tags"
       ],
       "allowed_changes": [
@@ -164,6 +189,28 @@
       "status": "ready",
       "narrative_job": "Light the already visible signal device.",
       "felt_intent": "The viewer feels the payoff spark - the signal finally alive against the night.",
+      "directors_read_lane": "narrative",
+      "authoring_state": {
+        "dramatic_function": "Convert the already exposed device into the single signal that pays off the guarded handoff.",
+        "turn": "The device is visible but inert, then a stable pulse makes the handoff active.",
+        "pov": "The courier through the switch hand; the pulse is read first in the trapped red thread rather than on a reaction shot.",
+        "power_shift": "Silence withholds confirmation at the start; the courier controls the one permitted transmission by pressing exactly once.",
+        "hidden_want_objective": "Know the signal was received without waiting for a reply.",
+        "obstacle_tactic": "The activation glow can expose the courier while no reply confirms a listener; press once, flatten the gloved hand, and leave after the pulse stabilizes.",
+        "subtext_contradiction": "A deliberately unanswered transmission is the only proof the courier permits.",
+        "visible_suppressed_behavior": "The courier's hand hovers for a second press, then settles flat beside the device.",
+        "non_transferable_detail": "The short red thread trapped beneath the released latch turns blue in the first pulse.",
+        "non_transferable_detail_provenance": "authored_choice",
+        "non_transferable_detail_source": null,
+        "stock_solution_refused": "No face-filling glow, countdown, or second confirmation press; replace them with one switch action and the red thread changing color.",
+        "value_before": "the forbidden contents are exposed",
+        "value_after": "the handoff becomes an active signal",
+        "prompt_carriers": [
+          "The courier presses the signal switch exactly once.",
+          "The gloved hand hovers for a second press, then settles flat beside the device.",
+          "The trapped red thread turns blue in the first signal pulse."
+        ]
+      },
       "already_happened": [
         "beat_unlock_case",
         "beat_open_case"
@@ -195,6 +242,7 @@
       "continuity_locks": [
         "courier identity",
         "case identity",
+        "red thread on left glove",
         "reference_tags"
       ],
       "allowed_changes": [

@@ -10,6 +10,7 @@ something breaks.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -386,6 +387,7 @@ class ExecutionTests(unittest.TestCase):
 
         accepted_without_endpoint = json.loads(json.dumps(base))
         accepted_without_endpoint["status"] = "accepted"
+        accepted_without_endpoint.pop("observed_end_state", None)
         self.assertTrue(list(validator.iter_errors(accepted_without_endpoint)))
 
         accepted_with_endpoint = json.loads(json.dumps(accepted_without_endpoint))
@@ -479,11 +481,18 @@ class ExecutionTests(unittest.TestCase):
 class DependencyTests(unittest.TestCase):
     def test_missing_dependency_fails_rather_than_skipping(self) -> None:
         """A silent skip would let CI report success while validating nothing."""
+        env = {
+            "PYTHONPATH": "",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        for name in ("PATH", "SystemRoot", "WINDIR", "TEMP", "TMP"):
+            if name in os.environ:
+                env[name] = os.environ[name]
         result = subprocess.run(
             [sys.executable, str(ROOT / "scripts/schema_check.py"), str(ROOT)],
             capture_output=True,
             text=True,
-            env={"PYTHONPATH": "", "PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"},
+            env=env,
         )
         self.assertIn(result.returncode, (0, 2), result.stdout + result.stderr)
         if result.returncode == 2:
