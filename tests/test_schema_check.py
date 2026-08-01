@@ -10,6 +10,7 @@ something breaks.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -104,11 +105,17 @@ class ExecutionTests(unittest.TestCase):
 class DependencyTests(unittest.TestCase):
     def test_missing_dependency_fails_rather_than_skipping(self) -> None:
         """A silent skip would let CI report success while validating nothing."""
+        child_env = os.environ.copy()
+        child_env.update(
+            PYTHONPATH="",
+            PYTHONDONTWRITEBYTECODE="1",
+            PYTHONNOUSERSITE="1",
+        )
         result = subprocess.run(
             [sys.executable, str(ROOT / "scripts/schema_check.py"), str(ROOT)],
             capture_output=True,
             text=True,
-            env={"PYTHONPATH": "", "PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"},
+            env=child_env,
         )
         self.assertIn(result.returncode, (0, 2), result.stdout + result.stderr)
         if result.returncode == 2:
