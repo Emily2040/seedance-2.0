@@ -2,6 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Emily2040/seedance-2.0/schemas/clip-contract.schema.json",
   "title": "Seedance Clip Contract",
+  "description": "Structural and record-local validation for one clip. Cross-record lineage semantics require project_state_check.py and continuity_chain_check.py.",
+  "$comment": "A single-clip schema cannot prove that parent_clip_id exists, precedes this clip, is accepted with a usable endpoint, or participates in an acyclic unique-ID graph.",
   "type": "object",
   "required": [
     "project_id",
@@ -23,13 +25,13 @@
     "status"
   ],
   "properties": {
-    "project_id": {"type": "string"},
-    "clip_id": {"type": "string"},
-    "parent_clip_id": {"type": ["string", "null"], "minLength": 1, "pattern": "\\S"},
-    "scene_id": {"type": "string"},
+    "project_id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "clip_id": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+    "parent_clip_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+    "scene_id": {"type": "string", "minLength": 1, "pattern": "\\S"},
     "sequence_index": {"type": "integer", "minimum": 1},
     "narrative_job": {"type": "string"},
-    "felt_intent": {"type": "string", "minLength": 1},
+    "felt_intent": {"type": "string", "minLength": 1, "pattern": "\\S"},
     "target_duration_sec": {"type": ["number", "null"]},
     "generation_mode": {"type": "string"},
     "shot_structure": {"enum": ["compact_single_take", "phased_single_take", "dense_multishot", "first_last_frame_transition", "video_edit_contract"]},
@@ -38,6 +40,8 @@
     "reserved_for_later": {"type": "array", "items": {"type": "string"}},
     "planned_start_state": {"type": "object"},
     "planned_end_state": {"type": "object"},
+    "observed_start_state": {"type": ["object", "null"]},
+    "observed_end_state": {"type": ["object", "null"]},
     "continuity_locks": {"type": "array"},
     "allowed_changes": {"type": "array"},
     "status": {"enum": ["planned", "ready", "generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]}
@@ -56,6 +60,30 @@
         "properties": {
           "parent_clip_id": {"type": "string", "minLength": 1, "pattern": "\\S"}
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"enum": ["accepted", "accepted_with_deviation"]}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["observed_end_state"],
+        "properties": {
+          "observed_end_state": {"type": "object", "minProperties": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "rejected"}},
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["observed_end_state"],
+        "properties": {"observed_end_state": {"type": "null"}}
       }
     }
   ]

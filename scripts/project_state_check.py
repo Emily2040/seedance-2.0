@@ -2,16 +2,16 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 from lineage_contract import (
-    ACCEPTED_PARENT_STATUSES,
     analyze_lineage,
+    bound_validation_diagnostics,
     classify_parent_id,
-    has_usable_observed_end_state,
     load_project_document,
 )
+from strict_json import bound_diagnostics
+from strict_json import load as load_strict_json
 
 
 REQUIRED_PROJECT_FIELDS = {
@@ -54,11 +54,10 @@ REQUIRED_TAKE_REVIEW_FIELDS = {
     "unexpected_completed_beats", "continuity_breaks", "accepted_deviations",
     "observation_confidence", "uncertainties", "requires_user_confirmation",
 }
-ACCEPTED = ACCEPTED_PARENT_STATUSES
 
 
 def load_json(path: Path) -> object:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return load_strict_json(path)
 
 
 def check_required(obj: dict, required: set[str], label: str, errors: list[str]) -> None:
@@ -78,14 +77,14 @@ def sequence_paths(root: Path) -> list[Path]:
 def validate_project(path: Path, root: Path) -> list[str]:
     data, rel, errors = load_project_document(path, root)
     if data is None:
-        return errors
+        return bound_validation_diagnostics(errors, rel)
 
     lineage = analyze_lineage(data.get("clips"), rel)
     errors.extend(lineage.errors)
     check_required(data, REQUIRED_PROJECT_FIELDS, rel, errors)
     missing_project_fields = REQUIRED_PROJECT_FIELDS - set(data)
     if missing_project_fields:
-        return errors
+        return bound_validation_diagnostics(errors, rel)
 
     clips = lineage.clips
     clips_by_id = lineage.clips_by_id
@@ -141,7 +140,11 @@ def validate_project(path: Path, root: Path) -> list[str]:
     for clip in clips:
         check_required(clip, REQUIRED_CLIP_FIELDS, f"{rel}: clip", errors)
         cid = clip.get("clip_id")
-        if not isinstance(cid, str) or not cid.strip():
+        if (
+            not isinstance(cid, str)
+            or not cid.strip()
+            or clips_by_id.get(cid) is not clip
+        ):
             continue
         sid = clip.get("scene_id")
         clip_scene[cid] = sid
@@ -159,17 +162,13 @@ def validate_project(path: Path, root: Path) -> list[str]:
                 f"{rel}: clip {cid} extension_depth {depth} exceeds "
                 f"scene {sid} max_chain_depth {scene_depth_caps[sid]}; open from canonical references instead"
             )
-        if clip.get("status") in ACCEPTED:
-            if not has_usable_observed_end_state(clip):
-                errors.append(
-                    f"{rel}: accepted clip {cid} observed_end_state must be a non-empty object"
-                )
-        if clip.get("status") == "rejected" and clip.get("observed_end_state"):
-            errors.append(f"{rel}: rejected clip {cid} must not publish observed_end_state as canon")
-
     for clip in clips:
         cid = clip.get("clip_id")
-        if not isinstance(cid, str) or not cid.strip():
+        if (
+            not isinstance(cid, str)
+            or not cid.strip()
+            or clips_by_id.get(cid) is not clip
+        ):
             continue
         overlap_current_future = set(clip.get("this_clip_only", [])) & set(clip.get("reserved_for_later", []))
         if overlap_current_future:
@@ -206,7 +205,7 @@ def validate_project(path: Path, root: Path) -> list[str]:
 
     if data["current_clip_id"] not in clip_ids:
         errors.append(f"{rel}: current_clip_id missing from clips")
-    return errors
+    return bound_validation_diagnostics(errors, rel)
 
 
 def main() -> int:
@@ -254,6 +253,7 @@ def main() -> int:
         except Exception as exc:
             errors.append(f"{schema.relative_to(root).as_posix()}: invalid JSON: {exc}")
 
+    errors = bound_diagnostics(errors, "additional project-state diagnostics omitted")
     if errors:
         print("Project state errors:")
         for error in errors:

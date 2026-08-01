@@ -13,13 +13,28 @@ schema cannot be added without an example that proves what it accepts.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
 
+from strict_json import bound_diagnostics, is_json_number, json_integer
+from strict_json import load as load_strict_json
+from strict_json import safe_diagnostic_text
+
 try:
-    from jsonschema import Draft202012Validator, FormatChecker
+    from jsonschema import Draft202012Validator as _Draft202012Validator
+    from jsonschema import FormatChecker, validators
+
+    exact_number_types = _Draft202012Validator.TYPE_CHECKER.redefine_many(
+        {
+            "integer": lambda _checker, instance: json_integer(instance) is not None,
+            "number": lambda _checker, instance: is_json_number(instance),
+        }
+    )
+    Draft202012Validator = validators.extend(
+        _Draft202012Validator,
+        type_checker=exact_number_types,
+    )
 except ImportError:  # pragma: no cover - covered by test_dependency_is_required
     Draft202012Validator = None  # type: ignore[assignment]
     FormatChecker = None  # type: ignore[assignment]
@@ -28,22 +43,8 @@ MANIFEST = Path("validation/schema-instances.json")
 SCHEMA_DIR = Path("schemas")
 
 
-def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    """json.loads keeps the last duplicate key; a silent overwrite in a schema
-    or fixture would hide the very drift this check exists to catch."""
-    seen: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in seen:
-            raise ValueError(f"duplicate object key: {key!r}")
-        seen[key] = value
-    return seen
-
-
 def load_json(path: Path) -> Any:
-    text = path.read_text(encoding="utf-8")
-    if text.startswith("﻿"):
-        raise ValueError("UTF-8 BOM is not permitted")
-    return json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+    return load_strict_json(path)
 
 
 def pointer(error: Any) -> str:
@@ -58,7 +59,7 @@ def check(root: Path) -> list[str]:
         return [f"missing {MANIFEST.as_posix()}"]
     try:
         manifest = load_json(manifest_path)
-    except ValueError as exc:
+    except (OSError, UnicodeError, ValueError) as exc:
         return [f"{MANIFEST.as_posix()}: {exc}"]
 
     declared = manifest.get("instances")
@@ -80,7 +81,7 @@ def check(root: Path) -> list[str]:
         schema_path = schema_dir / name
         try:
             schema = load_json(schema_path)
-        except ValueError as exc:
+        except (OSError, UnicodeError, ValueError) as exc:
             errors.append(f"schemas/{name}: {exc}")
             continue
 
@@ -103,13 +104,16 @@ def check(root: Path) -> list[str]:
                 continue
             try:
                 instance = load_json(instance_path)
-            except ValueError as exc:
+            except (OSError, UnicodeError, ValueError) as exc:
                 errors.append(f"{relative}: {exc}")
                 continue
             for error in sorted(validator.iter_errors(instance), key=lambda e: list(e.absolute_path)):
-                errors.append(f"{relative} against schemas/{name}: {pointer(error)}: {error.message}")
+                errors.append(
+                    f"{relative} against schemas/{name}: {pointer(error)}: "
+                    f"{safe_diagnostic_text(error.message)}"
+                )
 
-    return errors
+    return bound_diagnostics(errors, "additional schema diagnostics omitted")
 
 
 def main() -> int:
