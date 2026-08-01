@@ -1142,7 +1142,7 @@ def _quarantine_record_and_remove(
         _, quarantined_raw = _read_json_record(done)
         if quarantined_raw != expected_raw:
             raise RuntimeError("transaction record changed during quarantine")
-        done.unlink()
+        _delete_regular_file_by_handle(done, _metadata_for_bytes(expected_raw))
     except Exception:
         raise
 
@@ -1361,6 +1361,138 @@ def _delete_regular_file_by_handle(
         os.close(descriptor)
 
 
+def _delete_empty_directory_by_handle(path: Path) -> None:
+    """Delete the opened empty directory object, not a later path occupant."""
+    before = path.lstat()
+    if _is_reparse_stat(before) or not stat.S_ISDIR(before.st_mode):
+        raise RuntimeError(
+            f"quarantined directory changed before deletion: "
+            f"{_bounded_diagnostic(path, 200)}"
+        )
+
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
+        create_file.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        create_file.restype = wintypes.HANDLE
+        handle = create_file(
+            str(path),
+            0x00010000 | 0x00000080,  # DELETE | FILE_READ_ATTRIBUTES
+            0x00000001 | 0x00000002 | 0x00000004,
+            None,
+            3,  # OPEN_EXISTING
+            0x02000000 | 0x00200000,  # BACKUP_SEMANTICS | OPEN_REPARSE_POINT
+            None,
+        )
+        invalid = ctypes.c_void_p(-1).value
+        if handle == invalid:
+            raise ctypes.WinError(ctypes.get_last_error())
+
+        class ByHandleFileInformation(ctypes.Structure):
+            _fields_ = [
+                ("dwFileAttributes", wintypes.DWORD),
+                ("ftCreationTime", wintypes.FILETIME),
+                ("ftLastAccessTime", wintypes.FILETIME),
+                ("ftLastWriteTime", wintypes.FILETIME),
+                ("dwVolumeSerialNumber", wintypes.DWORD),
+                ("nFileSizeHigh", wintypes.DWORD),
+                ("nFileSizeLow", wintypes.DWORD),
+                ("nNumberOfLinks", wintypes.DWORD),
+                ("nFileIndexHigh", wintypes.DWORD),
+                ("nFileIndexLow", wintypes.DWORD),
+            ]
+
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [wintypes.HANDLE]
+        close_handle.restype = wintypes.BOOL
+        try:
+            get_information = kernel32.GetFileInformationByHandle
+            get_information.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(ByHandleFileInformation),
+            ]
+            get_information.restype = wintypes.BOOL
+            opened = ByHandleFileInformation()
+            if not get_information(handle, ctypes.byref(opened)):
+                raise ctypes.WinError(ctypes.get_last_error())
+            if (
+                not opened.dwFileAttributes & 0x00000010
+                or opened.dwFileAttributes & 0x00000400
+            ):
+                raise RuntimeError("bound deletion handle is not a non-reparse directory")
+
+            current = path.lstat()
+            file_index = (opened.nFileIndexHigh << 32) | opened.nFileIndexLow
+            if (
+                _is_reparse_stat(current)
+                or not stat.S_ISDIR(current.st_mode)
+                or _stat_identity(current) != _stat_identity(before)
+                or (current.st_ino and current.st_ino != file_index)
+            ):
+                raise RuntimeError("quarantined directory changed while it was opened")
+
+            class FileDispositionInfo(ctypes.Structure):
+                _fields_ = [("DeleteFile", wintypes.BOOL)]
+
+            set_information = kernel32.SetFileInformationByHandle
+            set_information.argtypes = [
+                wintypes.HANDLE,
+                wintypes.DWORD,
+                wintypes.LPVOID,
+                wintypes.DWORD,
+            ]
+            set_information.restype = wintypes.BOOL
+            disposition = FileDispositionInfo(True)
+            if not set_information(
+                handle,
+                4,  # FileDispositionInfo
+                ctypes.byref(disposition),
+                ctypes.sizeof(disposition),
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            close_handle(handle)
+        return
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor = os.open(path, flags)
+    tombstone = path.with_name(f".{path.name}.delete-{uuid.uuid4().hex}")
+    try:
+        opened = os.fstat(descriptor)
+        current = path.lstat()
+        if (
+            _is_reparse_stat(opened)
+            or not stat.S_ISDIR(opened.st_mode)
+            or _stat_identity(opened) != _stat_identity(before)
+            or _stat_identity(current) != _stat_identity(opened)
+        ):
+            raise RuntimeError("quarantined directory changed while it was opened")
+        if _path_exists(tombstone):
+            raise RuntimeError("random directory-deletion tombstone already exists")
+        path.rename(tombstone)
+        moved = tombstone.lstat()
+        if _stat_identity(moved) != _stat_identity(opened):
+            raise RuntimeError("quarantined directory changed during deletion quarantine")
+        tombstone.rmdir()
+    finally:
+        os.close(descriptor)
+
+
 def _delete_bound_tree(
     root: Path,
     authorized: PathSnapshot,
@@ -1410,21 +1542,15 @@ def _delete_bound_tree(
         target = root.joinpath(*relative.split("/"))
         if not _path_exists(target):
             continue
-        info = target.lstat()
-        if _is_reparse_stat(info) or not stat.S_ISDIR(info.st_mode):
-            raise RuntimeError(
-                f"quarantined directory changed before deletion: "
-                f"{_bounded_diagnostic(relative, 180)}"
-            )
         try:
-            target.rmdir()
+            _delete_empty_directory_by_handle(target)
         except OSError as exc:
             raise RuntimeError(
                 f"late data preserved in quarantine at {_bounded_diagnostic(target, 200)}: "
                 f"{_bounded_diagnostic(exc, 180)}"
             ) from exc
     try:
-        root.rmdir()
+        _delete_empty_directory_by_handle(root)
     except OSError as exc:
         raise RuntimeError(
             f"late data preserved in quarantine at {_bounded_diagnostic(root, 220)}: "

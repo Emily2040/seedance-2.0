@@ -671,6 +671,66 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), b"outside user data")
             self.assertEqual(stashed.read_bytes(), b"authorized installer bytes")
 
+    def test_transaction_record_cleanup_never_unlinks_a_swapped_outside_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            transaction_id = "b" * 32
+            record_path = root / installer.TRANSACTION_NAME
+            record_raw = installer._write_json_exclusive(record_path, {"sentinel": 1})
+            done = root / f"{installer.TRANSACTION_DONE_PREFIX}{transaction_id}"
+            stashed = root / "original-record-stashed"
+            outside = root / "outside-user-file"
+            outside.write_bytes(b"outside user bytes")
+            original_unlink = Path.unlink
+            swapped = False
+
+            def swap_then_unlink(path: Path, *args, **kwargs):
+                nonlocal swapped
+                if path == done and not swapped:
+                    swapped = True
+                    path.rename(stashed)
+                    outside.rename(path)
+                return original_unlink(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "unlink", swap_then_unlink):
+                installer._quarantine_record_and_remove(
+                    record_path,
+                    record_raw,
+                    transaction_id,
+                )
+
+            self.assertFalse(swapped, "cleanup regressed to pathname-based unlink")
+            self.assertEqual(outside.read_bytes(), b"outside user bytes")
+            self.assertFalse(done.exists())
+
+    def test_directory_cleanup_never_rmdirs_a_swapped_outside_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            quarantine = root / "quarantine"
+            owned = quarantine / "owned-empty-directory"
+            owned.mkdir(parents=True)
+            authorized = installer._capture_path_snapshot(quarantine)
+            stashed = root / "authorized-directory-stashed"
+            outside = root / "outside-user-directory"
+            outside.mkdir()
+            original_rmdir = Path.rmdir
+            swapped = False
+
+            def swap_then_rmdir(path: Path, *args, **kwargs):
+                nonlocal swapped
+                if path == owned and not swapped:
+                    swapped = True
+                    path.rename(stashed)
+                    outside.rename(path)
+                return original_rmdir(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "rmdir", swap_then_rmdir):
+                installer._delete_bound_tree(quarantine, authorized)
+
+            self.assertFalse(swapped, "cleanup regressed to pathname-based rmdir")
+            self.assertTrue(outside.is_dir())
+            self.assertFalse(owned.exists())
+
     def test_bound_deletion_refuses_hard_linked_leaf(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
