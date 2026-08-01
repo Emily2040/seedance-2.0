@@ -5,7 +5,9 @@ import argparse
 import fnmatch
 import os
 import shutil
+import sys
 from pathlib import Path
+from typing import TextIO
 
 
 SKILL_NAME = "seedance-20"
@@ -63,6 +65,37 @@ def payload_size(path: Path) -> str:
     return f"{total:.1f} GB"
 
 
+def _text_for_stream(text: str, stream: TextIO) -> str:
+    """Preserve Unicode when possible and escape only unsupported characters."""
+    encoding = getattr(stream, "encoding", None)
+    if not isinstance(encoding, str) or not encoding:
+        return text
+    try:
+        text.encode(encoding)
+        return text
+    except UnicodeEncodeError:
+        return text.encode(encoding, errors="backslashreplace").decode(encoding)
+    except LookupError:
+        return text.encode("ascii", errors="backslashreplace").decode("ascii")
+
+
+def safe_print(message: object, *, stream: TextIO | None = None) -> None:
+    """Write one message without letting a narrow console encoding abort it.
+
+    The stream is not reconfigured globally. If its advertised encoding is
+    wrong, retry once with an ASCII-only escaped representation. Other write
+    failures, including OSError, deliberately propagate.
+    """
+    output = sys.stdout if stream is None else stream
+    text = f"{message}\n"
+    prepared = _text_for_stream(text, output)
+    try:
+        output.write(prepared)
+    except UnicodeEncodeError:
+        escaped = text.encode("ascii", errors="backslashreplace").decode("ascii")
+        output.write(escaped)
+
+
 def assert_safe_destination(destination: Path, skills_dir: Path) -> None:
     resolved_destination = destination.resolve()
     resolved_skills_dir = skills_dir.resolve()
@@ -118,25 +151,25 @@ def main() -> int:
         assert_safe_destination(destination, skills_dir)
         assert_destination_outside_source(destination, repo_root)
     except ValueError as exc:
-        print(f"Refusing to install: {exc}")
+        safe_print(f"Refusing to install: {exc}")
         return 1
 
     skills_dir.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         if not args.force:
-            print(f"{SKILL_NAME} is already installed at {destination}")
-            print("Run again with --force to replace it.")
+            safe_print(f"{SKILL_NAME} is already installed at {destination}")
+            safe_print("Run again with --force to replace it.")
             return 1
         shutil.rmtree(destination)
 
     shutil.copytree(repo_root, destination, ignore=ignore_runtime_noise)
 
-    print(f"Installed {SKILL_NAME} to {destination}")
-    print(f"Installed payload size: {payload_size(destination)}")
+    safe_print(f"Installed {SKILL_NAME} to {destination}")
+    safe_print(f"Installed payload size: {payload_size(destination)}")
     # --dest sends this into any client's skills directory, so the closing line
     # cannot name one. Telling a Claude Code user to restart Codex is the kind
     # of instruction that makes a working install look broken.
-    print("Restart your agent client to pick up new skills.")
+    safe_print("Restart your agent client to pick up new skills.")
     return 0
 
 
