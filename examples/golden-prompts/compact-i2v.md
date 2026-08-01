@@ -14,7 +14,7 @@ Mode: I2V. Reference: `@Image1` controls product identity. Current clip action: 
 
 ## Lint Result
 
-lint: pass
+Run `python scripts/prompt_lint.py --strict` for the computed result; this document does not self-certify a pass.
 
 ## Control-Critical Sentences
 
