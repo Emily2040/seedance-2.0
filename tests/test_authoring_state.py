@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import io
 import json
 import shutil
@@ -8,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 
@@ -450,6 +452,126 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         errors = self.validate_project_copy(project, strict=True)
         self.assertTrue(any("clip lineage cycle" in error for error in errors), errors)
 
+    def test_deep_leaf_first_lineage_is_iterative(self) -> None:
+        project = load_json("examples/sequence-airport-arrival/project-state.json")
+        template = copy.deepcopy(project["clips"][0])
+        for field in (
+            "directors_read_lane",
+            "authoring_state",
+            "authoring_state_provenance",
+            "contract_authoring_state_snapshots",
+        ):
+            template.pop(field, None)
+        template["status"] = "planned"
+        template["observed_start_state"] = None
+        template["observed_end_state"] = None
+
+        clips = []
+        for index in range(1500):
+            clip = copy.deepcopy(template)
+            clip_id = f"deep_{index:04d}"
+            clip["clip_id"] = clip_id
+            clip["parent_clip_id"] = None if index == 0 else f"deep_{index - 1:04d}"
+            clip["sequence_index"] = index + 1
+            clip["extension_depth"] = index
+            clips.append(clip)
+        project["clips"] = list(reversed(clips))
+        project["scenes"][0]["assigned_clip_ids"] = [clip["clip_id"] for clip in clips]
+        project["beats"] = []
+        project["current_clip_id"] = clips[-1]["clip_id"]
+
+        errors = self.validate_project_copy(project, strict=False)
+
+        self.assertIsInstance(errors, list)
+        self.assertTrue(any("max_chain_depth" in error for error in errors), errors)
+
+    def test_wrong_type_story_is_diagnostic_not_exception(self) -> None:
+        project = load_json("examples/sequence-airport-arrival/project-state.json")
+        project["story"] = []
+
+        errors = self.validate_project_copy(project, strict=True)
+
+        self.assertTrue(any("story must be an object" in error for error in errors), errors)
+
+    def test_nested_wrong_types_are_diagnostic_not_exceptions(self) -> None:
+        base = load_json("examples/sequence-airport-arrival/project-state.json")
+
+        def mutate_beats(project: dict) -> None:
+            project["beats"] = [[]]
+
+        def mutate_references(project: dict) -> None:
+            project["reference_registry"] = [[]]
+
+        def mutate_scene_id(project: dict) -> None:
+            project["scenes"][0]["scene_id"] = []
+
+        def mutate_scene_assignments(project: dict) -> None:
+            project["scenes"][0]["assigned_clip_ids"] = [{}]
+
+        def mutate_clip_scene(project: dict) -> None:
+            project["clips"][0]["scene_id"] = {}
+
+        def mutate_clip_beats(project: dict) -> None:
+            project["clips"][0]["this_clip_only"] = [{}]
+
+        mutations = (
+            ("beats", mutate_beats),
+            ("reference_registry", mutate_references),
+            ("scene_id", mutate_scene_id),
+            ("assigned_clip_ids", mutate_scene_assignments),
+            ("clip_01 scene_id", mutate_clip_scene),
+            ("this_clip_only", mutate_clip_beats),
+        )
+        for expected, mutate in mutations:
+            project = copy.deepcopy(base)
+            mutate(project)
+            errors = self.validate_project_copy(project, strict=True)
+            with self.subTest(expected=expected):
+                self.assertTrue(any(expected in error for error in errors), errors)
+
+    def test_nested_unhashable_array_entries_are_diagnostic_not_exceptions(self) -> None:
+        base = load_json("examples/sequence-airport-arrival/project-state.json")
+        mutations = (
+            ("assigned_clip_ids", ("scenes", 0, "assigned_clip_ids")),
+            ("already_happened", ("clips", 0, "already_happened")),
+            ("this_clip_only", ("clips", 0, "this_clip_only")),
+            ("reserved_for_later", ("clips", 0, "reserved_for_later")),
+            ("prompt_carriers", ("clips", 0, "authoring_state", "prompt_carriers")),
+            (
+                "contract_authoring_state_snapshots",
+                ("clips", 0, "contract_authoring_state_snapshots"),
+            ),
+            ("dependencies", ("beats", 0, "dependencies")),
+        )
+        for expected, path in mutations:
+            project = copy.deepcopy(base)
+            target = project
+            for segment in path[:-1]:
+                target = target[segment]
+            target[path[-1]] = [{}]
+            errors = self.validate_project_copy(project, strict=True)
+            with self.subTest(expected=expected):
+                self.assertTrue(any(expected in error for error in errors), errors)
+
+    def test_contract_beat_arrays_reject_unhashable_entries_without_exception(self) -> None:
+        base = load_json(
+            "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
+        )
+        for field in ("this_clip_only", "reserved_for_later"):
+            contract = copy.deepcopy(base)
+            contract[field] = [{}]
+            errors: list[str] = []
+            project_state_check.validate_contract(
+                contract,
+                "malformed contract",
+                errors,
+                strict=False,
+                current_clip=None,
+                prompt=None,
+            )
+            with self.subTest(field=field):
+                self.assertTrue(any(field in error for error in errors), errors)
+
     def test_lineage_rejects_self_parent_forward_parent_and_duplicate_position(self) -> None:
         base = load_json("examples/sequence-mixed-lane/project-state.json")
 
@@ -614,6 +736,47 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         self.assertTrue(any("leaks internal labels" in error for error in errors), errors)
         self.assertTrue(any("duplicates" in error for error in errors), errors)
 
+    def test_narrative_state_rejects_generic_presence_only_content(self) -> None:
+        state = copy.deepcopy(
+            load_json("examples/sequence-airport-arrival/clip-01-contract.json")[
+                "authoring_state"
+            ]
+        )
+        for field in (
+            "dramatic_function",
+            "turn",
+            "pov",
+            "power_shift",
+            "hidden_want_objective",
+            "obstacle_tactic",
+            "subtext_contradiction",
+            "visible_suppressed_behavior",
+            "non_transferable_detail",
+            "stock_solution_refused",
+        ):
+            state[field] = "Something happens."
+        state["value_before"] = "Something before."
+        state["value_after"] = "Something after."
+        state["prompt_carriers"] = ["The camera shows something happening."]
+
+        errors: list[str] = []
+        project_state_check.check_authoring_state(
+            state,
+            "generic narrative state",
+            errors,
+            required=True,
+            lane="narrative",
+        )
+
+        self.assertTrue(
+            any(
+                "creative specificity" in error
+                or "reuses the same content" in error
+                for error in errors
+            ),
+            errors,
+        )
+
     def test_compiler_rejects_every_canonical_label_and_missing_carrier(self) -> None:
         state = load_json("examples/sequence-airport-arrival/clip-01-contract.json")["authoring_state"]
         labels = (
@@ -632,6 +795,28 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         self.assertTrue(any("pov" in error for error in errors), errors)
         self.assertTrue(any("stock_solution_refused" in error for error in errors), errors)
         self.assertEqual(sum("missing exact prompt carrier" in error for error in errors), 1)
+
+    def test_non_narrative_prompt_must_relate_to_utility_intent(self) -> None:
+        state = {
+            "utility_intent": "Show the latch closing cleanly in one readable motion.",
+            "non_narrative_refusal": "No invented desire, rivalry, or emotional performance.",
+        }
+
+        unrelated = project_state_check.compiled_prompt_errors(
+            "A static sunset over an empty beach.",
+            state,
+            "utility prompt",
+            lane="non_narrative",
+        )
+        related = project_state_check.compiled_prompt_errors(
+            "Hold top-down as the latch closes in one continuous motion.",
+            state,
+            "utility prompt",
+            lane="non_narrative",
+        )
+
+        self.assertTrue(any("utility_intent" in error for error in unrelated), unrelated)
+        self.assertEqual(related, [])
 
     def test_compiler_rejects_hyphenated_label_aliases_without_blocking_prose(self) -> None:
         state = load_json(
@@ -674,6 +859,45 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
             "On her turn: she closes the door."
         )
         self.assertEqual(project_state_check.leaked_authoring_labels(ordinary_prose), [])
+
+    def test_default_ignorables_cannot_split_internal_labels(self) -> None:
+        state = load_json(
+            "examples/sequence-airport-arrival/clip-01-contract.json"
+        )["authoring_state"]
+        carriers = " ".join(state["prompt_carriers"])
+        for counterfeit, field in (
+            ("val\u200bue_before: exposed", "value_before"),
+            ("sto\u2060ck solution refused: smile", "stock_solution_refused"),
+        ):
+            errors = project_state_check.compiled_prompt_errors(
+                f"{carriers} {counterfeit}",
+                state,
+                "default-ignorable label prompt",
+                lane="narrative",
+            )
+            with self.subTest(counterfeit=counterfeit):
+                self.assertTrue(
+                    any(field in error for error in errors),
+                    errors,
+                )
+
+    def test_canonical_digest_serializes_integral_decimal_without_precision_loss(self) -> None:
+        expected = hashlib.sha256(b'{"sequence_index":1.0}').hexdigest()
+        self.assertEqual(
+            project_state_check.canonical_json_digest(
+                {"sequence_index": Decimal("1.0")}
+            ),
+            expected,
+        )
+
+        historical = load_json(
+            "examples/sequence-airport-arrival/clip-01-contract.json"
+        )
+        historical["sequence_index"] = Decimal("1.0")
+        self.assertRegex(
+            project_state_check.canonical_json_digest(historical),
+            r"^[0-9a-f]{64}$",
+        )
 
     def test_prompt_carriers_must_be_in_rendered_generation_prose(self) -> None:
         state = load_json(

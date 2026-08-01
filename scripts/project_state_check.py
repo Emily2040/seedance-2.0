@@ -6,9 +6,15 @@ import hashlib
 import json
 import re
 import unicodedata
+from decimal import Decimal
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
+
+from behavior_contract_check import (
+    creative_specificity_errors,
+    utility_prompt_relevance_errors,
+)
 
 from lineage_contract import (
     ACCEPTED_PARENT_STATUSES,
@@ -252,6 +258,21 @@ def check_required(obj: dict, required: set[str], label: str, errors: list[str])
         errors.append(f"{label}: missing fields: {', '.join(missing)}")
 
 
+def checked_string_array(value: object, label: str, errors: list[str]) -> set[str]:
+    """Return safe set semantics while retaining diagnostics for malformed JSON."""
+
+    if not isinstance(value, list):
+        errors.append(f"{label} must be an array of strings")
+        return set()
+    values: set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            errors.append(f"{label}[{index}] must be a non-empty string")
+            continue
+        values.add(item)
+    return values
+
+
 DEFAULT_IGNORABLE_RANGES = (
     (0x034F, 0x034F),
     (0x115F, 0x1160),
@@ -333,13 +354,39 @@ def normalized_dramatic_value(value: str) -> str:
 
 
 def canonical_json_digest(value: object) -> str:
-    payload = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    payload = canonical_json_text(value).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def canonical_json_text(value: object) -> str:
+    """Serialize strict-JSON values without converting Decimal through binary float."""
+
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise ValueError("canonical JSON does not allow a non-finite Decimal")
+        return str(value)
+    if isinstance(value, float):
+        return json.dumps(value, allow_nan=False, separators=(",", ":"))
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(canonical_json_text(item) for item in value) + "]"
+    if isinstance(value, dict):
+        if not all(isinstance(key, str) for key in value):
+            raise TypeError("canonical JSON object keys must be strings")
+        return "{" + ",".join(
+            f"{json.dumps(key, ensure_ascii=False)}:{canonical_json_text(value[key])}"
+            for key in sorted(value)
+        ) + "}"
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def authoring_state_digest(state: dict) -> str:
@@ -1603,6 +1650,11 @@ def alias_patterns(alias: str) -> list[str]:
 def leaked_authoring_labels(text: str) -> list[str]:
     """Find serialized labels or prose explanations of internal authoring fields."""
     folded = unicodedata.normalize("NFKC", unescape(text)).casefold()
+    folded = "".join(
+        character
+        for character in folded
+        if not is_default_ignorable(character)
+    )
     folded = re.sub(
         r"!?\[((?:\\[^\r\n]|[^\]\\\r\n])*)\]"
         r"(?:\[(?:\\[^\r\n]|[^\]\\\r\n])*\])?",
@@ -1732,6 +1784,15 @@ def check_authoring_state(
             errors.append(f"{label}: authoring_state.{field} must be a non-empty one-line string")
 
     if expected == NON_NARRATIVE_AUTHORING_FIELDS:
+        utility_intent = state.get("utility_intent")
+        if isinstance(utility_intent, str):
+            errors.extend(
+                utility_prompt_relevance_errors(
+                    utility_intent,
+                    utility_intent,
+                    label=label,
+                )
+            )
         return
 
     provenance = state.get("non_transferable_detail_provenance")
@@ -1794,6 +1855,29 @@ def check_authoring_state(
             )
     if len(normalized) != len(set(normalized)):
         errors.append(f"{label}: authoring_state.prompt_carriers must not contain duplicates")
+    creative_fields = {
+        field: state[field]
+        for field in sorted(
+            NARRATIVE_AUTHORING_FIELDS
+            - {
+                "non_transferable_detail_provenance",
+                "non_transferable_detail_source",
+                "prompt_carriers",
+            }
+        )
+        if isinstance(state.get(field), str)
+    }
+    errors.extend(
+        creative_specificity_errors(
+            creative_fields,
+            carriers if isinstance(carriers, list) else [],
+            label=f"{label}: authoring_state",
+            carrier_fields=(
+                "visible_suppressed_behavior",
+                "non_transferable_detail",
+            ),
+        )
+    )
 
 
 def compiled_prompt_errors(
@@ -1821,6 +1905,16 @@ def compiled_prompt_errors(
     for carrier in state.get("prompt_carriers", []):
         if carrier not in rendered_prompt:
             errors.append(f"{label}: generation prompt missing exact prompt carrier: {carrier}")
+    if lane == "non_narrative":
+        utility_intent = state.get("utility_intent")
+        if isinstance(utility_intent, str):
+            errors.extend(
+                utility_prompt_relevance_errors(
+                    utility_intent,
+                    rendered_prompt,
+                    label=label,
+                )
+            )
     return errors
 
 
@@ -1894,6 +1988,49 @@ def check_authoring_state_provenance(
                     f"{label}: historical authoring_state provenance revision {revision} is "
                     f"newer than current project revision {current_project_version}"
                 )
+
+
+def check_authoring_state_snapshots(
+    value: object,
+    label: str,
+    errors: list[str],
+    *,
+    project_id: object,
+    clip_id: object,
+) -> None:
+    """Validate immutable contract coordinates stored on a project clip."""
+
+    if value is None:
+        return
+    if not isinstance(value, list):
+        errors.append(f"{label}: contract_authoring_state_snapshots must be an array")
+        return
+    for index, snapshot in enumerate(value):
+        item_label = f"{label}: contract_authoring_state_snapshots[{index}]"
+        if not isinstance(snapshot, dict):
+            errors.append(f"{item_label} must be an object")
+            continue
+        missing = sorted(AUTHORING_STATE_PROVENANCE_FIELDS - set(snapshot))
+        extra = sorted(set(snapshot) - AUTHORING_STATE_PROVENANCE_FIELDS)
+        if missing:
+            errors.append(f"{item_label} missing fields: {', '.join(missing)}")
+        if extra:
+            errors.append(f"{item_label} unknown fields: {', '.join(extra)}")
+        if snapshot.get("project_id") != project_id:
+            errors.append(f"{item_label} project_id does not match project")
+        if snapshot.get("clip_id") != clip_id:
+            errors.append(f"{item_label} clip_id does not match clip")
+        for field in ("canon_revision", "state_revision"):
+            revision = snapshot.get(field)
+            if not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
+                errors.append(f"{item_label} {field} must be an integer >= 1")
+        digest = snapshot.get("authoring_state_sha256")
+        if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+            errors.append(
+                f"{item_label} authoring_state_sha256 must be 64 lowercase hex characters"
+            )
+        if snapshot in value[:index]:
+            errors.append(f"{item_label} duplicates an earlier snapshot")
 
 
 def looks_like_project_state(path: Path, obj: object | None = None) -> bool:
@@ -1995,14 +2132,27 @@ def validate_project(
 
     if not is_string_enum(data["project_mode"], {"standalone_clip", "sequence_project"}):
         errors.append(f"{rel}: invalid project_mode {data['project_mode']}")
-    if data["project_mode"] == "sequence_project" and not data["story"].get("final_outcome"):
+    story = data["story"]
+    if not isinstance(story, dict):
+        errors.append(f"{rel}: story must be an object")
+        story = {}
+    if data["project_mode"] == "sequence_project" and not story.get("final_outcome"):
         errors.append(f"{rel}: sequence project missing final_outcome")
-    check_required(data["story"], REQUIRED_STORY_FIELDS, f"{rel}: story", errors)
-    source_references = {
-        reference.get("tag")
-        for reference in data.get("reference_registry", [])
-        if isinstance(reference, dict) and isinstance(reference.get("tag"), str)
-    }
+    check_required(story, REQUIRED_STORY_FIELDS, f"{rel}: story", errors)
+    references = data.get("reference_registry")
+    if not isinstance(references, list):
+        errors.append(f"{rel}: reference_registry must be an array of reference objects")
+        references = []
+    valid_references: list[dict] = []
+    source_references: set[str] = set()
+    for index, reference in enumerate(references):
+        if not isinstance(reference, dict):
+            errors.append(f"{rel}: reference_registry[{index}] must be an object")
+            continue
+        valid_references.append(reference)
+        tag = reference.get("tag")
+        if isinstance(tag, str):
+            source_references.add(tag)
 
     accepted_ids: set[str] = set()
     scene_ids = set()
@@ -2016,15 +2166,19 @@ def validate_project(
     if not isinstance(scenes, list):
         errors.append(f"{rel}: scenes must be an array of scene objects")
         scenes = []
-    for scene in scenes:
+    for scene_index, scene in enumerate(scenes):
         if not isinstance(scene, dict):
-            errors.append(f"{rel}: scenes entries must be objects")
+            errors.append(f"{rel}: scenes[{scene_index}] must be an object")
             continue
         check_required(scene, REQUIRED_SCENE_FIELDS, f"{rel}: scene", errors)
         sid = scene.get("scene_id")
-        if sid in scene_ids:
+        valid_sid = isinstance(sid, str) and bool(sid.strip())
+        if not valid_sid:
+            errors.append(f"{rel}: scene[{scene_index}] scene_id must be a non-empty string")
+        elif sid in scene_ids:
             errors.append(f"{rel}: duplicate scene_id {sid}")
-        scene_ids.add(sid)
+        else:
+            scene_ids.add(sid)
         idx = scene.get("scene_index")
         if not isinstance(idx, int) or isinstance(idx, bool) or idx < 1:
             errors.append(f"{rel}: scene {sid} scene_index must be an integer >= 1")
@@ -2032,7 +2186,7 @@ def validate_project(
             errors.append(f"{rel}: duplicate scene_index {idx}")
         else:
             scene_indexes.add(idx)
-            if isinstance(sid, str):
+            if valid_sid:
                 scene_order[sid] = idx
         if not is_string_enum(scene.get("status"), SCENE_STATUSES):
             errors.append(f"{rel}: scene {sid} invalid status {scene.get('status')}")
@@ -2042,14 +2196,24 @@ def validate_project(
         if not isinstance(depth_cap, int) or isinstance(depth_cap, bool) or depth_cap < 0 or depth_cap > MAX_CHAIN_DEPTH_CEILING:
             errors.append(f"{rel}: scene {sid} max_chain_depth must be an integer between 0 and {MAX_CHAIN_DEPTH_CEILING}")
         else:
-            scene_depth_caps[sid] = depth_cap
-        assigned_list = scene.get("assigned_clip_ids", [])
-        seen_assigned = set()
-        for assigned in assigned_list if isinstance(assigned_list, list) else []:
-            if assigned in seen_assigned:
-                errors.append(f"{rel}: scene {sid} lists clip {assigned} more than once")
-            seen_assigned.add(assigned)
-        scene_assigned[sid] = seen_assigned
+            if valid_sid:
+                scene_depth_caps[sid] = depth_cap
+        assigned_list = scene.get("assigned_clip_ids")
+        seen_assigned = checked_string_array(
+            assigned_list,
+            f"{rel}: scene {sid} assigned_clip_ids",
+            errors,
+        )
+        if isinstance(assigned_list, list):
+            seen_once: set[str] = set()
+            for assigned in assigned_list:
+                if not isinstance(assigned, str) or not assigned.strip():
+                    continue
+                if assigned in seen_once:
+                    errors.append(f"{rel}: scene {sid} lists clip {assigned} more than once")
+                seen_once.add(assigned)
+        if valid_sid:
+            scene_assigned[sid] = seen_assigned
     for clip in clips:
         check_required(clip, REQUIRED_CLIP_FIELDS, f"{rel}: clip", errors)
         cid = clip.get("clip_id")
@@ -2060,7 +2224,10 @@ def validate_project(
         ):
             continue
         sid = clip.get("scene_id")
-        clip_scene[cid] = sid
+        valid_sid = isinstance(sid, str) and bool(sid.strip())
+        if not valid_sid:
+            errors.append(f"{rel}: clip {cid} scene_id must be a non-empty string")
+        clip_scene[cid] = sid if valid_sid else None
         sequence_index = clip.get("sequence_index")
         normalized_sequence_index = json_integer(sequence_index)
         if normalized_sequence_index is None or normalized_sequence_index < 1:
@@ -2118,7 +2285,14 @@ def validate_project(
             lane=lane if is_string_enum(lane, DIRECTORS_READ_LANES) else None,
             source_references=source_references,
         )
-        if sid not in scene_ids:
+        check_authoring_state_snapshots(
+            clip.get("contract_authoring_state_snapshots"),
+            f"{rel}: clip {cid}",
+            errors,
+            project_id=data.get("project_id"),
+            clip_id=cid,
+        )
+        if not valid_sid or sid not in scene_ids:
             errors.append(f"{rel}: clip {cid} scene {sid} is missing")
         elif sid in scene_depth_caps and depth is not None and depth > scene_depth_caps[sid]:
             errors.append(
@@ -2170,8 +2344,12 @@ def validate_project(
                         f"parent {parent} sequence_index {parent_index} in scene {child_scene}"
                     )
             else:
-                child_scene_index = scene_order.get(child_scene)
-                parent_scene_index = scene_order.get(parent_scene)
+                child_scene_index = (
+                    scene_order.get(child_scene) if isinstance(child_scene, str) else None
+                )
+                parent_scene_index = (
+                    scene_order.get(parent_scene) if isinstance(parent_scene, str) else None
+                )
                 if (
                     isinstance(child_scene_index, int)
                     and isinstance(parent_scene_index, int)
@@ -2197,10 +2375,25 @@ def validate_project(
                     )
             if clip.get("status") != "planned" and parent not in accepted_ids:
                 errors.append(f"{rel}: later clip {cid} parent {parent} is not accepted")
-        overlap_current_future = set(clip.get("this_clip_only", [])) & set(clip.get("reserved_for_later", []))
+        already_happened = checked_string_array(
+            clip.get("already_happened"),
+            f"{rel}: clip {cid} already_happened",
+            errors,
+        )
+        this_clip_only = checked_string_array(
+            clip.get("this_clip_only"),
+            f"{rel}: clip {cid} this_clip_only",
+            errors,
+        )
+        reserved_for_later = checked_string_array(
+            clip.get("reserved_for_later"),
+            f"{rel}: clip {cid} reserved_for_later",
+            errors,
+        )
+        overlap_current_future = this_clip_only & reserved_for_later
         if overlap_current_future:
             errors.append(f"{rel}: clip {cid} overlaps current and reserved beats: {sorted(overlap_current_future)}")
-        overlap_done_current = set(clip.get("already_happened", [])) & set(clip.get("this_clip_only", []))
+        overlap_done_current = already_happened & this_clip_only
         if overlap_done_current:
             errors.append(f"{rel}: clip {cid} replays completed beats: {sorted(overlap_done_current)}")
         if strict and clip.get("directors_read_lane") == "narrative":
@@ -2220,34 +2413,32 @@ def validate_project(
                         "authoring_state.value_after"
                     )
 
-    visited_lineage = set()
-    active_lineage = []
-    active_positions = {}
-
-    def visit_lineage(cid: str) -> None:
-        if cid in visited_lineage:
-            return
-        if cid in active_positions:
-            cycle = active_lineage[active_positions[cid]:] + [cid]
-            errors.append(f"{rel}: clip lineage cycle: {' -> '.join(cycle)}")
-            return
-        active_positions[cid] = len(active_lineage)
-        active_lineage.append(cid)
-        parent = clips_by_id[cid].get("parent_clip_id")
-        if isinstance(parent, str) and parent in clips_by_id and parent != cid:
-            visit_lineage(parent)
-        active_lineage.pop()
-        active_positions.pop(cid)
-        visited_lineage.add(cid)
-
-    for cid in clips_by_id:
-        visit_lineage(cid)
-
-    for beat in data["beats"]:
+    beats = data["beats"]
+    if not isinstance(beats, list):
+        errors.append(f"{rel}: beats must be an array of beat objects")
+        beats = []
+    for beat_index, beat in enumerate(beats):
+        if not isinstance(beat, dict):
+            errors.append(f"{rel}: beats[{beat_index}] must be an object")
+            continue
         check_required(beat, REQUIRED_BEAT_FIELDS, f"{rel}: beat", errors)
+        beat_id = beat.get("beat_id")
+        if not isinstance(beat_id, str) or not beat_id.strip():
+            errors.append(f"{rel}: beat[{beat_index}] beat_id must be a non-empty string")
         assigned = beat.get("assigned_clip_id")
-        if assigned is not None and assigned not in clip_ids:
+        if assigned is not None and (
+            not isinstance(assigned, str) or not assigned.strip()
+        ):
+            errors.append(
+                f"{rel}: beat {beat.get('beat_id')} assigned_clip_id must be null or a non-empty string"
+            )
+        elif assigned is not None and assigned not in clip_ids:
             errors.append(f"{rel}: beat {beat.get('beat_id')} assigned to missing clip {assigned}")
+        checked_string_array(
+            beat.get("dependencies"),
+            f"{rel}: beat {beat.get('beat_id')} dependencies",
+            errors,
+        )
 
     assignment_owners = {}
     for sid, assigned_set in scene_assigned.items():
@@ -2265,11 +2456,15 @@ def validate_project(
         if owners and sid not in owners:
             errors.append(f"{rel}: clip {cid} carries scene_id {sid} but is listed under scene {owners[0]}")
 
-    for ref in data.get("reference_registry", []):
-        if not ref.get("preserve_exact_tag"):
+    for ref in valid_references:
+        tag = ref.get("tag")
+        if not isinstance(tag, str) or not tag.strip():
+            errors.append(f"{rel}: reference tag must be a non-empty string")
+        if ref.get("preserve_exact_tag") is not True:
             errors.append(f"{rel}: reference {ref.get('tag')} must set preserve_exact_tag true")
 
-    if data["current_clip_id"] not in clip_ids:
+    current_clip_id = data["current_clip_id"]
+    if not isinstance(current_clip_id, str) or current_clip_id not in clip_ids:
         errors.append(f"{rel}: current_clip_id missing from clips")
     return bound_validation_diagnostics(errors, rel)
 
@@ -2294,7 +2489,17 @@ def validate_contract(
         not has_visible_text(felt) or not is_one_line_text(felt)
     ):
         errors.append(f"{label}: felt_intent must be a non-empty one-line string")
-    if set(obj.get("this_clip_only", [])) & set(obj.get("reserved_for_later", [])):
+    current_beats = checked_string_array(
+        obj.get("this_clip_only"),
+        f"{label}: this_clip_only",
+        errors,
+    )
+    reserved_beats = checked_string_array(
+        obj.get("reserved_for_later"),
+        f"{label}: reserved_for_later",
+        errors,
+    )
+    if current_beats & reserved_beats:
         errors.append(f"{label}: current and reserved beats overlap")
 
     lane = obj.get("directors_read_lane")
@@ -2627,15 +2832,30 @@ def main() -> int:
                 errors.append(f"{rel}: current and reserved beats overlap")
             prompt_path = path.parent / f"{str(obj.get('clip_id', '')).replace('_', '-')}-prompt.md"
             prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else None
+            project_id = obj.get("project_id")
+            clip_id = obj.get("clip_id")
+            lookup_key = (
+                (project_id, clip_id)
+                if isinstance(project_id, str) and isinstance(clip_id, str)
+                else None
+            )
             validate_contract(
                 obj,
                 rel,
                 errors,
                 strict=args.strict,
-                current_clip=current_clips.get((obj.get("project_id"), obj.get("clip_id"))),
+                current_clip=current_clips.get(lookup_key) if lookup_key is not None else None,
                 prompt=prompt,
-                current_project_version=current_project_versions.get(obj.get("project_id")),
-                source_references=current_project_references.get(obj.get("project_id")),
+                current_project_version=(
+                    current_project_versions.get(project_id)
+                    if isinstance(project_id, str)
+                    else None
+                ),
+                source_references=(
+                    current_project_references.get(project_id)
+                    if isinstance(project_id, str)
+                    else None
+                ),
                 historical_ledger=historical_ledger,
                 consumed_historical_keys=consumed_historical_keys,
             )
