@@ -24,10 +24,12 @@ manually (or in a network-enabled job) when you want evidence, not just shape.
 from __future__ import annotations
 
 import argparse
+import html
 import http.client
 import json
 import os
 import re
+import shlex
 import stat
 import sys
 import tempfile
@@ -35,13 +37,23 @@ import unicodedata
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Mapping
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-sonnet-4-6"
-MINIMAX_MODELS = ("MiniMax-M3", "MiniMax-M2.7")
+MINIMAX_MODELS = (
+    "MiniMax-M3",
+    "MiniMax-M2.7",
+    "MiniMax-M2.7-highspeed",
+    "MiniMax-M2.5",
+    "MiniMax-M2.5-highspeed",
+    "MiniMax-M2.1",
+    "MiniMax-M2.1-highspeed",
+    "MiniMax-M2",
+)
 MINIMAX_ANTHROPIC_BASE_URLS = {
     "global_en": "https://api.minimax.io/anthropic",
     "cn_zh": "https://api.minimaxi.com/anthropic",
@@ -62,6 +74,60 @@ SEQUENCE_DIMENSIONS = (
     "uncertainty handling",
     "safety and rights",
 )
+REQUIRED_COMPLETION_FIELDS = (
+    "id",
+    "type",
+    "role",
+    "model",
+    "content",
+    "stop_reason",
+    "usage",
+)
+TRUNCATION_STOP_REASONS = {
+    "length",
+    "max_output_tokens",
+    "max_tokens",
+    "model_context_window_exceeded",
+}
+USAGE_REQUIRED_TOKEN_FIELDS = {"input_tokens", "output_tokens"}
+USAGE_NULLABLE_TOKEN_FIELDS = {
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+}
+USAGE_STRING_FIELDS = {"service_tier", "inference_geo"}
+USAGE_OBJECT_FIELDS = {
+    "cache_creation",
+    "server_tool_use",
+    "output_tokens_details",
+}
+ANTHROPIC_SERVICE_TIERS = {"standard", "priority", "batch"}
+ANTHROPIC_REFUSAL_CATEGORIES = {
+    "cyber",
+    "bio",
+    "frontier_llm",
+    "reasoning_extraction",
+    "general_harms",
+}
+ANTHROPIC_SERVER_TOOL_NAMES = {
+    "web_search",
+    "web_fetch",
+    "code_execution",
+    "bash_code_execution",
+    "text_editor_code_execution",
+    "tool_search_tool_regex",
+    "tool_search_tool_bm25",
+}
+SECRET_PATTERNS = (
+    re.compile(
+        r"(?i)((?:[\"']?authorization[\"']?)\s*[:=]\s*"
+        r"(?:[\"']?)bearer\s+)([^\"'\s,;}\]]+)"
+    ),
+    re.compile(
+        r"(?i)((?:[\"']?x-api-key[\"']?)\s*[:=]\s*(?:[\"']?))"
+        r"([^\"'\s,;}\]]+)"
+    ),
+    re.compile(r"(?i)(\bbearer\s+)([^\"'\s,;}\]]+)"),
+)
 
 MAX_EVAL_FILE_CHARACTERS = 5_000_000
 MAX_CASES = 1_000
@@ -80,6 +146,7 @@ class ProviderConfig:
     models: tuple[str, ...] = ()
     auth_header: str = "x-api-key"
     auth_prefix: str = ""
+    response_schema: str = "anthropic"
 
 
 PROVIDER_CONFIGS = {
@@ -98,6 +165,7 @@ PROVIDER_CONFIGS = {
         models=MINIMAX_MODELS,
         auth_header="Authorization",
         auth_prefix="Bearer ",
+        response_schema="minimax",
     ),
 }
 REGIONS = tuple(
@@ -157,6 +225,64 @@ def strict_json_loads(text: str) -> object:
     except RecursionError:
         raise ValueError("JSON nesting exceeds the supported depth") from None
     return value
+
+
+def _safe_exception_detail(
+    exc: BaseException,
+    api_key: str,
+    limit: int = 240,
+) -> str:
+    """Redact credentials and keep a bounded, single-line transport reason."""
+    detail = str(exc) or type(exc).__name__
+    if api_key:
+        detail = re.sub(re.escape(api_key), "[REDACTED]", detail, flags=re.I)
+    for pattern in SECRET_PATTERNS:
+        detail = pattern.sub(lambda match: match.group(1) + "[REDACTED]", detail)
+    detail = re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]+", " ", detail).strip()
+    return (detail or type(exc).__name__)[:limit]
+
+
+def _transport_failure(
+    phase: str,
+    exc: BaseException,
+    api_key: str,
+) -> ProviderResponseError:
+    detail = _safe_exception_detail(exc, api_key)
+    return ProviderResponseError(
+        f"model API transport {phase} failed ({type(exc).__name__}): {detail}"
+    )
+
+
+def _read_api_response(
+    request: urllib.request.Request,
+    api_key: str,
+) -> bytes:
+    """Open, enter, read, and close with phase-specific sanitized failures."""
+    try:
+        manager = urllib.request.urlopen(request, timeout=120)
+    except Exception as exc:
+        raise _transport_failure("open", exc, api_key) from None
+    try:
+        response = manager.__enter__()
+    except Exception as exc:
+        raise _transport_failure("enter", exc, api_key) from None
+    try:
+        raw_body = response.read(MAX_PROVIDER_RESPONSE_BYTES + 1)
+    except Exception as exc:
+        try:
+            manager.__exit__(type(exc), exc, exc.__traceback__)
+        except Exception:
+            pass
+        raise _transport_failure("read", exc, api_key) from None
+    try:
+        manager.__exit__(None, None, None)
+    except Exception as exc:
+        raise _transport_failure("exit", exc, api_key) from None
+    if len(raw_body) > MAX_PROVIDER_RESPONSE_BYTES:
+        raise ProviderResponseError(
+            f"model API response exceeded {MAX_PROVIDER_RESPONSE_BYTES} bytes"
+        )
+    return raw_body
 
 
 def repo_root() -> Path:
@@ -538,7 +664,486 @@ def validate_model(provider_name: str, config: ProviderConfig, model: str) -> No
         )
 
 
-def call_api(
+def _reject_extra_keys(value: dict, allowed: set[str], label: str) -> None:
+    extras = sorted(set(value) - allowed)
+    if extras:
+        raise ProviderResponseError(
+            f"{label} contains undocumented fields: {', '.join(extras)}"
+        )
+
+
+def _non_negative_int(value: object) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _is_rfc3339(value: object) -> bool:
+    if not isinstance(value, str) or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
+        value,
+    ) is None:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.utcoffset() is not None
+
+
+def _validate_usage(usage: object, provider: ProviderConfig) -> None:
+    if not isinstance(usage, dict):
+        raise ProviderResponseError("model API response has invalid usage")
+    if provider.response_schema == "minimax":
+        allowed_fields = USAGE_REQUIRED_TOKEN_FIELDS | USAGE_NULLABLE_TOKEN_FIELDS
+    elif provider.response_schema == "anthropic":
+        allowed_fields = (
+            USAGE_REQUIRED_TOKEN_FIELDS
+            | USAGE_NULLABLE_TOKEN_FIELDS
+            | USAGE_STRING_FIELDS
+            | USAGE_OBJECT_FIELDS
+        )
+    else:
+        raise ProviderResponseError(
+            f"unsupported provider response schema: {provider.response_schema!r}"
+        )
+    _reject_extra_keys(
+        usage,
+        allowed_fields,
+        "model API response usage",
+    )
+    for field in USAGE_REQUIRED_TOKEN_FIELDS:
+        if field not in usage or not _non_negative_int(usage[field]):
+            raise ProviderResponseError(
+                f"model API response has invalid usage.{field}"
+            )
+    for field in USAGE_NULLABLE_TOKEN_FIELDS:
+        if (
+            field in usage
+            and (
+                (usage[field] is None and provider.response_schema != "anthropic")
+                or (
+                    usage[field] is not None
+                    and not _non_negative_int(usage[field])
+                )
+            )
+        ):
+            raise ProviderResponseError(
+                f"model API response has invalid usage.{field}"
+            )
+    if provider.response_schema == "minimax":
+        return
+    for field in USAGE_STRING_FIELDS:
+        if field not in usage or usage[field] is None:
+            continue
+        if not isinstance(usage[field], str) or not usage[field].strip():
+            raise ProviderResponseError(
+                f"model API response has invalid usage.{field}"
+            )
+    if (
+        "service_tier" in usage
+        and usage["service_tier"] is not None
+        and usage["service_tier"] not in ANTHROPIC_SERVICE_TIERS
+    ):
+        raise ProviderResponseError(
+            "model API response has invalid usage.service_tier"
+        )
+    if "cache_creation" in usage:
+        cache = usage["cache_creation"]
+        if cache is None:
+            pass
+        elif not isinstance(cache, dict):
+            raise ProviderResponseError(
+                "model API response has invalid usage.cache_creation"
+            )
+        else:
+            required = {
+                "ephemeral_5m_input_tokens",
+                "ephemeral_1h_input_tokens",
+            }
+            _reject_extra_keys(cache, required, "usage.cache_creation")
+            if set(cache) != required or any(
+                not _non_negative_int(value) for value in cache.values()
+            ):
+                raise ProviderResponseError(
+                    "model API response has invalid usage.cache_creation"
+                )
+    if "server_tool_use" in usage:
+        tools = usage["server_tool_use"]
+        if tools is None:
+            pass
+        elif not isinstance(tools, dict):
+            raise ProviderResponseError(
+                "model API response has invalid usage.server_tool_use"
+            )
+        else:
+            allowed = {"web_search_requests", "web_fetch_requests"}
+            _reject_extra_keys(tools, allowed, "usage.server_tool_use")
+            if set(tools) != allowed or any(
+                not _non_negative_int(value) for value in tools.values()
+            ):
+                raise ProviderResponseError(
+                    "model API response has invalid usage.server_tool_use"
+                )
+    if "output_tokens_details" in usage:
+        details = usage["output_tokens_details"]
+        if details is None:
+            return
+        if not isinstance(details, dict):
+            raise ProviderResponseError(
+                "model API response has invalid usage.output_tokens_details"
+            )
+        _reject_extra_keys(
+            details,
+            {"thinking_tokens"},
+            "usage.output_tokens_details",
+        )
+        if (
+            set(details) != {"thinking_tokens"}
+            or not _non_negative_int(details["thinking_tokens"])
+            or details["thinking_tokens"] > usage["output_tokens"]
+        ):
+            raise ProviderResponseError(
+                "model API response has invalid usage.output_tokens_details"
+            )
+
+
+def _validate_citation(citation: object, block_index: int, index: int) -> None:
+    label = f"content block {block_index} citation {index}"
+    if not isinstance(citation, dict):
+        raise ProviderResponseError(f"{label} must be an object")
+    citation_type = citation.get("type")
+    if not isinstance(citation_type, str):
+        raise ProviderResponseError(f"{label} has an invalid type")
+    common = {"type", "cited_text"}
+    schemas = {
+        "char_location": common
+        | {
+            "document_index",
+            "document_title",
+            "start_char_index",
+            "end_char_index",
+            "file_id",
+        },
+        "page_location": common
+        | {
+            "document_index",
+            "document_title",
+            "start_page_number",
+            "end_page_number",
+            "file_id",
+        },
+        "content_block_location": common
+        | {
+            "document_index",
+            "document_title",
+            "start_block_index",
+            "end_block_index",
+            "file_id",
+        },
+        "web_search_result_location": common
+        | {"encrypted_index", "title", "url"},
+        "search_result_location": common
+        | {
+            "source",
+            "title",
+            "search_result_index",
+            "start_block_index",
+            "end_block_index",
+        },
+    }
+    allowed = schemas.get(citation_type)
+    if allowed is None:
+        raise ProviderResponseError(f"{label} has unsupported type: {citation_type!r}")
+    optional_by_type = {
+        "char_location": {"document_title", "file_id"},
+        "page_location": {"document_title", "file_id"},
+        "content_block_location": {"document_title", "file_id"},
+        "web_search_result_location": {"title"},
+        "search_result_location": {"title"},
+    }
+    optional = optional_by_type[citation_type]
+    required = allowed - optional
+    missing = sorted(required - set(citation))
+    if missing:
+        raise ProviderResponseError(f"{label} is missing fields: {', '.join(missing)}")
+    _reject_extra_keys(citation, allowed, label)
+    string_fields = required - {
+        "document_index",
+        "start_char_index",
+        "end_char_index",
+        "start_page_number",
+        "end_page_number",
+        "start_block_index",
+        "end_block_index",
+        "search_result_index",
+    }
+    if any(not isinstance(citation[field], str) for field in string_fields):
+        raise ProviderResponseError(f"{label} has an invalid string field")
+    for field in optional:
+        if (
+            field in citation
+            and citation[field] is not None
+            and not isinstance(citation[field], str)
+        ):
+            raise ProviderResponseError(f"{label} has an invalid {field}")
+    integer_fields = required - string_fields
+    if any(not _non_negative_int(citation[field]) for field in integer_fields):
+        raise ProviderResponseError(f"{label} has an invalid index")
+    for start, end in (
+        ("start_char_index", "end_char_index"),
+        ("start_page_number", "end_page_number"),
+        ("start_block_index", "end_block_index"),
+    ):
+        if start in citation and citation[end] <= citation[start]:
+            raise ProviderResponseError(f"{label} has an invalid range")
+    if "start_page_number" in citation and citation["start_page_number"] < 1:
+        raise ProviderResponseError(f"{label} has an invalid page range")
+
+
+def _validate_tool_caller(caller: object, block_index: int) -> None:
+    label = f"model API response tool_use block {block_index} caller"
+    if not isinstance(caller, dict):
+        raise ProviderResponseError(f"{label} must be an object")
+    caller_type = caller.get("type")
+    if not isinstance(caller_type, str):
+        raise ProviderResponseError(f"{label} has an invalid type")
+    if caller_type == "direct":
+        allowed = {"type"}
+    elif caller_type in {
+        "code_execution_20250825",
+        "code_execution_20260120",
+    }:
+        allowed = {"type", "tool_id"}
+        if not isinstance(caller.get("tool_id"), str) or not caller["tool_id"]:
+            raise ProviderResponseError(f"{label} has an invalid tool_id")
+    else:
+        raise ProviderResponseError(f"{label} has unsupported type: {caller_type!r}")
+    _reject_extra_keys(caller, allowed, label)
+
+
+def _validate_content_blocks(
+    provider: ProviderConfig,
+    model: str,
+    content: object,
+) -> str:
+    if not isinstance(content, list):
+        raise ProviderResponseError("model API response has invalid content blocks")
+    text_parts: list[str] = []
+    for index, block in enumerate(content):
+        if not isinstance(block, dict):
+            raise ProviderResponseError(
+                f"model API response content block {index} must be an object"
+            )
+        block_type = block.get("type")
+        if block_type == "text":
+            allowed = {"type", "text"}
+            if provider.response_schema == "anthropic":
+                allowed.add("citations")
+            _reject_extra_keys(block, allowed, f"content text block {index}")
+            block_text = block.get("text")
+            if not isinstance(block_text, str):
+                raise ProviderResponseError(
+                    f"model API response text block {index} has invalid text"
+                )
+            if "citations" in block:
+                citations = block["citations"]
+                if citations is None:
+                    citations = []
+                elif not isinstance(citations, list):
+                    raise ProviderResponseError(
+                        f"model API response text block {index} has invalid citations"
+                    )
+                for citation_index, citation in enumerate(citations):
+                    _validate_citation(citation, index, citation_index)
+            text_parts.append(block_text)
+            continue
+        if block_type == "thinking":
+            _reject_extra_keys(
+                block,
+                {"type", "thinking", "signature"},
+                f"content thinking block {index}",
+            )
+            thinking = block.get("thinking")
+            signature = block.get("signature")
+            if (
+                not isinstance(thinking, str)
+                or not thinking.strip()
+                or not isinstance(signature, str)
+                or not signature.strip()
+            ):
+                raise ProviderResponseError(
+                    f"model API response thinking block {index} is malformed"
+                )
+            if provider.response_schema == "minimax" and model != "MiniMax-M3":
+                continue
+            raise ProviderResponseError(
+                f"model API response thinking block {index} was not requested"
+            )
+        if block_type == "redacted_thinking":
+            _reject_extra_keys(
+                block,
+                {"type", "data"},
+                f"content redacted_thinking block {index}",
+            )
+            if not isinstance(block.get("data"), str) or not block["data"]:
+                raise ProviderResponseError(
+                    f"model API response redacted_thinking block {index} is malformed"
+                )
+            raise ProviderResponseError(
+                f"model API response redacted_thinking block {index} was not requested"
+            )
+        if block_type == "tool_use":
+            _reject_extra_keys(
+                block,
+                {"type", "id", "name", "input", "caller"},
+                f"content tool_use block {index}",
+            )
+            if (
+                not isinstance(block.get("id"), str)
+                or not block["id"]
+                or not isinstance(block.get("name"), str)
+                or not block["name"]
+                or not isinstance(block.get("input"), dict)
+            ):
+                raise ProviderResponseError(
+                    f"model API response tool_use block {index} is malformed"
+                )
+            if "caller" in block:
+                _validate_tool_caller(block["caller"], index)
+            raise ProviderResponseError(
+                f"model API response tool_use block {index} was not requested"
+            )
+        if block_type == "server_tool_use":
+            _reject_extra_keys(
+                block,
+                {"type", "id", "name", "input", "caller"},
+                f"content server_tool_use block {index}",
+            )
+            if (
+                not isinstance(block.get("id"), str)
+                or not block["id"]
+                or not isinstance(block.get("name"), str)
+                or not block["name"]
+                or not isinstance(block.get("input"), dict)
+            ):
+                raise ProviderResponseError(
+                    f"model API response server_tool_use block {index} is malformed"
+                )
+            if block["name"] not in ANTHROPIC_SERVER_TOOL_NAMES:
+                raise ProviderResponseError(
+                    f"model API response server_tool_use block {index} has "
+                    f"unsupported name: {block['name']!r}"
+                )
+            if "caller" in block:
+                _validate_tool_caller(block["caller"], index)
+            raise ProviderResponseError(
+                f"model API response server_tool_use block {index} was not requested"
+            )
+        raise ProviderResponseError(
+            f"model API response content block {index} has unsupported type: "
+            f"{block_type!r}"
+        )
+    text = "".join(text_parts)
+    if not text.strip():
+        raise ProviderResponseError("model API response contained no text")
+    return text
+
+
+def _validate_provider_legacy_fields(
+    provider: ProviderConfig,
+    body: dict,
+) -> None:
+    common = set(REQUIRED_COMPLETION_FIELDS)
+    if provider.response_schema == "anthropic":
+        _reject_extra_keys(
+            body,
+            common | {"stop_sequence", "container", "stop_details"},
+            "Anthropic response",
+        )
+        if "base_resp" in body:
+            raise ProviderResponseError("Anthropic response contains foreign base_resp")
+        if "stop_sequence" not in body:
+            raise ProviderResponseError(
+                "Anthropic response is missing completion field: stop_sequence"
+            )
+        stop_sequence = body["stop_sequence"]
+        if stop_sequence is not None and not isinstance(stop_sequence, str):
+            raise ProviderResponseError("Anthropic response has invalid stop_sequence")
+        if "container" in body and body["container"] is not None:
+            container = body["container"]
+            if not isinstance(container, dict):
+                raise ProviderResponseError("Anthropic response has invalid container")
+            _reject_extra_keys(container, {"id", "expires_at"}, "Anthropic container")
+            if (
+                set(container) != {"id", "expires_at"}
+                or not isinstance(container["id"], str)
+                or not container["id"]
+                or not _is_rfc3339(container["expires_at"])
+            ):
+                raise ProviderResponseError("Anthropic response has invalid container")
+        if "stop_details" in body and body["stop_details"] is not None:
+            stop_details = body["stop_details"]
+            if not isinstance(stop_details, dict):
+                raise ProviderResponseError("Anthropic response has invalid stop_details")
+            _reject_extra_keys(
+                stop_details,
+                {"type", "category", "explanation"},
+                "Anthropic stop_details",
+            )
+            if stop_details.get("type") != "refusal":
+                raise ProviderResponseError(
+                    "Anthropic response has invalid stop_details"
+                )
+            category = stop_details.get("category")
+            explanation = stop_details.get("explanation")
+            if (
+                category is not None
+                and (
+                    not isinstance(category, str)
+                    or category not in ANTHROPIC_REFUSAL_CATEGORIES
+                )
+            ) or (
+                explanation is not None and not isinstance(explanation, str)
+            ):
+                raise ProviderResponseError(
+                    "Anthropic response has invalid stop_details"
+                )
+        return
+    if provider.response_schema != "minimax":
+        raise ProviderResponseError(
+            f"unsupported provider response schema: {provider.response_schema!r}"
+        )
+    _reject_extra_keys(
+        body,
+        common | {"stop_sequence", "base_resp"},
+        "MiniMax response",
+    )
+    if "stop_sequence" in body and body["stop_sequence"] is not None:
+        raise ProviderResponseError("MiniMax response has invalid stop_sequence")
+    if "base_resp" not in body:
+        return
+    base_response = body["base_resp"]
+    if not isinstance(base_response, dict):
+        raise ProviderResponseError("MiniMax response has invalid base_resp")
+    _reject_extra_keys(
+        base_response,
+        {"status_code", "status_msg"},
+        "MiniMax base_resp",
+    )
+    if (
+        type(base_response.get("status_code")) is not int
+        or not isinstance(base_response.get("status_msg"), str)
+    ):
+        raise ProviderResponseError("MiniMax response has invalid base_resp")
+    status_message = base_response["status_msg"].strip().casefold()
+    if base_response["status_code"] != 0 or status_message not in {"", "success"}:
+        raise ProviderResponseError(
+            "MiniMax response reports an error: "
+            f"status_code={base_response['status_code']!r}, "
+            f"status_msg={base_response['status_msg']!r}"
+        )
+
+
+def _call_api_unredacted(
     system: str,
     user: str,
     model: str,
@@ -550,6 +1155,7 @@ def call_api(
     payload = json.dumps({
         "model": model,
         "max_tokens": max_tokens,
+        "stream": False,
         "system": system,
         "messages": [{"role": "user", "content": user}],
     }).encode("utf-8")
@@ -557,39 +1163,95 @@ def call_api(
     req.add_header(provider.auth_header, provider.auth_prefix + api_key)
     req.add_header("anthropic-version", ANTHROPIC_VERSION)
     req.add_header("content-type", "application/json")
-    try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            raw_body = resp.read(MAX_PROVIDER_RESPONSE_BYTES + 1)
-    except (urllib.error.HTTPError, urllib.error.URLError):
-        raise
-    except (http.client.HTTPException, OSError) as exc:
-        raise ProviderResponseError("model API response body could not be read") from exc
-    if len(raw_body) > MAX_PROVIDER_RESPONSE_BYTES:
-        raise ProviderResponseError(
-            f"model API response exceeded {MAX_PROVIDER_RESPONSE_BYTES} bytes"
-        )
+    raw_body = _read_api_response(req, api_key)
     try:
         body = strict_json_loads(raw_body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise ProviderResponseError("model API returned invalid JSON") from exc
     if not isinstance(body, dict):
         raise ProviderResponseError("model API response must be a JSON object")
-    content = body.get("content")
-    if not isinstance(content, list) or any(not isinstance(block, dict) for block in content):
-        raise ProviderResponseError("model API response has invalid content blocks")
-    if any(
-        block.get("type") == "text" and not isinstance(block.get("text"), str)
-        for block in content
-    ):
-        raise ProviderResponseError("model API response has an invalid text block")
-    text = "".join(
-        block["text"]
-        for block in content
-        if block.get("type") == "text"
+
+    _validate_provider_legacy_fields(provider, body)
+
+    missing = [field for field in REQUIRED_COMPLETION_FIELDS if field not in body]
+    if missing:
+        raise ProviderResponseError(
+            "model API response is missing completion fields: " + ", ".join(missing)
+        )
+    if not isinstance(body["id"], str) or not body["id"].strip():
+        raise ProviderResponseError("model API response has an invalid id")
+    if body["type"] != "message":
+        raise ProviderResponseError("model API response type must be message")
+    if body["role"] != "assistant":
+        raise ProviderResponseError("model API response role must be assistant")
+    if body["model"] != model:
+        raise ProviderResponseError(
+            "model API response model does not match the requested model: "
+            f"expected {model!r}, got {body['model']!r}"
+        )
+
+    stop_reason = body["stop_reason"]
+    if not isinstance(stop_reason, str) or not stop_reason.strip():
+        raise ProviderResponseError(
+            "model API response requires a non-null stop_reason"
+        )
+    normalized_reason = stop_reason.strip().casefold()
+    context_limited = "context" in normalized_reason and any(
+        marker in normalized_reason for marker in ("exceed", "limit", "window")
     )
-    if not text:
-        raise ProviderResponseError("model API response contained no text")
-    return text
+    token_limited = "token" in normalized_reason and any(
+        marker in normalized_reason for marker in ("max", "limit", "length")
+    )
+    if (
+        normalized_reason in TRUNCATION_STOP_REASONS
+        or context_limited
+        or token_limited
+    ):
+        raise ProviderResponseError(
+            f"model response stopped with {stop_reason!r}; refusing truncated evidence"
+        )
+    if stop_reason != "end_turn":
+        raise ProviderResponseError(
+            "model response did not complete normally: "
+            f"stop_reason={stop_reason!r}"
+        )
+    if provider.response_schema == "anthropic" and body["stop_sequence"] is not None:
+        raise ProviderResponseError(
+            "Anthropic end_turn response must have a null stop_sequence"
+        )
+    if provider.response_schema == "anthropic" and body.get("stop_details") is not None:
+        raise ProviderResponseError(
+            "Anthropic end_turn response must have null stop_details"
+        )
+
+    _validate_usage(body["usage"], provider)
+    return _validate_content_blocks(provider, model, body["content"])
+
+
+def call_api(
+    system: str,
+    user: str,
+    model: str,
+    api_key: str,
+    provider: ProviderConfig,
+    endpoint: str,
+    max_tokens: int = 1500,
+) -> str:
+    """Call a provider without allowing credentials into public error text."""
+    try:
+        return _call_api_unredacted(
+            system,
+            user,
+            model,
+            api_key,
+            provider,
+            endpoint,
+            max_tokens,
+        )
+    except ProviderResponseError as exc:
+        raise ProviderResponseError(
+            _safe_exception_detail(exc, api_key, limit=500)
+        ) from None
 
 
 def judge(
@@ -1307,6 +1969,73 @@ def _safe_ledger_text(value: str, limit: int = 80) -> str:
     return sanitized.replace("|", "/")[:limit]
 
 
+def _safe_markdown_code(value: str, limit: int = 80) -> str:
+    """Sanitize values interpolated into Markdown code spans or fences."""
+    return _safe_ledger_text(value, limit=limit).replace("`", "'")
+
+
+def _safe_markdown_text(value: str, limit: int = 80) -> str:
+    """Make untrusted text inert when it is rendered outside a code span."""
+    sanitized = html.escape(_safe_ledger_text(value, limit=limit), quote=False)
+    return re.sub(r"([\\`*_\[\]()#!~>])", r"\\\1", sanitized)
+
+
+COMMAND_VALUE_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:/+-]{0,199}\Z")
+
+
+def _regeneration_argv(
+    provider_name: str,
+    region: str,
+    model: str,
+    judge_model: str,
+) -> list[str] | None:
+    values = (provider_name, region, model, judge_model)
+    if any(
+        not _is_utf8_encodable(value) or COMMAND_VALUE_RE.fullmatch(value) is None
+        for value in values
+    ):
+        return None
+    return [
+        "python",
+        "scripts/eval_run.py",
+        "--provider",
+        provider_name,
+        "--region",
+        region,
+        "--model",
+        model,
+        "--judge-model",
+        judge_model,
+        "--ledger",
+        "evals/eval-run-ledger.md",
+    ]
+
+
+def _powershell_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _regeneration_command_lines(argv: list[str] | None) -> list[str]:
+    if argv is None:
+        return [
+            "Regeneration commands omitted because CLI metadata contains unsafe shell or ",
+            "Markdown characters; re-enter those values manually.",
+        ]
+    return [
+        "Regenerate from a POSIX shell:",
+        "",
+        "```sh",
+        shlex.join(argv),
+        "```",
+        "",
+        "Regenerate from PowerShell:",
+        "",
+        "```powershell",
+        "& " + " ".join(_powershell_quote(value) for value in argv),
+        "```",
+    ]
+
+
 def _render_ledger_row(index: int, row: object) -> str:
     """Render even malformed evidence rows without preserving a stale ledger."""
     if not isinstance(row, dict):
@@ -1317,7 +2046,7 @@ def _render_ledger_row(index: int, row: object) -> str:
 
     raw_id = row.get("id")
     case_id = (
-        _safe_ledger_text(raw_id)
+        _safe_markdown_text(raw_id)
         if isinstance(raw_id, str) and raw_id.strip()
         else f"[invalid row {index + 1}]"
     )
@@ -1337,7 +2066,7 @@ def _render_ledger_row(index: int, row: object) -> str:
                 dimension_parts.append("[invalid dimension row]")
                 continue
             dimension_parts.append(
-                f"{_safe_ledger_text(dimension)}={dimension_score}"
+                f"{_safe_markdown_text(dimension)}={dimension_score}"
             )
         dimensions = ", ".join(dimension_parts) or "n/a"
     else:
@@ -1349,7 +2078,7 @@ def _render_ledger_row(index: int, row: object) -> str:
     passed = "yes" if raw_pass is True else "NO" if raw_pass is False else "INVALID"
     raw_note = row.get("notes", "")
     note = (
-        _safe_ledger_text(raw_note)
+        _safe_markdown_text(raw_note)
         if isinstance(raw_note, str)
         else "[invalid non-string notes]"
     )
@@ -1380,11 +2109,14 @@ def write_ledger(
         release_eligible=release_eligible,
     )
     judge_model = judge_model or model
-    safe_stamp = _safe_ledger_text(stamp, limit=120)
-    safe_model = _safe_ledger_text(model, limit=200)
-    safe_judge_model = _safe_ledger_text(judge_model, limit=200)
-    safe_provider_name = _safe_ledger_text(provider_name, limit=120)
-    safe_region = _safe_ledger_text(region, limit=120)
+    safe_stamp = _safe_markdown_text(stamp, limit=120)
+    safe_model = _safe_markdown_code(model, limit=200)
+    safe_judge_model = _safe_markdown_code(judge_model, limit=200)
+    safe_provider_name = _safe_markdown_code(provider_name, limit=120)
+    safe_region = _safe_markdown_code(region, limit=120)
+    command_lines = _regeneration_command_lines(
+        _regeneration_argv(provider_name, region, model, judge_model)
+    )
     if report["scope"] == "UNSCOPED":
         scope_line = (
             f"Run scope: **UNSCOPED** — {report['completed_count']} results recorded; "
@@ -1406,16 +2138,15 @@ def write_ledger(
         f"Run verdict: **{report['run_verdict']}**. Release verdict: "
         f"**{report['release_verdict']}**.",
         "This is the evidence layer for the rubric in `references/eval-rubric.md`; the deterministic",
-        "CI validators check shape, this checks output quality. Regenerate with",
-        f"`python scripts/eval_run.py --provider {safe_provider_name} --region {safe_region} "
-        f"--model {safe_model} --judge-model {safe_judge_model} "
-        "--ledger evals/eval-run-ledger.md`.",
+        "CI validators check shape; this checks output quality.",
         "",
     ]
+    lines.extend(command_lines)
+    lines.append("")
     if report["integrity_errors"]:
         lines.extend(["## Integrity errors", ""])
         lines.extend(
-            f"- {_safe_ledger_text(error, limit=500)}"
+            f"- {_safe_markdown_text(error, limit=500)}"
             for error in report["integrity_errors"]
         )
         lines.append("")

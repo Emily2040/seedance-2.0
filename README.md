@@ -448,13 +448,34 @@ To prove the package is also *good*, run the model-in-the-loop harness, which se
 export ANTHROPIC_API_KEY=...
 python scripts/eval_run.py --ledger evals/eval-run-ledger.md --stamp 2026-06-28
 
-# MiniMax uses MiniMax-M3 by default; MiniMax-M2.7 is also supported.
+# The harness defaults to the current documented MiniMax-M3. The endpoint also
+# accepts the documented MiniMax-M2.7, M2.5, M2.1, M2 and highspeed variants.
 export MINIMAX_API_KEY=...
 python scripts/eval_run.py --provider minimax --region global_en \
   --ledger evals/eval-run-ledger.md --stamp 2026-06-28
 python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 \
   --ledger evals/eval-run-ledger.md --stamp 2026-06-28
 ```
+
+The harness uses `Authorization: Bearer <API_KEY>` as documented by both the
+[global](https://platform.minimax.io/docs/api-reference/text-chat-anthropic) and
+[CN](https://platform.minimaxi.com/docs/api-reference/text-chat-anthropic)
+Anthropic-compatible Messages endpoints. Those provider contracts were checked
+directly on 2026-08-01: both list the same eight supported models and the common
+successful-response fields (`id`, `type`, `role`, `model`, `content`,
+`stop_reason`, and `usage`), without requiring either `base_resp` or
+`stop_sequence`. Anthropic's own response contract is validated separately,
+including its required `stop_sequence` field.
+
+Successful bodies are validated fail-closed: documented optional usage,
+citation, thinking, and tool-call structures are type-checked with unknown
+fields rejected, while optional MiniMax legacy `base_resp`/`stop_sequence`
+fields cannot contradict an otherwise successful response. M2.x thinking
+blocks are accepted only in their documented shape; unrequested tool calls and
+Anthropic/M3 thinking are rejected as non-final evidence. Transport errors name
+the failed open, context-entry, or read phase and redact API keys before console
+or ledger output. Generated ledger commands are emitted separately for POSIX
+shells and PowerShell, and are omitted when metadata is not safe to round-trip.
 
 This is the quality gate, not a shape gate, so it lives outside offline CI; the latest scored run is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
 

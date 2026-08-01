@@ -74,6 +74,27 @@ def valid_verdict(assertions: tuple[str, ...] = ("works",), score: int = 3) -> d
     }
 
 
+def completion_payload(
+    provider_name: str,
+    model: str,
+    content: list[dict] | None = None,
+) -> dict:
+    payload = {
+        "id": "msg_test",
+        "type": "message",
+        "role": "assistant",
+        "model": model,
+        "content": (
+            content if content is not None else [{"type": "text", "text": "ok"}]
+        ),
+        "stop_reason": "end_turn",
+        "usage": {"input_tokens": 1, "output_tokens": 1},
+    }
+    if provider_name == "anthropic":
+        payload["stop_sequence"] = None
+    return payload
+
+
 class AggregateIntegrityTests(unittest.TestCase):
     def aggregate(self, rows: list[dict], **kwargs: object) -> tuple[int, str]:
         output = io.StringIO()
@@ -319,7 +340,8 @@ class JudgeIntegrityTests(unittest.TestCase):
             eval_run.urllib.request, "urlopen", return_value=response
         ):
             with self.assertRaisesRegex(
-                eval_run.ProviderResponseError, "could not be read"
+                eval_run.ProviderResponseError,
+                "transport read failed \\(IncompleteRead\\)",
             ):
                 eval_run.call_api(
                     "system", "user", model, "key", provider, endpoint
@@ -338,12 +360,13 @@ class JudgeIntegrityTests(unittest.TestCase):
                 with mock.patch.object(
                     eval_run.urllib.request, "urlopen", side_effect=failure
                 ):
-                    with self.assertRaisesRegex(
-                        eval_run.ProviderResponseError, "could not be read"
-                    ):
+                    with self.assertRaises(eval_run.ProviderResponseError) as raised:
                         eval_run.call_api(
                             "system", "user", model, "key", provider, endpoint
                         )
+                self.assertIn(type(failure).__name__, str(raised.exception))
+                self.assertIn(str(failure).strip(), str(raised.exception))
+                self.assertIn("transport open failed", str(raised.exception))
 
         for boundary in ("enter", "read"):
             with self.subTest(boundary=boundary):
@@ -359,29 +382,40 @@ class JudgeIntegrityTests(unittest.TestCase):
                 with mock.patch.object(
                     eval_run.urllib.request, "urlopen", return_value=response
                 ):
-                    with self.assertRaisesRegex(
-                        eval_run.ProviderResponseError, "could not be read"
-                    ):
+                    with self.assertRaises(eval_run.ProviderResponseError) as raised:
                         eval_run.call_api(
                             "system", "user", model, "key", provider, endpoint
                         )
+                self.assertIn("ConnectionResetError", str(raised.exception))
+                self.assertIn(f"reset {boundary}", str(raised.exception))
+                self.assertIn(f"transport {boundary} failed", str(raised.exception))
 
-    def test_call_api_preserves_http_error_diagnostics(self) -> None:
+    def test_call_api_sanitizes_http_error_diagnostics(self) -> None:
         provider, endpoint, model = eval_run.resolve_provider(
             "anthropic", "global_en", None
         )
+        api_key = "private-http-key"
         error = eval_run.urllib.error.HTTPError(
-            endpoint, 503, "provider unavailable", {}, None
+            endpoint,
+            503,
+            f"provider unavailable; X-Api-Key: {api_key}",
+            {},
+            None,
         )
         with mock.patch.object(
             eval_run.urllib.request, "urlopen", side_effect=error
         ):
-            with self.assertRaises(eval_run.urllib.error.HTTPError) as raised:
+            with self.assertRaises(eval_run.ProviderResponseError) as raised:
                 eval_run.call_api(
-                    "system", "user", model, "key", provider, endpoint
+                    "system", "user", model, api_key, provider, endpoint
                 )
 
-        self.assertIs(raised.exception, error)
+        message = str(raised.exception)
+        self.assertIn("transport open failed (HTTPError)", message)
+        self.assertIn("503", message)
+        self.assertIn("provider unavailable", message)
+        self.assertIn("[REDACTED]", message)
+        self.assertNotIn(api_key, message)
 
     def test_provider_envelopes_reject_duplicate_keys_and_nonstandard_constants(self) -> None:
         invalid_bodies = {
@@ -400,7 +434,7 @@ class JudgeIntegrityTests(unittest.TestCase):
         }
         providers = (
             ("anthropic", "global_en", None),
-            ("minimax", "global_en", "MiniMax-M3"),
+            ("minimax", "global_en", "MiniMax-M2.7-highspeed"),
             ("minimax", "cn_zh", "MiniMax-M2.7"),
         )
         for provider_name, region, requested_model in providers:
@@ -427,24 +461,30 @@ class JudgeIntegrityTests(unittest.TestCase):
                             )
 
     def test_provider_text_blocks_require_string_text_for_every_provider(self) -> None:
-        invalid_bodies = (
-            b'{"content":[{"type":"text","text":"ok"},{"type":"text"}]}',
-            b'{"content":[{"type":"text","text":"ok"},{"type":"text","text":7}]}',
-            b'{"content":[{"type":"text","text":"\\ud800"}]}',
+        invalid_contents = (
+            [{"type": "text", "text": "ok"}, {"type": "text"}],
+            [{"type": "text", "text": "ok"}, {"type": "text", "text": 7}],
+            [{"type": "text", "text": "\ud800"}],
         )
         providers = (
             ("anthropic", "global_en", None),
-            ("minimax", "global_en", "MiniMax-M3"),
+            ("minimax", "global_en", "MiniMax-M2.7-highspeed"),
             ("minimax", "cn_zh", "MiniMax-M2.7"),
         )
         for provider_name, region, requested_model in providers:
             provider, endpoint, model = eval_run.resolve_provider(
                 provider_name, region, requested_model
             )
-            for body in invalid_bodies:
-                with self.subTest(provider=provider_name, region=region, body=body):
+            for content in invalid_contents:
+                with self.subTest(
+                    provider=provider_name,
+                    region=region,
+                    content=content,
+                ):
                     response = mock.MagicMock()
-                    response.__enter__.return_value.read.return_value = body
+                    response.__enter__.return_value.read.return_value = json.dumps(
+                        completion_payload(provider_name, model, content)
+                    ).encode("utf-8")
                     with mock.patch.object(
                         eval_run.urllib.request, "urlopen", return_value=response
                     ):
@@ -458,29 +498,34 @@ class JudgeIntegrityTests(unittest.TestCase):
                                 endpoint,
                             )
 
-    def test_provider_envelope_allows_unknown_non_text_blocks(self) -> None:
-        body = (
-            b'{"content":[{"type":"future_block","payload":{"x":1}},'
-            b'{"type":"text","text":"ok"}]}'
-        )
+    def test_provider_envelope_rejects_unknown_non_text_blocks(self) -> None:
         for provider_name, region, requested_model in (
             ("anthropic", "global_en", None),
-            ("minimax", "cn_zh", "MiniMax-M3"),
+            ("minimax", "cn_zh", "MiniMax-M2.7-highspeed"),
         ):
             provider, endpoint, model = eval_run.resolve_provider(
                 provider_name, region, requested_model
             )
             response = mock.MagicMock()
-            response.__enter__.return_value.read.return_value = body
+            response.__enter__.return_value.read.return_value = json.dumps(
+                completion_payload(
+                    provider_name,
+                    model,
+                    [
+                        {"type": "future_block", "payload": {"x": 1}},
+                        {"type": "text", "text": "ok"},
+                    ],
+                )
+            ).encode("utf-8")
             with mock.patch.object(
                 eval_run.urllib.request, "urlopen", return_value=response
             ):
-                self.assertEqual(
+                with self.assertRaisesRegex(
+                    eval_run.ProviderResponseError, "unsupported type"
+                ):
                     eval_run.call_api(
                         "system", "user", model, "key", provider, endpoint
-                    ),
-                    "ok",
-                )
+                    )
 
     def test_judge_threads_selected_provider_and_endpoint_to_api(self) -> None:
         provider, endpoint, _model = eval_run.resolve_provider(
@@ -1589,7 +1634,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     "2026-08-01",
                     "minimax",
                     "cn_zh",
-                    judge_model="MiniMax-M3",
+                    judge_model="MiniMax-M2.5",
                     expected_cases=case_metadata(),
                     total_expected=1,
                     release_eligible=True,
@@ -1597,7 +1642,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             text = path.read_text(encoding="utf-8")
             self.assertIn("responder model `MiniMax-M2.7`", text)
-            self.assertIn("judge model `MiniMax-M3`", text)
+            self.assertIn("judge model `MiniMax-M2.5`", text)
             self.assertIn("provider `minimax`", text)
             self.assertIn("region `cn_zh`", text)
             self.assertIn("Run scope: **COMPLETE**", text)
@@ -1754,7 +1799,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                 self.assertEqual(report["release_verdict"], "FAIL")
                 self.assertEqual(len(result_lines), 1)
                 self.assertIn(
-                    "review failed # FORGED RELEASE PASS", result_lines[0]
+                    r"review failed \# FORGED RELEASE PASS", result_lines[0]
                 )
                 self.assertFalse(
                     any(line.startswith("# FORGED RELEASE PASS") for line in lines)
@@ -1809,7 +1854,41 @@ class LedgerIntegrityTests(unittest.TestCase):
                     for line in text.splitlines()
                 )
             )
-            self.assertGreaterEqual(text.count("safe # FORGED RELEASE PASS"), 5)
+            self.assertGreaterEqual(text.count(r"safe \# FORGED RELEASE PASS"), 5)
+
+    def test_table_metadata_cannot_emit_links_emphasis_or_html(self) -> None:
+        injected = "[FORGED](https://evil.example) *PASS* <img src=x>"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            row = result_row(passed=False)
+            row["id"] = injected
+            row["notes"] = injected
+            row["dimension_scores"] = [
+                {"dimension": injected, "score": 4}
+            ]
+            with redirect_stdout(io.StringIO()):
+                report = eval_run.write_ledger(
+                    path,
+                    [row],
+                    "model",
+                    "2026-08-01",
+                    "anthropic",
+                    "global_en",
+                    expected_cases={
+                        injected: {"sequence": True, "critical": True}
+                    },
+                    total_expected=1,
+                    release_eligible=True,
+                )
+
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(report["release_verdict"], "FAIL")
+            self.assertNotIn("[FORGED](https://evil.example)", text)
+            self.assertNotIn("*PASS*", text)
+            self.assertNotIn("<img src=x>", text)
+            self.assertIn(r"\[FORGED\]\(https://evil.example\)", text)
+            self.assertIn(r"\*PASS\*", text)
+            self.assertIn("&lt;img src=x&gt;", text)
 
     def test_malformed_rows_replace_stale_ledger_with_failed_placeholders(self) -> None:
         malformed_rows: tuple[tuple[str, object, str], ...] = (
