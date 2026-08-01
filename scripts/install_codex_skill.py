@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import stat
 from pathlib import Path, PurePosixPath
 
 
@@ -27,6 +28,31 @@ def default_skills_dir() -> Path:
     return Path.home() / ".codex" / "skills"
 
 
+def is_linked_or_reparse_path(path: Path) -> bool:
+    """Return whether one lexical path component redirects filesystem access."""
+    try:
+        metadata = path.lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+
+    if stat.S_ISLNK(metadata.st_mode):
+        return True
+
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    file_attributes = getattr(metadata, "st_file_attributes", 0)
+    return bool(reparse_flag and file_attributes & reparse_flag)
+
+
+def linked_payload_component(repo_root: Path, relative: PurePosixPath) -> PurePosixPath | None:
+    """Return the first linked/reparse component in one repository-relative path."""
+    current = repo_root
+    for part in relative.parts:
+        current /= part
+        if is_linked_or_reparse_path(current):
+            return PurePosixPath(*current.relative_to(repo_root).parts)
+    return None
+
+
 def load_payload_manifest(repo_root: Path) -> frozenset[str]:
     """Load an explicit, source-relative install contract.
 
@@ -34,6 +60,12 @@ def load_payload_manifest(repo_root: Path) -> frozenset[str]:
     the repository. Directories are implied by their declared descendants.
     """
     root = repo_root.resolve()
+    linked_manifest_component = linked_payload_component(root, PAYLOAD_MANIFEST)
+    if linked_manifest_component is not None:
+        raise ValueError(
+            "install payload manifest contains linked or reparse component: "
+            f"{linked_manifest_component.as_posix()}"
+        )
     manifest_path = root.joinpath(*PAYLOAD_MANIFEST.parts)
     if not manifest_path.is_file():
         raise FileNotFoundError(f"install payload manifest not found: {manifest_path}")
@@ -61,6 +93,12 @@ def load_payload_manifest(repo_root: Path) -> frozenset[str]:
             raise ValueError(f"{manifest_path}:{line_number}: duplicate payload path: {entry}")
 
         source = root.joinpath(*relative.parts)
+        linked_component = linked_payload_component(root, relative)
+        if linked_component is not None:
+            raise ValueError(
+                f"{manifest_path}:{line_number}: payload path contains linked or reparse component: "
+                f"{entry} (component: {linked_component.as_posix()})"
+            )
         resolved_source = source.resolve()
         if root not in resolved_source.parents:
             raise ValueError(f"{manifest_path}:{line_number}: payload path escapes repository: {entry}")
