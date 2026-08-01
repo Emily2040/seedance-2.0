@@ -27,6 +27,16 @@ against the case's own assertions. Legacy cases use the rubric's 0-3 scale
 (release: every case >= 2, average >= 2.6); sequence cases use the 0-4 scale
 (release: critical cases at 4, no dimension below 3, average >= 3.5).
 
+Generated ledgers record the provider, region, responder model, judge model,
+selected-versus-total scope, completed result count, run verdict, and release
+verdict. Focused `--id` or `--limit` runs are marked not release-eligible and
+cannot replace this canonical ledger.
+
+Release assessment binds every result to canonical per-case `sequence` and
+`critical` metadata derived from `evals/evals.json`. Case IDs or a result count
+alone cannot establish a release universe or prove that a row used the correct
+rubric scale.
+
 The offline wiring is checked in CI via `python scripts/eval_run.py --self-test`.
 
 ## Latest scored run
@@ -35,6 +45,6 @@ _Not yet scored live in this environment (no live provider credential is availab
 Run the command above to populate the table below; the harness overwrites this
 file with per-case scores and a pass/fail verdict against the rubric thresholds.
 
-| id | scale | score | pass | notes |
-|---|---|---|---|---|
-| _pending_ | — | — | — | run `eval_run.py --run --ledger` to populate |
+| id | scale | dimension scores | score | pass | notes |
+|---|---|---|---|---|---|
+| _pending_ | — | — | — | — | run `eval_run.py --ledger` to populate |
