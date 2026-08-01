@@ -151,7 +151,7 @@ def has_allowance(clip: dict, key: str) -> bool:
 
 
 def list_item_label(value: dict, index: int) -> str:
-    for identity_key in ("character_id", "id", "name"):
+    for identity_key in ("canonical_identity_id", "character_id", "id", "name"):
         identity = value.get(identity_key)
         if isinstance(identity, (str, int)):
             return str(identity)
@@ -181,6 +181,41 @@ def state_values(state: dict | None, key: str) -> list[tuple[str, object]]:
     return matches
 
 
+def canonical_identity_collections(state: dict | None) -> dict[str, tuple[object, ...]]:
+    """Collect list identities without making array order part of their identity."""
+    if not isinstance(state, dict):
+        return {}
+
+    collections: dict[str, tuple[object, ...]] = {}
+
+    def visit(value: object, path: tuple[str, ...]) -> None:
+        if isinstance(value, dict):
+            for child_key, child_value in value.items():
+                if isinstance(child_value, (dict, list)):
+                    visit(child_value, path + (str(child_key),))
+        elif isinstance(value, list):
+            identities = [
+                child_value["canonical_identity_id"]
+                for child_value in value
+                if isinstance(child_value, dict)
+                and child_value.get("canonical_identity_id") is not None
+            ]
+            if identities:
+                collections[".".join(path)] = tuple(
+                    sorted(identities, key=lambda item: (type(item).__name__, repr(item)))
+                )
+            for index, child_value in enumerate(value):
+                label = (
+                    list_item_label(child_value, index)
+                    if isinstance(child_value, dict)
+                    else str(index)
+                )
+                visit(child_value, path + (label,))
+
+    visit(state, ())
+    return collections
+
+
 def comparable_values(
     end_state: dict,
     start_state: dict,
@@ -188,15 +223,24 @@ def comparable_values(
 ) -> list[tuple[str, object, object]]:
     end_values = state_values(end_state, key)
     start_values = state_values(start_state, key)
-    if len(end_values) == 1 and len(start_values) == 1:
-        return [(key, end_values[0][1], start_values[0][1])]
-
     end_by_path = dict(end_values)
     start_by_path = dict(start_values)
-    return [
+    comparisons = [
         (path, end_by_path[path], start_by_path[path])
         for path in sorted(end_by_path.keys() & start_by_path.keys())
     ]
+    if key == "canonical_identity_id":
+        end_collections = canonical_identity_collections(end_state)
+        start_collections = canonical_identity_collections(start_state)
+        comparisons.extend(
+            (
+                f"{path}.{key}" if path else key,
+                end_collections[path],
+                start_collections[path],
+            )
+            for path in sorted(end_collections.keys() & start_collections.keys())
+        )
+    return comparisons
 
 
 def validate(

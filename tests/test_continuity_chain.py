@@ -380,6 +380,121 @@ class ContinuityChainTests(unittest.TestCase):
             errors,
         )
 
+    def test_reordered_character_list_matches_canonical_identity_ids(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": [
+                    {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    },
+                    {
+                        "canonical_identity_id": "guide-a",
+                        "wardrobe": "blue coat",
+                    },
+                ]
+            },
+            {
+                "characters": [
+                    {
+                        "canonical_identity_id": "guide-a",
+                        "wardrobe": "blue coat",
+                    },
+                    {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    },
+                ]
+            },
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_reordered_character_list_reports_change_for_the_canonical_identity(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    },
+                    {
+                        "canonical_identity_id": "guide-a",
+                        "wardrobe": "blue coat",
+                    },
+                ]
+            },
+            {
+                "characters": [
+                    {
+                        "canonical_identity_id": "guide-a",
+                        "wardrobe": "green coat",
+                    },
+                    {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    },
+                ]
+            },
+        )
+
+        self.assertTrue(
+            any("characters.guide-a.wardrobe" in error for error in errors),
+            errors,
+        )
+        self.assertFalse(any("canonical_identity_id" in error for error in errors), errors)
+        self.assertFalse(any("characters.hero-a.wardrobe" in error for error in errors), errors)
+
+    def test_character_list_still_reports_a_canonical_identity_replacement(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero-a", "wardrobe": "red coat"},
+                    {"canonical_identity_id": "guide-a", "wardrobe": "blue coat"},
+                ]
+            },
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero-b", "wardrobe": "red coat"},
+                    {"canonical_identity_id": "guide-a", "wardrobe": "blue coat"},
+                ]
+            },
+        )
+
+        self.assertTrue(any("canonical_identity_id" in error for error in errors), errors)
+
+    def test_singleton_fields_on_different_named_entities_are_not_compared(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    }
+                }
+            },
+            {
+                "characters": {
+                    "guide": {
+                        "canonical_identity_id": "guide-a",
+                        "wardrobe": "blue coat",
+                    }
+                }
+            },
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_singleton_fields_on_the_same_named_entity_are_still_compared(self) -> None:
+        errors, _ = self.validate_states(
+            {"characters": {"hero": {"wardrobe": "red coat"}}},
+            {"characters": {"hero": {"wardrobe": "blue coat"}}},
+        )
+
+        self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
+
 
 if __name__ == "__main__":
     unittest.main()
