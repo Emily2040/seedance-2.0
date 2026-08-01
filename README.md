@@ -393,6 +393,13 @@ Every check is offline. Exactly one of them, `schema_check.py`, needs a
 third-party library, so install the hash-pinned lock first — on a clean checkout
 that step otherwise stops the run:
 
+The validation toolchain supports **CPython 3.11 through 3.13**. CI exercises
+both endpoints on Ubuntu and Windows; the pinned dependency lock also carries
+the supported 3.12 wheels.
+Python 3.10 and 3.14 are outside this lock's supported range. Check
+`python --version` before running the commands below; on Windows,
+`py -3.13` may be used in place of `python` when the Python launcher is installed.
+
 ```bash
 python -m pip install --require-hashes --requirement requirements-validation.lock
 ```
