@@ -99,6 +99,16 @@ class RuntimePayloadContractTests(unittest.TestCase):
         self.assertNotIn("assets/hero-command-center.png", installed_readme)
         self.assertNotIn("therefore resolve only in this repository", installed_readme)
 
+    def test_installed_readme_does_not_advertise_omitted_maintenance_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self.install(Path(tmp))
+            installed_readme = (payload / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("Run validation from a source checkout", installed_readme)
+        self.assertNotIn("scripts/eval_run.py", installed_readme)
+        self.assertNotIn("unittest discover", installed_readme)
+        self.assertNotIn("compileall scripts tests", installed_readme)
+
     def test_active_guidance_and_source_gallery_remain_intact(self) -> None:
         self.assertTrue((ROOT / "assets" / "hero-command-center.png").is_file())
         self.assertIn(
@@ -144,14 +154,16 @@ class RuntimePayloadContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "must each appear exactly once"):
                 installer.rewrite_installed_readme(payload)
 
-    def test_source_readme_has_one_ordered_gallery_marker_pair(self) -> None:
+    def test_source_readme_has_one_ordered_marker_pair_per_rewritten_section(self) -> None:
         source_readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertEqual(source_readme.count(installer.README_GALLERY_START), 1)
-        self.assertEqual(source_readme.count(installer.README_GALLERY_END), 1)
-        self.assertLess(
-            source_readme.index(installer.README_GALLERY_START),
-            source_readme.index(installer.README_GALLERY_END),
-        )
+        for start, end in (
+            (installer.README_GALLERY_START, installer.README_GALLERY_END),
+            (installer.README_VALIDATION_START, installer.README_VALIDATION_END),
+        ):
+            with self.subTest(start=start):
+                self.assertEqual(source_readme.count(start), 1)
+                self.assertEqual(source_readme.count(end), 1)
+                self.assertLess(source_readme.index(start), source_readme.index(end))
 
 
 if __name__ == "__main__":
