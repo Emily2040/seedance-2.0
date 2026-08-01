@@ -219,6 +219,50 @@ class AdversarialMutationTests(unittest.TestCase):
         findings = stress.corpus_duplicate_findings(records)
         self.assertTrue(any("near-duplicate" in finding for finding in findings), findings)
 
+    def test_opposite_action_swap_does_not_hide_a_reused_prompt_skeleton(self) -> None:
+        records = [
+            {
+                "id": "airport-open",
+                "arm": "skill_formula",
+                "mode": "T2V",
+                "brief": "Woman opens a red case at an airport gate",
+                "prompt": "A courier opens the red case.",
+            },
+            {
+                "id": "workshop-close",
+                "arm": "skill_formula",
+                "mode": "T2V",
+                "brief": "Man closes a red case inside a flooded workshop",
+                "prompt": "A courier closes the red case.",
+            },
+        ]
+        similarity = stress.prompt_similarity(
+            records[0]["prompt"], records[1]["prompt"]
+        )
+        self.assertLess(similarity, 0.92)
+        findings = stress.corpus_duplicate_findings(records)
+        self.assertTrue(any("opposite-action" in finding for finding in findings), findings)
+
+        records[1]["prompt"] = "A courier slowly closed the red case."
+        self.assertLess(
+            stress.prompt_similarity(records[0]["prompt"], records[1]["prompt"]),
+            0.92,
+        )
+        findings = stress.corpus_duplicate_findings(records)
+        self.assertTrue(any("opposite-action" in finding for finding in findings), findings)
+
+        for prompt in (
+            "A courier softly closes the red case.",
+            "The courier slowly quietly shuts the red case.",
+        ):
+            with self.subTest(prompt=prompt):
+                records[1]["prompt"] = prompt
+                findings = stress.corpus_duplicate_findings(records)
+                self.assertTrue(
+                    any("opposite-action" in finding for finding in findings),
+                    findings,
+                )
+
     def test_duplicate_prompt_for_the_same_brief_is_not_called_cross_case_drift(self) -> None:
         prompt = next(r["prompt"] for r in shipped_corpus() if r["id"] == "b09-s")
         records = [
@@ -287,6 +331,214 @@ class AdversarialMutationTests(unittest.TestCase):
         )
         findings = stress.contradiction_findings(prompt)
         self.assertTrue(any(finding.startswith("camera:") for finding in findings), findings)
+
+    def test_sequence_cue_must_bind_the_conflicting_camera_directives(self) -> None:
+        bound = "Camera stays locked off, then the camera pushes in."
+        self.assertFalse(
+            any(
+                finding.startswith("camera:")
+                for finding in stress.contradiction_findings(bound)
+            )
+        )
+
+        unrelated = (
+            "Camera stays locked off as the courier then checks the latch before "
+            "the camera pushes in."
+        )
+        findings = stress.contradiction_findings(unrelated)
+        self.assertTrue(any(finding.startswith("camera:") for finding in findings), findings)
+
+        trailing_simultaneity = (
+            "Camera stays locked off, then the camera pushes in at the same time."
+        )
+        findings = stress.contradiction_findings(trailing_simultaneity)
+        self.assertTrue(any(finding.startswith("camera:") for finding in findings), findings)
+
+        event_transitions = (
+            "Camera stays locked off until the latch clicks, then the camera pushes in.",
+            "Camera stays locked off until the latch clicks. The camera pushes in.",
+        )
+        for prompt in event_transitions:
+            with self.subTest(prompt=prompt):
+                self.assertFalse(
+                    any(
+                        finding.startswith("camera:")
+                        for finding in stress.contradiction_findings(prompt)
+                    )
+                )
+
+        simultaneous_synonyms = (
+            "Camera pushes in. Meanwhile, the camera pulls out.",
+            "Camera pushes in and the camera pulls out together.",
+            "Camera pushes in and the camera pulls out concurrently.",
+            "Camera pushes in and the camera pulls out at once.",
+        )
+        for prompt in simultaneous_synonyms:
+            with self.subTest(prompt=prompt):
+                findings = stress.contradiction_findings(prompt)
+                self.assertTrue(
+                    any(finding.startswith("camera:") for finding in findings),
+                    findings,
+                )
+
+        unrelated_simultaneity = (
+            "Camera stays locked off while the actor waits, then the camera pushes in.",
+            (
+                "Camera stays locked off as the siblings stand together, then the "
+                "camera pushes in."
+            ),
+            (
+                "Camera stays locked off, then the camera pushes in as the siblings "
+                "stand together."
+            ),
+            (
+                "Camera stays locked off, then the camera pushes in concurrently "
+                "with the music."
+            ),
+            (
+                "Camera stays locked off while the actor waits. Meanwhile, she opens "
+                "the case; then the camera pushes in."
+            ),
+        )
+        for prompt in unrelated_simultaneity:
+            with self.subTest(prompt=prompt):
+                self.assertFalse(
+                    any(
+                        finding.startswith("camera:")
+                        for finding in stress.contradiction_findings(prompt)
+                    )
+                )
+
+        pair_local = (
+            "Camera stays locked off, then the camera pushes in. Meanwhile, "
+            "the camera pulls out."
+        )
+        findings = stress.contradiction_findings(pair_local)
+        self.assertTrue(any(finding.startswith("camera:") for finding in findings), findings)
+
+    def test_reference_exclusions_do_not_count_as_positive_lighting(self) -> None:
+        prompts = (
+            "The sole light is sunlight; ignore neon lighting from @Image1.",
+            "The sole light is sunlight; exclude moonlight from the source clip.",
+            (
+                "The sole light is sunlight; do not transfer the reference's wardrobe, "
+                "face, texture, colour palette, exposure pattern, reflected spill, or "
+                "neon lighting source."
+            ),
+        )
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                families = stress.positive_families(
+                    prompt, stress.LIGHT_SOURCE_FAMILIES
+                )
+                self.assertEqual(families, {"sun"})
+                self.assertFalse(
+                    any(
+                        finding.startswith("light:")
+                        for finding in stress.contradiction_findings(prompt)
+                    )
+                )
+
+        contrast = "Ignore the source identity, but keep its neon lighting."
+        self.assertIn(
+            "neon",
+            stress.positive_families(contrast, stress.LIGHT_SOURCE_FAMILIES),
+        )
+
+        reset = (
+            "Do not transfer the face and costume, and use neon lighting as the "
+            "sole source. Moonlight also lights the subject at the same time."
+        )
+        self.assertEqual(
+            stress.positive_families(reset, stress.LIGHT_SOURCE_FAMILIES),
+            {"moon", "neon"},
+        )
+        self.assertTrue(
+            any(
+                finding.startswith("light:")
+                for finding in stress.contradiction_findings(reset)
+            )
+        )
+
+        contrastive_negation = "No sunlight but neon lights the subject."
+        self.assertEqual(
+            stress.positive_families(
+                contrastive_negation, stress.LIGHT_SOURCE_FAMILIES
+            ),
+            {"neon"},
+        )
+
+        double_negation = "Do not exclude neon lighting."
+        self.assertIn(
+            "neon",
+            stress.positive_families(double_negation, stress.LIGHT_SOURCE_FAMILIES),
+        )
+
+        for prompt in (
+            "Don't ignore neon lighting.",
+            "Doesn't exclude neon lighting.",
+            "Mustn't ignore neon lighting.",
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertIn(
+                    "neon",
+                    stress.positive_families(prompt, stress.LIGHT_SOURCE_FAMILIES),
+                )
+
+        dialogue = 'The actor says "ignore the warning," as neon lighting comes on.'
+        self.assertIn(
+            "neon",
+            stress.positive_families(dialogue, stress.LIGHT_SOURCE_FAMILIES),
+        )
+
+        single_quoted_dialogue = (
+            "The actor says 'ignore the luggage' as neon lighting comes on."
+        )
+        self.assertIn(
+            "neon",
+            stress.positive_families(
+                single_quoted_dialogue, stress.LIGHT_SOURCE_FAMILIES
+            ),
+        )
+
+        for prompt in (
+            "The directors' instruction is to ignore neon lighting.",
+            "At 6' wide, ignore neon lighting from the reference.",
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertNotIn(
+                    "neon",
+                    stress.positive_families(prompt, stress.LIGHT_SOURCE_FAMILIES),
+                )
+
+        noun_phrase = (
+            "The sole light is sunlight; ignore the reference identity and use "
+            "of neon lighting."
+        )
+        self.assertEqual(
+            stress.positive_families(noun_phrase, stress.LIGHT_SOURCE_FAMILIES),
+            {"sun"},
+        )
+
+        for prompt in (
+            "Ignore wardrobe: use neon lighting as the sole source. Moonlight also lights.",
+            "Ignore wardrobe then use neon lighting as the sole source. Moonlight also lights.",
+            (
+                "Ignore wardrobe and light the subject with neon as the sole source. "
+                "Moonlight also lights."
+            ),
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    stress.positive_families(prompt, stress.LIGHT_SOURCE_FAMILIES),
+                    {"moon", "neon"},
+                )
+                self.assertTrue(
+                    any(
+                        finding.startswith("light:")
+                        for finding in stress.contradiction_findings(prompt)
+                    )
+                )
 
     def test_subject_motion_verbs_are_not_mistaken_for_camera_moves(self) -> None:
         prompts = (

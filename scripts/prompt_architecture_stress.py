@@ -183,6 +183,7 @@ TOKEN_ALIASES = {
     "bicyclist": "bicycle",
     "colourway": "colour",
     "chang": "change",
+    "clos": "close",
     "continu": "continue",
     "dancer": "dance",
     "dancing": "dance",
@@ -202,6 +203,8 @@ TOKEN_ALIASES = {
     "photographed": "portrait_photo",
     "portrait": "portrait_photo",
     "shoot": "sprout",
+    "shut": "close",
+    "shutt": "close",
     "shoe": "sneaker",
     "sprout": "sprout",
     "seed": "sprout",
@@ -214,15 +217,74 @@ TOKEN_ALIASES = {
     "us": "use",
 }
 
-SEQUENCE_CUE = re.compile(
-    r"\b(then|before|after|until|finally|first|next|followed by|once|in sequence|"
-    r"from .{0,40} to)\b",
+DIRECT_SEQUENCE_BRIDGE = re.compile(
+    r"^\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*(?:and\s+)?"
+    r"(?:(?:then|next|finally|followed by)|(?:before|after))\s+"
+    r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
+    re.I,
+)
+EVENT_SEQUENCE_BRIDGE = re.compile(
+    r"^(?:\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*"
+    r"(?:until|once|while|as)\b.{1,240}"
+    r"\b(?:then|next|finally)\b\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*"
+    r"|\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*"
+    r"(?:until|once)\b[^.!?;]{1,120}"
+    r"(?:"
+    r"[.!?]\s*(?:then\s+)?)"
+    r"|\s*[.!?]\s*(?:after|once)\b[^.!?;]{1,120}[,;:]\s*)"
+    r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
+    re.I,
+)
+DIRECT_SIMULTANEOUS_BRIDGE = re.compile(
+    r"^\s*(?:[.!?,;:]|[-\u2013\u2014]{1,2})?\s*(?:and\s+)?"
+    r"(?:while|as|simultaneous(?:ly)?|at the same time|all the while|"
+    r"meanwhile|together|at once|concurrent(?:ly)?(?:\s+with)?)\s+"
+    r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
+    re.I,
+)
+TRAILING_SIMULTANEOUS_CUE = re.compile(
+    r"^\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*"
+    r"(?:simultaneous(?:ly)?|at the same time|all the while|meanwhile|"
+    r"concurrent(?:ly)?|together|at once)\s*$",
     re.I,
 )
 NEGATED_PREFIX = re.compile(
     r"\b(no|not|never|without|do not|does not|must not|nothing from)\b[^.;,]{0,18}$",
     re.I,
 )
+SCOPED_EXCLUSION = re.compile(
+    r"\b(do not|does not|must not|never|nothing from|ignore|exclude)\b",
+    re.I,
+)
+NEGATION_RESET = re.compile(
+    r"\b(but|however|instead|except)\b|"
+    r"(?:[,:]\s*|\band\s+|\bthen\s+)(?:then\s+)?"
+    r"(?:use\b(?!\s+of\b)|keep\b|preserve\b|retain\b|include\b|add\b|"
+    r"make\b|light\b(?!\s+of\b)|illuminate\b)",
+    re.I,
+)
+DOUBLE_NEGATED_EXCLUSION = re.compile(
+    r"\b(?:do not|does not|must not|will not|should not|can(?:not| not)|never|"
+    r"don['\u2019]t|doesn['\u2019]t|mustn['\u2019]t|won['\u2019]t|"
+    r"shouldn['\u2019]t|can['\u2019]t)\s+(?:ignore|exclude)\b",
+    re.I,
+)
+
+OPPOSITE_ACTIONS = {
+    frozenset(pair)
+    for pair in (
+        ("open", "close"),
+        ("enter", "exit"),
+        ("raise", "lower"),
+        ("start", "stop"),
+        ("arrive", "depart"),
+        ("approach", "retreat"),
+    )
+}
+ACTION_MODIFIERS = {
+    "abruptly", "carefully", "deliberately", "gently", "immediately",
+    "now", "quietly", "quickly", "slowly", "suddenly",
+}
 
 CAMERA_FAMILIES = {
     # Camera conflicts must be conservative. Context-free verbs such as
@@ -379,7 +441,94 @@ def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
 
 
 def match_is_negated(text: str, start: int) -> bool:
-    return bool(NEGATED_PREFIX.search(text[max(0, start - 36):start]))
+    short_prefix = text[max(0, start - 36):start]
+    short_match = NEGATED_PREFIX.search(short_prefix)
+    if short_match:
+        global_short_start = max(0, start - 36) + short_match.start()
+        double_negated = any(
+            match.start() <= short_match.start() < match.end()
+            for match in DOUBLE_NEGATED_EXCLUSION.finditer(short_prefix)
+        )
+        if (
+            not double_negated
+            and not position_is_quoted(text, global_short_start)
+            and not NEGATION_RESET.search(short_prefix[short_match.start():])
+        ):
+            return True
+
+    # Reference exclusions often enumerate several protected attributes before
+    # naming the light or sound source. Keep the scope inside one clause, and
+    # let an explicit contrast reset it so "ignore identity, but keep neon"
+    # still records neon as positive evidence.
+    clause_start = max(
+        text.rfind(".", 0, start),
+        text.rfind(";", 0, start),
+        text.rfind("\n", 0, start),
+    ) + 1
+    clause = text[clause_start:start]
+    exclusions = [
+        match
+        for match in SCOPED_EXCLUSION.finditer(clause)
+        if not position_is_quoted(text, clause_start + match.start())
+    ]
+    if not exclusions:
+        return False
+    double_exclusions = list(DOUBLE_NEGATED_EXCLUSION.finditer(clause))
+    if any(
+        match.start() <= exclusions[-1].start() < match.end()
+        for match in double_exclusions
+    ):
+        return False
+    after_exclusion = clause[exclusions[-1].end():]
+    return NEGATION_RESET.search(after_exclusion) is None
+
+
+def position_is_quoted(text: str, position: int) -> bool:
+    """Return whether a control word is inside simple dialogue quotation marks."""
+    prefix = text[:position]
+    straight_quotes = len(re.findall(r'(?<!\\)"', prefix))
+    straight_quote_open = (
+        straight_quotes % 2 == 1
+        and re.search(r'(?<!\\)"', text[position:]) is not None
+    )
+
+    single_quote_open: int | None = None
+    inside_single_quote = False
+    for index, character in enumerate(text):
+        if character != "'":
+            continue
+        previous = text[index - 1] if index > 0 else " "
+        following = text[index + 1] if index + 1 < len(text) else " "
+        if previous.isalnum() and following.isalnum():
+            continue
+        if single_quote_open is None:
+            # Plural possessives (directors') and measurements (6') resemble
+            # closing marks, not dialogue openers.
+            if previous.isalnum() or following.isspace():
+                continue
+            single_quote_open = index
+            continue
+        if previous.isspace():
+            continue
+        if single_quote_open < position < index:
+            inside_single_quote = True
+            break
+        single_quote_open = None
+
+    curly_quote_open = (
+        prefix.rfind("\u201c") > prefix.rfind("\u201d")
+        and text.find("\u201d", position) != -1
+    )
+    curly_single_open = (
+        prefix.rfind("\u2018") > prefix.rfind("\u2019")
+        and text.find("\u2019", position) != -1
+    )
+    return (
+        straight_quote_open
+        or inside_single_quote
+        or curly_quote_open
+        or curly_single_open
+    )
 
 
 def positive_families(text: str, families: dict[str, re.Pattern[str]]) -> set[str]:
@@ -402,19 +551,57 @@ def positive_positions(
     ]
 
 
+def named_positive_positions(
+    text: str,
+    families: dict[str, re.Pattern[str]],
+    names: set[str],
+) -> list[tuple[int, int]]:
+    return positive_positions(
+        text,
+        {name: pattern for name, pattern in families.items() if name in names},
+    )
+
+
 def directives_are_sequenced(
     text: str,
     positions: list[tuple[int, int]],
 ) -> bool:
     if len(positions) < 2:
         return False
-    left = min(start for start, _ in positions)
-    right = max(end for _, end in positions)
-    span = text[left:right]
-    if SEQUENCE_CUE.search(span):
-        return True
-    prefix = text[max(0, left - 32):left]
-    return bool(re.search(r"\bfrom\b[^.;]*$", prefix, re.I) and re.search(r"\bto\b", span, re.I))
+    ordered = sorted(set(positions))
+    # A simultaneity qualifier can follow the final directive, outside its
+    # regex match. Inspect only the remainder of its local clause so an
+    # unrelated cue in a later sentence cannot poison a valid transition.
+    local_end_match = re.search(r"[.;!?\n]", text[ordered[-1][1]:])
+    local_end = (
+        ordered[-1][1] + local_end_match.start()
+        if local_end_match
+        else len(text)
+    )
+    if TRAILING_SIMULTANEOUS_CUE.fullmatch(text[ordered[-1][1]:local_end]):
+        return False
+    adjacent = list(zip(ordered, ordered[1:]))
+    if any(
+        DIRECT_SIMULTANEOUS_BRIDGE.fullmatch(text[left_end:right_start])
+        for (_, left_end), (right_start, _) in adjacent
+    ):
+        return False
+    for (left_start, left_end), (right_start, _) in adjacent:
+        bridge = text[left_end:right_start]
+        if DIRECT_SEQUENCE_BRIDGE.fullmatch(bridge):
+            return True
+        # Permit an explicit event boundary only when it culminates in a cue
+        # directly attached to the later directive. An unrelated "then/before"
+        # elsewhere between the directives is not enough.
+        if EVENT_SEQUENCE_BRIDGE.fullmatch(bridge):
+            return True
+
+        prefix = text[max(0, left_start - 32):left_start]
+        if re.search(r"\bfrom\b\s*$", prefix, re.I) and re.fullmatch(
+            r"\s*to\s*", bridge, re.I
+        ):
+            return True
+    return False
 
 
 def contradiction_findings(prompt: str) -> list[str]:
@@ -429,6 +616,12 @@ def contradiction_findings(prompt: str) -> list[str]:
             sentence,
             positive_positions(sentence, CAMERA_FAMILIES),
         )
+        push_pull_sequenced = directives_are_sequenced(
+            sentence,
+            named_positive_positions(
+                sentence, CAMERA_FAMILIES, {"push", "pull"}
+            ),
+        )
         if "locked" in camera and dynamic and not camera_sequenced:
             findings.append(
                 "camera: locked/static framing conflicts with simultaneous "
@@ -439,7 +632,7 @@ def contradiction_findings(prompt: str) -> list[str]:
                 "camera: three or more simultaneous move families are stacked: "
                 + ", ".join(sorted(dynamic))
             )
-        elif {"push", "pull"}.issubset(dynamic) and not camera_sequenced:
+        elif {"push", "pull"}.issubset(dynamic) and not push_pull_sequenced:
             findings.append("camera: simultaneous push-in and pull-out directives")
 
         light_sources = positive_families(sentence, LIGHT_SOURCE_FAMILIES)
@@ -493,16 +686,38 @@ def contradiction_findings(prompt: str) -> list[str]:
     # still honoring explicit phase cues between the directives.
     global_camera = positive_families(prompt, CAMERA_FAMILIES)
     global_dynamic = global_camera - {"locked"}
+    global_camera_sequenced = directives_are_sequenced(
+        prompt, positive_positions(prompt, CAMERA_FAMILIES)
+    )
+    global_push_pull_sequenced = directives_are_sequenced(
+        prompt,
+        named_positive_positions(prompt, CAMERA_FAMILIES, {"push", "pull"}),
+    )
     if (
         "locked" in global_camera
         and global_dynamic
-        and not directives_are_sequenced(prompt, positive_positions(prompt, CAMERA_FAMILIES))
+        and not global_camera_sequenced
         and not any(finding.startswith("camera:") for finding in findings)
     ):
         findings.append(
             "camera: locked/static framing conflicts with unphased "
             + ", ".join(sorted(global_dynamic))
         )
+    elif (
+        len(global_dynamic) >= 3
+        and not global_camera_sequenced
+        and not any(finding.startswith("camera:") for finding in findings)
+    ):
+        findings.append(
+            "camera: three or more unphased move families are stacked: "
+            + ", ".join(sorted(global_dynamic))
+        )
+    elif (
+        {"push", "pull"}.issubset(global_dynamic)
+        and not global_push_pull_sequenced
+        and not any(finding.startswith("camera:") for finding in findings)
+    ):
+        findings.append("camera: unphased push-in and pull-out directives")
 
     global_lights = positive_families(prompt, LIGHT_SOURCE_FAMILIES)
     global_light_positions = positive_positions(prompt, LIGHT_SOURCE_FAMILIES)
@@ -631,6 +846,41 @@ def prompt_similarity(left: str, right: str) -> float:
 
 
 @lru_cache(maxsize=8192)
+def opposite_action_mutation(left: str, right: str) -> bool:
+    """Catch a reused prompt skeleton hidden by one antithetical verb swap."""
+    left_counts = Counter(lexical_tokens(left))
+    right_counts = Counter(lexical_tokens(right))
+    left_only = list((left_counts - right_counts).elements())
+    right_only = list((right_counts - left_counts).elements())
+    opposite_pair: tuple[str, str] | None = None
+    for left_token in set(left_only):
+        for right_token in set(right_only):
+            if frozenset((left_token, right_token)) in OPPOSITE_ACTIONS:
+                opposite_pair = (left_token, right_token)
+                break
+        if opposite_pair:
+            break
+    if opposite_pair is None:
+        return False
+    left_only.remove(opposite_pair[0])
+    right_only.remove(opposite_pair[1])
+    residual = left_only + right_only
+    if any(
+        token not in ACTION_MODIFIERS
+        and token not in FUNCTION_WORDS
+        and not token.endswith("ly")
+        for token in residual
+    ):
+        return False
+    shared_content = {
+        token
+        for token in (left_counts.keys() & right_counts.keys())
+        if token not in FUNCTION_WORDS
+    }
+    return len(shared_content) >= 2
+
+
+@lru_cache(maxsize=8192)
 def materially_different_briefs(left: str, right: str) -> bool:
     if normalized_prompt(left) == normalized_prompt(right):
         return False
@@ -672,9 +922,14 @@ def corpus_duplicate_findings(records: list[dict], arm: str = "skill_formula") -
             if pair in exact_pairs or not materially_different_briefs(left["brief"], right["brief"]):
                 continue
             similarity = prompt_similarity(left["prompt"], right["prompt"])
-            if similarity >= 0.92:
+            opposite_mutation = opposite_action_mutation(
+                left["prompt"], right["prompt"]
+            )
+            if similarity >= 0.92 or opposite_mutation:
+                mutation_note = "; opposite-action skeleton" if opposite_mutation else ""
                 findings.append(
-                    f"cross-case near-duplicate prompt ({similarity:.2f}) across materially "
+                    f"cross-case near-duplicate prompt ({similarity:.2f}{mutation_note}) "
+                    "across materially "
                     f"different briefs: {left['id']}, {right['id']}"
                 )
     return findings
