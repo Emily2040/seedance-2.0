@@ -9,9 +9,13 @@ express are actually held.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -21,9 +25,10 @@ import build_hero  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RETIRED = ("viewfinder", "crosshair", "timecode", "sprocket", "REC", "21:9")
-MASTHEAD_INSTALL = (
-    "python -m pip install --require-hashes "
-    "--requirement requirements-masthead.lock"
+MASTHEAD_INSTALL = "python scripts/build_masthead_outlines.py --install-build-deps"
+MUSLLINUX_UHARFBUZZ_HASHES = (
+    "032382a82e3b9e2a460116aee2934bb713e4757efb68d7f11f55dbbb1ae57184",
+    "e3a80b0d94baf19be47708903246e2ff4bd1069e1f6bf9ed530bf1c9e3e476b4",
 )
 
 
@@ -138,9 +143,13 @@ class OutlinedTypeTests(unittest.TestCase):
             "uharfbuzz": "0.56.0",
             "harfbuzz": "14.3.0",
         }
-        lock = (ROOT / "requirements-masthead.lock").read_text(encoding="utf-8")
+        lock_path = ROOT / "requirements-masthead.lock"
+        lock = lock_path.read_text(encoding="utf-8")
         self.assertIn("fonttools==4.63.0", lock)
         self.assertIn("uharfbuzz==0.56.0", lock)
+        self.assertIn("Linux (glibc and musl", lock)
+        for digest in MUSLLINUX_UHARFBUZZ_HASHES:
+            self.assertIn(f"--hash=sha256:{digest}", lock)
         for package in ("fonttools", "uharfbuzz"):
             block = lock.split(f"{package}==", 1)[1]
             if package == "fonttools":
@@ -151,6 +160,11 @@ class OutlinedTypeTests(unittest.TestCase):
 
         data = json.loads((ROOT / "assets/masthead-outlines.json").read_text(encoding="utf-8"))
         self.assertEqual(data["provenance"]["builder_versions"], expected)
+        build_lock = data["provenance"]["build_lock"]
+        self.assertEqual(build_lock["path"], "requirements-masthead.lock")
+        self.assertEqual(build_lock["sha256"], hashlib.sha256(lock_path.read_bytes()).hexdigest())
+        self.assertIn("--force-reinstall --require-hashes", build_lock["install_policy"])
+        self.assertEqual(gen.build_lock_sha256(), build_lock["sha256"])
 
     def test_masthead_builder_refuses_an_unpinned_toolchain(self) -> None:
         """A different shaper must fail before silently rewriting committed geometry."""
@@ -173,8 +187,100 @@ class OutlinedTypeTests(unittest.TestCase):
         for missing in ("fontTools", "uharfbuzz"):
             with self.subTest(missing=missing):
                 with mock.patch.dict(sys.modules, {missing: None}):
-                    with self.assertRaisesRegex(SystemExit, re.escape(MASTHEAD_INSTALL)):
+                    with self.assertRaisesRegex(SystemExit, re.escape(gen.recovery_command())):
                         gen.installed_builder_versions()
+
+    def test_masthead_recovery_is_cwd_independent(self) -> None:
+        """The emitted recovery path must work when the generator is invoked by absolute path."""
+        script = ROOT / "scripts/build_masthead_outlines.py"
+        lock = ROOT / "requirements-masthead.lock"
+        with tempfile.TemporaryDirectory() as cwd:
+            result = subprocess.run(
+                [sys.executable, "-S", str(script), "--check"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        message = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(str(script), message)
+        self.assertIn(str(lock), message)
+        self.assertNotIn("--requirement requirements-masthead.lock", message)
+
+    def test_verified_installer_never_reuses_a_same_version_environment(self) -> None:
+        """Even an apparently matching environment must go through a forced wheel-hash install."""
+        from unittest import mock
+
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as cwd:
+            previous = Path.cwd()
+            try:
+                os.chdir(cwd)
+                with (
+                    mock.patch.object(
+                        gen,
+                        "installed_builder_versions",
+                        return_value=gen.pinned_builder_versions(),
+                    ) as installed,
+                    mock.patch.object(gen.subprocess, "run") as run,
+                ):
+                    gen.install_pinned_builder_dependencies()
+            finally:
+                os.chdir(previous)
+
+        installed.assert_not_called()
+        run.assert_called_once_with(gen.pinned_install_argv(), check=True, cwd=ROOT)
+        argv = run.call_args.args[0]
+        self.assertIn("--force-reinstall", argv)
+        self.assertIn("--require-hashes", argv)
+        self.assertEqual(Path(argv[-1]), ROOT / "requirements-masthead.lock")
+
+    def test_install_cli_routes_to_the_verified_installer(self) -> None:
+        """The command copied from README, CI, or an error must execute the forced installer."""
+        from unittest import mock
+
+        import build_masthead_outlines as gen
+
+        with (
+            mock.patch.object(gen, "install_pinned_builder_dependencies") as install,
+            mock.patch.object(gen, "document") as document,
+            mock.patch("builtins.print"),
+        ):
+            self.assertEqual(gen.main(["--install-build-deps"]), 0)
+
+        install.assert_called_once_with()
+        document.assert_not_called()
+
+    def test_writing_the_asset_cannot_bypass_the_verified_installer(self) -> None:
+        """Every CLI write must force-install before it reads a shaping dependency."""
+        from unittest import mock
+
+        import build_masthead_outlines as gen
+
+        events = []
+        with tempfile.TemporaryDirectory() as cwd:
+            target = Path(cwd) / "masthead-outlines.json"
+            with (
+                mock.patch.object(
+                    gen,
+                    "install_pinned_builder_dependencies",
+                    side_effect=lambda: events.append("install"),
+                ) as install,
+                mock.patch.object(
+                    gen,
+                    "document",
+                    side_effect=lambda: events.append("document") or {"ok": True},
+                ),
+                mock.patch.object(gen, "TARGET", target),
+                mock.patch.object(gen, "repo_relative_posix", return_value="asset.json"),
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(gen.main([]), 0)
+
+        install.assert_called_once_with()
+        self.assertEqual(events, ["install", "document"])
 
     def test_masthead_install_is_hash_enforced_everywhere_it_is_documented(self) -> None:
         """Release, CI, and script help must not regress to unconstrained installs."""
@@ -190,6 +296,10 @@ class OutlinedTypeTests(unittest.TestCase):
         self.assertIn("python scripts/build_masthead_outlines.py --check", workflow)
         self.assertIn(MASTHEAD_INSTALL, gen.__doc__)
         self.assertNotIn("pip install " + "fonttools uharfbuzz", gen.__doc__)
+        argv = gen.pinned_install_argv("python")
+        self.assertIn("--force-reinstall", argv)
+        self.assertIn("--require-hashes", argv)
+        self.assertEqual(Path(argv[-1]), ROOT / "requirements-masthead.lock")
 
     def test_the_generator_can_run_from_a_clean_checkout(self) -> None:
         """The fonts it reads must be tracked, or the documented path is fiction."""

@@ -19,6 +19,11 @@
       "uharfbuzz": "0.56.0",
       "harfbuzz": "14.3.0"
     },
+    "build_lock": {
+      "path": "requirements-masthead.lock",
+      "sha256": "687c8e4d082100d6a51e2c3b2e3b907752df3858f75df50f1dbf5ea9093ee70f",
+      "install_policy": "generator writes only after pip --force-reinstall --require-hashes; preinstalled distributions are not reused"
+    },
     "note": "Outlines are glyph geometry, not font software. The OFL permits both these outlines and the bundled originals in assets/fonts/; attribution is retained here."
   },
   "glyphs": {

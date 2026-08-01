@@ -8,11 +8,13 @@ design system specifies was what a minority of readers actually saw. Outlines
 depend on no installed font and render identically for everyone.
 
 This is a maintainer tool, not part of the installed skill runtime. Its two
-third-party packages are isolated in a hash-pinned build lock.
+third-party packages are isolated in a hash-pinned build lock. The installer
+always force-reinstalls them, so a same-version package already present in the
+environment cannot bypass wheel-hash verification.
 
-    python -m pip install --require-hashes --requirement requirements-masthead.lock
-    python scripts/build_masthead_outlines.py            # rewrite the asset
-    python scripts/build_masthead_outlines.py --check    # verify it is current
+    python scripts/build_masthead_outlines.py             # verified install + rewrite
+    python scripts/build_masthead_outlines.py --install-build-deps  # prepare an offline check
+    python scripts/build_masthead_outlines.py --check     # verify it is current
 
 Run it only when the wordmark or tagline copy changes, then re-run
 scripts/build_hero.py so the SVGs pick up the new geometry.
@@ -25,19 +27,21 @@ the bundled originals, and attribution travels in the generated file.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+import shlex
+import subprocess
+import sys
 from io import BytesIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+LOCK = ROOT / "requirements-masthead.lock"
 FONT_DIR = ROOT / "assets" / "fonts"
 ROMAN = FONT_DIR / "BodoniModa[opsz,wght].ttf"
 ITALIC = FONT_DIR / "BodoniModa-Italic[opsz,wght].ttf"
 TARGET = ROOT / "assets" / "masthead-outlines.json"
-INSTALL_COMMAND = (
-    "python -m pip install --require-hashes "
-    "--requirement requirements-masthead.lock"
-)
 
 # Optical size tracks the rendered size, clamped to the axis range. That is
 # what the axis is for: a didone drawn for 96px has hairlines that vanish at
@@ -58,6 +62,40 @@ PINNED_BUILDER_VERSIONS = {
 }
 
 
+def pinned_install_argv(python: str | Path | None = None) -> list[str]:
+    """Return the forced, hash-verified install command with an absolute lock path."""
+    return [
+        str(python or sys.executable),
+        "-m",
+        "pip",
+        "install",
+        "--force-reinstall",
+        "--require-hashes",
+        "--requirement",
+        str(LOCK),
+    ]
+
+
+def shell_command(argv: list[str]) -> str:
+    """Render an argv for the host shell without losing paths that contain spaces."""
+    return subprocess.list2cmdline(argv) if os.name == "nt" else shlex.join(argv)
+
+
+def recovery_command() -> str:
+    """Return a cwd-independent command that installs the pinned build toolchain."""
+    return shell_command([sys.executable, str(Path(__file__).resolve()), "--install-build-deps"])
+
+
+def install_pinned_builder_dependencies() -> None:
+    """Force-install locked wheels; never accept an already-satisfied distribution."""
+    subprocess.run(pinned_install_argv(), check=True, cwd=ROOT)
+
+
+def build_lock_sha256() -> str:
+    """Bind generated provenance to the exact requirements lock bytes."""
+    return hashlib.sha256(LOCK.read_bytes()).hexdigest()
+
+
 def repo_relative_posix(path: Path) -> str:
     """Return a repository-relative path with stable JSON/documentation separators."""
     return path.relative_to(ROOT).as_posix()
@@ -75,7 +113,9 @@ def installed_builder_versions() -> dict[str, str]:
         import uharfbuzz as hb
     except ImportError as exc:
         raise SystemExit(
-            f"masthead builder dependencies are missing; run:\n  {INSTALL_COMMAND}"
+            "masthead builder dependencies are missing; run:\n"
+            f"  {recovery_command()}\n"
+            f"Resolved build lock: {LOCK}"
         ) from exc
     return {
         "fonttools": fontTools.__version__,
@@ -93,7 +133,7 @@ def require_pinned_builder_versions() -> dict[str, str]:
         )
         observed = ", ".join(f"{name}={version}" for name, version in actual.items())
         raise SystemExit(
-            f"masthead builder version mismatch; run `{INSTALL_COMMAND}` "
+            f"masthead builder version mismatch; run `{recovery_command()}` "
             f"(expected {expected}; found {observed})"
         )
     return actual
@@ -173,6 +213,14 @@ def document() -> dict:
             "instances": f"opsz tracks rendered size clamped to {OPSZ_MIN}-{OPSZ_MAX}; wght=400 throughout",
             "shaping": "HarfBuzz with kern and liga features enabled",
             "builder_versions": builder_versions,
+            "build_lock": {
+                "path": repo_relative_posix(LOCK),
+                "sha256": build_lock_sha256(),
+                "install_policy": (
+                    "generator writes only after pip --force-reinstall --require-hashes; "
+                    "preinstalled distributions are not reused"
+                ),
+            },
             "note": (
                 "Outlines are glyph geometry, not font software. The OFL permits both these "
                 "outlines and the bundled originals in assets/fonts/; attribution is retained here."
@@ -182,10 +230,28 @@ def document() -> dict:
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="verify the committed asset is current")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--install-build-deps",
+        action="store_true",
+        help="force-install the hash-locked build toolchain and exit",
+    )
+    args = parser.parse_args(argv)
+
+    if args.install_build_deps:
+        if args.check:
+            parser.error("--install-build-deps and --check are separate steps")
+        install_pinned_builder_dependencies()
+        print(f"Installed masthead builder from {repo_relative_posix(LOCK)} with wheel hashes enforced.")
+        return 0
+
+    # Writing provenance is a release operation: always replace even an
+    # apparently matching installation from the locked wheel set first.
+    # Read-only --check remains offline after the explicit preparation step.
+    if not args.check:
+        install_pinned_builder_dependencies()
 
     rendered = json.dumps(document(), indent=2, ensure_ascii=False) + "\n"
 

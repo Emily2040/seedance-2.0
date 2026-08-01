@@ -37,11 +37,13 @@ jobs:
             requirements-validation.lock
             requirements-masthead.lock
       # Third-party validation and masthead build inputs are separately locked
-      # and hash-checked for this runner and Python version.
+      # and hash-checked for this runner and Python version. The masthead
+      # installer force-reinstalls so a preloaded same-version distribution
+      # cannot short-circuit wheel-hash verification.
       - name: Install validation dependencies
         run: python -m pip install --require-hashes --requirement requirements-validation.lock
-      - name: Install masthead build dependencies
-        run: python -m pip install --require-hashes --requirement requirements-masthead.lock
+      - name: Force-install masthead build dependencies from locked wheels
+        run: python scripts/build_masthead_outlines.py --install-build-deps
       - name: Validate skill metadata and required files
         run: python scripts/validate_skills.py --strict
       - name: Audit stale and risky active wording

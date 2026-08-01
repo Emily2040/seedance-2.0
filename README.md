@@ -389,15 +389,16 @@ Run these checks before every release. The source-registry check runs with
 validation deliberately omits the flag, because staleness depends on the calendar
 rather than on the change under test.
 
-The checks themselves are offline. Two maintainer checks need third-party
-libraries: `schema_check.py` executes JSON Schema instances, while
-`build_masthead_outlines.py --check` reproduces the outlined masthead type.
-Install both hash-pinned locks first — on a clean checkout those checks otherwise
-stop the run:
+The checks themselves are offline after their build dependencies are installed.
+Two maintainer checks need third-party libraries: `schema_check.py` executes JSON
+Schema instances, while `build_masthead_outlines.py --check` reproduces the
+outlined masthead type. Install both hash-pinned toolchains first — the masthead
+installer resolves the lock from the checkout and force-reinstalls its wheels, so
+an already-present same-version package cannot skip hash verification:
 
 ```bash
 python -m pip install --require-hashes --requirement requirements-validation.lock
-python -m pip install --require-hashes --requirement requirements-masthead.lock
+python scripts/build_masthead_outlines.py --install-build-deps
 ```
 
 ```bash
@@ -462,11 +463,16 @@ The front page follows an editorial design system rather than default AI styling
 The masthead is generated from one geometry by [`scripts/build_hero.py`](scripts/build_hero.py), so its dark and light variants cannot drift apart; `--check` proves the committed SVGs still match the generator, and it runs in CI.
 
 The outlined display type has a separate, build-only toolchain. Before changing
-the wordmark or tagline geometry, run
-`python -m pip install --require-hashes --requirement requirements-masthead.lock`, then run
-`python scripts/build_masthead_outlines.py` and `python scripts/build_hero.py`.
-The generator refuses unpinned shaping-library versions and records the exact
-FontTools, uharfbuzz, and HarfBuzz versions in `assets/masthead-outlines.json`.
+the wordmark or tagline geometry, run `python scripts/build_masthead_outlines.py`
+and then `python scripts/build_hero.py`. A writing run always uses pip's
+`--force-reinstall --require-hashes` against the resolved checkout lock before
+it emits geometry; preinstalled packages cannot bypass that step. The generator
+then refuses unpinned shaping-library versions and records the exact lock digest
+plus the FontTools, uharfbuzz, and HarfBuzz versions in
+`assets/masthead-outlines.json`.
+To prepare a later read-only check without regenerating, run
+`python scripts/build_masthead_outlines.py --install-build-deps` once and then
+use `python scripts/build_masthead_outlines.py --check` offline.
 
 The masthead and the hand-built operating diagram (`assets/hero-dark.svg`, `assets/hero-light.svg`, `assets/skill-map.svg`) are served through a `prefers-color-scheme` picture element; generated bitmap art lives only in the curated visual gallery, including the text-rich infographics.
 
