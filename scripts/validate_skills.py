@@ -101,6 +101,7 @@ REQUIRED_FILES = [
     "scripts/sequence_eval_check.py",
     "scripts/generation_run_check.py",
     "scripts/extract_last_frame.py",
+    "validation/install-payload.txt",
     ".github/workflows/validate-skills.yml",
     "agents/openai.yaml",
     "evals/evals.json",
