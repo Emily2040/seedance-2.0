@@ -4,7 +4,8 @@
 Scores three arms of the same 34 briefs against each other:
 
   naive_online      what a listicle or an untrained user writes
-  quickstart_style  the shape the beginner-facing example demonstrates
+  quickstart_style  the shape the beginner-facing example taught before v6.6.x
+                    fixed it - kept as a frozen regression arm, not a current doc
   skill_formula     seedance-prompt's Director Formula, followed literally
 
 The point is the gap between arms. If the skill's doctrine is sound, the
@@ -141,7 +142,7 @@ def score_opening(prompt: str) -> tuple[float, str]:
     if SHOT_META.match(prompt.strip()):
         return 2.0, "opens on camera/shot metadata, not the subject"
     # A concrete noun phrase followed by a verb inside the lead clause.
-    if re.search(r"\b(is|are|stands?|sits?|walks?|holds?|turns?|lowers?|raises?|"
+    if re.search(r"\b(is|are|stands?|sits?|walks?|holds?|turns?|lowers?|raises?|reads?|"
                  r"steps?|leans?|kneels?|runs?|reaches?|lifts?|opens?|pushes?|"
                  r"drags?|carries?|waits?|rests?|hangs?|floats?|drifts?|slides?)\b", head, re.I):
         return 4.0, "subject and action lead"

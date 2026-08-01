@@ -40,7 +40,9 @@ The [**directing engine**](references/directing-engine.md) encodes that judgment
 
 **Ask for "cinematic":** `epic cinematic shot of a woman reading a letter, emotional, beautiful lighting`
 
-**Direct it:** `Medium close-up, eye-level; she lowers the letter and her hands go still as a slow push-in arrives; soft window light behind her keeps her face plain; near-silence with one chair scrape — the realization lands in the stilled hands, not a word.`
+**Direct it:** `A woman at a kitchen table reads the letter twice, then her hands lower it and go still. Camera: medium close-up at eye level, a slow push-in that settles when her hands stop. Soft window light keeps her face plain. Sound: room tone, one chair scrape, near-silence — the realization lands in the stilled hands, not a word.`
+
+The order is part of the direction: the subject and her action take the opening words — where the model locks in who the shot is about — and the camera, light, and sound follow.
 
 It then holds one directorial voice across every short clip of a long story, and ships with **33 worked derivations** — product, music video, horror, anime, action, comedy, documentary, high fashion, sci-fi, and more — each shown end to end.
 
@@ -355,6 +357,8 @@ python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skill
 ```
 
 The command copies the repository to `<dest>/seedance-20` and prints where it landed. Add `--force` only to replace an install that already exists — it deletes the previous copy first, so it is not the flag to start with. Restart your client afterwards so `seedance-20` appears in its skill list.
+
+Installs skip the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator — an agent needs the skill text, not the artwork. The gallery links in an installed copy's README therefore resolve only in this repository.
 
 A destination inside this repository is refused rather than attempted: copying the source tree into a directory inside itself recurses until the path length fails. For a project-local install, run the script from the project you are installing into, by absolute path, as above.
 
