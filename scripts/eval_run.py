@@ -137,12 +137,15 @@ def _validate_json_strings(value: object) -> None:
 
 def strict_json_loads(text: str) -> object:
     """Decode standards-compliant JSON and reject ambiguous object keys."""
-    value = json.loads(
-        text,
-        parse_constant=_reject_json_constant,
-        object_pairs_hook=_reject_duplicate_json_keys,
-    )
-    _validate_json_strings(value)
+    try:
+        value = json.loads(
+            text,
+            parse_constant=_reject_json_constant,
+            object_pairs_hook=_reject_duplicate_json_keys,
+        )
+        _validate_json_strings(value)
+    except RecursionError:
+        raise ValueError("JSON nesting exceeds the supported depth") from None
     return value
 
 
@@ -175,29 +178,51 @@ def is_sequence_case(case: dict) -> bool:
     return "expected_sequence_relation" in case or case.get("critical") is True
 
 
+def _case_string_list(case: dict, field: str) -> list[str]:
+    """Return a case list only after every item is safe to iterate and hash."""
+
+    value = case.get(field, [])
+    if not isinstance(value, list):
+        raise ValueError(f"{field} must be a list of non-empty UTF-8 strings")
+    if any(
+        not isinstance(item, str)
+        or not item.strip()
+        or not _is_utf8_encodable(item)
+        for item in value
+    ):
+        raise ValueError(f"{field} must contain only non-empty UTF-8 strings")
+    return value
+
+
 def expected_judge_checks(case: dict) -> list[str]:
     """Return every case criterion that the judge must score exactly once."""
-    checks = list(case.get("assertions", []))
+    checks = list(_case_string_list(case, "assertions"))
     checks.extend(
         f"[required_output_section] {section}"
-        for section in case.get("required_output_sections", [])
+        for section in _case_string_list(case, "required_output_sections")
     )
     checks.extend(
         f"[forbidden_behavior_absent] {behavior}"
-        for behavior in case.get("forbidden_behaviors", [])
+        for behavior in _case_string_list(case, "forbidden_behaviors")
     )
     return checks
 
 
 def responder_context(root: Path, case: dict) -> str:
     parts = ["# Skill: seedance-20 (root router)", read_text(root / "SKILL.md")]
-    for name in case.get("skills_expected_to_activate", []):
+    for name in _case_string_list(case, "skills_expected_to_activate"):
         if name == "seedance-20":
             continue  # the root router is already included above
         body = read_text(root / "skills" / name / "SKILL.md", limit=8000)
         if body:
             parts.append(f"\n# Sub-skill: {name}\n{body}")
     fixture = case.get("state_fixture")
+    if fixture is not None and (
+        not isinstance(fixture, str)
+        or not fixture.strip()
+        or not _is_utf8_encodable(fixture)
+    ):
+        raise ValueError("state_fixture must be a non-empty UTF-8 string")
     if fixture and (root / fixture).exists():
         parts.append(f"\n# Project state fixture ({fixture})\n{read_text(root / fixture, limit=6000)}")
     return "\n\n".join(parts)
@@ -506,17 +531,31 @@ def self_test(root: Path) -> int:
             if cid in seen_ids:
                 errors.append(f"{cid}: duplicate case id")
             seen_ids.add(cid)
-        if not case.get("assertions"):
+        try:
+            assertions = _case_string_list(case, "assertions")
+            judge_checks = expected_judge_checks(case)
+        except ValueError as exc:
+            errors.append(f"{cid}: {exc}")
+            assertions = []
+            judge_checks = []
+        if not assertions:
             errors.append(f"{cid}: no assertions")
-        judge_checks = expected_judge_checks(case)
-        if any(not isinstance(check, str) or not check for check in judge_checks):
-            errors.append(f"{cid}: judge checks must be non-empty strings")
         if len(judge_checks) != len(set(judge_checks)):
             errors.append(f"{cid}: duplicate judge check")
-        for name in case.get("skills_expected_to_activate", []):
+        try:
+            skills = _case_string_list(case, "skills_expected_to_activate")
+        except ValueError as exc:
+            errors.append(f"{cid}: {exc}")
+            skills = []
+        for name in skills:
             if name != "seedance-20" and not (root / "skills" / name).is_dir():
                 errors.append(f"{cid}: skill '{name}' does not resolve")
-        if not responder_context(root, case).strip():
+        try:
+            context = responder_context(root, case)
+        except ValueError as exc:
+            errors.append(f"{cid}: {exc}")
+            context = ""
+        if not context.strip():
             errors.append(f"{cid}: empty responder context")
         if is_sequence_case(case):
             seq += 1

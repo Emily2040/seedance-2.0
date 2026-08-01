@@ -696,6 +696,71 @@ class InputContractTests(unittest.TestCase):
                 self.assertIn("id must be a non-empty UTF-8 string", output.getvalue())
                 self.assertNotIn("Traceback", output.getvalue())
 
+    def test_deeply_nested_eval_json_fails_cleanly_at_both_cli_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "evals").mkdir()
+            nested_id = "[" * 1100 + '"x"' + "]" * 1100
+            (root / "evals" / "evals.json").write_text(
+                '{"cases":[{"id":'
+                + nested_id
+                + ',"prompt":"test","assertions":["works"]}]}',
+                encoding="utf-8",
+            )
+
+            for argv, expected_code, expected_message in (
+                (["eval_run.py", str(root), "--self-test"], 1, "self-test FAILED"),
+                (["eval_run.py", str(root)], 2, "Could not load eval cases"),
+            ):
+                with self.subTest(argv=argv):
+                    output = io.StringIO()
+                    with mock.patch.object(sys, "argv", argv), redirect_stdout(output):
+                        code = eval_run.main()
+                    self.assertEqual(code, expected_code)
+                    self.assertIn(expected_message, output.getvalue())
+                    self.assertIn("supported depth", output.getvalue())
+                    self.assertNotIn("Traceback", output.getvalue())
+
+    def test_self_test_rejects_malformed_case_collections_without_tracebacks(self) -> None:
+        mutations = (
+            ("assertions", None, "assertions must be a list"),
+            ("assertions", [{}], "assertions must contain only"),
+            (
+                "skills_expected_to_activate",
+                [[]],
+                "skills_expected_to_activate must contain only",
+            ),
+            (
+                "required_output_sections",
+                {},
+                "required_output_sections must be a list",
+            ),
+            ("forbidden_behaviors", [None], "forbidden_behaviors must contain only"),
+            ("state_fixture", [], "state_fixture must be a non-empty UTF-8 string"),
+        )
+        for field, value, expected in mutations:
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "evals").mkdir()
+                (root / "references").mkdir()
+                (root / "SKILL.md").write_text("# test skill\n", encoding="utf-8")
+                (root / "references" / "eval-rubric.md").write_text(
+                    EXACT_RUBRIC, encoding="utf-8"
+                )
+                case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+                case[field] = value
+                (root / "evals" / "evals.json").write_text(
+                    json.dumps({"cases": [case]}), encoding="utf-8"
+                )
+
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    code = eval_run.self_test(root)
+
+                self.assertEqual(code, 1)
+                self.assertIn(expected, output.getvalue())
+                self.assertNotIn("Traceback", output.getvalue())
+
     def test_load_cases_rejects_ambiguous_json_and_invalid_shapes(self) -> None:
         invalid_documents = (
             '{"cases":[],"cases":[]}',
