@@ -136,6 +136,19 @@ class OutlinedTypeTests(unittest.TestCase):
         self.assertEqual(gen.TARGET, ROOT / "assets/masthead-outlines.json",
                          "the generator must write the asset the masthead actually reads")
 
+    def test_masthead_provenance_paths_are_posix(self) -> None:
+        """Generated JSON must be byte-identical on Windows and POSIX hosts."""
+        import build_masthead_outlines as gen
+
+        self.assertEqual(
+            gen.repo_relative_posix(gen.ROMAN),
+            "assets/fonts/BodoniModa[opsz,wght].ttf",
+        )
+        self.assertEqual(
+            gen.repo_relative_posix(gen.ITALIC),
+            "assets/fonts/BodoniModa-Italic[opsz,wght].ttf",
+        )
+
     def test_declared_font_families_must_be_monospace(self) -> None:
         """A denylist of serif names passes Arial and bare generics."""
         import design_audit
