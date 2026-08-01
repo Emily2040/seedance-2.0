@@ -9,14 +9,17 @@ explicit enforcement can fail.
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from collections.abc import Callable
+from contextlib import redirect_stdout
 from datetime import date, timedelta
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -65,10 +68,37 @@ class FreshnessClassificationTests(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
 
     def test_future_dated_registry_is_rejected(self) -> None:
+        errors, warnings = findings(-5, False)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("future", warnings[0])
+
         errors, warnings = findings(-5, True)
         self.assertEqual(len(errors), 1)
         self.assertIn("future", errors[0])
         self.assertEqual(warnings, [])
+
+    def test_future_ordering_requires_an_explicit_calendar_anchor(self) -> None:
+        future = VERIFIED + timedelta(days=3650)
+        text = f"last_verified: {future.isoformat()}\n"
+
+        deterministic_errors: list[str] = []
+        self.assertEqual(
+            checker.checked_in_last_verified(
+                text, "source-registry.md", None, deterministic_errors
+            ),
+            future,
+        )
+        self.assertEqual(deterministic_errors, [])
+
+        enforced_errors: list[str] = []
+        self.assertIsNone(
+            checker.checked_in_last_verified(
+                text, "source-registry.md", VERIFIED, enforced_errors
+            )
+        )
+        self.assertEqual(len(enforced_errors), 1)
+        self.assertIn("future", enforced_errors[0])
 
 
 class CommandLineBehaviourTests(unittest.TestCase):
@@ -92,6 +122,7 @@ class CommandLineBehaviourTests(unittest.TestCase):
         api_status_text: str | None = None,
         reference_text: str | None = None,
         fixture_observer: Callable[[Path], None] | None = None,
+        enforce_freshness: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         today = date.today()
         registry_verified = registry_verified or today
@@ -145,14 +176,11 @@ class CommandLineBehaviourTests(unittest.TestCase):
             (data_dir / "sources.seedance-2026-05-30.json").write_text(
                 json.dumps({"sources": sources}), encoding="utf-8"
             )
+            command = [sys.executable, str(self.script), str(repo), "--strict"]
+            if enforce_freshness:
+                command.append("--enforce-freshness")
             return subprocess.run(
-                [
-                    sys.executable,
-                    str(self.script),
-                    str(repo),
-                    "--strict",
-                    "--enforce-freshness",
-                ],
+                command,
                 capture_output=True,
                 text=True,
             )
@@ -160,6 +188,26 @@ class CommandLineBehaviourTests(unittest.TestCase):
     def test_default_run_passes_on_this_repository(self) -> None:
         result = self.run_checker("--strict")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_default_pr_mode_does_not_read_the_wall_clock(self) -> None:
+        class ExplodingDate(date):
+            @classmethod
+            def today(cls) -> date:
+                raise AssertionError("ordinary PR validation read the wall clock")
+
+        output = io.StringIO()
+        with (
+            mock.patch.object(checker, "date", ExplodingDate),
+            mock.patch.object(
+                sys,
+                "argv",
+                ["source_registry_check.py", str(self.root), "--strict"],
+            ),
+            redirect_stdout(output),
+        ):
+            code = checker.main()
+
+        self.assertEqual(code, 0, output.getvalue())
 
     def test_synthetic_repositories_stay_outside_the_source_tree(self) -> None:
         observed: list[Path] = []
@@ -190,6 +238,19 @@ class CommandLineBehaviourTests(unittest.TestCase):
         result = self.run_fixture(registry_verified=date.today() + timedelta(days=1))
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("future", result.stdout.lower())
+
+    def test_default_pr_mode_is_independent_of_future_calendar_ordering(self) -> None:
+        future = date.today() + timedelta(days=3650)
+        stamp = f"last_verified: {future.isoformat()}\n"
+        result = self.run_fixture(
+            registry_verified=future,
+            api_status_text=stamp,
+            reference_text=stamp,
+            enforce_freshness=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("future", result.stdout.lower())
+        self.assertNotIn("days old", result.stdout.lower())
 
     def test_green_output_refuses_live_verification_claim(self) -> None:
         result = self.run_fixture()

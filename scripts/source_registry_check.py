@@ -24,7 +24,7 @@ def parse_date(text: str) -> date | None:
 
 
 def checked_in_last_verified(
-    text: str, label: str, today: date, errors: list[str]
+    text: str, label: str, today: date | None, errors: list[str]
 ) -> date | None:
     """Read one explicit checked-in verification stamp.
 
@@ -46,7 +46,10 @@ def checked_in_last_verified(
     if verified is None:
         errors.append(f"{label} has invalid last_verified date `{raw}`")
         return None
-    if verified > today:
+    # Calendar ordering is release/scheduled evidence, not a property of a
+    # commit.  Ordinary pull-request validation passes ``None`` so the same
+    # tree cannot fail in one timezone and pass after the date boundary.
+    if today is not None and verified > today:
         days = (verified - today).days
         errors.append(
             f"{label} last_verified {verified.isoformat()} is {days} "
@@ -69,10 +72,11 @@ def freshness_findings(
     age = (today - verified).days
     if age < 0:
         days = -age
-        return [
+        message = (
             f"source-registry.md last_verified {verified.isoformat()} is {days} "
             f"day{'s' if days != 1 else ''} in the future"
-        ], []
+        )
+        return ([message], []) if enforce else ([], [message])
     if age <= STALE_WARN_DAYS:
         return [], []
     message = f"source-registry.md last_verified is {age} days old"
@@ -101,17 +105,19 @@ def main() -> int:
     root = Path(args.repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
+    enforcement_date = date.today() if args.enforce_freshness else None
 
     registry = root / "references" / "source-registry.md"
     if not registry.exists():
         errors.append("missing references/source-registry.md")
     else:
         text = registry.read_text(encoding="utf-8")
-        today = date.today()
-        verified = checked_in_last_verified(text, "source-registry.md", today, errors)
-        if verified:
+        verified = checked_in_last_verified(
+            text, "source-registry.md", enforcement_date, errors
+        )
+        if verified and enforcement_date is not None:
             stale_errors, stale_warnings = freshness_findings(
-                verified, today, args.enforce_freshness
+                verified, enforcement_date, True
             )
             errors.extend(stale_errors)
             warnings.extend(stale_warnings)
@@ -162,9 +168,11 @@ def main() -> int:
     # repository content and never on the wall clock. It stays a hard error.
     api_status = root / "references" / "api-status.md"
     if api_status.exists():
-        today = date.today()
         anchor = checked_in_last_verified(
-            api_status.read_text(encoding="utf-8"), "api-status.md", today, errors
+            api_status.read_text(encoding="utf-8"),
+            "api-status.md",
+            enforcement_date,
+            errors,
         )
         if anchor:
             freshness_critical = [
@@ -176,7 +184,10 @@ def main() -> int:
                 if not ref.exists():
                     continue
                 ref_verified = checked_in_last_verified(
-                    ref.read_text(encoding="utf-8"), name, today, errors
+                    ref.read_text(encoding="utf-8"),
+                    name,
+                    enforcement_date,
+                    errors,
                 )
                 if ref_verified is None:
                     continue
