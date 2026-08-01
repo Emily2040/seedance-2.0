@@ -72,6 +72,22 @@ jobs:
         run: python scripts/eval_run.py --self-test --strict
       - name: Check frame-extraction tool wiring (offline)
         run: python scripts/extract_last_frame.py --self-test --strict
+      # The decoded-frame regression must exercise a real executable. Export
+      # the verified path and a handoff marker so the unit-test step fails
+      # closed if this provisioning step is removed or reordered.
+      - name: Provision FFmpeg for decoded-frame tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          ffmpeg_path="$(command -v ffmpeg)"
+          test -x "$ffmpeg_path"
+          "$ffmpeg_path" -hide_banner -version
+          {
+            printf 'SEEDANCE_TEST_FFMPEG=%s\n' "$ffmpeg_path"
+            printf 'SEEDANCE_CI_FFMPEG_PROVISIONED=1\n'
+          } >> "$GITHUB_ENV"
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
       - name: Compile Python files

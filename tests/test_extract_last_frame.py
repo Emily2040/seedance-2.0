@@ -31,6 +31,21 @@ class FfmpegAvailabilityTests(unittest.TestCase):
                 FFMPEG,
                 "CI must provide ffmpeg so frame-selection integration tests do not false-green",
             )
+        if os.environ.get("GITHUB_ACTIONS"):
+            configured = os.environ.get("SEEDANCE_TEST_FFMPEG")
+            self.assertEqual(
+                os.environ.get("SEEDANCE_CI_FFMPEG_PROVISIONED"),
+                "1",
+                "CI must provision and verify ffmpeg before starting the unit-test step",
+            )
+            self.assertTrue(
+                configured,
+                "CI must export the verified ffmpeg path so integration tests cannot false-green",
+            )
+            self.assertTrue(
+                Path(str(configured)).is_file() and os.access(str(configured), os.X_OK),
+                f"CI-provisioned ffmpeg is not an executable file: {configured}",
+            )
 
 
 @unittest.skipUnless(
