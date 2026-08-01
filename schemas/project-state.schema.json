@@ -99,7 +99,6 @@
       "type": "object",
       "required": [
         "clip_id",
-        "parent_clip_id",
         "scene_id",
         "sequence_index",
         "prompt_version",
@@ -151,7 +150,24 @@
         "open_motion_vectors": {"type": "array"},
         "handoff_requirements": {"type": "array"},
         "extension_depth": {"type": "integer", "minimum": 0}
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"sequence_index": {"const": 1}},
+            "required": ["sequence_index"]
+          },
+          "then": {
+            "properties": {"parent_clip_id": {"type": "null"}}
+          },
+          "else": {
+            "required": ["parent_clip_id"],
+            "properties": {
+              "parent_clip_id": {"type": "string", "minLength": 1, "pattern": "\\S"}
+            }
+          }
+        }
+      ]
     }
   }
 }
