@@ -6,7 +6,7 @@ import json
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 EXPECTED_SKILLS = [
     "seedance-antislop", "seedance-audio", "seedance-camera", "seedance-characters", "seedance-continuation",
@@ -155,6 +155,76 @@ REQUIRED_FILES = [
 
 REQUIRED_FIELDS = ["name", "description", "license", "user-invocable", "tags", "metadata"]
 
+OPAQUE_ROUTE_RE = re.compile(r"\[(?P<kind>skill|ref):(?P<name>[^\]\s]+)\]")
+ROUTE_PATH_RE = re.compile(
+    r"`(?P<target>(?:[A-Za-z]:)?[\\/]?(?:skills|references)[\\/][^`\s]+)`"
+)
+ROUTE_SEGMENT_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")
+
+
+def validate_portable_routes(path: Path, root: Path, errors: list[str]) -> None:
+    """Require each root route to carry a portable, installed-relative file path."""
+    text = path.read_text(encoding="utf-8")
+    root = root.resolve()
+    rel = path.relative_to(root).as_posix()
+
+    for match in OPAQUE_ROUTE_RE.finditer(text):
+        kind = match.group("kind")
+        name = match.group("name")
+        line = text.count("\n", 0, match.start()) + 1
+        label = f"[{kind}:{name}]"
+        errors.append(
+            f"{rel}:{line}: opaque route `{label}` has no portable relative path; "
+            "use a literal `skills/.../SKILL.md` or `references/...md` path"
+        )
+
+    routes = list(ROUTE_PATH_RE.finditer(text))
+    if not routes:
+        errors.append(f"{rel}: no portable root route paths found")
+
+    for match in routes:
+        target = match.group("target")
+        line = text.count("\n", 0, match.start()) + 1
+        if "\\" in target:
+            errors.append(f"{rel}:{line}: route path must use forward slashes: {target}")
+            continue
+
+        portable = PurePosixPath(target)
+        if portable.is_absolute() or re.match(r"^[A-Za-z]:", target):
+            errors.append(f"{rel}:{line}: route path must be relative: {target}")
+            continue
+        if any(part in {".", ".."} for part in portable.parts):
+            errors.append(f"{rel}:{line}: route path must not traverse directories: {target}")
+            continue
+
+        if target.startswith("skills/"):
+            parts = portable.parts
+            valid = (
+                len(parts) == 3
+                and ROUTE_SEGMENT_RE.fullmatch(parts[1]) is not None
+                and parts[2] == "SKILL.md"
+            )
+            expected_shape = "skills/<skill-name>/SKILL.md"
+        else:
+            parts = portable.parts
+            stem_parts = parts[1:-1] + (PurePosixPath(parts[-1]).stem,)
+            valid = (
+                len(parts) >= 2
+                and parts[-1].endswith(".md")
+                and all(ROUTE_SEGMENT_RE.fullmatch(part) for part in stem_parts)
+            )
+            expected_shape = "references/<reference-name>.md"
+        if not valid:
+            errors.append(f"{rel}:{line}: route path must match `{expected_shape}`: {target}")
+            continue
+
+        resolved = (root / Path(*portable.parts)).resolve()
+        if resolved != root and root not in resolved.parents:
+            errors.append(f"{rel}:{line}: route resolves outside the skill root: {target}")
+            continue
+        if not resolved.is_file():
+            errors.append(f"{rel}:{line}: route target is not a file: {target}")
+
 
 def tracked_files(root: Path) -> set[str] | None:
     """Repository-relative paths git tracks, or None outside a git checkout.
@@ -287,6 +357,7 @@ def main() -> int:
         warnings.append("extra skill dirs: " + ", ".join(extra))
 
     validate_skill(root / "SKILL.md", root, errors, warnings)
+    validate_portable_routes(root / "SKILL.md", root, errors)
     for name in EXPECTED_SKILLS:
         path = root / "skills" / name / "SKILL.md"
         if path.exists():
