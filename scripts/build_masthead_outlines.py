@@ -48,6 +48,11 @@ SPECS = {
 }
 
 
+def repo_relative_posix(path: Path) -> str:
+    """Return a repository-relative path with stable JSON/documentation separators."""
+    return path.relative_to(ROOT).as_posix()
+
+
 def outline(src: Path, text: str, size: float) -> tuple[str, float]:
     """Shape `text` with HarfBuzz and return one SVG path plus its advance."""
     import uharfbuzz as hb
@@ -91,7 +96,7 @@ def outline(src: Path, text: str, size: float) -> tuple[str, float]:
 
 def document() -> dict:
     sources = {"roman": ROMAN, "italic": ITALIC}
-    missing = [str(p.relative_to(ROOT)) for p in sources.values() if not p.exists()]
+    missing = [repo_relative_posix(p) for p in sources.values() if not p.exists()]
     if missing:
         raise SystemExit(f"missing vendored font(s): {', '.join(missing)}")
 
@@ -117,7 +122,7 @@ def document() -> dict:
             "license_url": names.getDebugName(14) or "https://scripts.sil.org/OFL",
             "license_text": "assets/fonts/OFL.txt",
             "source": "https://github.com/google/fonts/tree/main/ofl/bodonimoda",
-            "vendored": [str(p.relative_to(ROOT)) for p in sources.values()],
+            "vendored": [repo_relative_posix(p) for p in sources.values()],
             "instances": f"opsz tracks rendered size clamped to {OPSZ_MIN}-{OPSZ_MAX}; wght=400 throughout",
             "shaping": "HarfBuzz with kern and liga features enabled",
             "note": (
@@ -139,13 +144,13 @@ def main() -> int:
     if args.check:
         current = TARGET.read_text(encoding="utf-8") if TARGET.exists() else ""
         if current != rendered:
-            print(f"{TARGET.relative_to(ROOT)} is out of date; re-run scripts/build_masthead_outlines.py")
+            print(f"{repo_relative_posix(TARGET)} is out of date; re-run scripts/build_masthead_outlines.py")
             return 1
         print("Masthead outlines check passed.")
         return 0
 
     TARGET.write_text(rendered, encoding="utf-8")
-    print(f"Wrote {TARGET.relative_to(ROOT)} ({len(rendered)} bytes)")
+    print(f"Wrote {repo_relative_posix(TARGET)} ({len(rendered)} bytes)")
     return 0
 
 
