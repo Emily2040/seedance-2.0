@@ -667,6 +667,27 @@ class JudgeIntegrityTests(unittest.TestCase):
 
 
 class InputContractTests(unittest.TestCase):
+    def write_case_repo(self, root: Path, first_case: dict) -> None:
+        (root / "evals").mkdir(parents=True)
+        (root / "references").mkdir()
+        (root / "skills").mkdir()
+        (root / "SKILL.md").write_text("# test skill\n", encoding="utf-8")
+        (root / "references" / "eval-rubric.md").write_text(
+            EXACT_RUBRIC, encoding="utf-8"
+        )
+        cases = [first_case]
+        cases.extend(
+            {
+                "id": f"valid-{index}",
+                "prompt": "test",
+                "assertions": ["works"],
+            }
+            for index in range(2, 17)
+        )
+        (root / "evals" / "evals.json").write_text(
+            json.dumps({"cases": cases}), encoding="utf-8"
+        )
+
     def test_self_test_rejects_unhashable_case_ids_without_a_traceback(self) -> None:
         for invalid_id in ([], {}):
             with self.subTest(invalid_id=invalid_id), tempfile.TemporaryDirectory() as tmp:
@@ -736,7 +757,17 @@ class InputContractTests(unittest.TestCase):
                 "required_output_sections must be a list",
             ),
             ("forbidden_behaviors", [None], "forbidden_behaviors must contain only"),
-            ("state_fixture", [], "state_fixture must be a non-empty UTF-8 string"),
+            (
+                "state_fixture",
+                [],
+                "state_fixture must be a non-empty UTF-8 repository-relative file",
+            ),
+            ("critical", [], "critical must be a boolean when present"),
+            (
+                "expected_sequence_relation",
+                None,
+                "expected_sequence_relation must be a non-empty UTF-8 string",
+            ),
         )
         for field, value, expected in mutations:
             with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as tmp:
@@ -760,6 +791,97 @@ class InputContractTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertIn(expected, output.getvalue())
                 self.assertNotIn("Traceback", output.getvalue())
+
+    def test_self_test_rejects_escaping_or_non_file_case_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp)
+            outside_file = sandbox / "outside-state.txt"
+            outside_file.write_text("OUTSIDE-STATE-SENTINEL", encoding="utf-8")
+            outside_skill = sandbox / "outside-skill"
+            outside_skill.mkdir()
+            (outside_skill / "SKILL.md").write_text(
+                "OUTSIDE-SKILL-SENTINEL", encoding="utf-8"
+            )
+            mutations = (
+                ("state_fixture", "."),
+                ("state_fixture", "missing-state.json"),
+                ("state_fixture", "bad\x00state.json"),
+                ("state_fixture", "fixtures/state.json:alternate"),
+                ("state_fixture", "../outside-state.txt"),
+                ("state_fixture", str(outside_file)),
+                ("skills_expected_to_activate", ["bad\x00skill"]),
+                ("skills_expected_to_activate", ["../../outside-skill"]),
+                ("skills_expected_to_activate", [str(outside_skill)]),
+            )
+            for index, (field, value) in enumerate(mutations):
+                with self.subTest(field=field, value=value):
+                    root = sandbox / f"repo-{index}"
+                    case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+                    case[field] = value
+                    self.write_case_repo(root, case)
+
+                    output = io.StringIO()
+                    with redirect_stdout(output):
+                        code = eval_run.self_test(root)
+
+                    self.assertEqual(code, 1)
+                    self.assertNotIn("Traceback", output.getvalue())
+                    self.assertNotIn("OUTSIDE-STATE-SENTINEL", output.getvalue())
+                    self.assertNotIn("OUTSIDE-SKILL-SENTINEL", output.getvalue())
+
+    def test_live_mode_rejects_case_contract_before_provider_calls(self) -> None:
+        mutations = (
+            ("assertions", None),
+            ("required_output_sections", {}),
+            ("forbidden_behaviors", [{}]),
+            ("skills_expected_to_activate", ["../outside-skill"]),
+            ("state_fixture", "."),
+            ("critical", []),
+            ("expected_sequence_relation", None),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+                case[field] = value
+                self.write_case_repo(root, case)
+                api_call = mock.Mock(return_value="candidate response")
+                output = io.StringIO()
+                with (
+                    mock.patch.object(
+                        sys, "argv", ["eval_run.py", str(root), "--limit", "1"]
+                    ),
+                    mock.patch.dict(
+                        os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
+                    ),
+                    mock.patch.object(eval_run, "call_api", api_call),
+                    redirect_stdout(output),
+                ):
+                    code = eval_run.main()
+
+                self.assertEqual(code, 2)
+                self.assertIn("case contract validation failed", output.getvalue())
+                self.assertNotIn("Traceback", output.getvalue())
+                api_call.assert_not_called()
+
+    def test_valid_contained_state_fixture_is_included(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            case = {
+                "id": "one",
+                "prompt": "test",
+                "assertions": ["works"],
+                "state_fixture": "fixtures/state.json",
+            }
+            self.write_case_repo(root, case)
+            fixture = root / "fixtures" / "state.json"
+            fixture.parent.mkdir()
+            fixture.write_text("INSIDE-STATE-SENTINEL", encoding="utf-8")
+
+            label, errors = eval_run.case_contract_errors(root, case, 0)
+            self.assertEqual(label, "one")
+            self.assertEqual(errors, [])
+            self.assertIn("INSIDE-STATE-SENTINEL", eval_run.responder_context(root, case))
 
     def test_load_cases_rejects_ambiguous_json_and_invalid_shapes(self) -> None:
         invalid_documents = (

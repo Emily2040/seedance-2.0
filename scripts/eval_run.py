@@ -33,7 +33,7 @@ import tempfile
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Mapping
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
@@ -194,6 +194,68 @@ def _case_string_list(case: dict, field: str) -> list[str]:
     return value
 
 
+def _safe_skill_name(name: str) -> str:
+    """Reject path syntax where the case contract expects one skill slug."""
+
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) or name in {
+        ".",
+        "..",
+    }:
+        raise ValueError(
+            "skills_expected_to_activate entries must be portable skill names, not paths"
+        )
+    return name
+
+
+def _resolve_repo_file(root: Path, relative: str, field: str) -> Path:
+    """Resolve one declared input to an existing regular file inside ``root``."""
+
+    if (
+        not relative
+        or not _is_utf8_encodable(relative)
+        or any(ord(character) < 0x20 for character in relative)
+        or ":" in relative
+    ):
+        raise ValueError(f"{field} must be a non-empty UTF-8 repository-relative file")
+    portable = relative.replace("\\", "/")
+    posix = PurePosixPath(portable)
+    windows = PureWindowsPath(relative)
+    if (
+        posix.is_absolute()
+        or windows.is_absolute()
+        or bool(windows.drive)
+        or bool(windows.root)
+        or any(part in {"", ".", ".."} for part in posix.parts)
+    ):
+        raise ValueError(f"{field} must stay inside the repository")
+    try:
+        resolved_root = root.resolve(strict=True)
+        resolved = resolved_root.joinpath(*posix.parts).resolve(strict=True)
+        resolved.relative_to(resolved_root)
+    except (OSError, RuntimeError, ValueError):
+        raise ValueError(
+            f"{field} must name an existing file inside the repository"
+        ) from None
+    if not resolved.is_file():
+        raise ValueError(f"{field} must name a regular file inside the repository")
+    return resolved
+
+
+def _state_fixture_path(root: Path, case: dict) -> Path | None:
+    if "state_fixture" not in case or case["state_fixture"] is None:
+        return None
+    fixture = case["state_fixture"]
+    if not isinstance(fixture, str):
+        raise ValueError("state_fixture must be a non-empty UTF-8 repository-relative file")
+    return _resolve_repo_file(root, fixture, "state_fixture")
+
+
+def _skill_file(root: Path, name: str) -> Path:
+    name = _safe_skill_name(name)
+    relative = "SKILL.md" if name == "seedance-20" else f"skills/{name}/SKILL.md"
+    return _resolve_repo_file(root, relative, f"skill '{name}'")
+
+
 def expected_judge_checks(case: dict) -> list[str]:
     """Return every case criterion that the judge must score exactly once."""
     checks = list(_case_string_list(case, "assertions"))
@@ -209,23 +271,89 @@ def expected_judge_checks(case: dict) -> list[str]:
 
 
 def responder_context(root: Path, case: dict) -> str:
-    parts = ["# Skill: seedance-20 (root router)", read_text(root / "SKILL.md")]
+    parts = [
+        "# Skill: seedance-20 (root router)",
+        read_text(_skill_file(root, "seedance-20")),
+    ]
     for name in _case_string_list(case, "skills_expected_to_activate"):
         if name == "seedance-20":
             continue  # the root router is already included above
-        body = read_text(root / "skills" / name / "SKILL.md", limit=8000)
+        body = read_text(_skill_file(root, name), limit=8000)
         if body:
             parts.append(f"\n# Sub-skill: {name}\n{body}")
-    fixture = case.get("state_fixture")
-    if fixture is not None and (
-        not isinstance(fixture, str)
-        or not fixture.strip()
-        or not _is_utf8_encodable(fixture)
-    ):
-        raise ValueError("state_fixture must be a non-empty UTF-8 string")
-    if fixture and (root / fixture).exists():
-        parts.append(f"\n# Project state fixture ({fixture})\n{read_text(root / fixture, limit=6000)}")
+    fixture_path = _state_fixture_path(root, case)
+    if fixture_path is not None:
+        fixture = case["state_fixture"]
+        parts.append(
+            f"\n# Project state fixture ({fixture})\n"
+            f"{read_text(fixture_path, limit=6000)}"
+        )
     return "\n\n".join(parts)
+
+
+def case_contract_errors(root: Path, case: dict, index: int) -> tuple[str, list[str]]:
+    """Validate every case field used before live provider calls."""
+
+    errors: list[str] = []
+    raw_id = case.get("id")
+    if (
+        not isinstance(raw_id, str)
+        or not raw_id.strip()
+        or not _is_utf8_encodable(raw_id)
+    ):
+        label = f"case {index + 1}"
+        errors.append(f"{label}: id must be a non-empty UTF-8 string")
+    else:
+        label = raw_id
+
+    prompt = case.get("prompt")
+    if (
+        not isinstance(prompt, str)
+        or not prompt.strip()
+        or not _is_utf8_encodable(prompt)
+    ):
+        errors.append(f"{label}: prompt must be a non-empty UTF-8 string")
+
+    judge_fields: dict[str, list[str]] = {}
+    for field in ("assertions", "required_output_sections", "forbidden_behaviors"):
+        try:
+            judge_fields[field] = _case_string_list(case, field)
+        except ValueError as exc:
+            errors.append(f"{label}: {exc}")
+    assertions = judge_fields.get("assertions", [])
+    if not assertions:
+        errors.append(f"{label}: no assertions")
+    if len(judge_fields) == 3:
+        judge_checks = expected_judge_checks(case)
+        if len(judge_checks) != len(set(judge_checks)):
+            errors.append(f"{label}: duplicate judge check")
+
+    try:
+        skills = _case_string_list(case, "skills_expected_to_activate")
+        for name in skills:
+            _skill_file(root, name)
+    except ValueError as exc:
+        errors.append(f"{label}: {exc}")
+
+    try:
+        _state_fixture_path(root, case)
+    except ValueError as exc:
+        errors.append(f"{label}: {exc}")
+
+    critical = case.get("critical", False)
+    if type(critical) is not bool:
+        errors.append(f"{label}: critical must be a boolean when present")
+    relation = case.get("expected_sequence_relation")
+    if "expected_sequence_relation" in case and (
+        not isinstance(relation, str)
+        or not relation.strip()
+        or not _is_utf8_encodable(relation)
+    ):
+        errors.append(
+            f"{label}: expected_sequence_relation must be a non-empty UTF-8 string"
+        )
+
+    return label, errors
 
 
 def resolve_provider(
@@ -505,7 +633,12 @@ def self_test(root: Path) -> int:
         return 1
     if len(cases) < 16:
         errors.append("fewer than 16 cases")
-    rubric = read_text(root / "references" / "eval-rubric.md")
+    try:
+        rubric = read_text(root / "references" / "eval-rubric.md")
+    except (OSError, UnicodeError) as exc:
+        print("eval_run self-test FAILED:")
+        print(f"- invalid references/eval-rubric.md: {exc}")
+        return 1
     if "0 to 3" not in rubric or "0-4" not in rubric:
         errors.append("eval-rubric.md missing the 0-3 and 0-4 scales")
     try:
@@ -515,48 +648,21 @@ def self_test(root: Path) -> int:
     seq = 0
     seen_ids: set[str] = set()
     for index, case in enumerate(cases):
-        if not isinstance(case, dict):
-            errors.append(f"case {index + 1}: case must be an object")
-            continue
+        cid, contract_errors = case_contract_errors(root, case, index)
+        errors.extend(contract_errors)
         raw_id = case.get("id")
-        if (
-            not isinstance(raw_id, str)
-            or not raw_id.strip()
-            or not _is_utf8_encodable(raw_id)
-        ):
-            errors.append(f"case {index + 1}: id must be a non-empty UTF-8 string")
-            cid = f"case {index + 1}"
-        else:
-            cid = raw_id
+        if isinstance(raw_id, str) and raw_id.strip() and _is_utf8_encodable(raw_id):
             if cid in seen_ids:
                 errors.append(f"{cid}: duplicate case id")
             seen_ids.add(cid)
-        try:
-            assertions = _case_string_list(case, "assertions")
-            judge_checks = expected_judge_checks(case)
-        except ValueError as exc:
-            errors.append(f"{cid}: {exc}")
-            assertions = []
-            judge_checks = []
-        if not assertions:
-            errors.append(f"{cid}: no assertions")
-        if len(judge_checks) != len(set(judge_checks)):
-            errors.append(f"{cid}: duplicate judge check")
-        try:
-            skills = _case_string_list(case, "skills_expected_to_activate")
-        except ValueError as exc:
-            errors.append(f"{cid}: {exc}")
-            skills = []
-        for name in skills:
-            if name != "seedance-20" and not (root / "skills" / name).is_dir():
-                errors.append(f"{cid}: skill '{name}' does not resolve")
-        try:
-            context = responder_context(root, case)
-        except ValueError as exc:
-            errors.append(f"{cid}: {exc}")
-            context = ""
-        if not context.strip():
-            errors.append(f"{cid}: empty responder context")
+        if not contract_errors:
+            try:
+                context = responder_context(root, case)
+            except (OSError, UnicodeError, ValueError) as exc:
+                errors.append(f"{cid}: repository input cannot be read: {exc}")
+                context = ""
+            if not context.strip():
+                errors.append(f"{cid}: empty responder context")
         if is_sequence_case(case):
             seq += 1
     if errors:
@@ -1191,6 +1297,15 @@ def main() -> int:
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         print(f"Could not load eval cases: {exc}")
         return 2
+    contract_errors: list[str] = []
+    for index, case in enumerate(all_cases):
+        _, case_errors = case_contract_errors(root, case, index)
+        contract_errors.extend(case_errors)
+    if contract_errors:
+        print("Could not load eval cases: case contract validation failed")
+        for error in contract_errors[:40]:
+            print(f"- {error}")
+        return 2
     all_case_ids = [case.get("id") for case in all_cases]
     if not all_cases:
         print("No eval cases are available; refusing an empty live run.")
@@ -1266,8 +1381,13 @@ def main() -> int:
     for case in cases:
         cid = case.get("id", "?")
         try:
+            context = responder_context(root, case)
+        except (OSError, UnicodeError, ValueError) as exc:
+            print(f"[{cid}] repository input error: {exc}")
+            return 2
+        try:
             response = call_api(
-                responder_context(root, case),
+                context,
                 case["prompt"],
                 model,
                 api_key,
