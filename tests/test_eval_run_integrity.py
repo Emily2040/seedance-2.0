@@ -1170,6 +1170,101 @@ class LedgerIntegrityTests(unittest.TestCase):
             self.assertIn("notes must be a string", text)
             self.assertIn("[invalid non-string notes]", text)
 
+    def test_ledger_sanitizes_all_markdown_line_controls_before_truncation(self) -> None:
+        controls = {
+            "CR": "\r",
+            "CRLF": "\r\n",
+            "C0": "\x00\x01\x0b\x0c\x1c\x1d\x1e\x1f",
+            "C1": "\x7f\x80\x85\x9f",
+            "line separator": "\u2028",
+            "paragraph separator": "\u2029",
+        }
+        ordinary = "Café 東京 — ordinary ledger text"
+        self.assertEqual(eval_run._safe_ledger_text(ordinary), ordinary)
+
+        for label, control in controls.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "ledger.md"
+                row = result_row(passed=False)
+                row["notes"] = (
+                    "review failed" + control + "# FORGED RELEASE PASS"
+                )
+                with redirect_stdout(io.StringIO()):
+                    report = eval_run.write_ledger(
+                        path,
+                        [row],
+                        "model",
+                        "2026-08-01",
+                        "anthropic",
+                        "global_en",
+                        expected_cases=case_metadata(),
+                        total_expected=1,
+                        release_eligible=True,
+                    )
+
+                text = path.read_text(encoding="utf-8")
+                lines = text.splitlines()
+                result_lines = [line for line in lines if line.startswith("| case-1 |")]
+                self.assertEqual(report["release_verdict"], "FAIL")
+                self.assertEqual(len(result_lines), 1)
+                self.assertIn(
+                    "review failed # FORGED RELEASE PASS", result_lines[0]
+                )
+                self.assertFalse(
+                    any(line.startswith("# FORGED RELEASE PASS") for line in lines)
+                )
+
+    def test_every_untrusted_ledger_field_uses_the_line_safe_serializer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            injected = "safe\r# FORGED RELEASE PASS"
+            dimensions = [
+                {"dimension": dimension, "score": 4}
+                for dimension in eval_run.SEQUENCE_DIMENSIONS
+            ]
+            dimensions.extend(
+                [
+                    {"dimension": injected, "score": 4},
+                    {"dimension": injected, "score": 4},
+                ]
+            )
+            row = {
+                "id": injected,
+                "score": 4,
+                "pass": False,
+                "sequence": True,
+                "critical": False,
+                "notes": injected,
+                "dimension_scores": dimensions,
+            }
+
+            with redirect_stdout(io.StringIO()):
+                report = eval_run.write_ledger(
+                    path,
+                    [row],
+                    injected,
+                    injected,
+                    injected,
+                    injected,
+                    judge_model=injected,
+                    expected_cases={
+                        injected: {"sequence": True, "critical": False}
+                    },
+                    total_expected=1,
+                    release_eligible=True,
+                )
+
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(report["release_verdict"], "FAIL")
+            self.assertNotIn("\r", text)
+            self.assertFalse(
+                any(
+                    line.startswith("# FORGED RELEASE PASS")
+                    for line in text.splitlines()
+                )
+            )
+            self.assertGreaterEqual(text.count("safe # FORGED RELEASE PASS"), 5)
+
     def test_malformed_rows_replace_stale_ledger_with_failed_placeholders(self) -> None:
         malformed_rows: tuple[tuple[str, object, str], ...] = (
             ("empty object", {}, "[invalid row 1]"),

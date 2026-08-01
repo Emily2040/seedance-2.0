@@ -976,7 +976,11 @@ def _ledger_row_sort_key(indexed_row: tuple[int, object]) -> tuple[int, str, int
 def _safe_ledger_text(value: str, limit: int = 80) -> str:
     if not _is_utf8_encodable(value):
         return "[invalid Unicode string]"
-    return value.replace("|", "/").replace("\n", " ")[:limit]
+    # Markdown treats several controls as line boundaries even when ``\n`` is
+    # absent. Collapse every unsafe C0/C1 control and Unicode line separator
+    # before truncation so one field can never create another ledger line.
+    sanitized = re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]+", " ", value)
+    return sanitized.replace("|", "/")[:limit]
 
 
 def _render_ledger_row(index: int, row: object) -> str:
@@ -1052,6 +1056,11 @@ def write_ledger(
         release_eligible=release_eligible,
     )
     judge_model = judge_model or model
+    safe_stamp = _safe_ledger_text(stamp, limit=120)
+    safe_model = _safe_ledger_text(model, limit=200)
+    safe_judge_model = _safe_ledger_text(judge_model, limit=200)
+    safe_provider_name = _safe_ledger_text(provider_name, limit=120)
+    safe_region = _safe_ledger_text(region, limit=120)
     if report["scope"] == "UNSCOPED":
         scope_line = (
             f"Run scope: **UNSCOPED** — {report['completed_count']} results recorded; "
@@ -1066,22 +1075,25 @@ def write_ledger(
     lines = [
         "# Eval Run Ledger",
         "",
-        f"Last scored: **{stamp}** with responder model `{model}` and judge model "
-        f"`{judge_model}` via provider `{provider_name}` in region `{region}` and "
+        f"Last scored: **{safe_stamp}** with responder model `{safe_model}` and judge model "
+        f"`{safe_judge_model}` via provider `{safe_provider_name}` in region `{safe_region}` and "
         "`scripts/eval_run.py`.",
         scope_line,
         f"Run verdict: **{report['run_verdict']}**. Release verdict: "
         f"**{report['release_verdict']}**.",
         "This is the evidence layer for the rubric in `references/eval-rubric.md`; the deterministic",
         "CI validators check shape, this checks output quality. Regenerate with",
-        f"`python scripts/eval_run.py --provider {provider_name} --region {region} "
-        f"--model {model} --judge-model {judge_model} "
+        f"`python scripts/eval_run.py --provider {safe_provider_name} --region {safe_region} "
+        f"--model {safe_model} --judge-model {safe_judge_model} "
         "--ledger evals/eval-run-ledger.md`.",
         "",
     ]
     if report["integrity_errors"]:
         lines.extend(["## Integrity errors", ""])
-        lines.extend(f"- {error}" for error in report["integrity_errors"])
+        lines.extend(
+            f"- {_safe_ledger_text(error, limit=500)}"
+            for error in report["integrity_errors"]
+        )
         lines.append("")
     lines.extend(
         [
