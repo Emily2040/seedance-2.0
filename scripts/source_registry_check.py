@@ -9,6 +9,7 @@ from pathlib import Path
 
 REQUIRED_LABELS = ["confirmed", "volatile", "field-observed", "unverified", "internal"]
 REQUIRED_OFFICIAL_MARKERS = ["seed.bytedance.com", "volcengine.com", "arxiv.org", "runwayml.com"]
+LAST_VERIFIED_FIELD = re.compile(r"^last_verified:\s*(.*?)\s*$", re.M)
 
 # Wall-clock staleness thresholds for references/source-registry.md.
 STALE_WARN_DAYS = 14
@@ -22,6 +23,39 @@ def parse_date(text: str) -> date | None:
         return None
 
 
+def checked_in_last_verified(
+    text: str, label: str, today: date, errors: list[str]
+) -> date | None:
+    """Read one explicit checked-in verification stamp.
+
+    Other dates in the document may describe launches, releases, retrievals, or
+    historical events. They are not evidence that this document was re-read.
+    """
+    values = LAST_VERIFIED_FIELD.findall(text)
+    if not values:
+        errors.append(f"{label} missing last_verified: YYYY-MM-DD")
+        return None
+    if len(values) != 1:
+        errors.append(f"{label} must contain exactly one last_verified field")
+        return None
+    raw = values[0]
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        errors.append(f"{label} has malformed last_verified `{raw}`; expected YYYY-MM-DD")
+        return None
+    verified = parse_date(raw)
+    if verified is None:
+        errors.append(f"{label} has invalid last_verified date `{raw}`")
+        return None
+    if verified > today:
+        days = (verified - today).days
+        errors.append(
+            f"{label} last_verified {verified.isoformat()} is {days} "
+            f"day{'s' if days != 1 else ''} in the future"
+        )
+        return None
+    return verified
+
+
 def freshness_findings(
     verified: date, today: date, enforce: bool
 ) -> tuple[list[str], list[str]]:
@@ -33,6 +67,12 @@ def freshness_findings(
     is requested explicitly (scheduled review or release).
     """
     age = (today - verified).days
+    if age < 0:
+        days = -age
+        return [
+            f"source-registry.md last_verified {verified.isoformat()} is {days} "
+            f"day{'s' if days != 1 else ''} in the future"
+        ], []
     if age <= STALE_WARN_DAYS:
         return [], []
     message = f"source-registry.md last_verified is {age} days old"
@@ -42,16 +82,18 @@ def freshness_findings(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Validate checked-in source metadata offline; no URLs are fetched."
+    )
     parser.add_argument("repo", nargs="?", default=".")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument(
         "--enforce-freshness",
         action="store_true",
         help=(
-            "fail when source-registry.md last_verified is older than "
+            "fail when checked-in source-registry.md last_verified metadata is older than "
             f"{STALE_ERROR_DAYS} days; intended for scheduled review and release, "
-            "not for per-pull-request validation"
+            "not for per-pull-request validation; does not verify upstream claims"
         ),
     )
     args = parser.parse_args()
@@ -65,17 +107,14 @@ def main() -> int:
         errors.append("missing references/source-registry.md")
     else:
         text = registry.read_text(encoding="utf-8")
-        match = re.search(r"^last_verified:\s*(\d{4}-\d{2}-\d{2})$", text, re.M)
-        if not match:
-            errors.append("source-registry.md missing last_verified: YYYY-MM-DD")
-        else:
-            verified = parse_date(match.group(1))
-            if verified:
-                stale_errors, stale_warnings = freshness_findings(
-                    verified, date.today(), args.enforce_freshness
-                )
-                errors.extend(stale_errors)
-                warnings.extend(stale_warnings)
+        today = date.today()
+        verified = checked_in_last_verified(text, "source-registry.md", today, errors)
+        if verified:
+            stale_errors, stale_warnings = freshness_findings(
+                verified, today, args.enforce_freshness
+            )
+            errors.extend(stale_errors)
+            warnings.extend(stale_warnings)
 
         for label in REQUIRED_LABELS:
             if f"`{label}`" not in text:
@@ -123,8 +162,10 @@ def main() -> int:
     # repository content and never on the wall clock. It stays a hard error.
     api_status = root / "references" / "api-status.md"
     if api_status.exists():
-        anchor_match = re.search(r"^last_verified:\s*(\d{4}-\d{2}-\d{2})$", api_status.read_text(encoding="utf-8"), re.M)
-        anchor = parse_date(anchor_match.group(1)) if anchor_match else None
+        today = date.today()
+        anchor = checked_in_last_verified(
+            api_status.read_text(encoding="utf-8"), "api-status.md", today, errors
+        )
         if anchor:
             freshness_critical = [
                 "platform-surface-matrix.md", "api-workflow.md", "model-name-map.md",
@@ -134,11 +175,12 @@ def main() -> int:
                 ref = root / "references" / name
                 if not ref.exists():
                     continue
-                parsed = [parse_date(d) for d in re.findall(r"\d{4}-\d{2}-\d{2}", ref.read_text(encoding="utf-8"))]
-                parsed = [d for d in parsed if d]
-                if not parsed:
+                ref_verified = checked_in_last_verified(
+                    ref.read_text(encoding="utf-8"), name, today, errors
+                )
+                if ref_verified is None:
                     continue
-                drift = (anchor - max(parsed)).days
+                drift = (anchor - ref_verified).days
                 if drift > 30:
                     errors.append(
                         f"{name} is {drift} days behind api-status last_verified ({anchor.isoformat()}); "
@@ -157,7 +199,11 @@ def main() -> int:
             print(f"- {error}")
         return 1
 
-    print("Source registry check passed.")
+    print("Offline source metadata check passed.")
+    print(
+        "Boundary: checked-in dates, labels, and source markers were validated; "
+        "this does not fetch URLs or verify upstream claims live."
+    )
     return 0
 
 
