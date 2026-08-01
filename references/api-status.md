@@ -1,7 +1,26 @@
 # Seedance 2.0 API and Platform Status
 
-last_verified: 2026-06-20
-confidence: public-source snapshot as of the verification date; per-section dates apply where noted (Seedance 2.0 Mini, additional provider/router, and China-facing search recorded 2026-06-20, platform safeguards and resolution recorded 2026-06-14, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
+last_verified: 2026-08-01
+confidence: public-source snapshot as of the verification date; per-section dates apply where noted (Seedance 2.5 and the 2.0 4K upgrade recorded 2026-08-01 from technology press and provider pages, Seedance 2.0 Mini / additional provider-router / China-facing search recorded 2026-06-20, platform safeguards and resolution recorded 2026-06-14, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
+
+## A Newer Model Line Exists *(recorded 2026-08-01, tech-press and provider pages)*
+
+**This repository targets Seedance 2.0. Seedance 2.5 is a separate, newer model line, and a user may be on it without saying so.** Establish which line the active surface runs before making any capability, duration, resolution, or reference-count claim.
+
+Technology press and provider documentation report, consistently across sources:
+
+- Seedance 2.5 was announced 2026-06-23 at ByteDance's Volcano Engine FORCE conference, and launched on consumer surfaces (Jimeng Web, Doubao) on 2026-07-31.
+- Reported 2.5 capabilities: ~30-second native single-shot generation, up to 50 multimodal reference inputs, output up to 4K, and region-level editing that changes part of a frame without regenerating the clip.
+- API access is reported to have opened through BytePlus around 2026-07-16, ahead of the consumer launch.
+- Seedance 2.0 was upgraded in parallel and is reported to support native 4K, above the 480p/720p native baseline the model card documents and the 1080p several surfaces expose.
+
+Every item above is `[tech-press]`, not `confirmed`: the primary ByteDance and Volcengine pages were not reachable for direct verification in this pass. **Do not quote 2.5 durations, reference counts, resolutions, or pricing as platform fact.** Recheck the official surface before any implementation claim.
+
+What this means for guidance:
+
+- **Craft transfers; platform facts do not.** Direction, shot contracts, reference-role discipline, continuity, and the anti-slop rules are model-independent and remain correct. Durations, reference ceilings, resolutions, model IDs, and mode availability are 2.0 facts and must not be applied to 2.5.
+- A 30-second single-shot ceiling, if it holds, changes the sequence math this repository assumes. `[ref:multishot-grammar]` and `[skill:seedance-sequence]` budget shots against a ~15s 2.0 generation; on 2.5 that budget is a floor, not a ceiling — re-derive it from the active surface rather than reusing the 2.0 number.
+- Never normalize "Seedance 2.5" to "Seedance 2.0". See `[ref:model-name-map]`.
 
 ## Confirmed From Public Sources
 
@@ -25,6 +44,10 @@ confidence: public-source snapshot as of the verification date; per-section date
 - China-facing searches on 2026-06-20 confirm the strongest sources remain official ByteDance Seed, Volcengine Ark, BytePlus ModelArk, Doubao, Jimeng/Jianying, and CapCut/Jianying surfaces. Chinese-language workflow posts, business-partner news, or hosted ComfyUI workflows are not public API providers unless they publish provider-owned API docs.
 - Partner workflow docs such as ComfyUI expose T2V, R2V, and FLF2V workflow vocabulary, but those docs are surface-specific.
 - Recent AV-generation benchmark papers, including AVBench and VABench, are useful for eval vocabulary around audio-video consistency, but they are not Seedance platform-access sources.
+
+## Copyright Dispute — Still Unresolved *(re-checked 2026-08-01)*
+
+The 2026-06-13 record below stands, with one update: reporting through July 2026 indicates the studio cease-and-desist letters remain **unanswered and unresolved in court**, and ByteDance shipped Seedance 2.5 and its API while the dispute was open. Nothing has been settled that would relax this repository's IP posture — the safety gates are not provisional, and the safeguards below are still the live enforcement path.
 
 ## Overseas API Status — Copyright Suspension *(recorded 2026-06-13)*
 

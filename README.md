@@ -12,7 +12,7 @@ English · [中文](docs/README.zh.md) · [日本語](docs/README.ja.md) · [한
 
 ---
 
-`v6.6.0` · MIT · updated 2026-07-25 · [what changed](CHANGELOG.md)
+`v6.7.0` · MIT · updated 2026-08-01 · [what changed](CHANGELOG.md)
 
 Author: [Iamemily2050 (@iamemily2050)](https://github.com/Emily2040) · [Instagram](https://instagram.com/iamemily2050) · [X](https://x.com/iamemily2050) · [Website](https://iamemily2050.com)
 
@@ -137,6 +137,10 @@ For these requests, the skill should not stop at a single prompt. It should retu
 ## Current Status Rule
 
 Seedance platform behavior changes quickly. Before making factual claims about API availability, face or portrait authorization, upload limits, pricing, regional availability, or model names, load [`references/api-status.md`](references/api-status.md) and check its `last_verified` date.
+
+**A newer model line exists.** Technology press and provider pages report that Seedance 2.5 was announced 2026-06-23 and launched on consumer surfaces on 2026-07-31, with API access from mid-July, and that the 2.0 line gained a 4K tier at the same announcement.
+
+This repository targets **Seedance 2.0**. The craft — direction, shot contracts, reference roles, continuity, anti-slop — transfers across model lines; the platform numbers below do not. Establish which line a surface runs before quoting any duration, reference count, or resolution, and never normalize "2.5" to "2.0". Recorded as `tech-press`, not verified against a primary source: see [`api-status.md`](references/api-status.md).
 
 As of 2026-06-20, public official sources describe Seedance 2.0 as supporting text, image, audio, and video inputs. Official launch and model-card material says references can include up to 9 images, 3 video clips, and 3 audio clips.
 
@@ -461,7 +465,7 @@ The README must stay readable in GitHub mobile, dark mode, and narrow widths. SV
 
 ## Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v6.6.0**.
+See [`CHANGELOG.md`](CHANGELOG.md). Current release: **v6.7.0**.
 
 ## License
 

@@ -155,8 +155,21 @@ def main() -> int:
             errors.append(f"{rel} must not include scripts or external resources")
         if "linearGradient" in svg or "feGaussianBlur" in svg:
             errors.append(f"{rel} must follow the editorial standard: no gradients or blur filters")
-        if "Georgia" not in svg or "ui-monospace" not in svg:
-            errors.append(f"{rel} missing the editorial serif/monospace type stacks")
+        # The display type is outlined, so there is no serif stack to check for
+        # any more - that is the point. What must hold instead: live text uses
+        # only the monospace stack, and no font-family naming a serif may
+        # reappear, because a serif stack is exactly what resolved differently
+        # on every reader's platform before the outlines replaced it.
+        if "ui-monospace" not in svg:
+            errors.append(f"{rel} missing the monospace stack for live specification text")
+        for serif in ("Georgia", "Didot", "Baskerville", "Palatino", "Hoefler", "Bodoni MT", "serif;"):
+            if serif in svg:
+                errors.append(
+                    f"{rel} names a system serif ({serif}); display type must be outlined, "
+                    "not set in a font stack that resolves differently per platform"
+                )
+        if "<path" not in svg:
+            errors.append(f"{rel} has no outlined display type")
 
     if errors:
         print("Design audit errors:")
