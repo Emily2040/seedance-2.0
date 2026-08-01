@@ -8,8 +8,8 @@ from pathlib import Path
 REQUIRED_SNIPPETS = {
     "SKILL.md": [
         "## Sequence Gate",
-        "[skill:seedance-sequence]",
-        "[skill:seedance-continuation]",
+        "skills/seedance-sequence/SKILL.md",
+        "skills/seedance-continuation/SKILL.md",
         "accepted observed state overrides planned state",
         "rejected footage",
         "exact reference tags",

@@ -6,7 +6,8 @@ import json
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urlsplit
 
 EXPECTED_SKILLS = [
     "seedance-antislop", "seedance-audio", "seedance-camera", "seedance-characters", "seedance-continuation",
@@ -158,6 +159,203 @@ REQUIRED_FILES = [
 
 REQUIRED_FIELDS = ["name", "description", "license", "user-invocable", "tags", "metadata"]
 
+OPAQUE_ROUTE_RE = re.compile(
+    r"\[(?P<kind>skill|ref):(?P<name>[^\]\r\n]+)\]",
+    re.IGNORECASE,
+)
+MARKDOWN_LINK_RE = re.compile(
+    r"(?<!!)\[[^\]\r\n]+\]\((?P<target><[^>\r\n]+>|[^)\r\n]+)\)"
+)
+UNLINKED_ROUTE_RE = re.compile(
+    r"`(?P<target>[^`\r\n]*(?:skills|references)[\\/][^`\r\n]*)`",
+    re.IGNORECASE,
+)
+ROUTE_SEGMENT_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")
+ROUTE_ANCHOR_RE = re.compile(r"[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?")
+
+
+def _line_number(text: str, offset: int) -> int:
+    return text.count("\n", 0, offset) + 1
+
+
+def _heading_anchors(path: Path) -> set[str]:
+    """Return the deterministic Markdown heading anchors this validator supports."""
+
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^#{1,6}\s+(.+?)\s*#*\s*$", line)
+        if not match:
+            continue
+        heading = re.sub(r"[`*_~]", "", match.group(1)).strip().lower()
+        base = re.sub(r"[^\w\- ]", "", heading, flags=re.UNICODE)
+        base = re.sub(r"\s+", "-", base).strip("-")
+        if not base:
+            continue
+        duplicate = seen.get(base, 0)
+        seen[base] = duplicate + 1
+        anchors.add(base if duplicate == 0 else f"{base}-{duplicate}")
+    return anchors
+
+
+def _find_exact_case_path(root: Path, parts: tuple[str, ...]) -> tuple[Path | None, str | None]:
+    """Walk by directory entries so Windows cannot hide a route's case mismatch."""
+
+    current = root
+    for part in parts:
+        try:
+            names = {entry.name: entry for entry in current.iterdir()}
+        except OSError:
+            return None, None
+        if part in names:
+            current = names[part]
+            continue
+        folded = sorted(name for name in names if name.casefold() == part.casefold())
+        return None, folded[0] if folded else None
+    return current, None
+
+
+def validate_portable_routes(path: Path, root: Path, errors: list[str]) -> None:
+    """Validate explicit Markdown routes without claiming a client will auto-load them."""
+
+    text = path.read_text(encoding="utf-8")
+    root = root.resolve()
+    rel = path.relative_to(root).as_posix()
+
+    for match in OPAQUE_ROUTE_RE.finditer(text):
+        kind = match.group("kind")
+        name = match.group("name")
+        line = _line_number(text, match.start())
+        label = f"[{kind}:{name}]"
+        errors.append(
+            f"{rel}:{line}: opaque route `{label}` has no portable relative path; "
+            "use an ordinary relative Markdown link"
+        )
+
+    for match in UNLINKED_ROUTE_RE.finditer(text):
+        line = _line_number(text, match.start())
+        errors.append(
+            f"{rel}:{line}: route `{match.group('target')}` is code text, not a Markdown link"
+        )
+
+    routes: list[tuple[re.Match[str], str]] = []
+    for match in MARKDOWN_LINK_RE.finditer(text):
+        destination = match.group("target").strip()
+        if destination.startswith("<") and destination.endswith(">"):
+            destination = destination[1:-1]
+        parsed_hint = urlsplit(destination)
+        if parsed_hint.scheme.casefold() in {"http", "https", "mailto"}:
+            continue
+        path_parts = unquote(parsed_hint.path).replace("\\", "/").split("/")
+        if any(part.casefold() in {"skills", "references"} for part in path_parts):
+            routes.append((match, destination))
+
+    if not routes:
+        errors.append(f"{rel}: no portable root route links found")
+
+    for match, destination in routes:
+        line = _line_number(text, match.start())
+        parsed = urlsplit(destination)
+        target = unquote(parsed.path)
+        fragment = unquote(parsed.fragment)
+
+        if (
+            parsed.scheme
+            or parsed.netloc
+            or target.startswith("/")
+            or re.match(r"^[A-Za-z]:", destination)
+        ):
+            errors.append(f"{rel}:{line}: route path must be relative: {destination}")
+            continue
+        if parsed.query:
+            errors.append(f"{rel}:{line}: route path must not contain a query: {destination}")
+            continue
+        if target != parsed.path or fragment != parsed.fragment:
+            errors.append(
+                f"{rel}:{line}: route must not hide path or anchor characters with percent encoding: "
+                f"{destination}"
+            )
+            continue
+        if "\\" in target:
+            errors.append(f"{rel}:{line}: route path must use forward slashes: {destination}")
+            continue
+        if any(character.isspace() for character in target):
+            errors.append(f"{rel}:{line}: route path must not contain whitespace: {destination}")
+            continue
+        if destination.endswith("#"):
+            errors.append(f"{rel}:{line}: route fragment must not be empty: {destination}")
+            continue
+        if fragment and ROUTE_ANCHOR_RE.fullmatch(fragment) is None:
+            errors.append(
+                f"{rel}:{line}: route fragment must be a lowercase Markdown anchor: {fragment}"
+            )
+            continue
+        if target.casefold().startswith("skills/") and not target.startswith("skills/"):
+            errors.append(f"{rel}:{line}: route path must use exact lowercase `skills/`: {target}")
+            continue
+        if target.casefold().startswith("references/") and not target.startswith("references/"):
+            errors.append(f"{rel}:{line}: route path must use exact lowercase `references/`: {target}")
+            continue
+
+        raw_parts = target.split("/")
+        if any(part in {".", ".."} for part in raw_parts):
+            errors.append(f"{rel}:{line}: route path must not traverse directories: {destination}")
+            continue
+        if any(part == "" for part in raw_parts):
+            errors.append(f"{rel}:{line}: route path must not contain empty segments: {destination}")
+            continue
+
+        portable = PurePosixPath(target)
+        if portable.is_absolute():
+            errors.append(f"{rel}:{line}: route path must be relative: {destination}")
+            continue
+
+        if target.startswith("skills/"):
+            parts = portable.parts
+            valid = (
+                len(parts) == 3
+                and ROUTE_SEGMENT_RE.fullmatch(parts[1]) is not None
+                and parts[2] == "SKILL.md"
+            )
+            expected_shape = "skills/<skill-name>/SKILL.md"
+        else:
+            parts = portable.parts
+            stem_parts = parts[1:-1] + (PurePosixPath(parts[-1]).stem,)
+            valid = (
+                len(parts) >= 2
+                and parts[-1].endswith(".md")
+                and all(ROUTE_SEGMENT_RE.fullmatch(part) for part in stem_parts)
+            )
+            expected_shape = "references/<reference-name>.md"
+        if not valid:
+            errors.append(f"{rel}:{line}: route path must match `{expected_shape}`: {target}")
+            continue
+
+        exact_path, case_match = _find_exact_case_path(root, portable.parts)
+        if exact_path is None:
+            if case_match is not None:
+                errors.append(
+                    f"{rel}:{line}: route path case mismatch at `{case_match}`: {target}"
+                )
+            else:
+                errors.append(f"{rel}:{line}: route target is not a file: {target}")
+            continue
+        try:
+            resolved = exact_path.resolve(strict=True)
+        except OSError:
+            errors.append(f"{rel}:{line}: route target is not a file: {target}")
+            continue
+        if resolved != root and root not in resolved.parents:
+            errors.append(f"{rel}:{line}: route resolves outside the skill root: {target}")
+            continue
+        if not exact_path.is_file():
+            errors.append(f"{rel}:{line}: route target is not a file: {target}")
+            continue
+        if fragment and fragment not in _heading_anchors(exact_path):
+            errors.append(
+                f"{rel}:{line}: route fragment does not resolve in {target}: #{fragment}"
+            )
+
 
 def tracked_files(root: Path) -> set[str] | None:
     """Repository-relative paths git tracks, or None outside a git checkout.
@@ -290,6 +488,7 @@ def main() -> int:
         warnings.append("extra skill dirs: " + ", ".join(extra))
 
     validate_skill(root / "SKILL.md", root, errors, warnings)
+    validate_portable_routes(root / "SKILL.md", root, errors)
     for name in EXPECTED_SKILLS:
         path = root / "skills" / name / "SKILL.md"
         if path.exists():
