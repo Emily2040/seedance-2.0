@@ -88,6 +88,7 @@ def validate_project(path: Path, root: Path) -> list[str]:
     check_required(data["story"], REQUIRED_STORY_FIELDS, f"{rel}: story", errors)
 
     clip_ids = set()
+    clips_by_id = {}
     accepted_ids = set()
     scene_ids = set()
     scene_depth_caps = {}
@@ -136,6 +137,7 @@ def validate_project(path: Path, root: Path) -> list[str]:
         if cid in clip_ids:
             errors.append(f"{rel}: duplicate clip_id {cid}")
         clip_ids.add(cid)
+        clips_by_id.setdefault(cid, clip)
         sid = clip.get("scene_id")
         clip_scene[cid] = sid
         depth = clip.get("extension_depth")
@@ -162,12 +164,28 @@ def validate_project(path: Path, root: Path) -> list[str]:
     for clip in data["clips"]:
         cid = clip.get("clip_id")
         parent = clip.get("parent_clip_id")
-        if clip.get("sequence_index", 1) > 1:
-            if not parent:
+        sequence_index = clip.get("sequence_index", 1)
+        if not parent:
+            if isinstance(sequence_index, int) and not isinstance(sequence_index, bool) and sequence_index > 1:
                 errors.append(f"{rel}: later clip {cid} missing parent_clip_id")
-            elif parent not in clip_ids:
-                errors.append(f"{rel}: later clip {cid} parent {parent} is missing")
-            elif clip.get("status") != "planned" and parent not in accepted_ids:
+        elif parent == cid:
+            errors.append(f"{rel}: clip {cid} cannot parent itself")
+        elif parent not in clip_ids:
+            errors.append(f"{rel}: clip {cid} parent {parent} is missing")
+        else:
+            parent_index = clips_by_id[parent].get("sequence_index")
+            if (
+                isinstance(sequence_index, int)
+                and not isinstance(sequence_index, bool)
+                and isinstance(parent_index, int)
+                and not isinstance(parent_index, bool)
+                and parent_index >= sequence_index
+            ):
+                errors.append(
+                    f"{rel}: clip {cid} sequence_index {sequence_index} must be greater than "
+                    f"parent {parent} sequence_index {parent_index}"
+                )
+            if clip.get("status") != "planned" and parent not in accepted_ids:
                 errors.append(f"{rel}: later clip {cid} parent {parent} is not accepted")
         overlap_current_future = set(clip.get("this_clip_only", [])) & set(clip.get("reserved_for_later", []))
         if overlap_current_future:
@@ -175,6 +193,29 @@ def validate_project(path: Path, root: Path) -> list[str]:
         overlap_done_current = set(clip.get("already_happened", [])) & set(clip.get("this_clip_only", []))
         if overlap_done_current:
             errors.append(f"{rel}: clip {cid} replays completed beats: {sorted(overlap_done_current)}")
+
+    visited_lineage = set()
+    active_lineage = []
+    active_positions = {}
+
+    def visit_lineage(cid) -> None:
+        if cid in visited_lineage:
+            return
+        if cid in active_positions:
+            cycle = active_lineage[active_positions[cid]:] + [cid]
+            errors.append(f"{rel}: clip lineage cycle: {' -> '.join(str(item) for item in cycle)}")
+            return
+        active_positions[cid] = len(active_lineage)
+        active_lineage.append(cid)
+        parent = clips_by_id[cid].get("parent_clip_id")
+        if parent in clips_by_id and parent != cid:
+            visit_lineage(parent)
+        active_lineage.pop()
+        active_positions.pop(cid)
+        visited_lineage.add(cid)
+
+    for cid in clips_by_id:
+        visit_lineage(cid)
 
     for beat in data["beats"]:
         check_required(beat, REQUIRED_BEAT_FIELDS, f"{rel}: beat", errors)
