@@ -15,6 +15,8 @@ REPOSITORY_URL = "https://github.com/Emily2040/seedance-2.0"
 ARCHIVE_ONLY_PATHS = frozenset({"references/migrated"})
 README_GALLERY_START = "<!-- installed-readme-gallery:start -->"
 README_GALLERY_END = "<!-- installed-readme-gallery:end -->"
+README_VALIDATION_START = "<!-- installed-readme-validation:start -->"
+README_VALIDATION_END = "<!-- installed-readme-validation:end -->"
 
 # Deliberately absent from the positive payload manifest because they are
 # development-only. eval_run.py is also network-capable and credential-reading.
@@ -123,33 +125,57 @@ def payload_allowlist_filter(repo_root: Path, declared: frozenset[str]):
     return ignore_undeclared
 
 
-def rewrite_installed_readme(destination: Path) -> None:
-    """Replace source-only gallery embeds with one usable repository link.
+def replace_marked_section(
+    text: str,
+    start_marker: str,
+    end_marker: str,
+    installed_body: str,
+    label: str,
+) -> str:
+    """Replace one source-only README section, refusing marker drift."""
+    if text.count(start_marker) != 1 or text.count(end_marker) != 1:
+        raise ValueError(f"README {label} install markers must each appear exactly once")
 
-    The source README keeps the curated gallery. Installed payloads omit its
-    large bitmaps, so retaining those embeds would knowingly create broken
-    local targets. Explicit markers make this transformation deterministic and
-    fail closed if the README structure changes.
+    start = text.index(start_marker)
+    end = text.index(end_marker)
+    if end <= start:
+        raise ValueError(f"README {label} install markers are out of order")
+
+    installed_section = f"{start_marker}\n\n{installed_body}\n\n{end_marker}"
+    return text[:start] + installed_section + text[end + len(end_marker):]
+
+
+def rewrite_installed_readme(destination: Path) -> None:
+    """Replace source-only README sections with usable repository links.
+
+    The source README keeps the curated gallery and maintainer-only validation
+    commands. Installed payloads omit their bitmaps, tests, and live evaluator,
+    so retaining those sections would knowingly create broken instructions.
+    Explicit markers make both transformations deterministic and fail closed if
+    the README structure changes.
     """
     readme = destination / "README.md"
     text = readme.read_text(encoding="utf-8")
-    if text.count(README_GALLERY_START) != 1 or text.count(README_GALLERY_END) != 1:
-        raise ValueError("README gallery install markers must each appear exactly once")
 
-    start = text.index(README_GALLERY_START)
-    end = text.index(README_GALLERY_END)
-    if end <= start:
-        raise ValueError("README gallery install markers are out of order")
-
-    installed_gallery = (
-        f"{README_GALLERY_START}\n\n"
+    text = replace_marked_section(
+        text,
+        README_GALLERY_START,
+        README_GALLERY_END,
         "The generated bitmap gallery is kept in the source repository rather "
         "than the installed runtime package. "
-        f"[View the full visual gallery in the source repository]({REPOSITORY_URL}#visual-gallery).\n\n"
-        f"{README_GALLERY_END}"
+        f"[View the full visual gallery in the source repository]({REPOSITORY_URL}#visual-gallery).",
+        "gallery",
     )
-    rewritten = text[:start] + installed_gallery + text[end + len(README_GALLERY_END):]
-    readme.write_text(rewritten, encoding="utf-8")
+    text = replace_marked_section(
+        text,
+        README_VALIDATION_START,
+        README_VALIDATION_END,
+        "Release validators, tests, and the credential-reading live evaluator are "
+        "maintainer tools and are not shipped in the installed runtime package. "
+        f"[Run validation from a source checkout]({REPOSITORY_URL}#validation).",
+        "validation",
+    )
+    readme.write_text(text, encoding="utf-8")
 
 
 def payload_size(path: Path) -> str:
