@@ -136,13 +136,21 @@ class InTreeDestinationTests(unittest.TestCase):
             )
 
     def test_the_cli_refuses_without_a_traceback_and_writes_nothing(self) -> None:
+        # A contributor may legitimately have .claude/ in their working copy
+        # (running Claude Code in this repository creates it), so the assertion
+        # is "nothing new appeared", never "the directory does not exist".
+        target = ROOT / ".claude" / "skills" / installer.SKILL_NAME
+        dot_claude_existed_before = (ROOT / ".claude").exists()
         argv = sys.argv
         sys.argv = ["install_codex_skill.py", "--dest", str(ROOT / ".claude" / "skills")]
         try:
             self.assertEqual(installer.main(), 1)
         finally:
             sys.argv = argv
-        self.assertFalse((ROOT / ".claude").exists(), "refused install must create nothing")
+        self.assertFalse(target.exists(), "refused install must create nothing")
+        if not dot_claude_existed_before:
+            self.assertFalse((ROOT / ".claude").exists(),
+                             "refusal must not create the destination's parents either")
 
 
 if __name__ == "__main__":

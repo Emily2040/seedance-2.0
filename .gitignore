@@ -8,6 +8,10 @@ __pycache__/
 *.swp
 *.swo
 
+# Local agent-client state (running Claude Code in this repository creates it;
+# it is per-machine configuration, never part of the skill)
+.claude/
+
 # Local audit outputs
 *.tmp
 *.log

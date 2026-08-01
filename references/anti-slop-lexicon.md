@@ -43,7 +43,7 @@ Two consequences for drafting:
 - **Never let a slop word hold an opening position.** `Cinematic shot of a woman reading a letter` has already spent its most valuable clause before naming what changes on screen.
 - **Give that opening to the subject and its action instead.** This is the same rule the `seedance-prompt` Director Formula states as "put the subject and primary action first"; the lexicon is where it gets enforced.
 
-Public prompting guides for Seedance 2.0 converge on the same practice, describing the opening of the prompt as where the subject and core action get locked in [community, 2026-06]. Treat that as field-observed corroboration of the mechanism, not a platform guarantee — the mechanism is the reason to follow it.
+Public prompting guides for Seedance 2.0 converge on the same practice, describing the opening of the prompt as where the subject and core action get locked in [field]. Treat that as field-observed corroboration of the mechanism, not a platform guarantee — the mechanism is the reason to follow it.
 
 ## Tag Salad Repair
 
