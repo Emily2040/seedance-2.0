@@ -57,6 +57,28 @@ class ValidationDocumentationContractTests(unittest.TestCase):
 
 
 class ArchiveSafeRunnerTests(unittest.TestCase):
+    def test_git_specific_tests_skip_cleanly_without_git_executable(self) -> None:
+        env = os.environ.copy()
+        env["PATH"] = ""
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "-v",
+                "tests.test_validate_skills_bytecode.TrackedFilesTests",
+            ],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+        )
+
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("skipped", output)
+        self.assertNotIn("FileNotFoundError", output)
+
     def test_both_plans_exclude_git_commands(self) -> None:
         for release in (False, True):
             with self.subTest(release=release):
