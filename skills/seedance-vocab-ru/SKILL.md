@@ -26,7 +26,7 @@ Use Russian cinematic vocabulary when the user asks for Russian prompt wording, 
 
 ## Intent
 
-Russian users arrive having already fought the hardest dialogue battle in this model and built workarounds worth respecting. The soul here is honoring that ingenuity: give them the field-tested paths, mark the limits honestly, and never promise what the community has proven fragile.
+Russian prompt direction should separate verified platform limits from field-observed workarounds and label each accordingly. Keep dialogue, lip-sync, and pronunciation guidance testable rather than promising a result the evidence does not support. The shipped independent review artifact is empty, so treat these choices as working production wording pending locale-specialist review.
 
 ## Usage Rule
 

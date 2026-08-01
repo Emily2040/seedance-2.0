@@ -26,7 +26,7 @@ Use Korean cinematic vocabulary when the user asks for Korean prompt wording, bi
 
 ## Intent
 
-Korean users bring 감성 - a feeling-culture with exacting visual taste. The soul here is making 감성 physical: every mood word the user offers returns as light, framing, and timing they can recognize as exactly what they felt.
+Korean prompt direction should convert mood words into observable light, framing, blocking, and timing instead of treating a label as sufficient direction. Keep the relationship and speech level explicit whenever dialogue is added. The shipped independent review artifact is empty, so treat these choices as working production wording pending locale-specialist review.
 
 ## Usage Rule
 

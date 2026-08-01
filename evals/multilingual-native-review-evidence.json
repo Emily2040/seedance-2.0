@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "fixture": "evals/multilingual-native-review.json",
+  "purpose": "Store CI-validated review-record structures bound to the exact current fixture input and review protocol. An empty list means no completed language-quality review has been submitted.",
+  "review_state": "pending_native_review",
+  "completed_review_sets": []
+}

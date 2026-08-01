@@ -121,7 +121,7 @@ def main() -> int:
             "What this skill can do",
             "Professional QC stack",
             "## Start Here",
-            "## Native Language Start",
+            "## Multilingual Start",
             "docs/README.zh.md",
             "docs/README.ja.md",
             "docs/README.ko.md",
