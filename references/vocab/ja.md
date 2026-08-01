@@ -25,6 +25,14 @@ Use this reference for Japanese Seedance prompt wording, role binding, and compa
 | Shot | `中近景` | medium close-up |
 | Shot | `広い導入ショット` | wide establishing shot |
 | Shot | `四分の三の横顔` | three-quarter profile |
+| Shot | `三分割法で構図` | rule-of-thirds composition |
+| Shot | `日の丸構図、主体中央` | centered composition, subject in the middle |
+| Shot | `大きな余白、孤独感` | large negative space, isolation |
+| Shot | `前ボケ越しに被写体` | subject seen past foreground blur |
+| Shot | `誘導線で奥へ` | leading lines pulling into depth |
+| Camera | `ワンカット長回し` | one continuous long take |
+| Camera | `ピン送りで視線を移す` | rack focus shifts the eye |
+| Lighting | `木漏れ日` | sunlight dappled through leaves |
 | Lens | `24mmの広角で空間を強調` | 24mm wide lens spatial feel |
 | Lens | `50mmの自然なポートレート感` | 50mm natural portrait feel |
 | Lens | `マクロレンズで素材の細部を見せる` | macro lens for material detail |
@@ -138,6 +146,19 @@ One axis is unique to Japanese: the first-person pronoun is itself register. 私
 With two speakers, the pair of registers *is* the relationship: a boss in 普通体 answered in です・ます体 reads as hierarchy, both in です・ます体 reads as peers or strangers. Keep each character's register and pronoun consistent across a sequence - drifting mid-project reads as a translation error, and it is the kind of continuity that no frame-level QC catches.
 
 If the user has not stated a register and the relationship does not imply one, ask once rather than defaulting silently; it is one question and it changes both the performance and the mora budget.
+
+## Aesthetic Registers (美学)
+
+Japanese carries aesthetic concepts with no one-word English equivalent. They are legitimate intent words — but they are intent, not instruction: alone in a prompt they behave like any feel-word and destabilize the output. Use them the way the Slop Traps table repairs feel-words — name the register, then spend the words on the physical elements that produce it.
+
+| Register | Decompose into |
+|---|---|
+| 間 (ma — the charged pause) | a held frame, an action that stops before the cut, one beat of room tone with no dialogue: `動作が止まり、二拍の沈黙、その後カットせずに保持` |
+| 侘び寂び (imperfect, weathered beauty) | material and age, not mood: `欠けた陶器、古い木の質感、苔、曇天の柔らかい光` |
+| もののあわれ (the pathos of passing things) | one transient physical event given the whole shot: `散る桜が一枚、水面に落ちて波紋が消えるまで` |
+| 幽玄 (profound, veiled depth) | occlusion and distance: `薄い霧、遠景の人影、輪郭だけの照明、音は遠い鐘のみ` |
+| 粋 (understated urban elegance) | restraint in costume and gesture: `無地の着流し、最小限の所作、視線だけの反応` |
+| 木漏れ日 (light through leaves) | already physical — usable as-is in the Lighting slot |
 
 ## Slop Traps
 
