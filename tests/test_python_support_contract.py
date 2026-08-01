@@ -25,10 +25,20 @@ class PythonSupportContractTests(unittest.TestCase):
             "python-version: [\"3.11\", \"3.13\"]",
             "runs-on: ${{ matrix.os }}",
             "python-version: ${{ matrix.python-version }}",
-            "PYTHONPYCACHEPREFIX: ${{ runner.temp }}/seedance-pycache",
+            "shell: python",
+            'cache = Path(os.environ["RUNNER_TEMP"]) / "seedance-pycache"',
+            'with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8")',
         ):
             with self.subTest(required=required):
                 self.assertIn(required, workflow)
+
+    def test_job_environment_does_not_use_step_only_runner_context(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "validate-skills.yml"
+        ).read_text(encoding="utf-8")
+        job_prefix, _steps = workflow.split("    steps:\n", 1)
+
+        self.assertNotIn("${{ runner.", job_prefix)
 
 
 if __name__ == "__main__":

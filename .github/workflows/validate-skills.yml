@@ -29,7 +29,6 @@ jobs:
       # __pycache__ out of the tree stops any step that imports a module from
       # changing the result of a later step.
       PYTHONDONTWRITEBYTECODE: "1"
-      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/seedance-pycache
     steps:
       # Actions are pinned to commit SHAs: a tag is mutable, so `@v4` silently
       # changes what executes here. The trailing comment tracks the release.
@@ -39,6 +38,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: requirements-validation.lock
+      # `runner` context is not available while GitHub evaluates job-level
+      # `env`. Resolve RUNNER_TEMP after the runner and Python are available,
+      # then export the value for every later validation step.
+      - name: Route Python bytecode outside the checkout
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+
+          cache = Path(os.environ["RUNNER_TEMP"]) / "seedance-pycache"
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              print(f"PYTHONPYCACHEPREFIX={cache}", file=env_file)
       # Only scripts/schema_check.py needs a third-party package. The lock is
       # hash-pinned for every supported runner and interpreter in this matrix.
       - name: Install validation dependencies
