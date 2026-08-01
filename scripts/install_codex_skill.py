@@ -2,38 +2,22 @@
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import os
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 SKILL_NAME = "seedance-20"
+PAYLOAD_MANIFEST = PurePosixPath("validation/install-payload.txt")
 
-# Kept out of the installed payload because they are development-only and
-# network-capable. eval_run.py contacts a model provider and reads
-# ANTHROPIC_API_KEY; nothing in skills/ or references/ invokes it, so an
-# install has no use for it and shipping it would put a credential-reading
-# script inside every agent that loads this skill. eval-runs/ holds its output.
-# tests/test_install_payload.py enforces this.
+# Deliberately absent from the positive payload manifest because they are
+# development-only. eval_run.py is also network-capable and credential-reading.
+# tests/test_install_payload.py enforces that none of these reach an install.
 DEV_ONLY_NAMES = {
     "eval_run.py",
     "eval-runs",
     "tests",
 }
-
-IGNORE_NAMES = {
-    ".git",
-    ".github",
-    ".pytest_cache",
-    ".seedance_backups",
-    "__pycache__",
-} | DEV_ONLY_NAMES
-# Fonts are build inputs for scripts/build_masthead_outlines.py, which an
-# installed skill never runs - the outlines it produces are already baked into
-# the committed SVGs. Shipping them would add ~340 KB to every install for
-# nothing.
-IGNORE_PATTERNS = ["*.pyc", "*.pyo", "*.tmp", "*.log", "*.png", "*.jpg", "*.jpeg", "*.psd", "*.ttf", "*.otf"]
 
 
 def default_skills_dir() -> Path:
@@ -43,15 +27,81 @@ def default_skills_dir() -> Path:
     return Path.home() / ".codex" / "skills"
 
 
-def ignore_runtime_noise(_src: str, names: list[str]) -> set[str]:
-    ignored: set[str] = set()
-    for name in names:
-        if name in IGNORE_NAMES:
-            ignored.add(name)
+def load_payload_manifest(repo_root: Path) -> frozenset[str]:
+    """Load an explicit, source-relative install contract.
+
+    Every entry is a normalized POSIX relative path to one regular file inside
+    the repository. Directories are implied by their declared descendants.
+    """
+    root = repo_root.resolve()
+    manifest_path = root.joinpath(*PAYLOAD_MANIFEST.parts)
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"install payload manifest not found: {manifest_path}")
+
+    declared: set[str] = set()
+    for line_number, raw_line in enumerate(manifest_path.read_text(encoding="utf-8").splitlines(), 1):
+        entry = raw_line.strip()
+        if not entry or entry.startswith("#"):
             continue
-        if any(fnmatch.fnmatch(name, pattern) for pattern in IGNORE_PATTERNS):
-            ignored.add(name)
-    return ignored
+        relative = PurePosixPath(entry)
+        invalid = (
+            raw_line != entry
+            or "\\" in entry
+            or relative.is_absolute()
+            or not relative.parts
+            or any(part in {".", ".."} for part in relative.parts)
+            or ":" in relative.parts[0]
+            or relative.as_posix() != entry
+        )
+        if invalid:
+            raise ValueError(
+                f"{manifest_path}:{line_number}: payload path must be a normalized POSIX relative path: {entry!r}"
+            )
+        if entry in declared:
+            raise ValueError(f"{manifest_path}:{line_number}: duplicate payload path: {entry}")
+
+        source = root.joinpath(*relative.parts)
+        resolved_source = source.resolve()
+        if root not in resolved_source.parents:
+            raise ValueError(f"{manifest_path}:{line_number}: payload path escapes repository: {entry}")
+        if not source.is_file():
+            raise FileNotFoundError(f"{manifest_path}:{line_number}: declared payload file missing: {entry}")
+        declared.add(entry)
+
+    required = {
+        "SKILL.md",
+        "scripts/install_codex_skill.py",
+        PAYLOAD_MANIFEST.as_posix(),
+    }
+    missing_required = sorted(required - declared)
+    if missing_required:
+        raise ValueError(
+            f"{manifest_path}: missing required payload entries: {', '.join(missing_required)}"
+        )
+    return frozenset(declared)
+
+
+def payload_allowlist_filter(repo_root: Path, declared: frozenset[str]):
+    """Return a copytree ignore callback that admits only declared files."""
+    root = repo_root.resolve()
+    declared_directories = {
+        PurePosixPath(*path.parts[:depth]).as_posix()
+        for entry in declared
+        for path in [PurePosixPath(entry)]
+        for depth in range(1, len(path.parts))
+    }
+
+    def ignore_undeclared(source_directory: str, names: list[str]) -> set[str]:
+        relative_directory = Path(source_directory).resolve().relative_to(root)
+        parent_parts = () if relative_directory == Path(".") else relative_directory.parts
+        ignored: set[str] = set()
+        for name in names:
+            candidate = PurePosixPath(*parent_parts, name).as_posix()
+            if candidate not in declared and candidate not in declared_directories:
+                ignored.add(name)
+        return ignored
+
+    return ignore_undeclared
 
 
 def payload_size(path: Path) -> str:
@@ -109,6 +159,8 @@ def main() -> int:
     source_skill = repo_root / "SKILL.md"
     if not source_skill.exists():
         raise FileNotFoundError(f"SKILL.md not found at {source_skill}")
+    # Validate the source contract before creating or replacing any destination.
+    declared_payload = load_payload_manifest(repo_root)
 
     skills_dir = args.dest.expanduser()
     destination = skills_dir / SKILL_NAME
@@ -129,7 +181,11 @@ def main() -> int:
             return 1
         shutil.rmtree(destination)
 
-    shutil.copytree(repo_root, destination, ignore=ignore_runtime_noise)
+    shutil.copytree(
+        repo_root,
+        destination,
+        ignore=payload_allowlist_filter(repo_root, declared_payload),
+    )
 
     print(f"Installed {SKILL_NAME} to {destination}")
     print(f"Installed payload size: {payload_size(destination)}")
