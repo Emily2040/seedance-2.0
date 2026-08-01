@@ -489,11 +489,23 @@ def self_test(root: Path) -> int:
         errors.append(str(exc))
     seq = 0
     seen_ids: set[str] = set()
-    for case in cases:
-        cid = case.get("id", "?")
-        if cid in seen_ids:
-            errors.append(f"{cid}: duplicate case id")
-        seen_ids.add(cid)
+    for index, case in enumerate(cases):
+        if not isinstance(case, dict):
+            errors.append(f"case {index + 1}: case must be an object")
+            continue
+        raw_id = case.get("id")
+        if (
+            not isinstance(raw_id, str)
+            or not raw_id.strip()
+            or not _is_utf8_encodable(raw_id)
+        ):
+            errors.append(f"case {index + 1}: id must be a non-empty UTF-8 string")
+            cid = f"case {index + 1}"
+        else:
+            cid = raw_id
+            if cid in seen_ids:
+                errors.append(f"{cid}: duplicate case id")
+            seen_ids.add(cid)
         if not case.get("assertions"):
             errors.append(f"{cid}: no assertions")
         judge_checks = expected_judge_checks(case)

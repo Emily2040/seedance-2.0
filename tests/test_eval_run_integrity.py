@@ -667,6 +667,35 @@ class JudgeIntegrityTests(unittest.TestCase):
 
 
 class InputContractTests(unittest.TestCase):
+    def test_self_test_rejects_unhashable_case_ids_without_a_traceback(self) -> None:
+        for invalid_id in ([], {}):
+            with self.subTest(invalid_id=invalid_id), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "evals").mkdir()
+                (root / "references").mkdir()
+                (root / "SKILL.md").write_text("# test skill\n", encoding="utf-8")
+                (root / "references" / "eval-rubric.md").write_text(
+                    EXACT_RUBRIC, encoding="utf-8"
+                )
+                cases = [
+                    {
+                        "id": invalid_id,
+                        "prompt": "test",
+                        "assertions": ["works"],
+                    }
+                ]
+                (root / "evals" / "evals.json").write_text(
+                    json.dumps({"cases": cases}), encoding="utf-8"
+                )
+
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    code = eval_run.self_test(root)
+
+                self.assertEqual(code, 1)
+                self.assertIn("id must be a non-empty UTF-8 string", output.getvalue())
+                self.assertNotIn("Traceback", output.getvalue())
+
     def test_load_cases_rejects_ambiguous_json_and_invalid_shapes(self) -> None:
         invalid_documents = (
             '{"cases":[],"cases":[]}',
