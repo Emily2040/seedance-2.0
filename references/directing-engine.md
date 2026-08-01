@@ -1,16 +1,16 @@
 # Directing Engine
 
-The difference between a prompt that asks for "a cinematic look" and a prompt a director would sign is motivation. A director does not pick a camera move, a light, or a performance from a menu. They decide what the scene must do to the audience, then make every craft choice serve that one decision - in a consistent personal voice, across the whole film. This reference is the reasoning layer above the lookup tables in [seedance-camera](../skills/seedance-camera/SKILL.md), [seedance-lighting](../skills/seedance-lighting/SKILL.md), [seedance-motion](../skills/seedance-motion/SKILL.md), and [seedance-characters](../skills/seedance-characters/SKILL.md). Those skills answer "what phrase?"; this answers "why this, here, for this story."
+The difference between a prompt that asks for "a cinematic look" and a prompt a director would sign is motivation. A director does not pick a camera move, a light, or a performance from a menu. They decide what the scene must do to the audience, then make every craft choice serve that one decision - in a consistent personal voice, across the whole film. This reference is the deeper reasoning layer above the mandatory lane and story record in the [Director's Read](directors-read.md) and the lookup tables in [seedance-camera](../skills/seedance-camera/SKILL.md), [seedance-lighting](../skills/seedance-lighting/SKILL.md), [seedance-motion](../skills/seedance-motion/SKILL.md), and [seedance-characters](../skills/seedance-characters/SKILL.md). Those skills answer "what phrase?"; this answers "why this, here, for this story."
 
-Load this whenever an idea is becoming a script or a shot, whenever scenes need different treatment from each other, or whenever a long story must hold one directorial hand across many short clips.
+Load the [Director's Read](directors-read.md) first on every route. Load this deeper engine when an idea is becoming a fully directed script or shot, scenes need different treatment from each other, the setup is unclear, or a long story must hold one directorial hand across many short clips. It expands the canonical read; it cannot replace, shorten, or bypass it.
 
 ## Why "cinematic" is not a decision
 
 "Cinematic," "epic," "beautiful," and "this kind of camera" are wishes, not direction. They describe a feeling about the result instead of the cause that produces it. Real direction runs the other way: from the scene's dramatic job, to one intention, to a set of mutually reinforcing choices. The same set never fits two different scenes, because two scenes are doing two different things to the audience. A reveal is not lit, framed, blocked, or performed like a goodbye. The engine's whole purpose is to refuse the generic answer and derive the specific one.
 
-## Step 1 - The Director's Read
+## Step 1 - Expand the Canonical Director's Read
 
-Before any technique, understand the scene. Answer five questions in plain words; the answers, not adjectives, decide everything downstream.
+Before any technique, complete the exact ten-field narrative record in the [Director's Read](directors-read.md), or its two-line non-narrative refusal when no agency, story, or performance is requested. Do not fabricate drama for utility, packshot, functional product, abstract, VFX, or ambient work. The five lenses below deepen parts of the narrative record; they are not a shorter substitute for its hidden objective, obstacle/tactic, visible suppressed behavior, non-transferable detail, or stock-solution refusal.
 
 1. **Function.** What is this scene for in the larger story - introduce, deepen, turn, or pay off? A scene that earns its place changes something.
 2. **The turn.** Name the single shift the scene exists to deliver as a value flip: safe to threatened, hope to despair, stranger to ally, control to helplessness, ordinary to wonder. If nothing flips, the scene is decoration and should be cut or merged.
@@ -18,7 +18,7 @@ Before any technique, understand the scene. Answer five questions in plain words
 4. **Power.** Who has it, who wants it, and where does it move during the scene? Power is expressed by height, size, who looks and who is looked at, who occupies space and who is pushed to the edge.
 5. **Subtext.** What is true but unsaid? The gap between what a character says and what they want is where direction lives; behavior in that gap is the performance.
 
-The read is the script work. A vague idea becomes directable the moment these five are answered, even with defaults.
+The read is the script work. A vague narrative idea becomes directable when the full canonical record is answered, even with bounded defaults, and every abstraction is later translated into visible or audible carriers.
 
 ## Step 2 - The Coherence Principle
 
@@ -119,7 +119,7 @@ A practical spine record per clip: `voice`, `arc_position` (open / rising / turn
 
 The skills run this function whenever a scene becomes a shot.
 
-1. Read the scene: function, turn, POV, power, subtext (Step 1).
+1. Complete the [Director's Read](directors-read.md): classify the lane, then write the full narrative record or the non-narrative refusal. For narrative work, use the function, turn, POV, power, objective, obstacle/tactic, contradiction, visible suppressed behavior, non-transferable detail, and stock refusal in the steps below.
 2. Set or inherit the project voice (Step 6); store it.
 3. Derive the unified setup: let scene-type (Step 3) and the one-sentence intention choose the instruments, biased by the voice.
 4. Write the performance as one true gesture per beat (Step 4).
@@ -131,7 +131,7 @@ The skills run this function whenever a scene becomes a shot.
 
 Idea: "a couple breaks up at the kitchen table."
 
-- **Read.** Function: turn the relationship. Turn: together to apart. POV: the one being left. Power: shifts from her (deciding) to him (absorbing). Subtext: he keeps talking about the dishes because he cannot say the real thing.
+- **Read.** Function: turn the relationship. Turn: together to apart. POV: the one being left. Power: shifts from her (deciding) to him (absorbing). Hidden objective: keep her at the table without asking her to stay. Obstacle/tactic: she has already decided; he keeps talking about the dishes. Subtext: the practical talk hides the plea. Visible suppressed behavior: he wipes the same spot twice. Non-transferable detail: the chipped plate from their first flat. Stock refusal: no tearful close-up or swelling breakup score.
 - **Intention:** make the audience feel the moment he realizes it is already over.
 - **Voice:** intimate minimalist.
 - **Setup:** medium close-up on him at eye-level, 50mm-feel compression, a very slow push-in that finishes as the realization lands; soft warm practical from a window behind her so she is slightly haloed and he is in plainer light; cool evening outside; near-silence, a tap dripping, one chair scrape.

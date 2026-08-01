@@ -1,6 +1,8 @@
 # Directing Engine — Genre Worked-Example Library
 
-On-demand companion to [`directing-engine.md`](directing-engine.md). Load this only when you want a fully worked example in a specific genre. The directing *method* - the Director's Read, the Coherence Principle, the Director's Voice, the long-form spine - lives in the core file; these entries simply apply it. Each runs the same read -> intention -> voice -> coherent setup -> performance -> compiled-prompt procedure, and the contrast across genres is the lesson: the voice and instruments change because the scene is doing something different.
+On-demand companion to [`directing-engine.md`](directing-engine.md). Load this only when you want a fully worked example in a specific genre.
+
+The canonical lane criteria and narrative record live in [`directors-read.md`](directors-read.md); the Coherence Principle, Director's Voice, and long-form spine live in the engine. These entries apply both layers. Each runs the same read -> intention -> voice -> coherent setup -> performance -> compiled-prompt procedure, and the contrast across genres is the lesson: the voice and instruments change because the scene is doing something different.
 
 ## Worked Examples by Genre
 

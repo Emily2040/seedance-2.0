@@ -23,7 +23,7 @@ metadata:
 
 Use this for seamless continuation, intentional next shots, bridge clips, tail repair, and re-anchoring after drift. A continuation prompt must be grounded in accepted footage, not only in the old plan.
 
-Load [continuation-handoff](../../references/continuation-handoff.md), [sequence-project-state](../../references/sequence-project-state.md), [prompt-compiler](../../references/prompt-compiler.md), [reference-transfer-contract](../../references/reference-transfer-contract.md), and [continuity-qc](../../references/continuity-qc.md). Load [failure-atlas](../../references/failure-atlas.md) when the continuation failed or drift is visible. Load [directing-engine](../../references/directing-engine.md) so the next clip inherits the project's directorial voice and its position on the long-form spine; the look never re-rolls between clips.
+Load the [Director's Read](../../references/directors-read.md), [continuation-handoff](../../references/continuation-handoff.md), [sequence-project-state](../../references/sequence-project-state.md), [prompt-compiler](../../references/prompt-compiler.md), [reference-transfer-contract](../../references/reference-transfer-contract.md), and [continuity-qc](../../references/continuity-qc.md). Load [failure-atlas](../../references/failure-atlas.md) when the continuation failed or drift is visible. Load [directing-engine](../../references/directing-engine.md) so the next clip inherits the project's directorial voice and its position on the long-form spine; the look never re-rolls between clips.
 
 ## Intent
 
@@ -55,6 +55,8 @@ Once a frame or clip is attached **and this client can actually open it**, run t
 If the client accepts the file but cannot render it, the pixels are not in hand. Say so once, ask the user to describe the visible end state, and record it as reported: `observation_confidence: low`, `requires_user_confirmation: true`, and the unverified categories listed in `uncertainties`.
 
 Do not hide this uncertainty by writing a speculative prompt.
+
+After the source gate is satisfied and before the next prompt is compiled, classify the current clip with the [Director's Read](../../references/directors-read.md). Narrative, story, and performance continuations complete the canonical ten-field internal read against the observed end state; non-narrative utility, product-only, abstract, VFX, or ambient continuations keep only the two-line utility intent and refusal. Do not add new Project State fields. Translate the read into the current clip's blocking, visible suppressed behavior, non-transferable detail, camera endpoint, light, and sound; never paste the internal labels into final generation prose.
 
 ## Continuation Types
 

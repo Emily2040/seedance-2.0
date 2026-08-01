@@ -23,6 +23,8 @@ metadata:
 
 Use this when speed matters more than exhaustive creative discovery. The goal is to turn a vague idea into a compact director brief with no more than three questions, then route to prompt writing.
 
+Speed does not bypass story judgment. Load the [Director's Read](../../references/directors-read.md) before producing the compact brief. Complete its ten-field internal record for every narrative, story, or performance idea; for a utility, product-only, abstract, VFX, or ambient idea with no requested agency or performance, record its two-line non-narrative intent and refusal instead. Never reconstruct the read from remembered craft.
+
 ## Intent
 
 The user here knows what they want and is asking you to respect their momentum. The soul of this skill is restraint: find the one missing piece that would sink the generation, ask only that, and get out of the way. Speed is the form their trust takes.
@@ -39,11 +41,11 @@ If the user already supplied enough information, do not ask. Produce a brief imm
 
 Run the interview and brief in the user's language; for native starting-point menus and invites, load [interview-starters](../../references/interview-starters.md). If the user gives explicit shot, lens, camera, blocking, or performance direction, keep it verbatim and compile it into a shot-contract-grade brief - never simplify or override a professional's spec. When the user has no idea at all, offer a starting-point menu to react to instead of asking a question they cannot answer.
 
-Even in fast mode, the brief states one motivated intention, not a generic "cinematic" look: name what the scene is doing and let the camera, light, and performance serve that. Load [directing-engine](../../references/directing-engine.md) only when the right setup for the scene is genuinely unclear; otherwise apply its coherence rule inline.
+Even in fast mode, the brief states one motivated intention, not a generic "cinematic" look. For narrative work, derive it from the completed [Director's Read](../../references/directors-read.md) record and translate the turn, visible suppressed behavior, and non-transferable detail into filmable or audible carriers. For non-narrative work, serve the utility intent without inventing want, power, conflict, or subtext. Load [directing-engine](../../references/directing-engine.md) only when the right setup for the scene is genuinely unclear.
 
 ## Compact Brief Pattern
 
-`Mode: [T2V/I2V/V2V/R2V]. Subject: [anchor]. Beat: [before -> action -> final state]. Camera: [one move]. Light/style: [physical source and safe descriptor]. Sound: [dialogue/ambience/SFX/music/silence]. Constraints: [identity, IP, safety, product, prompt budget].`
+Internal lane record from the [Director's Read](../../references/directors-read.md), then: `Mode: [T2V/I2V/V2V/R2V]. Subject: [anchor]. Beat: [before -> action -> final state]. Camera: [one move]. Light/style: [physical source and safe descriptor]. Sound: [dialogue/ambience/SFX/music/silence]. Constraints: [identity, IP, safety, product, prompt budget].`
 
 ## Routing Rule
 
@@ -51,4 +53,4 @@ Route to [seedance-sequence](../seedance-sequence/SKILL.md) for connected clips,
 
 ## Output Contract
 
-Return one compact brief under 150 words, any missing high-impact question, and a recommended skill route. If the request is a sequence, include the complete story ending, likely clip count, current clip job, and the fact that future prompts stay provisional until accepted footage is reviewed.
+Return one compact brief under 150 words, any missing high-impact question, and a recommended skill route. Keep Director's Read labels out of final generation prose; show the internal record only when the user requests the planning rationale or when another agent needs the handoff. If the request is a sequence, include the complete story ending, likely clip count, current clip job, and the fact that future prompts stay provisional until accepted footage is reviewed.
