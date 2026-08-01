@@ -13,7 +13,7 @@ import json
 import re
 import sys
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -21,6 +21,10 @@ import build_hero  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RETIRED = ("viewfinder", "crosshair", "timecode", "sprocket", "REC", "21:9")
+MASTHEAD_INSTALL = (
+    "python -m pip install --require-hashes "
+    "--requirement requirements-masthead.lock"
+)
 
 
 class GeneratorTests(unittest.TestCase):
@@ -125,6 +129,68 @@ class OutlinedTypeTests(unittest.TestCase):
             self.assertTrue(prov.get(field), f"provenance is missing {field}")
         self.assertIn("Open Font License", prov["license"])
 
+    def test_masthead_builder_versions_are_pinned_and_recorded(self) -> None:
+        """Committed geometry must name the exact shaper toolchain that produced it."""
+        import build_masthead_outlines as gen
+
+        expected = {
+            "fonttools": "4.63.0",
+            "uharfbuzz": "0.56.0",
+            "harfbuzz": "14.3.0",
+        }
+        lock = (ROOT / "requirements-masthead.lock").read_text(encoding="utf-8")
+        self.assertIn("fonttools==4.63.0", lock)
+        self.assertIn("uharfbuzz==0.56.0", lock)
+        for package in ("fonttools", "uharfbuzz"):
+            block = lock.split(f"{package}==", 1)[1]
+            if package == "fonttools":
+                block = block.split("uharfbuzz==", 1)[0]
+            self.assertRegex(block, r"--hash=sha256:[0-9a-f]{64}")
+        self.assertEqual(gen.pinned_builder_versions(), expected)
+        self.assertEqual(gen.installed_builder_versions(), expected)
+
+        data = json.loads((ROOT / "assets/masthead-outlines.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["provenance"]["builder_versions"], expected)
+
+    def test_masthead_builder_refuses_an_unpinned_toolchain(self) -> None:
+        """A different shaper must fail before silently rewriting committed geometry."""
+        from unittest import mock
+
+        import build_masthead_outlines as gen
+
+        mismatched = gen.pinned_builder_versions()
+        mismatched["uharfbuzz"] = "999.0"
+        with mock.patch.object(gen, "installed_builder_versions", return_value=mismatched):
+            with self.assertRaisesRegex(SystemExit, "version mismatch"):
+                gen.require_pinned_builder_versions()
+
+    def test_masthead_builder_missing_dependency_error_uses_the_locked_install(self) -> None:
+        """A clean checkout must fail closed with the reproducible recovery command."""
+        from unittest import mock
+
+        import build_masthead_outlines as gen
+
+        for missing in ("fontTools", "uharfbuzz"):
+            with self.subTest(missing=missing):
+                with mock.patch.dict(sys.modules, {missing: None}):
+                    with self.assertRaisesRegex(SystemExit, re.escape(MASTHEAD_INSTALL)):
+                        gen.installed_builder_versions()
+
+    def test_masthead_install_is_hash_enforced_everywhere_it_is_documented(self) -> None:
+        """Release, CI, and script help must not regress to unconstrained installs."""
+        import build_masthead_outlines as gen
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        release_setup = readme.split("## Validation", 1)[1].split("## Design Standard", 1)[0]
+        workflow = (ROOT / ".github/workflows/validate-skills.yml").read_text(encoding="utf-8")
+        self.assertIn(MASTHEAD_INSTALL, release_setup)
+        self.assertGreaterEqual(readme.count(MASTHEAD_INSTALL), 2)
+        self.assertIn("python scripts/build_masthead_outlines.py --check", release_setup)
+        self.assertIn(MASTHEAD_INSTALL, workflow)
+        self.assertIn("python scripts/build_masthead_outlines.py --check", workflow)
+        self.assertIn(MASTHEAD_INSTALL, gen.__doc__)
+        self.assertNotIn("pip install " + "fonttools uharfbuzz", gen.__doc__)
+
     def test_the_generator_can_run_from_a_clean_checkout(self) -> None:
         """The fonts it reads must be tracked, or the documented path is fiction."""
         import build_masthead_outlines as gen
@@ -138,6 +204,8 @@ class OutlinedTypeTests(unittest.TestCase):
 
     def test_masthead_provenance_paths_are_posix(self) -> None:
         """Generated JSON must be byte-identical on Windows and POSIX hosts."""
+        from unittest import mock
+
         import build_masthead_outlines as gen
 
         self.assertEqual(
@@ -148,6 +216,17 @@ class OutlinedTypeTests(unittest.TestCase):
             gen.repo_relative_posix(gen.ITALIC),
             "assets/fonts/BodoniModa-Italic[opsz,wght].ttf",
         )
+        cases = (
+            (
+                PureWindowsPath("C:/checkout"),
+                PureWindowsPath("C:/checkout/assets/fonts/Font.ttf"),
+            ),
+            (PurePosixPath("/checkout"), PurePosixPath("/checkout/assets/fonts/Font.ttf")),
+        )
+        for root, font in cases:
+            with self.subTest(root=str(root)):
+                with mock.patch.object(gen, "ROOT", root):
+                    self.assertEqual(gen.repo_relative_posix(font), "assets/fonts/Font.ttf")
 
     def test_declared_font_families_must_be_monospace(self) -> None:
         """A denylist of serif names passes Arial and bare generics."""

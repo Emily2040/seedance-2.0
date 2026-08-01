@@ -389,12 +389,15 @@ Run these checks before every release. The source-registry check runs with
 validation deliberately omits the flag, because staleness depends on the calendar
 rather than on the change under test.
 
-Every check is offline. Exactly one of them, `schema_check.py`, needs a
-third-party library, so install the hash-pinned lock first — on a clean checkout
-that step otherwise stops the run:
+The checks themselves are offline. Two maintainer checks need third-party
+libraries: `schema_check.py` executes JSON Schema instances, while
+`build_masthead_outlines.py --check` reproduces the outlined masthead type.
+Install both hash-pinned locks first — on a clean checkout those checks otherwise
+stop the run:
 
 ```bash
 python -m pip install --require-hashes --requirement requirements-validation.lock
+python -m pip install --require-hashes --requirement requirements-masthead.lock
 ```
 
 ```bash
@@ -403,6 +406,7 @@ python scripts/content_audit.py --strict
 python scripts/eval_schema_check.py --strict
 python scripts/schema_check.py --strict
 python scripts/design_audit.py --strict
+python scripts/build_masthead_outlines.py --check
 python scripts/build_hero.py --check
 python scripts/source_registry_check.py --strict --enforce-freshness
 python scripts/vocab_schema_check.py --strict
@@ -456,6 +460,13 @@ This is the quality gate, not a shape gate, so it lives outside offline CI; the 
 The front page follows an editorial design system rather than default AI styling: warm ink and paper themes, a serif display face paired with monospace specification labels, a single amber accent, and hairline rules — no gradients, no glow. Camera motifs are deliberately retired: no viewfinder marks, timecode, record dots, or aspect badges. They depict the tool rather than the work, and they are the visual cliché of every AI-video product.
 
 The masthead is generated from one geometry by [`scripts/build_hero.py`](scripts/build_hero.py), so its dark and light variants cannot drift apart; `--check` proves the committed SVGs still match the generator, and it runs in CI.
+
+The outlined display type has a separate, build-only toolchain. Before changing
+the wordmark or tagline geometry, run
+`python -m pip install --require-hashes --requirement requirements-masthead.lock`, then run
+`python scripts/build_masthead_outlines.py` and `python scripts/build_hero.py`.
+The generator refuses unpinned shaping-library versions and records the exact
+FontTools, uharfbuzz, and HarfBuzz versions in `assets/masthead-outlines.json`.
 
 The masthead and the hand-built operating diagram (`assets/hero-dark.svg`, `assets/hero-light.svg`, `assets/skill-map.svg`) are served through a `prefers-color-scheme` picture element; generated bitmap art lives only in the curated visual gallery, including the text-rich infographics.
 

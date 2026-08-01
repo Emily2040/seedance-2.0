@@ -14,6 +14,11 @@
     ],
     "instances": "opsz tracks rendered size clamped to 6-96; wght=400 throughout",
     "shaping": "HarfBuzz with kern and liga features enabled",
+    "builder_versions": {
+      "fonttools": "4.63.0",
+      "uharfbuzz": "0.56.0",
+      "harfbuzz": "14.3.0"
+    },
     "note": "Outlines are glyph geometry, not font software. The OFL permits both these outlines and the bundled originals in assets/fonts/; attribution is retained here."
   },
   "glyphs": {

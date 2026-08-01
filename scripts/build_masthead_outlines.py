@@ -7,10 +7,10 @@ only on macOS and a default system serif on Linux - so the editorial serif the
 design system specifies was what a minority of readers actually saw. Outlines
 depend on no installed font and render identically for everyone.
 
-This is a maintainer tool, not part of the validation suite: it needs two
-third-party packages that the offline CI gate deliberately does not carry.
+This is a maintainer tool, not part of the installed skill runtime. Its two
+third-party packages are isolated in a hash-pinned build lock.
 
-    python -m pip install fonttools uharfbuzz
+    python -m pip install --require-hashes --requirement requirements-masthead.lock
     python scripts/build_masthead_outlines.py            # rewrite the asset
     python scripts/build_masthead_outlines.py --check    # verify it is current
 
@@ -34,6 +34,10 @@ FONT_DIR = ROOT / "assets" / "fonts"
 ROMAN = FONT_DIR / "BodoniModa[opsz,wght].ttf"
 ITALIC = FONT_DIR / "BodoniModa-Italic[opsz,wght].ttf"
 TARGET = ROOT / "assets" / "masthead-outlines.json"
+INSTALL_COMMAND = (
+    "python -m pip install --require-hashes "
+    "--requirement requirements-masthead.lock"
+)
 
 # Optical size tracks the rendered size, clamped to the axis range. That is
 # what the axis is for: a didone drawn for 96px has hairlines that vanish at
@@ -47,10 +51,52 @@ SPECS = {
     "tagline_2": {"font": "italic", "text": "Don’t micro-manage the frame.", "size": 26},
 }
 
+PINNED_BUILDER_VERSIONS = {
+    "fonttools": "4.63.0",
+    "uharfbuzz": "0.56.0",
+    "harfbuzz": "14.3.0",
+}
+
 
 def repo_relative_posix(path: Path) -> str:
     """Return a repository-relative path with stable JSON/documentation separators."""
     return path.relative_to(ROOT).as_posix()
+
+
+def pinned_builder_versions() -> dict[str, str]:
+    """Return the toolchain versions committed in requirements-masthead.lock."""
+    return dict(PINNED_BUILDER_VERSIONS)
+
+
+def installed_builder_versions() -> dict[str, str]:
+    """Read versions from the libraries that actually shape the outlines."""
+    try:
+        import fontTools
+        import uharfbuzz as hb
+    except ImportError as exc:
+        raise SystemExit(
+            f"masthead builder dependencies are missing; run:\n  {INSTALL_COMMAND}"
+        ) from exc
+    return {
+        "fonttools": fontTools.__version__,
+        "uharfbuzz": hb.__version__,
+        "harfbuzz": hb.version_string(),
+    }
+
+
+def require_pinned_builder_versions() -> dict[str, str]:
+    """Refuse to emit geometry from an unrecorded shaping toolchain."""
+    actual = installed_builder_versions()
+    if actual != PINNED_BUILDER_VERSIONS:
+        expected = ", ".join(
+            f"{name}={version}" for name, version in PINNED_BUILDER_VERSIONS.items()
+        )
+        observed = ", ".join(f"{name}={version}" for name, version in actual.items())
+        raise SystemExit(
+            f"masthead builder version mismatch; run `{INSTALL_COMMAND}` "
+            f"(expected {expected}; found {observed})"
+        )
+    return actual
 
 
 def outline(src: Path, text: str, size: float) -> tuple[str, float]:
@@ -95,6 +141,7 @@ def outline(src: Path, text: str, size: float) -> tuple[str, float]:
 
 
 def document() -> dict:
+    builder_versions = require_pinned_builder_versions()
     sources = {"roman": ROMAN, "italic": ITALIC}
     missing = [repo_relative_posix(p) for p in sources.values() if not p.exists()]
     if missing:
@@ -125,6 +172,7 @@ def document() -> dict:
             "vendored": [repo_relative_posix(p) for p in sources.values()],
             "instances": f"opsz tracks rendered size clamped to {OPSZ_MIN}-{OPSZ_MAX}; wght=400 throughout",
             "shaping": "HarfBuzz with kern and liga features enabled",
+            "builder_versions": builder_versions,
             "note": (
                 "Outlines are glyph geometry, not font software. The OFL permits both these "
                 "outlines and the bundled originals in assets/fonts/; attribution is retained here."
