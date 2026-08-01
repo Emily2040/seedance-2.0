@@ -420,6 +420,18 @@ python -m compileall scripts tests
 git diff --check
 ```
 
+`prompt_lint.py` is a bounded structure and anti-pattern check, not a creativity
+grader: a pass does not establish semantic creativity or generation quality. In
+default mode it rejects JSON objects and arrays, malformed object/array
+candidates, JSON/YAML-labeled fences, structured data inside unlabelled fences,
+and clear YAML wrapper, mapping, sequence, block, or flow shapes. It uses
+Python's standard JSON parser and conservative YAML shape checks; it does not
+execute content or deserialize YAML. Prose-only code fences remain accepted in
+default mode for compatibility. `--strict` additionally requires the compiled
+prompt to be bare prose with no code-fence wrapper and rejects a self-declared
+`lint: pass` line. Only the command's exit status and output are computed lint
+evidence.
+
 The CI workflow runs this same list on push and pull request, with the one deliberate difference noted above: it omits `--enforce-freshness`. These checks are deterministic and offline — they prove the package is well-formed.
 
 ### Source freshness
