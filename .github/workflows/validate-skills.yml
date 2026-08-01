@@ -43,43 +43,9 @@ jobs:
       # hash-pinned for every supported runner and interpreter in this matrix.
       - name: Install validation dependencies
         run: python -m pip install --require-hashes --requirement requirements-validation.lock
-      - name: Validate skill metadata and required files
-        run: python scripts/validate_skills.py --strict
-      - name: Audit stale and risky active wording
-        run: python scripts/content_audit.py --strict
-      - name: Validate eval schema
-        run: python scripts/eval_schema_check.py --strict
-      - name: Execute JSON Schemas against declared instances
-        run: python scripts/schema_check.py --strict
-      - name: Audit frontend README and SVG assets
-        run: python scripts/design_audit.py --strict
-      - name: Check the masthead matches its generator
-        run: python scripts/build_hero.py --check
-      - name: Validate source freshness and claim labels
-        run: python scripts/source_registry_check.py --strict
-      - name: Validate multilingual vocabulary schema
-        run: python scripts/vocab_schema_check.py --strict
-      - name: Validate sequence project state
-        run: python scripts/project_state_check.py --strict
-      - name: Validate continuity chains
-        run: python scripts/continuity_chain_check.py --strict
-      - name: Validate behavior contracts
-        run: python scripts/behavior_contract_check.py --strict
-      - name: Validate sequence evals
-        run: python scripts/sequence_eval_check.py --strict
-      - name: Validate generation-run fixtures
-        run: python scripts/generation_run_check.py --strict
-      - name: Lint compiled prompts
-        run: python scripts/prompt_lint.py --self-test --strict
-      - name: Stress-test the prompt architecture
-        run: python scripts/prompt_architecture_stress.py --strict
-      - name: Check eval harness wiring (offline)
-        run: python scripts/eval_run.py --self-test --strict
-      - name: Check frame-extraction tool wiring (offline)
-        run: python scripts/extract_last_frame.py --self-test --strict
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -v
-      - name: Compile Python files
-        run: python -m compileall scripts tests
-      - name: Check diff whitespace
+      # README and CI call the same runner so the Download ZIP contract cannot
+      # silently lose a check when this workflow changes.
+      - name: Run canonical archive-safe validation suite
+        run: python scripts/validate_repo.py
+      - name: Check diff whitespace (Git checkout only)
         run: git diff --check
