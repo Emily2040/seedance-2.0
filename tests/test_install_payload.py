@@ -9,6 +9,8 @@ rather than against what the repository happens to contain.
 from __future__ import annotations
 
 import ast
+import errno
+import os
 import shutil
 import subprocess
 import sys
@@ -214,6 +216,45 @@ class PayloadManifestTests(unittest.TestCase):
         manifest.write_text("\n".join(entries) + "\n", encoding="utf-8")
         return root
 
+    def symlink_or_skip(
+        self,
+        link: Path,
+        target: Path,
+        *,
+        target_is_directory: bool = False,
+    ) -> None:
+        link.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            link.symlink_to(target, target_is_directory=target_is_directory)
+        except (NotImplementedError, OSError) as exc:
+            unavailable_errors = {
+                errno.EACCES,
+                errno.ENOSYS,
+                errno.EPERM,
+            }
+            unavailable_errors.update(
+                value
+                for name in ("ENOTSUP", "EOPNOTSUPP")
+                if (value := getattr(errno, name, None))
+            )
+            if isinstance(exc, NotImplementedError) or (
+                exc.errno in unavailable_errors or getattr(exc, "winerror", None) == 1314
+            ):
+                self.skipTest(f"filesystem symlinks are unavailable: {exc}")
+            raise
+
+    def junction_or_skip(self, link: Path, target: Path) -> None:
+        if os.name != "nt":
+            self.skipTest("Windows directory junctions are unavailable on this platform")
+        link.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.skipTest(f"Windows directory junctions are unavailable: {result.stderr.strip()}")
+
     def test_manifest_rejects_parent_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.minimal_repo(Path(tmp), ["../outside.txt"])
@@ -230,6 +271,115 @@ class PayloadManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.minimal_repo(Path(tmp), ["references/missing.md"])
             with self.assertRaisesRegex(FileNotFoundError, "declared payload file missing"):
+                installer.load_payload_manifest(root)
+
+    def test_manifest_rejects_declared_file_symlink_to_internal_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), ["references/linked.md"])
+            (root / "runtime.md").write_text("runtime\n", encoding="utf-8")
+            self.symlink_or_skip(root / "references/linked.md", Path("../runtime.md"))
+
+            with self.assertRaisesRegex(ValueError, "linked or reparse component") as raised:
+                installer.load_payload_manifest(root)
+            self.assertIn("component: references/linked.md", str(raised.exception))
+
+    def test_manifest_rejects_declared_file_symlink_to_external_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp)
+            root = self.minimal_repo(sandbox / "repo", ["references/linked.md"])
+            external = sandbox / "external.md"
+            external.write_text("external\n", encoding="utf-8")
+            self.symlink_or_skip(root / "references/linked.md", external)
+
+            with self.assertRaisesRegex(ValueError, "linked or reparse component") as raised:
+                installer.load_payload_manifest(root)
+            self.assertIn("component: references/linked.md", str(raised.exception))
+
+    def test_manifest_rejects_directory_symlink_to_internal_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), ["references/linked/runtime.md"])
+            target = root / "runtime"
+            target.mkdir()
+            (target / "runtime.md").write_text("runtime\n", encoding="utf-8")
+            self.symlink_or_skip(
+                root / "references/linked",
+                Path("../runtime"),
+                target_is_directory=True,
+            )
+
+            with self.assertRaisesRegex(ValueError, "linked or reparse component") as raised:
+                installer.load_payload_manifest(root)
+            self.assertIn("component: references/linked", str(raised.exception))
+
+    def test_manifest_rejects_directory_symlink_to_external_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp)
+            root = self.minimal_repo(sandbox / "repo", ["references/linked/runtime.md"])
+            external = sandbox / "external"
+            external.mkdir()
+            (external / "runtime.md").write_text("external\n", encoding="utf-8")
+            self.symlink_or_skip(
+                root / "references/linked",
+                external,
+                target_is_directory=True,
+            )
+
+            with self.assertRaisesRegex(ValueError, "linked or reparse component") as raised:
+                installer.load_payload_manifest(root)
+            self.assertIn("component: references/linked", str(raised.exception))
+
+    def test_manifest_rejects_internal_windows_junction_component(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), ["references/linked/runtime.md"])
+            target = root / "runtime"
+            target.mkdir()
+            (target / "runtime.md").write_text("runtime\n", encoding="utf-8")
+            self.junction_or_skip(root / "references/linked", target)
+
+            with self.assertRaisesRegex(ValueError, "linked or reparse component") as raised:
+                installer.load_payload_manifest(root)
+            self.assertIn("component: references/linked", str(raised.exception))
+
+    def test_manifest_rejects_external_windows_junction_component(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp)
+            root = self.minimal_repo(sandbox / "repo", ["references/linked/runtime.md"])
+            external = sandbox / "external"
+            external.mkdir()
+            (external / "runtime.md").write_text("external\n", encoding="utf-8")
+            self.junction_or_skip(root / "references/linked", external)
+
+            with self.assertRaisesRegex(ValueError, "linked or reparse component") as raised:
+                installer.load_payload_manifest(root)
+            self.assertIn("component: references/linked", str(raised.exception))
+
+    def test_manifest_rejects_linked_manifest_before_reading_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), [])
+            manifest = root / installer.PAYLOAD_MANIFEST.as_posix()
+            target = root / "real-manifest.txt"
+            manifest.replace(target)
+            self.symlink_or_skip(manifest, Path("../real-manifest.txt"))
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "install payload manifest contains linked or reparse component",
+            ):
+                installer.load_payload_manifest(root)
+
+    def test_manifest_rejects_windows_junction_before_reading_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp)
+            root = self.minimal_repo(sandbox / "repo", [])
+            validation = root / "validation"
+            target = sandbox / "manifest-directory"
+            validation.replace(target)
+            self.junction_or_skip(validation, target)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "install payload manifest contains linked or reparse component",
+            ):
                 installer.load_payload_manifest(root)
 
 
