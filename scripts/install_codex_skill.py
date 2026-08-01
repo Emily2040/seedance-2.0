@@ -9,6 +9,12 @@ from pathlib import Path, PurePosixPath
 
 SKILL_NAME = "seedance-20"
 PAYLOAD_MANIFEST = PurePosixPath("validation/install-payload.txt")
+REPOSITORY_URL = "https://github.com/Emily2040/seedance-2.0"
+# Archive material remains available for source history and comparison, but it
+# must never become active retrieval material in an installed skill.
+ARCHIVE_ONLY_PATHS = frozenset({"references/migrated"})
+README_GALLERY_START = "<!-- installed-readme-gallery:start -->"
+README_GALLERY_END = "<!-- installed-readme-gallery:end -->"
 
 # Deliberately absent from the positive payload manifest because they are
 # development-only. eval_run.py is also network-capable and credential-reading.
@@ -25,6 +31,15 @@ def default_skills_dir() -> Path:
     if codex_home:
         return Path(codex_home).expanduser() / "skills"
     return Path.home() / ".codex" / "skills"
+
+
+def is_archive_only_path(relative_path: Path | PurePosixPath) -> bool:
+    """Return whether a source-relative path belongs only to repository history."""
+    normalized = relative_path.as_posix().strip("/")
+    return any(
+        normalized == archive or normalized.startswith(f"{archive}/")
+        for archive in ARCHIVE_ONLY_PATHS
+    )
 
 
 def load_payload_manifest(repo_root: Path) -> frozenset[str]:
@@ -56,6 +71,10 @@ def load_payload_manifest(repo_root: Path) -> frozenset[str]:
         if invalid:
             raise ValueError(
                 f"{manifest_path}:{line_number}: payload path must be a normalized POSIX relative path: {entry!r}"
+            )
+        if is_archive_only_path(relative):
+            raise ValueError(
+                f"{manifest_path}:{line_number}: archive-only path cannot be installed: {entry}"
             )
         if entry in declared:
             raise ValueError(f"{manifest_path}:{line_number}: duplicate payload path: {entry}")
@@ -102,6 +121,35 @@ def payload_allowlist_filter(repo_root: Path, declared: frozenset[str]):
         return ignored
 
     return ignore_undeclared
+
+
+def rewrite_installed_readme(destination: Path) -> None:
+    """Replace source-only gallery embeds with one usable repository link.
+
+    The source README keeps the curated gallery. Installed payloads omit its
+    large bitmaps, so retaining those embeds would knowingly create broken
+    local targets. Explicit markers make this transformation deterministic and
+    fail closed if the README structure changes.
+    """
+    readme = destination / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    if text.count(README_GALLERY_START) != 1 or text.count(README_GALLERY_END) != 1:
+        raise ValueError("README gallery install markers must each appear exactly once")
+
+    start = text.index(README_GALLERY_START)
+    end = text.index(README_GALLERY_END)
+    if end <= start:
+        raise ValueError("README gallery install markers are out of order")
+
+    installed_gallery = (
+        f"{README_GALLERY_START}\n\n"
+        "The generated bitmap gallery is kept in the source repository rather "
+        "than the installed runtime package. "
+        f"[View the full visual gallery in the source repository]({REPOSITORY_URL}#visual-gallery).\n\n"
+        f"{README_GALLERY_END}"
+    )
+    rewritten = text[:start] + installed_gallery + text[end + len(README_GALLERY_END):]
+    readme.write_text(rewritten, encoding="utf-8")
 
 
 def payload_size(path: Path) -> str:
@@ -186,6 +234,8 @@ def main() -> int:
         destination,
         ignore=payload_allowlist_filter(repo_root, declared_payload),
     )
+    if "README.md" in declared_payload:
+        rewrite_installed_readme(destination)
 
     print(f"Installed {SKILL_NAME} to {destination}")
     print(f"Installed payload size: {payload_size(destination)}")
