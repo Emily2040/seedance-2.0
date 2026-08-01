@@ -178,6 +178,8 @@ The diagram is the contract: every request passes the gates, the root routes it,
 
 ## Visual Gallery
 
+<!-- installed-readme-gallery:start -->
+
 Concept art for the system, generated and curated. Every image is paired with searchable alt text so the gallery stays auditable; the README's working visuals above are hand-built vector assets that follow the design standard.
 
 ### Hero Shots
@@ -203,6 +205,8 @@ Concept art for the system, generated and curated. Every image is paired with se
 ![Seedance 2.0 Skill OS infographic: source registry, prompt router, multimodal references, safety gates, and eval loop](assets/skill-os-infographic.png)
 
 ![Seedance 2.0 cinematic skill map: modular skill clusters around an AI filmmaking director console](assets/skill-map-cinematic.png)
+
+<!-- installed-readme-gallery:end -->
 
 ## Skill Map
 
@@ -348,7 +352,7 @@ python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skill
 
 The command copies the repository to `<dest>/seedance-20` and prints where it landed. Add `--force` only to replace an install that already exists — it deletes the previous copy first, so it is not the flag to start with. Restart your client afterwards so `seedance-20` appears in its skill list.
 
-Installs skip the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator — an agent needs the skill text, not the artwork. The gallery links in an installed copy's README therefore resolve only in this repository.
+Installs skip the quarantined `references/migrated/` history, the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator. The installer replaces the omitted gallery embeds with one repository link, so the installed README does not contain broken local asset targets.
 
 A destination inside this repository is refused rather than attempted: copying the source tree into a directory inside itself recurses until the path length fails. For a project-local install, run the script from the project you are installing into, by absolute path, as above.
 
