@@ -125,7 +125,10 @@ class ProjectStateTests(unittest.TestCase):
 
                 result = self.run_mutated_project(remove_parent_endpoint)
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn("parent clip_01 is accepted but missing observed_end_state", result.stdout)
+                self.assertIn(
+                    "parent clip_01 is accepted but missing a usable observed_end_state",
+                    result.stdout,
+                )
 
     def test_preserves_explicit_null_root(self) -> None:
         def keep_only_root(data: dict) -> None:

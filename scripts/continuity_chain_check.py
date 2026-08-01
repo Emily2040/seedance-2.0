@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
-from lineage_contract import classify_parent_id, parent_link_mode
+from lineage_contract import analyze_lineage, load_project_document
 
 
 IMMUTABLE_KEYS = [
@@ -31,10 +30,6 @@ TRANSIENT_KEYS = [
 ]
 
 
-def load(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def has_allowance(clip: dict, key: str) -> bool:
     blob = " ".join(str(item).lower() for item in (
         clip.get("transition_in", ""),
@@ -57,36 +52,14 @@ def state_value(state: dict | None, key: str):
 
 
 def validate(path: Path, root: Path) -> tuple[list[str], list[str]]:
-    rel = path.relative_to(root).as_posix()
-    data = load(path)
-    clips = {clip["clip_id"]: clip for clip in data.get("clips", [])}
-    errors: list[str] = []
+    data, rel, errors = load_project_document(path, root)
     warnings: list[str] = []
-    for clip in data.get("clips", []):
-        parent_kind, parent_id = classify_parent_id(clip)
-        if parent_kind == "root":
-            continue
-        if parent_kind == "invalid":
-            errors.append(
-                f"{rel}: clip {clip.get('clip_id')} parent_clip_id must be null or a non-empty string"
-            )
-            continue
-        parent = clips.get(parent_id)
-        if not parent:
-            errors.append(f"{rel}: clip {clip['clip_id']} parent {parent_id} missing")
-            continue
-        link_mode = parent_link_mode(clip, parent)
-        if link_mode == "provisional":
-            continue
-        if link_mode == "unusable_status":
-            errors.append(
-                f"{rel}: clip {clip['clip_id']} parent {parent_id} status "
-                f"{parent.get('status')!r} is not usable"
-            )
-            continue
-        if link_mode == "missing_observed_end_state":
-            errors.append(f"{rel}: parent {parent_id} missing observed_end_state")
-            continue
+    if data is None:
+        return errors, warnings
+    lineage = analyze_lineage(data.get("clips"), rel)
+    errors.extend(lineage.errors)
+    for clip, parent in lineage.accepted_links:
+        parent_id = parent.get("clip_id")
         end_state = parent.get("observed_end_state")
         start_state = clip.get("planned_start_state")
         if not start_state:

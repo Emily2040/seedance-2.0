@@ -7,9 +7,10 @@ from pathlib import Path
 
 from lineage_contract import (
     ACCEPTED_PARENT_STATUSES,
+    analyze_lineage,
     classify_parent_id,
     has_usable_observed_end_state,
-    parent_link_mode,
+    load_project_document,
 )
 
 
@@ -34,7 +35,7 @@ REQUIRED_BEAT_FIELDS = {
     "beat_id", "description", "narrative_function", "status", "assigned_clip_id", "dependencies",
 }
 REQUIRED_CLIP_FIELDS = {
-    "clip_id", "parent_clip_id", "scene_id", "sequence_index", "prompt_version", "generation_mode",
+    "clip_id", "scene_id", "sequence_index", "prompt_version", "generation_mode",
     "status", "narrative_job", "felt_intent", "already_happened", "this_clip_only", "reserved_for_later",
     "planned_start_state", "planned_end_state", "observed_start_state", "observed_end_state",
     "continuity_locks", "allowed_changes", "continuity_breaks", "accepted_deviations",
@@ -42,7 +43,7 @@ REQUIRED_CLIP_FIELDS = {
     "extension_depth",
 }
 REQUIRED_CLIP_CONTRACT_FIELDS = {
-    "project_id", "clip_id", "parent_clip_id", "scene_id", "sequence_index", "narrative_job", "felt_intent",
+    "project_id", "clip_id", "scene_id", "sequence_index", "narrative_job", "felt_intent",
     "target_duration_sec", "generation_mode", "shot_structure", "already_happened",
     "this_clip_only", "reserved_for_later", "planned_start_state", "planned_end_state",
     "continuity_locks", "allowed_changes", "status",
@@ -75,18 +76,20 @@ def sequence_paths(root: Path) -> list[Path]:
 
 
 def validate_project(path: Path, root: Path) -> list[str]:
-    rel = path.relative_to(root).as_posix()
-    errors: list[str] = []
-    try:
-        data = load_json(path)
-    except Exception as exc:
-        return [f"{rel}: invalid JSON: {exc}"]
-    if not isinstance(data, dict):
-        return [f"{rel}: project state must be an object"]
-
-    check_required(data, REQUIRED_PROJECT_FIELDS, rel, errors)
-    if errors:
+    data, rel, errors = load_project_document(path, root)
+    if data is None:
         return errors
+
+    lineage = analyze_lineage(data.get("clips"), rel)
+    errors.extend(lineage.errors)
+    check_required(data, REQUIRED_PROJECT_FIELDS, rel, errors)
+    missing_project_fields = REQUIRED_PROJECT_FIELDS - set(data)
+    if missing_project_fields:
+        return errors
+
+    clips = lineage.clips
+    clips_by_id = lineage.clips_by_id
+    clip_ids = set(clips_by_id)
 
     if data["project_mode"] not in {"standalone_clip", "sequence_project"}:
         errors.append(f"{rel}: invalid project_mode {data['project_mode']}")
@@ -94,8 +97,6 @@ def validate_project(path: Path, root: Path) -> list[str]:
         errors.append(f"{rel}: sequence project missing final_outcome")
     check_required(data["story"], REQUIRED_STORY_FIELDS, f"{rel}: story", errors)
 
-    clip_ids = set()
-    clips_by_id = {}
     scene_ids = set()
     scene_depth_caps = {}
     scene_indexes = set()
@@ -137,13 +138,11 @@ def validate_project(path: Path, root: Path) -> list[str]:
                 errors.append(f"{rel}: scene {sid} lists clip {assigned} more than once")
             seen_assigned.add(assigned)
         scene_assigned[sid] = seen_assigned
-    for clip in data["clips"]:
+    for clip in clips:
         check_required(clip, REQUIRED_CLIP_FIELDS, f"{rel}: clip", errors)
         cid = clip.get("clip_id")
-        if cid in clip_ids:
-            errors.append(f"{rel}: duplicate clip_id {cid}")
-        clip_ids.add(cid)
-        clips_by_id.setdefault(cid, clip)
+        if not isinstance(cid, str) or not cid.strip():
+            continue
         sid = clip.get("scene_id")
         clip_scene[cid] = sid
         depth = clip.get("extension_depth")
@@ -168,73 +167,16 @@ def validate_project(path: Path, root: Path) -> list[str]:
         if clip.get("status") == "rejected" and clip.get("observed_end_state"):
             errors.append(f"{rel}: rejected clip {cid} must not publish observed_end_state as canon")
 
-    for clip in data["clips"]:
+    for clip in clips:
         cid = clip.get("clip_id")
-        parent_kind, parent = classify_parent_id(clip)
-        sequence_index = clip.get("sequence_index", 1)
-        if parent_kind == "root":
-            if isinstance(sequence_index, int) and not isinstance(sequence_index, bool) and sequence_index > 1:
-                errors.append(f"{rel}: later clip {cid} missing parent_clip_id")
-        elif parent_kind == "invalid":
-            errors.append(
-                f"{rel}: clip {cid} parent_clip_id must be null or a non-empty string"
-            )
-        elif parent == cid:
-            errors.append(f"{rel}: clip {cid} cannot parent itself")
-        elif parent not in clip_ids:
-            errors.append(f"{rel}: clip {cid} parent {parent} is missing")
-        else:
-            parent_index = clips_by_id[parent].get("sequence_index")
-            if (
-                isinstance(sequence_index, int)
-                and not isinstance(sequence_index, bool)
-                and isinstance(parent_index, int)
-                and not isinstance(parent_index, bool)
-                and parent_index >= sequence_index
-            ):
-                errors.append(
-                    f"{rel}: clip {cid} sequence_index {sequence_index} must be greater than "
-                    f"parent {parent} sequence_index {parent_index}"
-                )
-            link_mode = parent_link_mode(clip, clips_by_id[parent])
-            if link_mode == "missing_observed_end_state":
-                errors.append(
-                    f"{rel}: clip {cid} parent {parent} is accepted but missing observed_end_state"
-                )
-            elif link_mode == "unusable_status":
-                errors.append(
-                    f"{rel}: clip {cid} parent {parent} status "
-                    f"{clips_by_id[parent].get('status')!r} is not usable"
-                )
+        if not isinstance(cid, str) or not cid.strip():
+            continue
         overlap_current_future = set(clip.get("this_clip_only", [])) & set(clip.get("reserved_for_later", []))
         if overlap_current_future:
             errors.append(f"{rel}: clip {cid} overlaps current and reserved beats: {sorted(overlap_current_future)}")
         overlap_done_current = set(clip.get("already_happened", [])) & set(clip.get("this_clip_only", []))
         if overlap_done_current:
             errors.append(f"{rel}: clip {cid} replays completed beats: {sorted(overlap_done_current)}")
-
-    visited_lineage = set()
-    active_lineage = []
-    active_positions = {}
-
-    def visit_lineage(cid) -> None:
-        if cid in visited_lineage:
-            return
-        if cid in active_positions:
-            cycle = active_lineage[active_positions[cid]:] + [cid]
-            errors.append(f"{rel}: clip lineage cycle: {' -> '.join(str(item) for item in cycle)}")
-            return
-        active_positions[cid] = len(active_lineage)
-        active_lineage.append(cid)
-        parent_kind, parent = classify_parent_id(clips_by_id[cid])
-        if parent_kind == "parent" and parent in clips_by_id and parent != cid:
-            visit_lineage(parent)
-        active_lineage.pop()
-        active_positions.pop(cid)
-        visited_lineage.add(cid)
-
-    for cid in clips_by_id:
-        visit_lineage(cid)
 
     for beat in data["beats"]:
         check_required(beat, REQUIRED_BEAT_FIELDS, f"{rel}: beat", errors)

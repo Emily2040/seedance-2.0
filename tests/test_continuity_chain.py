@@ -83,7 +83,10 @@ class ContinuityChainTests(unittest.TestCase):
                     parent["observed_end_state"] = endpoint
 
                 errors, _ = self.validate_mutated_project(remove_parent_endpoint)
-                self.assertTrue(any("missing observed_end_state" in error for error in errors), errors)
+                self.assertTrue(
+                    any("missing a usable observed_end_state" in error for error in errors),
+                    errors,
+                )
 
     def test_explicit_null_root_remains_valid(self) -> None:
         errors, _ = self.validate_mutated_project(

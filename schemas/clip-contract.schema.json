@@ -6,7 +6,6 @@
   "required": [
     "project_id",
     "clip_id",
-    "parent_clip_id",
     "scene_id",
     "sequence_index",
     "narrative_job",
@@ -42,5 +41,22 @@
     "continuity_locks": {"type": "array"},
     "allowed_changes": {"type": "array"},
     "status": {"enum": ["planned", "ready", "generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"sequence_index": {"const": 1}},
+        "required": ["sequence_index"]
+      },
+      "then": {
+        "properties": {"parent_clip_id": {"type": "null"}}
+      },
+      "else": {
+        "required": ["parent_clip_id"],
+        "properties": {
+          "parent_clip_id": {"type": "string", "minLength": 1, "pattern": "\\S"}
+        }
+      }
+    }
+  ]
 }

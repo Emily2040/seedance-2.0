@@ -115,6 +115,93 @@ class ExecutionTests(unittest.TestCase):
             self.assertIsNone(json.loads(contract.read_text("utf-8"))["parent_clip_id"])
             self.assertEqual(schema_check.check(repo), [])
 
+    def test_project_schema_enforces_root_and_later_parent_policy(self) -> None:
+        schema = schema_check.load_json(ROOT / "schemas/project-state.schema.json")
+        validator = schema_check.Draft202012Validator(schema)
+        base = json.loads(
+            (ROOT / "examples/sequence-observed-deviation/project-state-before.json").read_text(
+                "utf-8"
+            )
+        )
+
+        for mode in ("missing", "null"):
+            with self.subTest(later_parent=mode):
+                data = json.loads(json.dumps(base))
+                later = data["clips"][1]
+                if mode == "missing":
+                    later.pop("parent_clip_id")
+                else:
+                    later["parent_clip_id"] = None
+                self.assertTrue(list(validator.iter_errors(data)))
+
+        first_with_parent = json.loads(json.dumps(base))
+        first_with_parent["clips"][0]["parent_clip_id"] = "external_parent"
+        self.assertTrue(list(validator.iter_errors(first_with_parent)))
+
+        first_without_parent = json.loads(json.dumps(base))
+        first_without_parent["clips"][0].pop("parent_clip_id")
+        self.assertEqual(list(validator.iter_errors(first_without_parent)), [])
+
+    def test_clip_contract_schema_enforces_root_and_later_parent_policy(self) -> None:
+        schema = schema_check.load_json(ROOT / "schemas/clip-contract.schema.json")
+        validator = schema_check.Draft202012Validator(schema)
+        base = json.loads(
+            (ROOT / "examples/sequence-airport-arrival/clip-01-contract.json").read_text(
+                "utf-8"
+            )
+        )
+
+        for mode in ("missing", "null"):
+            with self.subTest(later_parent=mode):
+                data = json.loads(json.dumps(base))
+                data["sequence_index"] = 2
+                if mode == "missing":
+                    data.pop("parent_clip_id")
+                else:
+                    data["parent_clip_id"] = None
+                self.assertTrue(list(validator.iter_errors(data)))
+
+        first_without_parent = json.loads(json.dumps(base))
+        first_without_parent.pop("parent_clip_id")
+        self.assertEqual(list(validator.iter_errors(first_without_parent)), [])
+
+        later_with_parent = json.loads(json.dumps(base))
+        later_with_parent["sequence_index"] = 2
+        later_with_parent["parent_clip_id"] = "clip_01"
+        self.assertEqual(list(validator.iter_errors(later_with_parent)), [])
+
+    def test_schemas_accept_finite_integral_json_numbers_only(self) -> None:
+        project_schema = schema_check.load_json(ROOT / "schemas/project-state.schema.json")
+        project_validator = schema_check.Draft202012Validator(project_schema)
+        project = json.loads(
+            (ROOT / "examples/sequence-observed-deviation/project-state-before.json").read_text(
+                "utf-8"
+            )
+        )
+        for index, clip in enumerate(project["clips"], start=1):
+            clip["sequence_index"] = float(index)
+        self.assertEqual(list(project_validator.iter_errors(project)), [])
+
+        contract_schema = schema_check.load_json(ROOT / "schemas/clip-contract.schema.json")
+        contract_validator = schema_check.Draft202012Validator(contract_schema)
+        contract = json.loads(
+            (ROOT / "examples/sequence-airport-arrival/clip-01-contract.json").read_text(
+                "utf-8"
+            )
+        )
+        contract["sequence_index"] = 1.0
+        self.assertEqual(list(contract_validator.iter_errors(contract)), [])
+
+        for invalid in (1.5, True, False):
+            with self.subTest(sequence_index=invalid):
+                invalid_project = json.loads(json.dumps(project))
+                invalid_project["clips"][1]["sequence_index"] = invalid
+                self.assertTrue(list(project_validator.iter_errors(invalid_project)))
+
+                invalid_contract = json.loads(json.dumps(contract))
+                invalid_contract["sequence_index"] = invalid
+                self.assertTrue(list(contract_validator.iter_errors(invalid_contract)))
+
     def test_schema_requiring_a_field_no_example_has_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = self._copy_repo(tmp)
