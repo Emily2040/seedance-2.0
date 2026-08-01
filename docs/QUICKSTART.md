@@ -33,7 +33,13 @@ python scripts/install_codex_skill.py --dest ~/.claude/skills
 python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
-It prints where the skill landed. Restart your client, then call `seedance-20`. Add `--force` only when replacing an existing install — it deletes the old copy first. A destination inside this repository is refused, since copying the tree into itself would recurse until the path length fails.
+It prints where the skill landed. Restart your client, then call `seedance-20`.
+Installs are staged and validated, and concurrent installers sharing one
+destination are serialized. Add `--force` only when replacing a complete
+existing install; an incomplete managed install is repaired automatically, and
+the previous complete copy is retained for rollback until promotion succeeds.
+A destination inside this repository is refused, since copying the tree into
+itself would recurse until the path length fails.
 
 **Install from GitHub (if your client supports repo-URL install):**
 
