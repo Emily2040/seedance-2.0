@@ -6,7 +6,12 @@ Current active release: **6.7.0**. Older entries below are preserved as release 
 
 ## Unreleased
 
-Nothing yet.
+### Fixed
+
+- Replaced the duplicated README/CI validation lists with one archive-safe
+  runner. `python scripts/validate_repo.py --release` now works from an extracted
+  Download ZIP without `.git`; `git diff --check` remains a separately labeled
+  Git-checkout-only hygiene step.
 
 ## [6.7.0] — 2026-08-01
 
