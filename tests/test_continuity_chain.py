@@ -22,7 +22,7 @@ class ContinuityChainTests(unittest.TestCase):
     def validate_mutated_project(self, mutate) -> tuple[list[str], list[str]]:
         data = json.loads(BASE_PROJECT_STATE.read_text(encoding="utf-8"))
         mutate(data)
-        with tempfile.TemporaryDirectory(prefix="continuity-lineage-", dir=ROOT) as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="continuity-lineage-") as temp_dir:
             fixture = Path(temp_dir) / "project-state.json"
             fixture.write_text(json.dumps(data), encoding="utf-8")
             return continuity_chain_check.validate(fixture, ROOT)
@@ -30,7 +30,7 @@ class ContinuityChainTests(unittest.TestCase):
     def validate_mutated_project_with_both(self, mutate) -> tuple[list[str], list[str]]:
         data = json.loads(BASE_PROJECT_STATE.read_text(encoding="utf-8"))
         mutate(data)
-        with tempfile.TemporaryDirectory(prefix="lineage-agreement-", dir=ROOT) as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="lineage-agreement-") as temp_dir:
             fixture = Path(temp_dir) / "project-state.json"
             fixture.write_text(json.dumps(data), encoding="utf-8")
             project_errors = project_state_check.validate_project(fixture, ROOT)
