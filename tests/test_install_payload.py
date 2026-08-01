@@ -9,6 +9,8 @@ rather than against what the repository happens to contain.
 from __future__ import annotations
 
 import ast
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -17,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import install_codex_skill as installer  # noqa: E402
+import validate_skills  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -69,6 +72,89 @@ class InstallPayloadTests(unittest.TestCase):
                 matches = list(payload.rglob(name))
                 self.assertEqual(matches, [], f"{name} must not reach an installed skill")
 
+    def test_installed_files_exactly_match_the_payload_manifest(self) -> None:
+        declared = set(installer.load_payload_manifest(ROOT))
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self.install(Path(tmp))
+            installed = {
+                path.relative_to(payload).as_posix()
+                for path in payload.rglob("*")
+                if path.is_file()
+            }
+        self.assertEqual(installed, declared)
+
+    def test_payload_manifest_preserves_required_runtime_content(self) -> None:
+        declared = set(installer.load_payload_manifest(ROOT))
+        required = {
+            "README.md",
+            "SECURITY.md",
+            "SKILL.md",
+            "agents/openai.yaml",
+            "scripts/install_codex_skill.py",
+            installer.PAYLOAD_MANIFEST.as_posix(),
+            *validate_skills.REQUIRED_REFERENCES,
+            *(
+                f"skills/{name}/SKILL.md"
+                for name in validate_skills.EXPECTED_SKILLS
+            ),
+        }
+        self.assertEqual(
+            sorted(required - declared),
+            [],
+            "mandatory runtime files must remain in the explicit payload contract",
+        )
+
+    def test_only_declared_files_are_installed_from_source_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            copied_installer = source / "scripts" / "install_codex_skill.py"
+            copied_installer.parent.mkdir(parents=True)
+            shutil.copy2(ROOT / "scripts/install_codex_skill.py", copied_installer)
+
+            declared = [
+                "SKILL.md",
+                "references/nested/runtime-note.md",
+                "scripts/install_codex_skill.py",
+                "validation/install-payload.txt",
+            ]
+            fixture_files = {
+                "SKILL.md": "---\nname: fixture\n---\n",
+                "references/nested/runtime-note.md": "declared runtime content\n",
+                "validation/install-payload.txt": "\n".join(declared) + "\n",
+                ".env": "API_KEY=must-not-ship\n",
+                "private.txt": "must not ship\n",
+                "secret.json": '{"secret": true}\n',
+                "clip.mp4": "not really media, but still undeclared\n",
+                "references/nested/undeclared-note.md": "safe-looking but undeclared\n",
+            }
+            for relative, content in fixture_files.items():
+                path = source / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+
+            destination = root / "installed-skills"
+            result = subprocess.run(
+                [sys.executable, str(copied_installer), "--dest", str(destination)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            payload = destination / installer.SKILL_NAME
+            self.assertTrue((payload / "references/nested/runtime-note.md").is_file())
+            for relative in (
+                ".env",
+                "private.txt",
+                "secret.json",
+                "clip.mp4",
+                "references/nested/undeclared-note.md",
+            ):
+                self.assertFalse(
+                    (payload / relative).exists(),
+                    f"undeclared source file reached payload: {relative}",
+                )
+
     def test_no_installed_script_imports_a_network_module(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload = self.install(Path(tmp))
@@ -98,7 +184,7 @@ class InstallPayloadTests(unittest.TestCase):
         self.assertIn("ANTHROPIC_API_KEY", credential_env_reads(tree))
 
     def test_the_skill_itself_is_still_installed(self) -> None:
-        """Guard against the exclusion list quietly gutting the install."""
+        """Guard against the payload contract quietly gutting the install."""
         with tempfile.TemporaryDirectory() as tmp:
             payload = self.install(Path(tmp))
             self.assertTrue((payload / "SKILL.md").exists())
@@ -109,6 +195,42 @@ class InstallPayloadTests(unittest.TestCase):
     def test_repository_still_ships_the_evaluator(self) -> None:
         """Excluded from installs, not deleted from the project."""
         self.assertTrue((ROOT / "scripts/eval_run.py").exists())
+
+
+class PayloadManifestTests(unittest.TestCase):
+    def minimal_repo(self, root: Path, extra_entries: list[str]) -> Path:
+        entries = [
+            "SKILL.md",
+            "scripts/install_codex_skill.py",
+            "validation/install-payload.txt",
+            *extra_entries,
+        ]
+        for relative in ("SKILL.md", "scripts/install_codex_skill.py"):
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fixture\n", encoding="utf-8")
+        manifest = root / installer.PAYLOAD_MANIFEST.as_posix()
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text("\n".join(entries) + "\n", encoding="utf-8")
+        return root
+
+    def test_manifest_rejects_parent_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), ["../outside.txt"])
+            with self.assertRaisesRegex(ValueError, "normalized POSIX relative path"):
+                installer.load_payload_manifest(root)
+
+    def test_manifest_rejects_duplicate_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), ["SKILL.md"])
+            with self.assertRaisesRegex(ValueError, "duplicate payload path"):
+                installer.load_payload_manifest(root)
+
+    def test_manifest_rejects_missing_declared_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), ["references/missing.md"])
+            with self.assertRaisesRegex(FileNotFoundError, "declared payload file missing"):
+                installer.load_payload_manifest(root)
 
 
 class InTreeDestinationTests(unittest.TestCase):
