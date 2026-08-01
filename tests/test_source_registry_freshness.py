@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -90,14 +91,22 @@ class CommandLineBehaviourTests(unittest.TestCase):
         registry_stamp: str | None = None,
         api_status_text: str | None = None,
         reference_text: str | None = None,
+        fixture_observer: Callable[[Path], None] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         today = date.today()
         registry_verified = registry_verified or today
         registry_stamp = registry_stamp or registry_verified.isoformat()
         api_status_text = api_status_text or f"last_verified: {today.isoformat()}\n"
         reference_text = reference_text or f"last_verified: {today.isoformat()}\n"
-        with tempfile.TemporaryDirectory(prefix="source-freshness-", dir=self.root) as temp_dir:
+        # Keep synthetic repositories outside the source tree.  The full suite
+        # legitimately installs/copies this repository in parallel; an
+        # in-tree temporary directory can disappear between copytree's scan
+        # and open, turning an unrelated fixture cleanup into a false installer
+        # failure.
+        with tempfile.TemporaryDirectory(prefix="source-freshness-") as temp_dir:
             repo = Path(temp_dir)
+            if fixture_observer is not None:
+                fixture_observer(repo)
             references = repo / "references"
             data_dir = repo / "data"
             references.mkdir()
@@ -151,6 +160,14 @@ class CommandLineBehaviourTests(unittest.TestCase):
     def test_default_run_passes_on_this_repository(self) -> None:
         result = self.run_checker("--strict")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_synthetic_repositories_stay_outside_the_source_tree(self) -> None:
+        observed: list[Path] = []
+        result = self.run_fixture(fixture_observer=observed.append)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(observed), 1)
+        self.assertFalse(observed[0].is_relative_to(self.root))
 
     def test_enforcement_flag_is_available(self) -> None:
         result = self.run_checker("--help")
