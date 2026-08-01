@@ -86,6 +86,7 @@ REQUIRED_FILES = [
     "SKILL.md",
     "CHANGELOG.md",
     "V6_SEQUENCE_PROMPT_COMPILER_MANIFEST.md",
+    "scripts/validate_repo.py",
     "scripts/validate_skills.py",
     "scripts/content_audit.py",
     "scripts/eval_schema_check.py",
@@ -326,6 +327,7 @@ def main() -> int:
             errors.append(f"evals/evals.json parse error: {exc}")
 
     for rel in [
+        "scripts/validate_repo.py",
         "scripts/validate_skills.py",
         "scripts/content_audit.py",
         "scripts/eval_schema_check.py",
