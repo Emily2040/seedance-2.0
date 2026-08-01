@@ -100,18 +100,32 @@ class ReleaseChecklistTests(unittest.TestCase):
     readme = Path(__file__).resolve().parents[1] / "README.md"
 
     def test_release_checklist_enforces_freshness(self) -> None:
-        lines = [
-            line.strip()
-            for line in self.readme.read_text(encoding="utf-8").splitlines()
-            if "source_registry_check.py" in line
-        ]
-        self.assertTrue(lines, "README must document the source-registry check")
-        for line in lines:
-            self.assertIn(
-                "--enforce-freshness",
-                line,
-                "the documented release check must fail on a stale registry",
-            )
+        readme = self.readme.read_text(encoding="utf-8")
+        self.assertIn(
+            "python scripts/validate_repo.py --release",
+            readme,
+            "README must document the canonical release runner",
+        )
+
+        scripts = self.readme.parent / "scripts"
+        sys.path.insert(0, str(scripts))
+        try:
+            import validate_repo
+
+            release_commands = [
+                check.display_command()
+                for check in validate_repo.validation_plan(release=True)
+                if "source_registry_check.py" in check.display_command()
+            ]
+        finally:
+            sys.path.remove(str(scripts))
+
+        self.assertEqual(len(release_commands), 1)
+        self.assertIn(
+            "--enforce-freshness",
+            release_commands[0],
+            "the documented release runner must fail on a stale registry",
+        )
 
 
 if __name__ == "__main__":
