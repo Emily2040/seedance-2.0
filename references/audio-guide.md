@@ -33,6 +33,8 @@ Past the reliable-sync budget, especially in non-English, use the voice-referenc
 
 One budget trap is language-specific: **Korean has no neutral register**, and the speech level chosen for a line changes its syllable count. 감사합니다 (5 syllables) and 고마워 (3) are the same thanks at different levels, and 합니다체 runs roughly 1.5-2x 반말 across a line. On a tier already flagged as under-tested, picking the formal register by reflex can spend the budget on politeness endings rather than content. Decide the level deliberately - see Speech Level in `[ref:vocab/ko]`.
 
+**Japanese has the same trap in its registers.** ありがとう (5 morae) and ありがとうございます (10) are one thanks at two politeness levels, and full 敬語 can double a line on the tier already flagged as weaker for sync. The first-person pronoun (私/僕/俺) is part of the same decision. Decide the register deliberately - see Register (文体) in `[ref:vocab/ja]`.
+
 ## Dialogue
 
 - Keep lines short, preferably one sentence per speaker turn.

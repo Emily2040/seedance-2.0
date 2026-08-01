@@ -42,6 +42,10 @@ Translate the production intention rather than every English word. Keep the Kore
 
 `@Image1은 참조 이미지이며 얼굴/제품 형태/로고를 정확히 유지한다. 변화는 [동작/조명/카메라]만 적용한다. 카메라: [한 가지 움직임]. 사운드: [음향 지시].`
 
+## Speech Level Rule
+
+The moment a prompt contains dialogue, load Speech Level (말투) in `references/vocab/ko.md` and declare one level per speaker - 합니다체, 해요체, or 반말. Korean has no neutral register, and the syllable cost differs enough to break the sync budget (고마워 3 → 감사합니다 5).
+
 ## De-Slop Rule
 
 When the prompt leans on `영화 같은`, `감성적인`, `분위기 있는`, `웅장한`, or `고퀄리티`, load the Slop Traps table in `references/vocab/ko.md` and decompose each into the physical elements that produce it - 카메라 동사+속도+시점, 광원+방향+행동.

@@ -44,6 +44,11 @@ Use this reference for Japanese Seedance prompt wording, role binding, and compa
 | Audio | `音楽なし、低い環境音のみ` | no music, low ambience only |
 | Audio | `セリフ中はカメラを固定する` | locked camera during dialogue |
 | Audio | `足音をビートに合わせる` | footsteps hit the beat |
+| Audio | `台詞はです・ます体で` | dialogue in polite です・ます体 |
+| Audio | `台詞は敬語で、格式高く` | dialogue in formal 敬語 |
+| Audio | `台詞は普通体で、くだけて` | dialogue in plain 普通体 |
+| Audio | `一人称は「僕」で統一する` | first-person pronoun fixed to 僕 |
+| Audio | `二人の文体の関係を保つ` | keep the register relationship between the two characters |
 | Text | `字幕、透かし、余計な文字を追加しない` | no subtitles, watermark, or extra text |
 | Editing | `ショットを続ける` | continue the shot |
 | Editing | `5秒延長する` | extend by five seconds |
@@ -62,6 +67,17 @@ Use this reference for Japanese Seedance prompt wording, role binding, and compa
 ## Multimodal Template
 
 `@Image1でオリジナル人物を固定する。@Video1はカメラの動きのみ参照し、人物・場所・ブランドはコピーしない。@Audio1はテンポと雰囲気のみ参照する。`
+
+## Timeline Template
+
+The bracket-timeline skeleton is the Chinese community's long-prompt pattern (`vocab/zh` Timeline Template, field-observed on 即梦/Dreamina). Below is the same structure in Japanese: the *structure* is what is field-observed, a Japanese-specific version is not independently reported, so treat it as a starting scaffold rather than a community guarantee.
+
+```
+【スタイル】[媒介・質感・色調を一文で]
+【タイムライン】0-3s：[画面＋カメラ＋音]；3-6s：[画面＋カメラ＋音]；6-10s：[画面＋カメラ＋音]
+【音】[台詞／環境音／効果音／音楽なし]
+【参照】@Image1で人物の同一性を固定；@Video1はカメラの動きのみ参照；@Audio1はテンポのみ参照
+```
 
 ## Sequence and Continuation Phrases
 
@@ -92,7 +108,36 @@ Field-observed from 2026 community testing (note.com, Qiita); test per surface, 
 
 - No separate word-count is documented; treat Japanese as the weaker tier. Keep to one short line (一言), about one breath.
 - Japanese is mora-timed, so "word count" misleads - judge by sentence length and clarity, not word number.
+- 台詞の書式: 話者名＋動作＋「台詞」. Example: `男：ゆっくり顔を上げて「もう一度だけ」`. Keep the spoken line inside 「 」 so the model can separate performance direction from the words to be spoken.
+- Reference tags stay Latin inside a Japanese prompt: `@Image1`, never `@画像1`. No surface documents translated Japanese tags; the localized `@图片1` family belongs to Chinese-UI surfaces only.
 - For reliable Japanese voice, prefer a voice reference (attach the spoken line so the model lip-syncs to it) or plan a post-dub.
+
+## Register (文体)
+
+Japanese dialogue commits to a register the same way Korean commits to a speech level: leaving it unstated does not avoid the decision, it hands the decision to the model. Declare one per speaker.
+
+This is a budget decision as well as a characterization one. Japanese is mora-timed, the sync budget in `[ref:audio-guide]` is spent per mora, and the same sentence costs a different number of them at each register:
+
+| 同じ意味 (same meaning) | 普通体 → です・ます体 → 敬語, モーラ数 (mora count) |
+|---|---|
+| thank you | ありがとう (5) → ありがとうございます (10) |
+| understood | 分かった (4) → 分かりました (6) → かしこまりました (8) |
+| please come | 来て (2) → 来てください (6) → お越しください (7) |
+| I'll do it | やる (2) → やります (4) → いたします (5) |
+
+です・ます体 runs roughly 1.5x the morae of 普通体 for identical content, and full 敬語 can double it. On a language already flagged as the weaker sync tier, an unconsidered formal register can spend the whole budget on politeness endings.
+
+Choosing:
+
+- **敬語 (尊敬語・謙譲語)** - service staff to customers, corporate and public-facing VO, formal announcements, a subordinate addressing a superior. Most morae.
+- **です・ます体** - the safe default for a single-line commercial, presenter-to-camera, or a stranger-to-stranger exchange. Polite without the full honorific cost.
+- **普通体 (だ体)** - close friends, family, internal monologue, an older speaker to a younger one. Shortest, and too blunt for a Japanese viewer where the relationship does not license it.
+
+One axis is unique to Japanese: the first-person pronoun is itself register. 私 / 僕 / 俺 / わたくし each cast a different speaker, and a pronoun that contradicts the declared register (俺 inside 敬語, わたくし inside 普通体) reads as a dubbing error, not a character choice.
+
+With two speakers, the pair of registers *is* the relationship: a boss in 普通体 answered in です・ます体 reads as hierarchy, both in です・ます体 reads as peers or strangers. Keep each character's register and pronoun consistent across a sequence - drifting mid-project reads as a translation error, and it is the kind of continuity that no frame-level QC catches.
+
+If the user has not stated a register and the relationship does not imply one, ask once rather than defaulting silently; it is one question and it changes both the performance and the mora budget.
 
 ## Slop Traps
 
