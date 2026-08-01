@@ -387,6 +387,37 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
 
+    def test_hard_linked_lock_never_writes_outside_user_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            victim = root / "outside-empty-user-file.txt"
+            victim.write_bytes(b"")
+            lock = skills_dir / installer.LOCK_NAME
+            os.link(victim, lock)
+
+            result = self.run_installer(skills_dir)
+
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("installer lock is linked", result.stderr)
+            self.assertEqual(victim.read_bytes(), b"")
+            self.assertEqual(lock.read_bytes(), b"")
+            self.assertFalse((skills_dir / SKILL_NAME).exists())
+
+    def test_existing_lock_bytes_are_never_mutated(self) -> None:
+        for original in (b"", b"x"):
+            with self.subTest(original=original), tempfile.TemporaryDirectory() as tmp:
+                skills_dir = Path(tmp) / "skills"
+                skills_dir.mkdir()
+                lock = skills_dir / installer.LOCK_NAME
+                lock.write_bytes(original)
+
+                result = self.run_installer(skills_dir)
+
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(lock.read_bytes(), original)
+
     def test_untrusted_reserved_quarantine_is_preserved_even_with_force(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
@@ -460,6 +491,28 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
             self.assertEqual(record.read_bytes(), b'{"b":2}')
 
+    def test_record_reader_rejects_same_inode_rewrite_with_restored_mtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "record.json"
+            record.write_bytes(b'{"a":1}')
+            before = record.stat()
+            original_read = installer.os.read
+            rewritten = False
+
+            def rewrite_then_read(descriptor: int, count: int) -> bytes:
+                nonlocal rewritten
+                if not rewritten:
+                    rewritten = True
+                    record.write_bytes(b'{"b":2}')
+                    os.utime(record, ns=(before.st_atime_ns, before.st_mtime_ns))
+                return original_read(descriptor, count)
+
+            with mock.patch.object(installer.os, "read", rewrite_then_read):
+                with self.assertRaises((OSError, RuntimeError, ValueError)):
+                    installer._read_json_record(record)
+
+            self.assertTrue(rewritten)
+
     def test_record_reader_rejects_oversize_before_opening(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             record = Path(tmp) / "oversized.json"
@@ -474,6 +527,19 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "outside the safe limit"):
                     installer._read_json_record(record)
 
+    def test_record_reader_rejects_hard_linked_authority_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outside = root / "outside-user-record.json"
+            outside.write_bytes(b'{"a":1}')
+            record = root / "record.json"
+            os.link(outside, record)
+
+            with self.assertRaisesRegex(ValueError, "hard-linked"):
+                installer._read_json_record(record)
+
+            self.assertEqual(outside.read_bytes(), b'{"a":1}')
+
     def test_manifest_rejects_windows_ads_or_drive_like_path(self) -> None:
         hostile = {
             "SKILL.md:stream": {
@@ -484,6 +550,27 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "unsafe path"):
             installer._validate_payload_manifest(hostile)
+
+    def test_manifest_rejects_windows_reserved_and_normalized_aliases(self) -> None:
+        metadata = {"size": 0, "sha256": "0" * 64}
+        hostile = [
+            "CON",
+            "NUL",
+            "aux.txt",
+            "name.",
+            "name ",
+            "dir./file",
+            "dir /file",
+            "nested/COM1.log",
+            "nested/LPT9",
+            "nested/COM¹.txt",
+            "nested/LPT².log",
+        ]
+
+        for relative in hostile:
+            with self.subTest(relative=relative):
+                with self.assertRaisesRegex(ValueError, "unsafe path"):
+                    installer._validate_payload_manifest({relative: metadata})
 
     def test_late_stage_extra_is_quarantined_and_never_becomes_live(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -547,6 +634,59 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 (quarantines[0] / "old-live.txt").read_text(encoding="utf-8"),
                 "old live\n",
             )
+
+    def test_leaf_swap_after_metadata_validation_preserves_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            quarantine = root / "quarantine"
+            quarantine.mkdir()
+            target = quarantine / "owned.txt"
+            target.write_bytes(b"authorized installer bytes")
+            authorized = installer._capture_path_snapshot(quarantine)
+            stashed = root / "authorized-stashed.txt"
+            victim = root / "outside-user-data.txt"
+            victim.write_bytes(b"outside user data")
+            original_metadata = installer._regular_file_metadata
+            target_checks = 0
+
+            def swap_after_last_validation(path: Path):
+                nonlocal target_checks
+                metadata = original_metadata(path)
+                if path == target:
+                    target_checks += 1
+                    if target_checks == 2:
+                        os.replace(target, stashed)
+                        os.replace(victim, target)
+                return metadata
+
+            with mock.patch.object(
+                installer,
+                "_regular_file_metadata",
+                swap_after_last_validation,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "changed immediately"):
+                    installer._delete_bound_tree(quarantine, authorized)
+
+            self.assertEqual(target_checks, 2)
+            self.assertEqual(target.read_bytes(), b"outside user data")
+            self.assertEqual(stashed.read_bytes(), b"authorized installer bytes")
+
+    def test_bound_deletion_refuses_hard_linked_leaf(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            quarantine = root / "quarantine"
+            quarantine.mkdir()
+            target = quarantine / "owned.txt"
+            target.write_bytes(b"authorized installer bytes")
+            authorized = installer._capture_path_snapshot(quarantine)
+            outside = root / "outside-user-alias.txt"
+            os.link(target, outside)
+
+            with self.assertRaisesRegex(RuntimeError, "linked, reparse, or non-regular"):
+                installer._delete_bound_tree(quarantine, authorized)
+
+            self.assertEqual(target.read_bytes(), b"authorized installer bytes")
+            self.assertEqual(outside.read_bytes(), b"authorized installer bytes")
 
     def test_kill_window_before_quarantine_marker_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

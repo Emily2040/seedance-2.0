@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import errno
 import fnmatch
 import hashlib
 import json
@@ -114,13 +113,14 @@ def _is_reparse_stat(info: os.stat_result) -> bool:
     return bool(getattr(info, "st_file_attributes", 0) & attribute)
 
 
-def _stat_identity(info: os.stat_result) -> tuple[int, int, int, int, int]:
+def _stat_identity(info: os.stat_result) -> tuple[int, int, int, int, int, int]:
     return (
         info.st_dev,
         info.st_ino,
         stat.S_IFMT(info.st_mode),
         info.st_size,
         info.st_mtime_ns,
+        info.st_nlink,
     )
 
 
@@ -160,6 +160,32 @@ def _regular_file_metadata(path: Path) -> dict[str, object]:
     return {"type": "file", "size": opened.st_size, "sha256": digest.hexdigest()}
 
 
+WINDOWS_RESERVED_BASENAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "CONIN$",
+    "CONOUT$",
+    *(f"COM{index}" for index in range(1, 10)),
+    *(f"LPT{index}" for index in range(1, 10)),
+    *(f"COM{digit}" for digit in "¹²³"),
+    *(f"LPT{digit}" for digit in "¹²³"),
+}
+
+
+def _safe_path_component(part: str) -> bool:
+    if not part or part in {".", ".."} or ":" in part or "\x00" in part:
+        return False
+    # Win32 strips trailing spaces/dots and treats the prefix before the first
+    # dot as a DOS device name. Reject those aliases on every platform so a
+    # transaction written on one OS cannot address a different path on Windows.
+    if part != part.rstrip(" ."):
+        return False
+    basename = part.split(".", 1)[0].upper()
+    return basename not in WINDOWS_RESERVED_BASENAMES
+
+
 def _safe_relative_path(relative: object, *, allow_root: bool = False) -> bool:
     if not isinstance(relative, str):
         return False
@@ -170,10 +196,7 @@ def _safe_relative_path(relative: object, *, allow_root: bool = False) -> bool:
         and "\\" not in relative
         and "\x00" not in relative
         and not relative.startswith("/")
-        and all(
-            part not in {"", ".", ".."} and ":" not in part
-            for part in relative.split("/")
-        )
+        and all(_safe_path_component(part) for part in relative.split("/"))
     )
 
 
@@ -257,40 +280,120 @@ def _reject_nonfinite(value: str) -> object:
     raise ValueError(f"non-finite JSON number: {_bounded_diagnostic(value, 80)}")
 
 
+@contextmanager
+def _locked_record_descriptor(descriptor: int) -> Iterator[None]:
+    """Hold an exclusive byte-range lock while installer authority is read."""
+    if os.name == "nt":
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+
+        class Overlapped(ctypes.Structure):
+            _fields_ = [
+                ("Internal", ctypes.c_size_t),
+                ("InternalHigh", ctypes.c_size_t),
+                ("Offset", wintypes.DWORD),
+                ("OffsetHigh", wintypes.DWORD),
+                ("hEvent", wintypes.HANDLE),
+            ]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        lock_file = kernel32.LockFileEx
+        lock_file.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.POINTER(Overlapped),
+        ]
+        lock_file.restype = wintypes.BOOL
+        unlock_file = kernel32.UnlockFileEx
+        unlock_file.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.POINTER(Overlapped),
+        ]
+        unlock_file.restype = wintypes.BOOL
+        handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+        overlapped = Overlapped()
+        range_length = MAX_RECORD_BYTES + 1
+        flags = 0x00000001 | 0x00000002  # FAIL_IMMEDIATELY | EXCLUSIVE_LOCK
+        if not lock_file(handle, flags, 0, range_length, 0, ctypes.byref(overlapped)):
+            error = ctypes.get_last_error()
+            raise OSError(error, "record is being modified by another process")
+        try:
+            yield
+        finally:
+            if not unlock_file(
+                handle, 0, range_length, 0, ctypes.byref(overlapped)
+            ):
+                error = ctypes.get_last_error()
+                raise OSError(error, "could not release installer record lock")
+        return
+
+    import fcntl
+
+    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        yield
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+
+
 def _read_json_record(path: Path) -> tuple[dict[str, object], bytes]:
     before = path.lstat()
     if _is_reparse_stat(before) or stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
         raise ValueError("record is not a non-reparse regular file")
+    if before.st_nlink != 1:
+        raise ValueError("record is hard-linked and cannot grant installer authority")
     if before.st_size <= 0 or before.st_size > MAX_RECORD_BYTES:
         raise ValueError(f"record size is outside the safe limit: {before.st_size}")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags)
     try:
-        opened = os.fstat(descriptor)
-        if (
-            _is_reparse_stat(opened)
-            or not stat.S_ISREG(opened.st_mode)
-            or _stat_identity(opened) != _stat_identity(before)
-        ):
-            raise ValueError("record changed while it was being opened")
-        chunks: list[bytes] = []
-        total = 0
-        while True:
-            chunk = os.read(descriptor, min(1024 * 1024, MAX_RECORD_BYTES + 1 - total))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            total += len(chunk)
-            if total > MAX_RECORD_BYTES:
-                raise ValueError("record exceeds the safe size limit")
-        after_open = os.fstat(descriptor)
+        with _locked_record_descriptor(descriptor):
+            opened = os.fstat(descriptor)
+            if (
+                _is_reparse_stat(opened)
+                or not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+                or _stat_identity(opened) != _stat_identity(before)
+            ):
+                raise ValueError("record changed while it was being opened")
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = os.read(
+                    descriptor,
+                    min(1024 * 1024, MAX_RECORD_BYTES + 1 - total),
+                )
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                total += len(chunk)
+                if total > MAX_RECORD_BYTES:
+                    raise ValueError("record exceeds the safe size limit")
+            after_open = os.fstat(descriptor)
+            after_path = path.lstat()
+            if (
+                _stat_identity(after_open) != _stat_identity(opened)
+                or _stat_identity(after_path) != _stat_identity(opened)
+                or _is_reparse_stat(after_path)
+                or after_path.st_nlink != 1
+                or (os.name != "nt" and after_path.st_ctime_ns != before.st_ctime_ns)
+            ):
+                raise ValueError("record changed while it was being read")
     finally:
         os.close(descriptor)
-    after_path = path.lstat()
+    final_path = path.lstat()
     if (
-        _stat_identity(after_open) != _stat_identity(opened)
-        or _stat_identity(after_path) != _stat_identity(opened)
-        or _is_reparse_stat(after_path)
+        _stat_identity(final_path) != _stat_identity(opened)
+        or _is_reparse_stat(final_path)
+        or final_path.st_nlink != 1
+        or (os.name != "nt" and final_path.st_ctime_ns != before.st_ctime_ns)
     ):
         raise ValueError("record changed while it was being read")
     raw = b"".join(chunks)
@@ -568,58 +671,82 @@ def classify_existing_install(
     return _classify_payload_subset(snapshot, expected_manifest)
 
 
+def _validate_open_lock(
+    lock_path: Path,
+    descriptor: int,
+    allowed_sizes: tuple[int, ...],
+) -> None:
+    opened = os.fstat(descriptor)
+    current = lock_path.lstat()
+    if (
+        _is_reparse_stat(opened)
+        or _is_reparse_stat(current)
+        or stat.S_ISLNK(opened.st_mode)
+        or stat.S_ISLNK(current.st_mode)
+        or not stat.S_ISREG(opened.st_mode)
+        or not stat.S_ISREG(current.st_mode)
+        or opened.st_nlink != 1
+        or current.st_nlink != 1
+        or opened.st_size not in allowed_sizes
+        or _stat_identity(opened) != _stat_identity(current)
+    ):
+        raise ValueError(
+            f"installer lock is linked, replaced, or malformed: "
+            f"{_bounded_diagnostic(lock_path, 220)}"
+        )
+
+
+def _open_install_lock(lock_path: Path):
+    """Open a lock without ever writing through a user-controlled pathname."""
+    flags = (
+        os.O_RDWR
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        descriptor = os.open(lock_path, flags | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        descriptor = os.open(lock_path, flags)
+    try:
+        # New locks are empty. A one-byte file is accepted for compatibility
+        # with prior installer releases, but neither form is ever mutated.
+        _validate_open_lock(lock_path, descriptor, (0, 1))
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        return os.fdopen(descriptor, "r+b", closefd=True)
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
 @contextmanager
 def exclusive_install_lock(skills_dir: Path) -> Iterator[None]:
     """Serialize cooperating installers and release automatically on process death."""
     lock_path = skills_dir / LOCK_NAME
-    handle = lock_path.open("a+b")
+    handle = _open_install_lock(lock_path)
     acquired = False
+    lock_context = None
     deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
     try:
-        if os.name == "nt":
-            import msvcrt
-
-            handle.seek(0, os.SEEK_END)
-            if handle.tell() == 0:
-                handle.write(b"\0")
-                handle.flush()
-            while not acquired:
-                handle.seek(0)
-                try:
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-                    acquired = True
-                except OSError as exc:
-                    if exc.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
-                        raise
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError(f"timed out waiting for installer lock {lock_path}") from exc
-                    time.sleep(0.05)
-        else:
-            import fcntl
-
-            while not acquired:
-                try:
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    acquired = True
-                except OSError as exc:
-                    if exc.errno not in {errno.EACCES, errno.EAGAIN}:
-                        raise
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError(f"timed out waiting for installer lock {lock_path}") from exc
-                    time.sleep(0.05)
+        while not acquired:
+            candidate = _locked_record_descriptor(handle.fileno())
+            try:
+                candidate.__enter__()
+                lock_context = candidate
+                acquired = True
+            except (BlockingIOError, OSError) as exc:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"timed out waiting for installer lock {lock_path}"
+                    ) from exc
+                time.sleep(0.05)
+        _validate_open_lock(lock_path, handle.fileno(), (0, 1))
         yield
     finally:
-        if acquired:
-            if os.name == "nt":
-                import msvcrt
-
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        handle.close()
+        try:
+            if acquired and lock_context is not None:
+                lock_context.__exit__(None, None, None)
+        finally:
+            handle.close()
 
 
 def _record_with_digest(record: dict[str, object]) -> dict[str, object]:
@@ -1104,6 +1231,136 @@ def _validate_bound_subset(
         raise RuntimeError("quarantined artifact changed before deletion")
 
 
+def _descriptor_file_metadata(descriptor: int) -> tuple[dict[str, object], os.stat_result]:
+    before = os.fstat(descriptor)
+    if (
+        _is_reparse_stat(before)
+        or not stat.S_ISREG(before.st_mode)
+        or before.st_nlink != 1
+    ):
+        raise RuntimeError("bound deletion handle is linked, reparse, or non-regular")
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    digest = hashlib.sha256()
+    total = 0
+    while True:
+        chunk = os.read(descriptor, 1024 * 1024)
+        if not chunk:
+            break
+        digest.update(chunk)
+        total += len(chunk)
+    after = os.fstat(descriptor)
+    if _stat_identity(after) != _stat_identity(before) or total != before.st_size:
+        raise RuntimeError("bound deletion handle changed while it was verified")
+    return (
+        {"type": "file", "size": total, "sha256": digest.hexdigest()},
+        after,
+    )
+
+
+def _delete_regular_file_by_handle(
+    path: Path, expected: Mapping[str, object]
+) -> None:
+    """Delete the verified file object, never a later occupant of its pathname."""
+    if os.name == "nt":
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
+        create_file.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        create_file.restype = wintypes.HANDLE
+        handle = create_file(
+            str(path),
+            0x80000000 | 0x00010000,  # GENERIC_READ | DELETE
+            0x00000001 | 0x00000002 | 0x00000004,
+            None,
+            3,  # OPEN_EXISTING
+            0x00200000 | 0x08000000,  # OPEN_REPARSE_POINT | SEQUENTIAL_SCAN
+            None,
+        )
+        invalid = ctypes.c_void_p(-1).value
+        if handle == invalid:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            descriptor = msvcrt.open_osfhandle(
+                int(handle), os.O_RDONLY | getattr(os, "O_BINARY", 0)
+            )
+        except Exception:
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = [wintypes.HANDLE]
+            close_handle.restype = wintypes.BOOL
+            close_handle(wintypes.HANDLE(handle))
+            raise
+        try:
+            actual, opened = _descriptor_file_metadata(descriptor)
+            if actual != dict(expected):
+                raise RuntimeError(
+                    f"quarantined file changed immediately before deletion: "
+                    f"{_bounded_diagnostic(path.name, 180)}"
+                )
+            current = path.lstat()
+            if _stat_identity(current) != _stat_identity(opened):
+                raise RuntimeError(
+                    f"quarantined file pathname changed before handle deletion: "
+                    f"{_bounded_diagnostic(path.name, 180)}"
+                )
+
+            class FileDispositionInfo(ctypes.Structure):
+                _fields_ = [("DeleteFile", wintypes.BOOL)]
+
+            set_information = kernel32.SetFileInformationByHandle
+            set_information.argtypes = [
+                wintypes.HANDLE,
+                wintypes.DWORD,
+                wintypes.LPVOID,
+                wintypes.DWORD,
+            ]
+            set_information.restype = wintypes.BOOL
+            disposition = FileDispositionInfo(True)
+            if not set_information(
+                wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
+                4,  # FileDispositionInfo
+                ctypes.byref(disposition),
+                ctypes.sizeof(disposition),
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            os.close(descriptor)
+        return
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    tombstone = path.with_name(f".{path.name}.delete-{uuid.uuid4().hex}")
+    try:
+        actual, opened = _descriptor_file_metadata(descriptor)
+        if actual != dict(expected):
+            raise RuntimeError(
+                f"quarantined file changed immediately before deletion: "
+                f"{_bounded_diagnostic(path.name, 180)}"
+            )
+        current = path.lstat()
+        if _stat_identity(current) != _stat_identity(opened):
+            raise RuntimeError("quarantined file pathname changed before deletion")
+        if _path_exists(tombstone):
+            raise RuntimeError("random deletion tombstone already exists")
+        path.rename(tombstone)
+        moved = tombstone.lstat()
+        if _stat_identity(moved) != _stat_identity(opened):
+            raise RuntimeError("quarantined file changed during deletion quarantine")
+        tombstone.unlink()
+    finally:
+        os.close(descriptor)
+
+
 def _delete_bound_tree(
     root: Path,
     authorized: PathSnapshot,
@@ -1119,7 +1376,7 @@ def _delete_bound_tree(
         actual = _regular_file_metadata(root)
         if actual != allowed[""]:
             raise RuntimeError("quarantined file changed immediately before deletion")
-        root.unlink()
+        _delete_regular_file_by_handle(root, allowed[""])
         return
 
     protected = [QUARANTINE_MARKER, PROVENANCE_MARKER]
@@ -1139,7 +1396,7 @@ def _delete_bound_tree(
                 f"quarantined file changed immediately before deletion: "
                 f"{_bounded_diagnostic(relative, 180)}"
             )
-        target.unlink()
+        _delete_regular_file_by_handle(target, allowed[relative])
     directories = sorted(
         (
             relative
