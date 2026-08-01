@@ -5,6 +5,7 @@ import ast
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -306,6 +307,32 @@ class StrictLoaderTests(unittest.TestCase):
                 self.fail("FIFO read blocked waiting for a writer")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("not a regular file", result.stdout)
+
+    def test_device_nodes_are_rejected_before_open(self) -> None:
+        for kind in (stat.S_IFCHR, stat.S_IFBLK):
+            with self.subTest(kind=kind):
+                metadata = mock.Mock(
+                    st_mode=kind | 0o600,
+                    st_size=0,
+                    st_file_attributes=0,
+                )
+                with (
+                    mock.patch.object(
+                        strict_json_module.os,
+                        "stat",
+                        return_value=metadata,
+                    ),
+                    mock.patch.object(strict_json_module.os, "open") as open_mock,
+                ):
+                    with self.assertRaisesRegex(
+                        StrictJSONError,
+                        "not a regular file",
+                    ):
+                        strict_json_module._read_bounded(
+                            Path("device-node"),
+                            "JSON input",
+                        )
+                open_mock.assert_not_called()
 
     @unittest.skipUnless(os.name == "nt", "Windows junction semantics")
     def test_windows_directory_junction_is_rejected(self) -> None:

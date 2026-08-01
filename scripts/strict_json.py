@@ -451,6 +451,28 @@ def _read_bounded(path: Path, label: str, *, root: Path | None = None) -> bytes:
     """Read one regular file through a single bounded, identity-checked handle."""
 
     checked = validate_repo_input_path(root, path) if root is not None else path
+    try:
+        preopened = os.stat(checked, follow_symlinks=False)
+    except OSError as exc:
+        reason = diagnostic_text(exc.strerror or type(exc).__name__, 160)
+        raise StrictJSONError(
+            f"cannot inspect {label} {diagnostic_path(path)}: {reason}"
+        ) from None
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    preopened_attributes = getattr(preopened, "st_file_attributes", 0)
+    if stat.S_ISLNK(preopened.st_mode) or preopened_attributes & reparse_flag:
+        raise StrictJSONError(
+            "repository input uses a symbolic link, junction, or reparse point: "
+            f"{diagnostic_path(path)}"
+        )
+    if not stat.S_ISREG(preopened.st_mode):
+        raise StrictJSONError(
+            f"{label} is not a regular file: {diagnostic_path(path)}"
+        )
+    if preopened.st_size > MAX_JSON_BYTES:
+        raise StrictJSONError(
+            f"{label} exceeds {MAX_JSON_BYTES} bytes", line=1, column=1
+        )
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
     # A FIFO opened read-only can wait forever for a writer before ``fstat``
     # gets a chance to reject it.  Non-blocking mode is inert for regular
@@ -462,7 +484,6 @@ def _read_bounded(path: Path, label: str, *, root: Path | None = None) -> bytes:
     try:
         descriptor = os.open(checked, flags)
         opened = os.fstat(descriptor)
-        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
         attributes = getattr(opened, "st_file_attributes", 0)
         if not stat.S_ISREG(opened.st_mode):
             raise StrictJSONError(
@@ -471,6 +492,11 @@ def _read_bounded(path: Path, label: str, *, root: Path | None = None) -> bytes:
         if attributes & reparse_flag:
             raise StrictJSONError(
                 "repository input opened a symbolic link, junction, or reparse point: "
+                f"{diagnostic_path(path)}"
+            )
+        if not os.path.samestat(preopened, opened):
+            raise StrictJSONError(
+                f"{label} changed identity while being opened: "
                 f"{diagnostic_path(path)}"
             )
         if opened.st_size > MAX_JSON_BYTES:
