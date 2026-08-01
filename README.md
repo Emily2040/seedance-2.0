@@ -442,7 +442,10 @@ The scheduled job never edits the registry. Re-stamping `last_verified` without
 actually re-reading the upstream sources would record a verification that never
 happened, so refreshing it is deliberately a human step.
 
-To prove the package is also *good*, run the model-in-the-loop harness, which sends each eval case through the real skill content and scores the response against the case's assertions using [`eval-rubric.md`](references/eval-rubric.md):
+To prove the package is also *good*, run the model-in-the-loop harness. Its
+discovery phase sees the root router and a safe catalog, not the expected route
+labels; the responder receives only the sources it selected, and the judge then
+scores the answer against [`eval-rubric.md`](references/eval-rubric.md):
 
 ```bash
 export ANTHROPIC_API_KEY=...
@@ -476,6 +479,32 @@ Anthropic/M3 thinking are rejected as non-final evidence. Transport errors name
 the failed open, context-entry, or read phase and redact API keys before console
 or ledger output. Generated ledger commands are emitted separately for POSIX
 shells and PowerShell, and are omitted when metadata is not safe to round-trip.
+
+Before either offline or live evaluation starts, the harness resolves every eval
+input through [`evals/source-manifest.json`](evals/source-manifest.json), rejects
+unclassified files, symlinks/reparse aliases, hard-link aliases, and digest
+drift, then freezes the verified UTF-8 bytes for the whole run. The root router,
+rubric, eval suite, fixture data, planner catalog, responder context, judge, and
+ledger therefore share one immutable source view. State fixtures are strict JSON
+objects under `evals/fixtures/`; models receive the data but never the fixture
+path. A post-run identity and SHA-256 check refuses release evidence if any input
+changed after the snapshot.
+
+Blind discovery is scored, not merely recorded: after the planner returns, its
+selected skill paths must exactly match the hidden
+`skills_expected_to_activate` oracle. Missing, wrong, extra, duplicate, unknown,
+or non-responder selections fail before response generation. Generated ledger
+rows bind every selected responder path to its frozen SHA-256 digest; fabricated,
+non-canonical, missing, or mismatched provenance cannot produce a release pass.
+The canonical eval-suite and rubric digests are pinned so a structurally valid
+but semantically gutted replacement also fails closed.
+
+The material-criteria work tracked separately in
+[#29](https://github.com/Emily2040/seedance-2.0/issues/29) is intentionally not
+absorbed here. `failure_mode`, `expected_state_delta`,
+`expected_prompt_architecture`, and `expected_sequence_relation` remain
+prompt-inert in discovery, response, and judge calls; this snapshot makes no
+claim that those fields are independently scored.
 
 This is the quality gate, not a shape gate, so it lives outside offline CI; the latest scored run is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
 

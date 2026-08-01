@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import os
 import sys
@@ -24,6 +25,41 @@ EXACT_RUBRIC = (
 )
 
 
+def write_source_manifest(root: Path) -> None:
+    paths = {"SKILL.md", "evals/evals.json", "references/eval-rubric.md"}
+    for directory in (root / "skills", root / "references", root / "evals" / "fixtures"):
+        if directory.exists():
+            paths.update(
+                path.relative_to(root).as_posix()
+                for path in directory.rglob("*")
+                if path.is_file()
+            )
+    entries = []
+    for relative in sorted(paths):
+        path = root / relative
+        if relative == "SKILL.md":
+            role = "root"
+        elif relative in {"evals/evals.json", "references/eval-rubric.md"}:
+            role = "evaluator"
+        elif relative.startswith("evals/fixtures/"):
+            role = "fixture"
+        elif relative.startswith("references/migrated/"):
+            role = "archive"
+        else:
+            role = "responder"
+        entries.append(
+            {
+                "path": relative,
+                "role": role,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+    (root / "evals" / "source-manifest.json").write_text(
+        json.dumps({"version": 1, "sources": entries}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def result_row(
     case_id: str = "case-1",
     *,
@@ -39,6 +75,7 @@ def result_row(
         "sequence": sequence,
         "critical": critical,
         "notes": "test verdict",
+        "sources": [],
         "dimension_scores": (
             [
                 {"dimension": dimension, "score": 4}
@@ -165,6 +202,7 @@ class AggregateIntegrityTests(unittest.TestCase):
             expected_cases=case_metadata(),
             total_expected=1,
             release_eligible=True,
+            source_manifest={},
         )
 
         self.assertEqual(report["scope"], "COMPLETE")
@@ -1277,7 +1315,7 @@ class InputContractTests(unittest.TestCase):
                     with self.assertRaises(
                         (json.JSONDecodeError, ValueError)
                     ):
-                        eval_run.load_cases(root)
+                        eval_run._parse_cases_text(document)
 
     def test_invalid_eval_json_fails_cleanly_in_self_test_and_live_cli(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1294,7 +1332,7 @@ class InputContractTests(unittest.TestCase):
                     1,
                     "self-test FAILED",
                 ),
-                (["eval_run.py", str(root)], 2, "Could not load eval cases"),
+                (["eval_run.py", str(root)], 2, "Could not freeze evaluation inputs"),
             ):
                 output = io.StringIO()
                 with mock.patch.object(sys, "argv", argv), redirect_stdout(output):
@@ -1355,7 +1393,7 @@ class InputContractTests(unittest.TestCase):
                 code = eval_run.main()
 
             self.assertEqual(code, 2)
-            self.assertIn("Could not load eval rubric", output.getvalue())
+            self.assertIn("Could not freeze evaluation inputs", output.getvalue())
             call.assert_not_called()
 
 
@@ -1363,13 +1401,26 @@ class LedgerIntegrityTests(unittest.TestCase):
     def make_repo(self, root: Path, cases: list[dict]) -> None:
         (root / "evals").mkdir(parents=True)
         (root / "references").mkdir()
+        normalized = []
+        for case in cases:
+            normalized.append(
+                {
+                    **case,
+                    "expected_output": case.get("expected_output", "usable answer"),
+                    "failure_mode": case.get("failure_mode", "incorrect answer"),
+                    "skills_expected_to_activate": case.get(
+                        "skills_expected_to_activate", ["seedance-20"]
+                    ),
+                }
+            )
         (root / "evals" / "evals.json").write_text(
-            json.dumps({"cases": cases}), encoding="utf-8"
+            json.dumps({"cases": normalized}), encoding="utf-8"
         )
         (root / "references" / "eval-rubric.md").write_text(
             EXACT_RUBRIC, encoding="utf-8"
         )
         (root / "SKILL.md").write_text("# test skill", encoding="utf-8")
+        write_source_manifest(root)
 
     def run_main(
         self,
@@ -1379,8 +1430,9 @@ class LedgerIntegrityTests(unittest.TestCase):
         environment: dict[str, str] | None = None,
     ) -> tuple[int, str, mock.Mock, mock.Mock]:
         output = io.StringIO()
-        call = mock.Mock(return_value="candidate")
-        judge = mock.Mock(return_value=verdict)
+        call = mock.Mock(return_value=(verdict, []))
+        judge = mock.Mock()
+        real_freeze = eval_run.freeze_repository
         with (
             mock.patch.object(sys, "argv", argv),
             mock.patch.dict(
@@ -1388,8 +1440,14 @@ class LedgerIntegrityTests(unittest.TestCase):
                 environment or {"ANTHROPIC_API_KEY": "test-key"},
                 clear=True,
             ),
-            mock.patch.object(eval_run, "call_api", call),
-            mock.patch.object(eval_run, "judge", judge),
+            mock.patch.object(
+                eval_run,
+                "freeze_repository",
+                side_effect=lambda root: real_freeze(
+                    root, enforce_canonical_contract=False
+                ),
+            ),
+            mock.patch.object(eval_run, "run_case", call),
             redirect_stdout(output),
         ):
             code = eval_run.main()
@@ -1546,7 +1604,7 @@ class LedgerIntegrityTests(unittest.TestCase):
             self.assertNotIn("stale passing artifact", text)
             self.assertIn("Release verdict: **FAIL**", text)
             self.assertIn("invalid judge verdict", text.lower())
-            self.assertIn("| one | 0-3 | n/a | 0 | NO |", text)
+            self.assertIn("| one | 0-3 | n/a | root only | 0 | NO |", text)
 
     def test_malformed_provider_response_becomes_failed_fresh_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1559,6 +1617,7 @@ class LedgerIntegrityTests(unittest.TestCase):
             ledger.write_text("stale passing artifact\n", encoding="utf-8")
             output = io.StringIO()
             judge = mock.Mock()
+            real_freeze = eval_run.freeze_repository
 
             with (
                 mock.patch.object(
@@ -1576,7 +1635,14 @@ class LedgerIntegrityTests(unittest.TestCase):
                 ),
                 mock.patch.object(
                     eval_run,
-                    "call_api",
+                    "freeze_repository",
+                    side_effect=lambda root: real_freeze(
+                        root, enforce_canonical_contract=False
+                    ),
+                ),
+                mock.patch.object(
+                    eval_run,
+                    "run_case",
                     side_effect=eval_run.ProviderResponseError("invalid body"),
                 ),
                 mock.patch.object(eval_run, "judge", judge),
@@ -1588,7 +1654,7 @@ class LedgerIntegrityTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertNotIn("stale passing artifact", text)
             self.assertIn("Release verdict: **FAIL**", text)
-            self.assertIn("api error: invalid body", text)
+            self.assertIn("discovery error: invalid body", text)
             judge.assert_not_called()
 
     def test_atomic_replace_failure_preserves_previous_artifact(self) -> None:
@@ -1614,6 +1680,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     expected_cases=case_metadata(),
                     total_expected=1,
                     release_eligible=True,
+                    source_manifest={},
                 )
 
             self.assertEqual(
@@ -1638,6 +1705,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     expected_cases=case_metadata(),
                     total_expected=1,
                     release_eligible=True,
+                    source_manifest={},
                 )
 
             text = path.read_text(encoding="utf-8")
@@ -2048,18 +2116,14 @@ class LedgerIntegrityTests(unittest.TestCase):
             )
 
             self.assertEqual(code, 0)
-            responder_args = call.call_args.args
-            judge_args = judge.call_args.args
-            self.assertEqual(responder_args[2], "MiniMax-M2.7")
-            self.assertEqual(responder_args[4], eval_run.PROVIDER_CONFIGS["minimax"])
+            run_args = call.call_args.args
+            self.assertEqual(run_args[2], "MiniMax-M2.7")
+            self.assertEqual(run_args[3], "MiniMax-M2.7")
+            self.assertEqual(run_args[6], eval_run.PROVIDER_CONFIGS["minimax"])
             self.assertEqual(
-                responder_args[5], "https://api.minimaxi.com/anthropic/v1/messages"
+                run_args[7], "https://api.minimaxi.com/anthropic/v1/messages"
             )
-            self.assertEqual(judge_args[2], "MiniMax-M2.7")
-            self.assertEqual(judge_args[5], eval_run.PROVIDER_CONFIGS["minimax"])
-            self.assertEqual(
-                judge_args[6], "https://api.minimaxi.com/anthropic/v1/messages"
-            )
+            judge.assert_not_called()
 
 
 if __name__ == "__main__":
