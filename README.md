@@ -384,14 +384,21 @@ Several of these clients share the `.agents/skills/` convention — Codex, Googl
 
 ## Validation
 
-Run these checks before every release. The source-registry check runs with
-`--enforce-freshness` here so a stale registry blocks a release; per-pull-request
-validation deliberately omits the flag, because staleness depends on the calendar
-rather than on the change under test.
+Run these checks before every release. The offline source-metadata check runs with
+`--enforce-freshness` here so an old checked-in registry stamp blocks a release;
+per-pull-request validation deliberately omits the flag, because metadata age
+depends on the calendar rather than on the change under test.
 
 Every check is offline. Exactly one of them, `schema_check.py`, needs a
 third-party library, so install the hash-pinned lock first — on a clean checkout
 that step otherwise stops the run:
+
+`source_registry_check.py` parses the explicit `last_verified` field, rejects
+missing, malformed, duplicate, or future stamps, and compares the checked-in
+metadata dates of freshness-critical references. It does not fetch URLs and it
+does not prove that any upstream claim is still true. A human or separately
+authorized live-verification process must re-read the cited sources and update
+the claims before changing a stamp.
 
 ```bash
 python -m pip install --require-hashes --requirement requirements-validation.lock
@@ -422,7 +429,7 @@ git diff --check
 
 The CI workflow runs this same list on push and pull request, with the one deliberate difference noted above: it omits `--enforce-freshness`. These checks are deterministic and offline — they prove the package is well-formed.
 
-### Source freshness
+### Checked-in source metadata age
 
 Whether `references/source-registry.md` is stale depends on today's date, not on
 the change being tested, so it is not asked per pull request — that would fail
@@ -430,8 +437,8 @@ unrelated work on a calendar boundary. It is asked in two places instead:
 
 | Where | Behaviour |
 |---|---|
-| Release checklist above | `--enforce-freshness` blocks a release on a registry older than 30 days |
-| `source-freshness-review.yml` | Runs Mondays 09:00 UTC on the default branch and reports clean, drifting (past 14 days), or stale (past 30) |
+| Release checklist above | `--enforce-freshness` blocks a release when the checked-in registry stamp is older than 30 days |
+| `source-freshness-review.yml` | Runs Mondays 09:00 UTC on the default branch and reports metadata age as clean, drifting (past 14 days), or stale (past 30) |
 
 Drift and staleness are tracked in a single automatically maintained issue. It
 opens when the registry first drifts, is refreshed in place each week rather
@@ -440,7 +447,9 @@ window.
 
 The scheduled job never edits the registry. Re-stamping `last_verified` without
 actually re-reading the upstream sources would record a verification that never
-happened, so refreshing it is deliberately a human step.
+happened, so refreshing it is deliberately a human step. A clean metadata-age
+result means only that the recorded review date is recent enough; it is not a
+live source or claim verification.
 
 To prove the package is also *good*, run the model-in-the-loop harness, which sends each eval case through the real skill content and scores the response against the case's assertions using [`eval-rubric.md`](references/eval-rubric.md):
 
