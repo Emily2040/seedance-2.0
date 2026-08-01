@@ -446,6 +446,8 @@ Several of these clients share the `.agents/skills/` convention — Codex, Googl
 
 ## Validation
 
+<!-- installed-readme-validation:start -->
+
 Run these checks before every release. The source-registry check runs with
 `--enforce-freshness` here so a stale registry blocks a release; per-pull-request
 validation deliberately omits the flag, because staleness depends on the calendar
@@ -512,6 +514,8 @@ python scripts/eval_run.py --run --ledger evals/eval-run-ledger.md --stamp 2026-
 ```
 
 This is the quality gate, not a shape gate, so it lives outside offline CI; the latest scored run is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
+
+<!-- installed-readme-validation:end -->
 
 ## Design Standard
 
