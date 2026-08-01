@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -163,7 +164,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertTrue((destination / "skills" / "seedance-prompt" / "SKILL.md").is_file())
             self.assert_completed(destination)
 
-    def test_no_force_repairs_a_partial_install_with_a_truncated_file(self) -> None:
+    def test_no_force_refuses_a_partial_install_with_a_truncated_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
             destination = skills_dir / SKILL_NAME
@@ -172,9 +173,23 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
             result = self.run_installer(skills_dir)
 
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("Detected an incomplete", result.stdout)
-            self.assert_completed(destination)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("Refusing to replace the existing path", result.stdout)
+            self.assertEqual(
+                (destination / "SKILL.md").read_bytes(), b"truncated during copy"
+            )
+
+    def test_empty_unmarked_directory_is_never_auto_repaired(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            destination = skills_dir / SKILL_NAME
+            destination.mkdir(parents=True)
+
+            result = self.run_installer(skills_dir)
+
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("empty unmarked directories are never auto-repaired", result.stdout)
+            self.assertEqual(list(destination.iterdir()), [])
 
     def test_later_no_force_call_still_reports_already_installed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -312,6 +327,358 @@ class AtomicInstallRegressionTests(unittest.TestCase):
     def assert_completed(self, destination: Path) -> None:
         valid, reason = installer.validate_completed_install(destination)
         self.assertTrue(valid, reason)
+
+    def call_main(self, skills_dir: Path, *args: str) -> tuple[int, str]:
+        original_argv = sys.argv
+        sys.argv = ["install_codex_skill.py", "--dest", str(skills_dir), *args]
+        output = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                result = installer.main()
+        finally:
+            sys.argv = original_argv
+        return result, output.getvalue()
+
+    def test_valid_live_plus_untrusted_reserved_backup_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            initial = self.run_installer(skills_dir)
+            self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+            backup = skills_dir / installer.BACKUP_NAME
+            backup.mkdir()
+            sentinel = backup / "user-data.txt"
+            sentinel.write_text("never delete me\n", encoding="utf-8")
+
+            retry = self.run_installer(skills_dir, "--force")
+
+            self.assertEqual(retry.returncode, 1, retry.stdout + retry.stderr)
+            self.assertIn("untrusted reserved-name backup", retry.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "never delete me\n")
+            self.assert_completed(skills_dir / SKILL_NAME)
+
+    def test_missing_live_plus_untrusted_reserved_backup_is_not_promoted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            backup = skills_dir / installer.BACKUP_NAME
+            backup.mkdir(parents=True)
+            sentinel = backup / "user-data.txt"
+            sentinel.write_text("not an install\n", encoding="utf-8")
+
+            retry = self.run_installer(skills_dir, "--force")
+
+            self.assertEqual(retry.returncode, 1, retry.stdout + retry.stderr)
+            self.assertIn("untrusted reserved-name backup", retry.stderr)
+            self.assertFalse((skills_dir / SKILL_NAME).exists())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "not an install\n")
+
+    def test_cleanup_stages_refuses_untrusted_reserved_prefix_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            stage = skills_dir / f"{installer.STAGE_PREFIX}user-data"
+            stage.mkdir(parents=True)
+            sentinel = stage / "sentinel.txt"
+            sentinel.write_text("preserve\n", encoding="utf-8")
+            (stage / installer.PROVENANCE_MARKER).write_text(
+                '{"looks":"owned"}\n', encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "untrusted reserved-prefix stage"):
+                installer._cleanup_stages(skills_dir)
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+
+    def test_untrusted_reserved_quarantine_is_preserved_even_with_force(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            quarantine = skills_dir / f"{installer.QUARANTINE_PREFIX}user-data"
+            quarantine.mkdir(parents=True)
+            sentinel = quarantine / "sentinel.txt"
+            sentinel.write_text("preserve\n", encoding="utf-8")
+
+            result = self.run_installer(skills_dir, "--force")
+
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("untrusted reserved-prefix quarantine", result.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+            self.assertFalse((skills_dir / SKILL_NAME).exists())
+
+    def test_malformed_transaction_is_preserved_and_creates_no_live_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            transaction = skills_dir / installer.TRANSACTION_NAME
+            transaction.write_text('{"broken":', encoding="utf-8")
+
+            result = self.run_installer(skills_dir, "--force")
+
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("transaction record is untrusted", result.stderr)
+            self.assertEqual(transaction.read_text(encoding="utf-8"), '{"broken":')
+            self.assertFalse((skills_dir / SKILL_NAME).exists())
+
+    def test_hostile_duplicate_marker_key_has_bounded_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            destination = skills_dir / SKILL_NAME
+            destination.mkdir(parents=True)
+            hostile_key = "x" * 5000
+            marker = destination / installer.COMPLETION_MARKER
+            marker.write_text(
+                "{" + json.dumps(hostile_key) + ":1," + json.dumps(hostile_key) + ":2}",
+                encoding="utf-8",
+            )
+
+            result = self.run_installer(skills_dir)
+            combined = result.stdout + result.stderr
+
+            self.assertEqual(result.returncode, 1, combined)
+            self.assertIn("duplicate key", combined)
+            self.assertNotIn("Traceback", combined)
+            self.assertLess(len(combined), 1200)
+            self.assertTrue(marker.is_file())
+
+    def test_record_reader_rejects_same_length_atomic_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / "record.json"
+            replacement = root / "replacement.json"
+            record.write_bytes(b'{"a":1}')
+            replacement.write_bytes(b'{"b":2}')
+            original_close = installer.os.close
+            swapped = False
+
+            def close_then_swap(descriptor: int) -> None:
+                nonlocal swapped
+                original_close(descriptor)
+                if not swapped:
+                    swapped = True
+                    os.replace(replacement, record)
+
+            with mock.patch.object(installer.os, "close", close_then_swap):
+                with self.assertRaisesRegex(ValueError, "record changed while it was being read"):
+                    installer._read_json_record(record)
+
+            self.assertEqual(record.read_bytes(), b'{"b":2}')
+
+    def test_record_reader_rejects_oversize_before_opening(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "oversized.json"
+            with record.open("wb") as handle:
+                handle.truncate(installer.MAX_RECORD_BYTES + 1)
+
+            with mock.patch.object(
+                installer.os,
+                "open",
+                side_effect=AssertionError("oversized record must not be opened"),
+            ):
+                with self.assertRaisesRegex(ValueError, "outside the safe limit"):
+                    installer._read_json_record(record)
+
+    def test_manifest_rejects_windows_ads_or_drive_like_path(self) -> None:
+        hostile = {
+            "SKILL.md:stream": {
+                "size": 1,
+                "sha256": "0" * 64,
+            }
+        }
+
+        with self.assertRaisesRegex(ValueError, "unsafe path"):
+            installer._validate_payload_manifest(hostile)
+
+    def test_late_stage_extra_is_quarantined_and_never_becomes_live(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            initial = self.run_installer(skills_dir)
+            self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+            destination = skills_dir / SKILL_NAME
+            sentinel = destination / "old-live.txt"
+            sentinel.write_text("old live\n", encoding="utf-8")
+            original_rename = installer._rename_directory
+
+            def inject_before_stage_promotion(source: Path, target: Path) -> None:
+                if source.name.startswith(installer.STAGE_PREFIX) and target == destination:
+                    (source / "late-user-data.txt").write_text("preserve me\n", encoding="utf-8")
+                original_rename(source, target)
+
+            with mock.patch.object(installer, "_rename_directory", inject_before_stage_promotion):
+                result, output = self.call_main(skills_dir, "--force")
+
+            self.assertEqual(result, 1, output)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "old live\n")
+            quarantines = list(skills_dir.glob(f"{installer.QUARANTINE_PREFIX}*"))
+            self.assertEqual(len(quarantines), 1)
+            self.assertEqual(
+                (quarantines[0] / "late-user-data.txt").read_text(encoding="utf-8"),
+                "preserve me\n",
+            )
+            self.assertFalse((destination / "late-user-data.txt").exists())
+            self.assertFalse((skills_dir / installer.BACKUP_NAME).exists())
+
+    def test_late_backup_extra_is_preserved_after_atomic_quarantine(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            initial = self.run_installer(skills_dir)
+            self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+            destination = skills_dir / SKILL_NAME
+            old_sentinel = destination / "old-live.txt"
+            old_sentinel.write_text("old live\n", encoding="utf-8")
+            original_rename = installer._rename_directory
+
+            def inject_before_backup_quarantine(source: Path, target: Path) -> None:
+                if source == skills_dir / installer.BACKUP_NAME and target.name.startswith(
+                    installer.QUARANTINE_PREFIX
+                ):
+                    (source / "late-user-data.txt").write_text("preserve me\n", encoding="utf-8")
+                original_rename(source, target)
+
+            with mock.patch.object(installer, "_rename_directory", inject_before_backup_quarantine):
+                result, output = self.call_main(skills_dir, "--force")
+
+            self.assertEqual(result, 1, output)
+            self.assert_completed(destination)
+            self.assertFalse((destination / "old-live.txt").exists())
+            quarantines = list(skills_dir.glob(f"{installer.QUARANTINE_PREFIX}*"))
+            self.assertEqual(len(quarantines), 1)
+            self.assertEqual(
+                (quarantines[0] / "late-user-data.txt").read_text(encoding="utf-8"),
+                "preserve me\n",
+            )
+            self.assertEqual(
+                (quarantines[0] / "old-live.txt").read_text(encoding="utf-8"),
+                "old live\n",
+            )
+
+    def test_kill_window_before_quarantine_marker_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            initial = self.run_installer(skills_dir)
+            self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+            destination = skills_dir / SKILL_NAME
+            old_sentinel = destination / "old-live.txt"
+            old_sentinel.write_text("old live\n", encoding="utf-8")
+            original_write = installer._write_json_exclusive
+
+            def fail_quarantine_marker(path: Path, record: object) -> bytes:
+                if path.name == installer.QUARANTINE_MARKER:
+                    raise OSError("injected kill before quarantine marker")
+                return original_write(path, record)  # type: ignore[arg-type]
+
+            with mock.patch.object(
+                installer, "_write_json_exclusive", fail_quarantine_marker
+            ):
+                result, output = self.call_main(skills_dir, "--force")
+
+            self.assertEqual(result, 1, output)
+            self.assert_completed(destination)
+            quarantine = next(skills_dir.glob(f"{installer.QUARANTINE_PREFIX}*"))
+            self.assertEqual(
+                (quarantine / "old-live.txt").read_text(encoding="utf-8"),
+                "old live\n",
+            )
+            self.assertFalse((quarantine / installer.QUARANTINE_MARKER).exists())
+            self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
+
+            retry = self.run_installer(skills_dir, "--force")
+            self.assertEqual(retry.returncode, 1, retry.stdout + retry.stderr)
+            self.assertIn("quarantine", retry.stderr.lower())
+            self.assertEqual(
+                (quarantine / "old-live.txt").read_text(encoding="utf-8"),
+                "old live\n",
+            )
+
+    def test_stage_path_swap_is_quarantined_without_recursive_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            ready = root / "copy-paused"
+            process = self.start_controlled_installer(
+                PAUSE_DURING_COPY, skills_dir, ready, "fresh"
+            )
+            self.terminate_at_pause(process, ready)
+            transaction, _ = installer._load_transaction(skills_dir)
+            stage = skills_dir / str(transaction["stage_name"])
+            quarantine = skills_dir / str(transaction["quarantine_name"])
+            stashed = skills_dir / "owned-stage-stashed-by-test"
+            original_rename = installer._rename_directory
+
+            def swap_at_quarantine(source: Path, target: Path) -> None:
+                if source == stage and target == quarantine:
+                    original_rename(source, stashed)
+                    source.mkdir()
+                    (source / "user-data.txt").write_text("preserve\n", encoding="utf-8")
+                original_rename(source, target)
+
+            with mock.patch.object(installer, "_rename_directory", swap_at_quarantine):
+                with self.assertRaisesRegex(RuntimeError, "changed after transaction ownership"):
+                    installer.recover_interrupted_transaction(
+                        skills_dir, skills_dir / SKILL_NAME
+                    )
+
+            self.assertEqual(
+                (quarantine / "user-data.txt").read_text(encoding="utf-8"),
+                "preserve\n",
+            )
+            self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
+
+    def test_transaction_record_swap_to_directory_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            transaction = skills_dir / installer.TRANSACTION_NAME
+            stashed = skills_dir / "original-transaction-stashed-by-test"
+            original_rename = installer._rename_directory
+            swapped = False
+
+            def swap_record_before_quarantine(source: Path, target: Path) -> None:
+                nonlocal swapped
+                if source == transaction and not swapped:
+                    swapped = True
+                    original_rename(source, stashed)
+                    source.mkdir()
+                    (source / "user-data.txt").write_text("preserve\n", encoding="utf-8")
+                original_rename(source, target)
+
+            with mock.patch.object(installer, "_rename_directory", swap_record_before_quarantine):
+                result, output = self.call_main(skills_dir)
+
+            self.assertEqual(result, 1, output)
+            done = list(skills_dir.glob(f"{installer.TRANSACTION_DONE_PREFIX}*"))
+            self.assertEqual(len(done), 1)
+            self.assertEqual(
+                (done[0] / "user-data.txt").read_text(encoding="utf-8"), "preserve\n"
+            )
+            self.assert_completed(skills_dir / SKILL_NAME)
+
+    def test_reparse_stage_is_refused_and_preserved_when_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skills_dir = root / "skills"
+            outside = root / "outside"
+            outside.mkdir(parents=True)
+            sentinel = outside / "sentinel.txt"
+            sentinel.write_text("preserve\n", encoding="utf-8")
+            stage = skills_dir / f"{installer.STAGE_PREFIX}junction"
+            skills_dir.mkdir()
+            if os.name == "nt":
+                junction = subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(stage), str(outside)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if junction.returncode != 0:
+                    self.skipTest(f"directory junctions unavailable: {junction.stderr}")
+            else:
+                try:
+                    os.symlink(outside, stage, target_is_directory=True)
+                except (OSError, NotImplementedError) as exc:
+                    self.skipTest(f"directory symlinks unavailable: {exc}")
+
+            result = self.run_installer(skills_dir, "--force")
+
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+            self.assertTrue(os.path.lexists(stage))
 
     def test_concurrent_fresh_writers_finish_cleanly(self) -> None:
         workers = 6
