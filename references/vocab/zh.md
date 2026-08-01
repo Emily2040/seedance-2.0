@@ -31,6 +31,13 @@ Use this reference for Chinese Seedance prompt wording, role binding, and compac
 | Shot | `中近景` | medium close-up |
 | Shot | `远景定场镜头` | wide establishing shot |
 | Shot | `四分之三侧脸` | three-quarter profile |
+| Shot | `三分法构图` | rule-of-thirds composition |
+| Shot | `大面积负空间，孤独感` | large negative space, isolation |
+| Shot | `前景虚化遮挡` | subject seen past foreground blur |
+| Shot | `引导线指向焦点` | leading lines pointing to the focus |
+| Shot | `前中后景层次分明` | distinct foreground, midground, background layers |
+| Camera | `一镜到底长镜头` | one continuous long take |
+| Lighting | `树叶间洒下的斑驳光` | sunlight dappled through leaves |
 | Lens | `长焦压缩空间` | telephoto compression |
 | Lens | `广角空间感` | wide-angle spatial feel |
 | Lens | `焦点从模糊过渡到清晰` | focus resolves from blur to sharpness |
@@ -116,6 +123,18 @@ Field-observed from 2026 community testing (即梦官方手册解读、知乎、
 - 台词格式：角色名 + 动作 + 冒号 + 引号内台词。Count characters/syllables, not "words"; keep to one short clause.
 - 唇形同步在部分界面默认关闭（如即梦需勾选“启用唇形同步”）- confirm it is enabled before blaming the prompt.
 - Inline audio tags are field-reported on some surfaces: 在台词末尾加方括号提示音色与音效，例如 `"领旨" [低沉男声][编钟余音]`。Surface-specific; verify before relying on it.
+
+## Aesthetic Registers (美学语域)
+
+Chinese carries genre-aesthetic registers with no one-word English equivalent. They are legitimate intent words — but they are intent, not instruction: alone in a prompt they behave like feel-words and destabilize the output. Name the register, then spend the words on the physical elements that produce it, exactly as the Slop Traps table repairs feel-words.
+
+| Register | Decompose into |
+|---|---|
+| 武侠 (wuxia) | physical craft, not the label: `竹林间的剑客、衣袂随步伐摆动、足尖点地的轻功起跳、竹叶纷落` |
+| 仙侠 (xianxia) | one supernatural element grounded in physics: `御剑离地三尺悬停、云海在脚下流动、法器发出的冷光映在脸上` |
+| 国风 / 水墨 (guofeng / ink-wash) | the medium itself: `水墨晕染的远山、留白的天空、毛笔笔触的边缘、淡彩点染` |
+| 废土 (wasteland) | material decay: `锈蚀的车壳、沙尘掠过裂开的公路、褪色的广告牌` |
+| 烟火气 (lived-in warmth) | street-level sensory detail: `路边摊的蒸汽、油锅的滋滋声、灯泡下的塑料凳` |
 
 ## Script Variant (简繁)
 

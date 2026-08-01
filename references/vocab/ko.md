@@ -25,6 +25,14 @@ Use this reference for Korean Seedance prompt wording, role binding, and compact
 | Shot | `미디엄 클로즈업` | medium close-up |
 | Shot | `넓은 설정 샷` | wide establishing shot |
 | Shot | `3/4 측면 얼굴` | three-quarter profile |
+| Shot | `삼분할 구도` | rule-of-thirds composition |
+| Shot | `여백의 미, 고독감` | negative space, isolation |
+| Shot | `전경을 흐리게 처리한 프레임` | frame seen past foreground blur |
+| Shot | `시선을 끄는 유도선` | leading lines pulling the eye |
+| Shot | `전경, 중경, 원경의 깊이` | layered foreground, midground, background depth |
+| Camera | `원테이크 롱테이크` | one continuous long take |
+| Camera | `드론 부감샷` | drone bird's-eye view |
+| Lighting | `나뭇잎 사이로 비치는 빛` | sunlight dappled through leaves |
 | Lens | `24mm 광각으로 공간감 강조` | 24mm wide spatial feel |
 | Lens | `50mm 자연스러운 인물감` | 50mm natural portrait feel |
 | Lens | `매크로 렌즈로 재질 디테일 강조` | macro lens for material detail |
@@ -134,6 +142,18 @@ Choosing:
 With two speakers, the pair of levels *is* the relationship: senior to junior in 반말 answered in 해요체 reads as a hierarchy, both in 해요체 reads as peers or strangers. Keep each character's level consistent across a sequence - drifting between levels mid-project reads as a translation error, not a character choice, and it is the kind of continuity that no frame-level QC catches.
 
 If the user has not stated a level and the relationship does not imply one, ask once rather than defaulting silently; it is one question and it changes both the performance and the syllable budget.
+
+## Aesthetic Registers (미학)
+
+Korean carries aesthetic concepts with no one-word English equivalent. They are legitimate intent words — but they are intent, not instruction: alone in a prompt they behave like any feel-word and destabilize the output. Name the register, then spend the words on the physical elements that produce it, exactly as the Slop Traps table repairs feel-words.
+
+| Register | Decompose into |
+|---|---|
+| 한 (han — grief that stays) | stillness and weight, not tears: `움직임을 멈춘 인물, 긴 그림자, 식은 밥상, 빗소리만` |
+| 정 (jeong — accumulated closeness) | small physical care between people: `말없이 반찬을 옮겨 주는 손, 어깨에 걸쳐 주는 외투` |
+| 여백의 미 (beauty of empty space) | already physical — compose it: `대칭 구도, 화면 대부분이 빈 벽, 인물은 구석에 작게` |
+| 신명 (exuberant collective spirit) | rhythm made visible: `북 장단에 맞춘 발 구름, 원을 그리며 도는 군무, 손에서 손으로 넘어가는 술잔` |
+| 사극 (historical-drama register) | period material, not the label: `한복의 겹쳐진 옷감, 궁궐 처마 아래의 그림자, 촛불 조명` |
 
 ## Slop Traps
 

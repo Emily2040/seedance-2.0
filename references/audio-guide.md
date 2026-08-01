@@ -25,8 +25,8 @@ Two budgets matter, and people confuse them. The acoustic budget is how many wor
 |---|---|---|---|
 | English | ~16-20 words before the mix compresses | 5-10 words | close-second lip-sync |
 | Mandarin | count in characters/syllables, not words; strongest sync | one short clause | best lip-sync, training-weighted |
-| Japanese | not separately measured; treat as the weaker tier | one short line | mora-timed; word counts mislead |
-| Korean | not separately measured, under-tested | one short line | flag uncertainty, do not assume parity |
+| Japanese | not separately measured; treat as the weaker tier | one short line | mora-timed; word counts mislead — measure via `[ref:sync-budget-protocol]` |
+| Korean | not separately measured, under-tested | one short line | flag uncertainty, do not assume parity — measure via `[ref:sync-budget-protocol]` |
 | Russian | ~10-15 words maximum, shorter is better | under 10 words | weak, often English-accented |
 
 Past the reliable-sync budget, especially in non-English, use the voice-reference lip-sync path below or plan a post-dub.
