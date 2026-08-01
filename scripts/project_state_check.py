@@ -5,6 +5,13 @@ import argparse
 import json
 from pathlib import Path
 
+from lineage_contract import (
+    ACCEPTED_PARENT_STATUSES,
+    classify_parent_id,
+    has_usable_observed_end_state,
+    parent_link_mode,
+)
+
 
 REQUIRED_PROJECT_FIELDS = {
     "schema_version", "state_revision", "project_id", "project_mode", "surface",
@@ -46,7 +53,7 @@ REQUIRED_TAKE_REVIEW_FIELDS = {
     "unexpected_completed_beats", "continuity_breaks", "accepted_deviations",
     "observation_confidence", "uncertainties", "requires_user_confirmation",
 }
-ACCEPTED = {"accepted", "accepted_with_deviation"}
+ACCEPTED = ACCEPTED_PARENT_STATUSES
 
 
 def load_json(path: Path) -> object:
@@ -89,7 +96,6 @@ def validate_project(path: Path, root: Path) -> list[str]:
 
     clip_ids = set()
     clips_by_id = {}
-    accepted_ids = set()
     scene_ids = set()
     scene_depth_caps = {}
     scene_indexes = set()
@@ -155,19 +161,24 @@ def validate_project(path: Path, root: Path) -> list[str]:
                 f"scene {sid} max_chain_depth {scene_depth_caps[sid]}; open from canonical references instead"
             )
         if clip.get("status") in ACCEPTED:
-            accepted_ids.add(cid)
-            if not clip.get("observed_end_state"):
-                errors.append(f"{rel}: accepted clip {cid} missing observed_end_state")
+            if not has_usable_observed_end_state(clip):
+                errors.append(
+                    f"{rel}: accepted clip {cid} observed_end_state must be a non-empty object"
+                )
         if clip.get("status") == "rejected" and clip.get("observed_end_state"):
             errors.append(f"{rel}: rejected clip {cid} must not publish observed_end_state as canon")
 
     for clip in data["clips"]:
         cid = clip.get("clip_id")
-        parent = clip.get("parent_clip_id")
+        parent_kind, parent = classify_parent_id(clip)
         sequence_index = clip.get("sequence_index", 1)
-        if not parent:
+        if parent_kind == "root":
             if isinstance(sequence_index, int) and not isinstance(sequence_index, bool) and sequence_index > 1:
                 errors.append(f"{rel}: later clip {cid} missing parent_clip_id")
+        elif parent_kind == "invalid":
+            errors.append(
+                f"{rel}: clip {cid} parent_clip_id must be null or a non-empty string"
+            )
         elif parent == cid:
             errors.append(f"{rel}: clip {cid} cannot parent itself")
         elif parent not in clip_ids:
@@ -185,8 +196,16 @@ def validate_project(path: Path, root: Path) -> list[str]:
                     f"{rel}: clip {cid} sequence_index {sequence_index} must be greater than "
                     f"parent {parent} sequence_index {parent_index}"
                 )
-            if clip.get("status") != "planned" and parent not in accepted_ids:
-                errors.append(f"{rel}: later clip {cid} parent {parent} is not accepted")
+            link_mode = parent_link_mode(clip, clips_by_id[parent])
+            if link_mode == "missing_observed_end_state":
+                errors.append(
+                    f"{rel}: clip {cid} parent {parent} is accepted but missing observed_end_state"
+                )
+            elif link_mode == "unusable_status":
+                errors.append(
+                    f"{rel}: clip {cid} parent {parent} status "
+                    f"{clips_by_id[parent].get('status')!r} is not usable"
+                )
         overlap_current_future = set(clip.get("this_clip_only", [])) & set(clip.get("reserved_for_later", []))
         if overlap_current_future:
             errors.append(f"{rel}: clip {cid} overlaps current and reserved beats: {sorted(overlap_current_future)}")
@@ -207,8 +226,8 @@ def validate_project(path: Path, root: Path) -> list[str]:
             return
         active_positions[cid] = len(active_lineage)
         active_lineage.append(cid)
-        parent = clips_by_id[cid].get("parent_clip_id")
-        if parent in clips_by_id and parent != cid:
+        parent_kind, parent = classify_parent_id(clips_by_id[cid])
+        if parent_kind == "parent" and parent in clips_by_id and parent != cid:
             visit_lineage(parent)
         active_lineage.pop()
         active_positions.pop(cid)
@@ -274,6 +293,9 @@ def main() -> int:
             continue
         if "contract" in path.name:
             check_required(obj, REQUIRED_CLIP_CONTRACT_FIELDS, rel, errors)
+            parent_kind, _ = classify_parent_id(obj)
+            if parent_kind == "invalid":
+                errors.append(f"{rel}: parent_clip_id must be null or a non-empty string")
             felt = obj.get("felt_intent")
             if "felt_intent" in obj and (not isinstance(felt, str) or not felt.strip()):
                 errors.append(f"{rel}: felt_intent must be a non-empty one-line string")

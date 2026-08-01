@@ -56,6 +56,24 @@ class ProjectStateTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("clip clip_01 parent missing_clip is missing", result.stdout)
 
+    def test_rejects_empty_parent_id_even_at_first_index(self) -> None:
+        result = self.run_mutated_project(
+            lambda data: self.clip(data, "clip_01").update(parent_clip_id="")
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("parent_clip_id must be null or a non-empty string", result.stdout)
+
+    def test_rejects_whitespace_only_or_non_string_parent_ids(self) -> None:
+        for invalid in ("   ", False, 0, []):
+            with self.subTest(parent_clip_id=invalid):
+                result = self.run_mutated_project(
+                    lambda data, value=invalid: self.clip(data, "clip_01").update(
+                        parent_clip_id=value
+                    )
+                )
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("parent_clip_id must be null or a non-empty string", result.stdout)
+
     def test_rejects_non_monotonic_parent_order(self) -> None:
         result = self.run_mutated_project(
             lambda data: self.clip(data, "clip_02").update(sequence_index=1)
@@ -75,6 +93,52 @@ class ProjectStateTests(unittest.TestCase):
 
     def test_preserves_valid_provisional_planned_chain(self) -> None:
         result = self.run_mutated_project(lambda data: None)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_rejects_unusable_parent_even_for_a_planned_child(self) -> None:
+        for status in ("generated", "reviewed", "repair", "rejected"):
+            with self.subTest(parent_status=status):
+                def make_parent_unusable(data: dict, parent_status: str = status) -> None:
+                    parent = self.clip(data, "clip_01")
+                    parent["status"] = parent_status
+                    parent["observed_end_state"] = None
+                    self.clip(data, "clip_02")["status"] = "planned"
+
+                result = self.run_mutated_project(make_parent_unusable)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn(f"status '{status}' is not usable", result.stdout)
+
+    def test_ready_child_requires_an_accepted_parent(self) -> None:
+        result = self.run_mutated_project(
+            lambda data: self.clip(data, "clip_02").update(status="ready")
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("parent clip_01 status 'ready' is not usable", result.stdout)
+
+    def test_rejects_accepted_parent_without_observed_end_state(self) -> None:
+        for invalid_endpoint in (None, {}, [], "claimed endpoint", 1):
+            with self.subTest(observed_end_state=invalid_endpoint):
+                def remove_parent_endpoint(data: dict, endpoint=invalid_endpoint) -> None:
+                    parent = self.clip(data, "clip_01")
+                    parent["status"] = "accepted"
+                    parent["observed_end_state"] = endpoint
+
+                result = self.run_mutated_project(remove_parent_endpoint)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("parent clip_01 is accepted but missing observed_end_state", result.stdout)
+
+    def test_preserves_explicit_null_root(self) -> None:
+        def keep_only_root(data: dict) -> None:
+            root = self.clip(data, "clip_01")
+            root["parent_clip_id"] = None
+            data["clips"] = [root]
+            data["beats"] = [
+                beat for beat in data["beats"] if beat.get("assigned_clip_id") == "clip_01"
+            ]
+            data["scenes"][0]["assigned_clip_ids"] = ["clip_01"]
+            data["current_clip_id"] = "clip_01"
+
+        result = self.run_mutated_project(keep_only_root)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_preserves_valid_accepted_chain_with_planned_leaf(self) -> None:

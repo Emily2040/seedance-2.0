@@ -70,6 +70,51 @@ class ExecutionTests(unittest.TestCase):
             errors = schema_check.check(repo)
             self.assertTrue(any("schema_version" in e for e in errors), errors)
 
+    def test_project_state_rejects_empty_or_whitespace_parent_ids(self) -> None:
+        for invalid in ("", "   "):
+            with self.subTest(parent_clip_id=invalid), tempfile.TemporaryDirectory() as tmp:
+                repo = self._copy_repo(tmp)
+                target = repo / "examples/standalone-clip/project-state.json"
+                data = json.loads(target.read_text("utf-8"))
+                data["clips"][0]["parent_clip_id"] = invalid
+                target.write_text(json.dumps(data), encoding="utf-8")
+                errors = schema_check.check(repo)
+                self.assertTrue(
+                    any(
+                        "project-state.json against schemas/project-state.schema.json" in error
+                        and "parent_clip_id" in error
+                        for error in errors
+                    ),
+                    errors,
+                )
+
+    def test_clip_contract_rejects_empty_or_whitespace_parent_ids(self) -> None:
+        for invalid in ("", "   "):
+            with self.subTest(parent_clip_id=invalid), tempfile.TemporaryDirectory() as tmp:
+                repo = self._copy_repo(tmp)
+                target = repo / "examples/sequence-airport-arrival/clip-01-contract.json"
+                data = json.loads(target.read_text("utf-8"))
+                data["parent_clip_id"] = invalid
+                target.write_text(json.dumps(data), encoding="utf-8")
+                errors = schema_check.check(repo)
+                self.assertTrue(
+                    any(
+                        "clip-01-contract.json against schemas/clip-contract.schema.json" in error
+                        and "parent_clip_id" in error
+                        for error in errors
+                    ),
+                    errors,
+                )
+
+    def test_null_root_parent_remains_schema_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._copy_repo(tmp)
+            project = repo / "examples/standalone-clip/project-state.json"
+            contract = repo / "examples/sequence-airport-arrival/clip-01-contract.json"
+            self.assertIsNone(json.loads(project.read_text("utf-8"))["clips"][0]["parent_clip_id"])
+            self.assertIsNone(json.loads(contract.read_text("utf-8"))["parent_clip_id"])
+            self.assertEqual(schema_check.check(repo), [])
+
     def test_schema_requiring_a_field_no_example_has_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = self._copy_repo(tmp)
