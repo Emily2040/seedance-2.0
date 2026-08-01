@@ -6,9 +6,14 @@ import fnmatch
 import os
 import shutil
 from pathlib import Path
+from typing import Iterator
 
 
 SKILL_NAME = "seedance-20"
+# MAX_PATH is a 260-unit buffer including its terminating NUL. Portable
+# directory creation also reserves 12 units for an appended 8.3 name.
+WINDOWS_PORTABLE_DIRECTORY_LIMIT = 247
+WINDOWS_PORTABLE_FILE_LIMIT = 259
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -63,6 +68,69 @@ def payload_size(path: Path) -> str:
     return f"{total:.1f} GB"
 
 
+def windows_utf16_units(path: Path) -> int:
+    """Count Windows path units, where non-BMP characters consume two units."""
+    return len(str(path).encode("utf-16-le", errors="surrogatepass")) // 2
+
+
+def lexical_absolute_path(path: Path) -> Path:
+    """Make a path absolute without resolving or touching a possibly long path."""
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    return Path(os.path.normpath(str(candidate)))
+
+
+def installed_payload_entries(repo_root: Path) -> Iterator[tuple[Path, bool]]:
+    """Yield the directories and files that copytree will install."""
+    for current, directory_names, file_names in os.walk(repo_root):
+        ignored = ignore_runtime_noise(current, directory_names + file_names)
+        directory_names[:] = sorted(name for name in directory_names if name not in ignored)
+        current_path = Path(current)
+        for name in directory_names:
+            yield (current_path / name).relative_to(repo_root), True
+        for name in sorted(file_names):
+            if name not in ignored:
+                yield (current_path / name).relative_to(repo_root), False
+
+
+def assert_windows_portable_install_path(destination: Path, repo_root: Path) -> None:
+    """Refuse paths that cannot be copied on legacy-compatible Windows hosts."""
+    absolute_destination = lexical_absolute_path(destination)
+    candidates: list[tuple[Path, Path, bool]] = [
+        (Path("."), absolute_destination, True)
+    ]
+    for relative, is_directory in installed_payload_entries(repo_root):
+        candidates.append((relative, absolute_destination / relative, is_directory))
+
+    violations: list[tuple[int, int, int, Path, Path, bool]] = []
+    for relative, installed_path, is_directory in candidates:
+        limit = (
+            WINDOWS_PORTABLE_DIRECTORY_LIMIT
+            if is_directory
+            else WINDOWS_PORTABLE_FILE_LIMIT
+        )
+        units = windows_utf16_units(installed_path)
+        if units > limit:
+            violations.append(
+                (units - limit, units, limit, relative, installed_path, is_directory)
+            )
+    if not violations:
+        return
+
+    _excess, units, limit, relative, installed_path, is_directory = max(
+        violations, key=lambda item: (item[0], item[1], str(item[3]))
+    )
+    kind = "directory" if is_directory else "file"
+    payload_entry = "install destination" if relative == Path(".") else relative.as_posix()
+    raise ValueError(
+        "Windows portable path limit would be exceeded.\n"
+        f"Predicted {kind} path uses {units} UTF-16 code units; safe limit is {limit}.\n"
+        f"Payload entry: {payload_entry}\n"
+        f"Predicted path: {installed_path}\n"
+        "Choose a shorter --dest (for example C:\\Codex\\skills), or set "
+        "CODEX_HOME closer to the drive root. No files were copied."
+    )
+
+
 def assert_safe_destination(destination: Path, skills_dir: Path) -> None:
     resolved_destination = destination.resolve()
     resolved_skills_dir = skills_dir.resolve()
@@ -115,6 +183,8 @@ def main() -> int:
     # Reported as a message rather than a traceback: this is the first command a
     # new user runs, and a stack trace reads as "the tool is broken".
     try:
+        if os.name == "nt":
+            assert_windows_portable_install_path(destination, repo_root)
         assert_safe_destination(destination, skills_dir)
         assert_destination_outside_source(destination, repo_root)
     except ValueError as exc:
