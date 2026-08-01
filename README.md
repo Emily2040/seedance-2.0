@@ -384,14 +384,14 @@ Several of these clients share the `.agents/skills/` convention — Codex, Googl
 
 ## Validation
 
-Run these checks before every release. The source-registry check runs with
-`--enforce-freshness` here so a stale registry blocks a release; per-pull-request
-validation deliberately omits the flag, because staleness depends on the calendar
-rather than on the change under test.
+The canonical runner contains the validation command list used by both this
+release path and CI. The release mode adds the source-freshness gate; CI omits
+that calendar-dependent gate so an unrelated pull request cannot become red as
+time passes.
 
-Every check is offline. Exactly one of them, `schema_check.py`, needs a
-third-party library, so install the hash-pinned lock first — on a clean checkout
-that step otherwise stops the run:
+After dependencies are installed, every check runs offline. Exactly one checker,
+`schema_check.py`, needs a third-party library, so install the hash-pinned lock
+first:
 
 The validation toolchain supports **CPython 3.11 through 3.13**. CI exercises
 both endpoints on Ubuntu and Windows; the pinned dependency lock also carries
@@ -404,30 +404,33 @@ Python 3.10 and 3.14 are outside this lock's supported range. Check
 python -m pip install --require-hashes --requirement requirements-validation.lock
 ```
 
+### Archive-safe release validation (clone or Download ZIP)
+
+Run this from the repository root. It works in a Git checkout and in an
+extracted **Download ZIP** tree with no `.git` directory. The runner anchors its
+child processes to its own repository path, so parent folders containing spaces
+do not change what gets validated.
+
 ```bash
-python scripts/validate_skills.py --strict
-python scripts/content_audit.py --strict
-python scripts/eval_schema_check.py --strict
-python scripts/schema_check.py --strict
-python scripts/design_audit.py --strict
-python scripts/build_hero.py --check
-python scripts/source_registry_check.py --strict --enforce-freshness
-python scripts/vocab_schema_check.py --strict
-python scripts/project_state_check.py --strict
-python scripts/continuity_chain_check.py --strict
-python scripts/behavior_contract_check.py --strict
-python scripts/sequence_eval_check.py --strict
-python scripts/generation_run_check.py --strict
-python scripts/prompt_architecture_stress.py --strict
-python scripts/prompt_lint.py --self-test --strict
-python scripts/eval_run.py --self-test --strict
-python scripts/extract_last_frame.py --self-test --strict
-python -m unittest discover -s tests -v
-python -m compileall scripts tests
+python scripts/validate_repo.py --release
+```
+
+CI calls the same runner without `--release`. That is the only suite difference:
+release validation enforces the checked-in source date; pull-request validation
+still validates the source registry and its claim labels without adding a
+wall-clock failure.
+
+### Git checkout-only hygiene
+
+If this copy came from `git clone` or a Git worktree, run the whitespace check
+as an additional hygiene gate:
+
+```bash
 git diff --check
 ```
 
-The CI workflow runs this same list on push and pull request, with the one deliberate difference noted above: it omits `--enforce-freshness`. These checks are deterministic and offline — they prove the package is well-formed.
+This command requires Git metadata and is deliberately outside the archive-safe
+runner. Do not run it in a Download ZIP extraction.
 
 ### Source freshness
 
@@ -437,7 +440,7 @@ unrelated work on a calendar boundary. It is asked in two places instead:
 
 | Where | Behaviour |
 |---|---|
-| Release checklist above | `--enforce-freshness` blocks a release on a registry older than 30 days |
+| Archive-safe release runner (`--release`) | `--enforce-freshness` blocks a release on a registry older than 30 days |
 | `source-freshness-review.yml` | Runs Mondays 09:00 UTC on the default branch and reports clean, drifting (past 14 days), or stale (past 30) |
 
 Drift and staleness are tracked in a single automatically maintained issue. It
