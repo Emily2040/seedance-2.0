@@ -24,7 +24,9 @@ Surfaces: [ByteDance Seedance 2.0](https://seed.bytedance.com/en/seedance2_0) ·
 
 Most tools ask the model for a "cinematic look." A director asks what the scene is *doing* — then makes the camera, lens, light, blocking, performance, and sound all serve one intention, in a single recognizable voice, across an entire story.
 
-The [**directing engine**](references/directing-engine.md) encodes that judgment. It reads a scene's dramatic function — the turn, the point of view, the power, the subtext — names one intention, and derives a coherent setup instead of stacking adjectives.
+The mandatory [**Director's Read**](references/directors-read.md) encodes that judgment before every narrative, story, or performance prompt: function, turn, POV, power shift, objective, obstacle/tactic, contradiction, one visible suppressed behavior, one non-transferable detail, and one explicit genre refusal.
+
+Utility, packshot, functional product, and abstract work take a separate lane so the skill does not invent drama. The deeper [**directing engine**](references/directing-engine.md) then turns the read into a coherent camera, light, blocking, performance, and sound setup instead of stacking adjectives.
 
 **Ask for "cinematic":** `epic cinematic shot of a woman reading a letter, emotional, beautiful lighting`
 
@@ -116,6 +118,7 @@ For these requests, the skill should not stop at a single prompt. It should retu
 | “Continue this video / make the next part.” | [`seedance-continuation`](skills/seedance-continuation/SKILL.md) | A source-gated continuation from accepted footage or a request for the missing clip/final frame. |
 | “I know the scene I want.” | [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | A production-ready Seedance prompt. |
 | “Make it actually feel directed, not just cinematic.” | [`directing-engine`](references/directing-engine.md) | One intention per scene, a coherent camera/light/blocking/performance/sound setup, and one directorial voice across the story. |
+| “Make the story or performance specific before writing the prompt.” | [`directors-read`](references/directors-read.md) | A mandatory narrative read, a no-fabricated-drama utility boundary, and visible or audible prompt carriers. |
 | “Make it short and strong.” | [`seedance-prompt-short`](skills/seedance-prompt-short/SKILL.md) | A compressed 30–100 word prompt. |
 | “I have an image/video/audio reference.” | [`reference-workflow`](references/reference-workflow.md) | A role map for every reference asset. |
 | “Use this as first frame and that as final frame.” | [`first-last-frame-guide`](references/first-last-frame-guide.md) | A continuous transition with endpoint locks. |
@@ -259,6 +262,7 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`agent-compatibility.md`](references/agent-compatibility.md) | Agent Skills structure, Codex compatibility, and packaging notes. |
 | [`api-workflow.md`](references/api-workflow.md) | Volcengine, BytePlus, Runway, provider/router APIs, async task, reference-file, pricing, and production workflow checklist. |
 | [`capability-map.md`](references/capability-map.md) | Design into model strengths and around known limits before prompting. |
+| [`directors-read.md`](references/directors-read.md) | Mandatory narrative/story/performance read, non-narrative refusal boundary, and internal-to-visible compilation contract. |
 | [`directing-engine.md`](references/directing-engine.md) | Read the scene, choose one intention, make every instrument cohere, hold one directorial voice, and shape the look across a long story. |
 | [`directing-engine-genre-library.md`](references/directing-engine-genre-library.md) | 33 fully worked genre examples (product, music video, horror, anime, action, documentary, and more), loaded on demand. |
 | [`model-mechanics.md`](references/model-mechanics.md) | Why the rules work: eight mechanisms of the generator, novel-case derivation, mechanism-indexed diagnosis. |
