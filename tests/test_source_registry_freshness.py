@@ -9,10 +9,12 @@ explicit enforcement can fail.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -61,9 +63,10 @@ class FreshnessClassificationTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(len(warnings), 1)
 
-    def test_future_dated_registry_is_not_reported_as_stale(self) -> None:
+    def test_future_dated_registry_is_rejected(self) -> None:
         errors, warnings = findings(-5, True)
-        self.assertEqual(errors, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("future", errors[0])
         self.assertEqual(warnings, [])
 
 
@@ -80,6 +83,71 @@ class CommandLineBehaviourTests(unittest.TestCase):
             text=True,
         )
 
+    def run_fixture(
+        self,
+        *,
+        registry_verified: date | None = None,
+        registry_stamp: str | None = None,
+        api_status_text: str | None = None,
+        reference_text: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        today = date.today()
+        registry_verified = registry_verified or today
+        registry_stamp = registry_stamp or registry_verified.isoformat()
+        api_status_text = api_status_text or f"last_verified: {today.isoformat()}\n"
+        reference_text = reference_text or f"last_verified: {today.isoformat()}\n"
+        with tempfile.TemporaryDirectory(prefix="source-freshness-", dir=self.root) as temp_dir:
+            repo = Path(temp_dir)
+            references = repo / "references"
+            data_dir = repo / "data"
+            references.mkdir()
+            data_dir.mkdir()
+            (references / "source-registry.md").write_text(
+                "\n".join(
+                    [
+                        "# Source Registry",
+                        f"last_verified: {registry_stamp}",
+                        "`confirmed` `volatile` `field-observed` `unverified` `internal`",
+                        "seed.bytedance.com volcengine.com arxiv.org runwayml.com",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (references / "api-status.md").write_text(
+                api_status_text, encoding="utf-8"
+            )
+            (references / "platform-surface-matrix.md").write_text(
+                reference_text, encoding="utf-8"
+            )
+            sources = []
+            for index in range(20):
+                sources.append(
+                    {
+                        "id": f"source-{index}",
+                        "title": f"Source {index}",
+                        "url": f"https://example.com/{index}",
+                        "language": "en",
+                        "source_type": "official",
+                        "retrieved_at": today.isoformat(),
+                        "confidence": "high",
+                        "claims": [],
+                    }
+                )
+            (data_dir / "sources.seedance-2026-05-30.json").write_text(
+                json.dumps({"sources": sources}), encoding="utf-8"
+            )
+            return subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script),
+                    str(repo),
+                    "--strict",
+                    "--enforce-freshness",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
     def test_default_run_passes_on_this_repository(self) -> None:
         result = self.run_checker("--strict")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -89,6 +157,83 @@ class CommandLineBehaviourTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("--enforce-freshness", result.stdout)
 
+    def test_unrelated_newer_date_cannot_mask_stale_reference_stamp(self) -> None:
+        today = date.today()
+        stale = today - timedelta(days=checker.STALE_ERROR_DAYS + 1)
+        result = self.run_fixture(
+            reference_text=(
+                f"last_verified: {stale.isoformat()}\n"
+                f"unrelated release date: {today.isoformat()}\n"
+            )
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("platform-surface-matrix.md is 31 days behind", result.stdout)
+
+    def test_future_registry_stamp_fails(self) -> None:
+        result = self.run_fixture(registry_verified=date.today() + timedelta(days=1))
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("future", result.stdout.lower())
+
+    def test_green_output_refuses_live_verification_claim(self) -> None:
+        result = self.run_fixture()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("offline source metadata", result.stdout.lower())
+        self.assertIn("does not fetch", result.stdout.lower())
+
+    def test_rejects_impossible_registry_date(self) -> None:
+        result = self.run_fixture(registry_stamp="2026-02-30")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("invalid last_verified date", result.stdout)
+
+    def test_rejects_missing_reference_stamp_despite_unrelated_date(self) -> None:
+        result = self.run_fixture(
+            reference_text=f"release date: {date.today().isoformat()}\n"
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("platform-surface-matrix.md missing last_verified", result.stdout)
+
+    def test_rejects_malformed_reference_stamp_despite_unrelated_date(self) -> None:
+        result = self.run_fixture(
+            reference_text=(
+                "last_verified: 2026-02-30\n"
+                f"release date: {date.today().isoformat()}\n"
+            )
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("platform-surface-matrix.md has invalid last_verified date", result.stdout)
+
+    def test_rejects_duplicate_reference_stamps(self) -> None:
+        today = date.today().isoformat()
+        result = self.run_fixture(
+            reference_text=f"last_verified: {today}\nlast_verified: {today}\n"
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("must contain exactly one last_verified field", result.stdout)
+
+    def test_rejects_future_reference_stamp(self) -> None:
+        future = date.today() + timedelta(days=1)
+        result = self.run_fixture(reference_text=f"last_verified: {future.isoformat()}\n")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("platform-surface-matrix.md last_verified", result.stdout)
+        self.assertIn("future", result.stdout.lower())
+
+    def test_rejects_future_api_anchor_stamp(self) -> None:
+        future = date.today() + timedelta(days=1)
+        result = self.run_fixture(api_status_text=f"last_verified: {future.isoformat()}\n")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("api-status.md last_verified", result.stdout)
+        self.assertIn("future", result.stdout.lower())
+
+    def test_explicit_current_stamp_is_not_harmed_by_historical_dates(self) -> None:
+        today = date.today().isoformat()
+        result = self.run_fixture(
+            reference_text=(
+                f"last_verified: {today}\n"
+                "historical launch: 2020-01-01\n"
+            )
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 class ReleaseChecklistTests(unittest.TestCase):
     """Relaxing per-pull-request validation only holds if release still enforces.
@@ -97,13 +242,15 @@ class ReleaseChecklistTests(unittest.TestCase):
     caller anywhere, and a stale registry would pass every documented check.
     """
 
-    readme = Path(__file__).resolve().parents[1] / "README.md"
+    root = Path(__file__).resolve().parents[1]
+    readme = root / "README.md"
+    workflow = root / ".github" / "workflows" / "source-freshness-review.yml"
 
     def test_release_checklist_enforces_freshness(self) -> None:
         lines = [
             line.strip()
             for line in self.readme.read_text(encoding="utf-8").splitlines()
-            if "source_registry_check.py" in line
+            if line.strip().startswith("python scripts/source_registry_check.py")
         ]
         self.assertTrue(lines, "README must document the source-registry check")
         for line in lines:
@@ -112,6 +259,16 @@ class ReleaseChecklistTests(unittest.TestCase):
                 line,
                 "the documented release check must fail on a stale registry",
             )
+
+    def test_docs_define_the_offline_metadata_boundary(self) -> None:
+        text = self.readme.read_text(encoding="utf-8").lower()
+        self.assertIn("does not fetch urls", text)
+        self.assertIn("does not prove that any upstream claim is still true", text)
+
+    def test_scheduled_green_state_refuses_live_verification_claim(self) -> None:
+        text = self.workflow.read_text(encoding="utf-8").lower()
+        self.assertIn("did not fetch or re-read upstream sources", text)
+        self.assertNotIn("references are within the freshness window. no action needed.", text)
 
 
 if __name__ == "__main__":
