@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stress-test the prompt architecture this repository teaches.
+"""Stress-test deterministic prompt-architecture failure modes.
 
 Scores three arms of the same 34 briefs against each other:
 
@@ -13,9 +13,11 @@ skill_formula arm clears the release bar in references/eval-rubric.md and the
 others do not - and if a beginner-facing example teaches a shape that misses
 that bar, this is where it shows up rather than in user feedback.
 
-Scores are mechanical: every dimension is computed from the text against the
-repository's own stated rules. No human judgement is applied, so the arms are
-comparable. Offline and dependency-free, like every other check here.
+Scores are mechanical and intentionally bounded. They catch structural,
+brief-relevance, explicit contradiction, and repetition failures. They do not
+judge creativity or originality. Comparative creative quality still requires
+blinded model evaluation and native-language human review. Offline and
+dependency-free, like every other check here.
 
     python scripts/prompt_architecture_stress.py            # score the shipped corpus
     python scripts/prompt_architecture_stress.py --strict   # fail if the doctrine arm regresses
@@ -27,13 +29,19 @@ Dimensions (0-4, matching references/eval-rubric.md's V6 scale):
   coverage           camera move / motivated light / sound / visible endpoint
   structure          prose shooting-brief vs comma tag-salad, negation slop
   ref_integrity      reference tags present and byte-exact for reference modes
+  brief_traceability brief-specific material survives into the prompt
+  coherence          explicit incompatible camera/light/sound/action stacks
+  repetition         repeated-token, repeated-phrase, and padding resistance
 """
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import statistics
+from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 # ---------------------------------------------------------------- vocabularies
@@ -127,9 +135,549 @@ PROSE_BINDING = re.compile(
     r"source clip|previous clip|final frame of)\b", re.I,
 )
 
+DIM_NAMES = [
+    "opening_authority",
+    "length_fit",
+    "slop_free",
+    "coverage",
+    "structure",
+    "ref_integrity",
+    "brief_traceability",
+    "coherence",
+    "repetition",
+]
+
+BOUNDARY = (
+    "Boundary: this deterministic gate catches structural, brief-relevance, "
+    "explicit contradiction, and repetition failures. It does not judge "
+    "creativity or originality; comparative creative quality still requires "
+    "blinded model evaluation and native-language human review."
+)
+
+TOKEN = re.compile(r"[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)?")
+FUNCTION_WORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "beside", "between", "by",
+    "for", "from", "has", "he", "her", "his", "in", "into", "is", "it",
+    "its", "of", "on", "or", "she", "that", "the", "their", "them", "then",
+    "there", "they", "this", "through", "to", "under", "while", "with",
+}
+
+# These words can make unrelated prompts look connected merely because both are
+# production prompts. They cannot, by themselves, establish brief traceability.
+PRODUCTION_GENERIC = {
+    "audio", "blocking", "camera", "clip", "duration", "endpoint", "exist", "final",
+    "frame", "grade", "image", "lens", "light", "mode", "motion", "new", "only",
+    "original", "production", "prompt", "reference", "same", "scene", "shot", "sound",
+    "source", "style", "timing", "video", "workflow",
+}
+TRACE_GENERIC = {
+    "animate", "change", "character", "continue", "create", "make", "move",
+    "person", "replace", "restyle", "sit", "stand", "stop", "subject", "thing",
+    "turn", "use", "walk", "woman", "man", "child",
+}
+
+TOKEN_ALIASES = {
+    "animated": "animate",
+    "animation": "animate",
+    "bike": "bicycle",
+    "bicyclist": "bicycle",
+    "colourway": "colour",
+    "chang": "change",
+    "continu": "continue",
+    "dancer": "dance",
+    "dancing": "dance",
+    "earthshine": "earth",
+    "footfall": "foot",
+    "fram": "frame",
+    "dialogue": "speech",
+    "line": "speech",
+    "spoken": "speech",
+    "land": "landscape",
+    "terrain": "landscape",
+    "letter": "letter_document",
+    "paper": "letter_document",
+    "sheet": "letter_document",
+    "photo": "portrait_photo",
+    "photograph": "portrait_photo",
+    "photographed": "portrait_photo",
+    "portrait": "portrait_photo",
+    "shoot": "sprout",
+    "shoe": "sneaker",
+    "sprout": "sprout",
+    "seed": "sprout",
+    "mov": "move",
+    "driv": "drive",
+    "preserv": "preserve",
+    "receiv": "receive",
+    "streetlamp": "street",
+    "terminal": "airport",
+    "us": "use",
+}
+
+SEQUENCE_CUE = re.compile(
+    r"\b(then|before|after|until|finally|first|next|followed by|once|in sequence|"
+    r"from .{0,40} to)\b",
+    re.I,
+)
+NEGATED_PREFIX = re.compile(
+    r"\b(no|not|never|without|do not|does not|must not|nothing from)\b[^.;,]{0,18}$",
+    re.I,
+)
+
+CAMERA_FAMILIES = {
+    # Camera conflicts must be conservative. Context-free verbs such as
+    # ``orbits``, ``tilts``, ``tracks``, and ``zooms`` commonly describe the
+    # subject, so they are not camera directives without a camera/shot actor or
+    # an unambiguous movement phrase.
+    "locked": re.compile(
+        r"\b(?:(?:camera|shot|frame|framing)\s+"
+        r"(?:(?:is|stays?|remains?|holds?)\s+)?(?:completely\s+)?"
+        r"(?:locked(?:[- ]off)?|static)|(?:locked[- ]off|static)\s+"
+        r"(?:camera|shot|frame|framing))\b",
+        re.I,
+    ),
+    "orbit": re.compile(
+        r"\b(?:(?:camera|shot)\s+(?:slowly\s+|then\s+|now\s+)?orbit(?:s|ing)?|"
+        r"camera\b[^.;,]{0,48}\b(?:while|as|then)\s+it\s+(?:\w+\s+){0,2}orbits?|"
+        r"camera\b[^.;,]{0,48}\b(?:while|as)\s+(?:slowly\s+)?orbiting|"
+        r"orbiting\s+(?:camera|shot))\b",
+        re.I,
+    ),
+    "push": re.compile(
+        r"\b(?:(?:camera|shot)\s+(?:slowly\s+|then\s+|now\s+)?push(?:es|ing)?[- ]?in|"
+        r"camera\b[^.;,]{0,48}\b(?:while|as|then)\s+it\s+(?:\w+\s+){0,2}push(?:es|ing)?[- ]?in|"
+        r"doll(?:y|ies|ying)[- ]?in|push-in)\b",
+        re.I,
+    ),
+    "pull": re.compile(
+        r"\b(?:(?:camera|shot)\s+(?:slowly\s+|then\s+|now\s+)?pull(?:s|ing)?[- ]?(?:back|out)|"
+        r"camera\b[^.;,]{0,48}\b(?:while|as|then)\s+it\s+(?:\w+\s+){0,2}pull(?:s|ing)?[- ]?(?:back|out)|"
+        r"doll(?:y|ies|ying)[- ]?out|pull-(?:back|out))\b",
+        re.I,
+    ),
+    "track": re.compile(
+        r"\b(?:(?:camera|shot)\s+(?:slowly\s+|then\s+|now\s+)?(?:track(?:s|ing)?|follows?)|"
+        r"camera\b[^.;,]{0,48}\b(?:while|as|then)\s+it\s+(?:\w+\s+){0,2}(?:track(?:s|ing)?|follows?)|"
+        r"tracking\s+(?:shot|left|right|forward|back|around))\b",
+        re.I,
+    ),
+    "pan": re.compile(
+        r"\b(?:(?:camera|shot)\s+(?:slowly\s+|then\s+|now\s+)?pan(?:s|ning)?|"
+        r"pan(?:s|ning)?\s+(?:left|right|across|to)|whip pan)\b",
+        re.I,
+    ),
+    "tilt": re.compile(
+        r"\b(?:(?:camera|shot)\s+(?:slowly\s+|then\s+|now\s+)?tilt(?:s|ing)?|"
+        r"tilt(?:s|ing)?\s+(?:up|down|left|right))\b",
+        re.I,
+    ),
+    "crane": re.compile(
+        r"\b(?:(?:camera|shot)\s+(?:slowly\s+|then\s+|now\s+)?(?:crane(?:s|ing)?|jibs?)|"
+        r"(?:crane|jib)(?:s|bing)?\s+(?:up|down|over|back)|crane shot)\b",
+        re.I,
+    ),
+    "zoom": re.compile(
+        r"\b(?:(?:camera|shot)\s+(?:slowly\s+|then\s+|now\s+)?zoom(?:s|ing)?|"
+        r"zoom(?:s|ing)?\s+(?:in|out))\b",
+        re.I,
+    ),
+}
+
+LIGHT_SOURCE_FAMILIES = {
+    "sun": re.compile(r"\b(sun|sunlight|daylight|noon)\b", re.I),
+    "moon": re.compile(r"\b(moon|moonlight|earthlight|earthshine)\b", re.I),
+    "neon": re.compile(r"\bneon\b", re.I),
+    "fire": re.compile(r"\b(fire|firelight|forge|flame)\b", re.I),
+    "candle": re.compile(r"\b(candle|candlelight|lantern)\b", re.I),
+    "fluorescent": re.compile(r"\b(fluorescent|overhead tubes?)\b", re.I),
+    "lamp": re.compile(r"\b(lamp|practical|bare bulb|work light)\b", re.I),
+    "window": re.compile(r"\b(window light|skylight|window shaft)\b", re.I),
+    "softbox": re.compile(r"\bsoftbox(?:es)?\b", re.I),
+    "street": re.compile(r"\b(streetlight|streetlamp|sodium)\b", re.I),
+}
+
+SOUND_LAYER_FAMILIES = {
+    "dialogue": re.compile(r"\b(dialogue|voice|spoken line|says?)\b", re.I),
+    "music": re.compile(r"\b(music|score|synth|song)\b", re.I),
+    "ambience": re.compile(r"\b(ambience|ambient|room tone|reverb)\b", re.I),
+    "weather": re.compile(r"\b(rain|wind|thunder)\b", re.I),
+    "body": re.compile(r"\b(footsteps?|footfalls?|breath(?:ing)?|heartbeat)\b", re.I),
+    "mechanical": re.compile(r"\b(engine|hum|rumble|buzz|whirr|clatter|scrape)\b", re.I),
+}
+SILENCE = re.compile(r"\b(absolute silence|silence|no sound)\b", re.I)
+UNCHANGED_AUDIO = re.compile(r"\b(keep|preserve)\b[^.;]{0,35}\b(audio|sound)\b[^.;]{0,20}\b(unchanged|same)\b", re.I)
+ADDED_AUDIO = re.compile(r"\b(add|added|layer|introduce)\b[^.;]{0,25}\b(music|dialogue|voice|sfx|sound)\b", re.I)
+STILL_ACTION = re.compile(r"\b(remains? (?:completely )?still|goes? still|freezes?|stops? moving)\b", re.I)
+CONTINUING_ACTION = re.compile(
+    r"\b(keeps? (?:walking|running|moving)|continu(?:es?|ing) to (?:walk|run|move))\b",
+    re.I,
+)
+
 
 def words(text: str) -> list[str]:
     return [w for w in re.split(r"\s+", text.strip()) if w]
+
+
+def canonical_token(token: str) -> str:
+    token = token.lower().replace("’", "'").strip("'")
+    if token.endswith("'s"):
+        token = token[:-2]
+    if token in TOKEN_ALIASES:
+        return TOKEN_ALIASES[token]
+    if len(token) > 5 and token.endswith("ies"):
+        token = token[:-3] + "y"
+    elif len(token) > 5 and token.endswith("ing"):
+        token = token[:-3]
+        if len(token) > 3 and token[-1] == token[-2]:
+            token = token[:-1]
+    elif len(token) > 4 and token.endswith("ed"):
+        token = token[:-2]
+    elif len(token) > 4 and token.endswith("s") and not token.endswith("ss"):
+        token = token[:-1]
+    return TOKEN_ALIASES.get(token, token)
+
+
+def lexical_tokens(text: str) -> list[str]:
+    tokens: list[str] = []
+    for match in TOKEN.finditer(text):
+        for part in re.split(r"[-–—]", match.group(0)):
+            if part:
+                tokens.append(canonical_token(part))
+    return tokens
+
+
+@lru_cache(maxsize=4096)
+def trace_terms(text: str) -> frozenset[str]:
+    return frozenset({
+        token
+        for token in lexical_tokens(text)
+        if len(token) > 2
+        and token not in FUNCTION_WORDS
+        and token not in PRODUCTION_GENERIC
+        and token not in TRACE_GENERIC
+    })
+
+
+def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
+    """Require brief-specific material, not shared production vocabulary."""
+    brief_terms = trace_terms(brief)
+    prompt_terms = trace_terms(prompt)
+    if not brief_terms:
+        return 0.0, "brief has no usable non-generic material to trace"
+    matched = sorted(brief_terms & prompt_terms)
+    if len(matched) >= 2:
+        return 4.0, f"brief-specific terms carried through: {', '.join(matched)}"
+    if len(matched) == 1 and len(brief_terms) <= 3:
+        return 3.0, f"one brief-specific anchor carried through: {matched[0]}"
+    if matched:
+        missing = sorted(brief_terms - prompt_terms)
+        return 2.0, (
+            f"only one of {len(brief_terms)} brief-specific terms survives: {matched[0]}; "
+            f"missing: {', '.join(missing[:5])}"
+        )
+    return 0.0, f"no brief-specific material survives; expected one of: {', '.join(sorted(brief_terms)[:6])}"
+
+
+def match_is_negated(text: str, start: int) -> bool:
+    return bool(NEGATED_PREFIX.search(text[max(0, start - 36):start]))
+
+
+def positive_families(text: str, families: dict[str, re.Pattern[str]]) -> set[str]:
+    present: set[str] = set()
+    for name, pattern in families.items():
+        if any(not match_is_negated(text, match.start()) for match in pattern.finditer(text)):
+            present.add(name)
+    return present
+
+
+def positive_positions(
+    text: str,
+    families: dict[str, re.Pattern[str]],
+) -> list[tuple[int, int]]:
+    return [
+        (match.start(), match.end())
+        for pattern in families.values()
+        for match in pattern.finditer(text)
+        if not match_is_negated(text, match.start())
+    ]
+
+
+def directives_are_sequenced(
+    text: str,
+    positions: list[tuple[int, int]],
+) -> bool:
+    if len(positions) < 2:
+        return False
+    left = min(start for start, _ in positions)
+    right = max(end for _, end in positions)
+    span = text[left:right]
+    if SEQUENCE_CUE.search(span):
+        return True
+    prefix = text[max(0, left - 32):left]
+    return bool(re.search(r"\bfrom\b[^.;]*$", prefix, re.I) and re.search(r"\bto\b", span, re.I))
+
+
+def contradiction_findings(prompt: str) -> list[str]:
+    """Find explicit, local incompatibilities without interpreting creative intent."""
+    findings: list[str] = []
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?;])\s+", prompt) if part.strip()]
+
+    for sentence in sentences:
+        camera = positive_families(sentence, CAMERA_FAMILIES)
+        dynamic = camera - {"locked"}
+        camera_sequenced = directives_are_sequenced(
+            sentence,
+            positive_positions(sentence, CAMERA_FAMILIES),
+        )
+        if "locked" in camera and dynamic and not camera_sequenced:
+            findings.append(
+                "camera: locked/static framing conflicts with simultaneous "
+                + ", ".join(sorted(dynamic))
+            )
+        elif len(dynamic) >= 3 and not camera_sequenced:
+            findings.append(
+                "camera: three or more simultaneous move families are stacked: "
+                + ", ".join(sorted(dynamic))
+            )
+        elif {"push", "pull"}.issubset(dynamic) and not camera_sequenced:
+            findings.append("camera: simultaneous push-in and pull-out directives")
+
+        light_sources = positive_families(sentence, LIGHT_SOURCE_FAMILIES)
+        light_sequenced = directives_are_sequenced(
+            sentence,
+            positive_positions(sentence, LIGHT_SOURCE_FAMILIES),
+        )
+        exclusive_light = re.search(
+            r"\b(single|sole|only)\b[^.;]{0,80}\b(light|lit|sources?)\b",
+            sentence,
+            re.I,
+        )
+        if len(light_sources) >= 2 and exclusive_light and not light_sequenced:
+            findings.append(
+                "light: an exclusive source claim names multiple sources: "
+                + ", ".join(sorted(light_sources))
+            )
+        elif len(light_sources) >= 3 and not light_sequenced:
+            findings.append(
+                "light: three or more unphased source families are stacked: "
+                + ", ".join(sorted(light_sources))
+            )
+
+        sound_layers = positive_families(sentence, SOUND_LAYER_FAMILIES)
+        has_silence = bool(SILENCE.search(sentence))
+        sound_positions = positive_positions(sentence, SOUND_LAYER_FAMILIES)
+        sound_positions.extend((match.start(), match.end()) for match in SILENCE.finditer(sentence))
+        sound_sequenced = directives_are_sequenced(sentence, sound_positions)
+        if has_silence and sound_layers and not sound_sequenced:
+            findings.append(
+                "sound: silence conflicts with simultaneous layers: "
+                + ", ".join(sorted(sound_layers))
+            )
+        elif len(sound_layers) >= 5 and not sound_sequenced:
+            findings.append(
+                "sound: five or more unphased layers are stacked: "
+                + ", ".join(sorted(sound_layers))
+            )
+
+        action_positions = [
+            (match.start(), match.end())
+            for pattern in (STILL_ACTION, CONTINUING_ACTION)
+            for match in pattern.finditer(sentence)
+        ]
+        action_sequenced = directives_are_sequenced(sentence, action_positions)
+        if STILL_ACTION.search(sentence) and CONTINUING_ACTION.search(sentence) and not action_sequenced:
+            findings.append("action: stillness conflicts with continuing locomotion")
+
+    # Punctuation must not turn simultaneous incompatible directives into a
+    # false negative. Re-run the hard conflicts across the whole prompt while
+    # still honoring explicit phase cues between the directives.
+    global_camera = positive_families(prompt, CAMERA_FAMILIES)
+    global_dynamic = global_camera - {"locked"}
+    if (
+        "locked" in global_camera
+        and global_dynamic
+        and not directives_are_sequenced(prompt, positive_positions(prompt, CAMERA_FAMILIES))
+        and not any(finding.startswith("camera:") for finding in findings)
+    ):
+        findings.append(
+            "camera: locked/static framing conflicts with unphased "
+            + ", ".join(sorted(global_dynamic))
+        )
+
+    global_lights = positive_families(prompt, LIGHT_SOURCE_FAMILIES)
+    global_light_positions = positive_positions(prompt, LIGHT_SOURCE_FAMILIES)
+    global_exclusive_light = re.search(
+        r"\b(single|sole|only)\b[^.;]{0,80}\b(light|lit|sources?)\b",
+        prompt,
+        re.I,
+    )
+    if (
+        len(global_lights) >= 2
+        and global_exclusive_light
+        and not directives_are_sequenced(prompt, global_light_positions)
+        and not any(finding.startswith("light:") for finding in findings)
+    ):
+        findings.append(
+            "light: an exclusive source claim conflicts with another unphased source: "
+            + ", ".join(sorted(global_lights))
+        )
+
+    global_sound = positive_families(prompt, SOUND_LAYER_FAMILIES)
+    global_sound_positions = positive_positions(prompt, SOUND_LAYER_FAMILIES)
+    global_sound_positions.extend((match.start(), match.end()) for match in SILENCE.finditer(prompt))
+    if (
+        SILENCE.search(prompt)
+        and global_sound
+        and not directives_are_sequenced(prompt, global_sound_positions)
+        and not any(finding.startswith("sound:") for finding in findings)
+    ):
+        findings.append(
+            "sound: silence conflicts with unphased layers: "
+            + ", ".join(sorted(global_sound))
+        )
+
+    global_action_positions = [
+        (match.start(), match.end())
+        for pattern in (STILL_ACTION, CONTINUING_ACTION)
+        for match in pattern.finditer(prompt)
+    ]
+    if (
+        STILL_ACTION.search(prompt)
+        and CONTINUING_ACTION.search(prompt)
+        and not directives_are_sequenced(prompt, global_action_positions)
+        and not any(finding.startswith("action:") for finding in findings)
+    ):
+        findings.append("action: stillness conflicts with unphased continuing locomotion")
+
+    added_audio = any(
+        not match_is_negated(prompt, match.start())
+        for match in ADDED_AUDIO.finditer(prompt)
+    )
+    if UNCHANGED_AUDIO.search(prompt) and added_audio:
+        findings.append("sound: preserve-source-audio and add-new-audio directives conflict")
+    return list(dict.fromkeys(findings))
+
+
+def score_coherence(prompt: str) -> tuple[float, str]:
+    findings = contradiction_findings(prompt)
+    if not findings:
+        return 4.0, "no explicit incompatible directive stacks"
+    score = 2.0 if len(findings) == 1 else 0.0
+    return score, " | ".join(findings)
+
+
+def repetition_findings(prompt: str) -> list[str]:
+    all_tokens = lexical_tokens(prompt)
+    content = [token for token in all_tokens if token not in FUNCTION_WORDS]
+    if not content:
+        return ["no lexical content"]
+
+    findings: list[str] = []
+    counts = Counter(content)
+    dominant, frequency = counts.most_common(1)[0]
+    if frequency >= 6 and frequency / len(content) >= 0.08:
+        findings.append(
+            f"dominant token repeated {frequency} times ({dominant})"
+        )
+
+    if len(content) >= 35:
+        diversity = len(set(content)) / len(content)
+        if diversity < 0.55:
+            findings.append(f"low lexical diversity ({diversity:.2f})")
+
+    if len(all_tokens) >= 6:
+        trigrams = Counter(tuple(all_tokens[index:index + 3]) for index in range(len(all_tokens) - 2))
+        repeated = [(gram, count) for gram, count in trigrams.items() if count >= 3]
+        if repeated:
+            gram, count = max(repeated, key=lambda item: item[1])
+            findings.append(f"repeated phrase {count} times ({' '.join(gram)})")
+
+    sentence_keys = [
+        " ".join(lexical_tokens(sentence))
+        for sentence in re.split(r"[.!?]+", prompt)
+        if len(lexical_tokens(sentence)) >= 4
+    ]
+    repeated_sentences = [key for key, count in Counter(sentence_keys).items() if count >= 2]
+    if repeated_sentences:
+        findings.append("repeated sentence or clause")
+    return findings
+
+
+def score_repetition(prompt: str) -> tuple[float, str]:
+    findings = repetition_findings(prompt)
+    if not findings:
+        return 4.0, "no padding or repeated-token pattern"
+    return 2.0, " | ".join(findings)
+
+
+@lru_cache(maxsize=4096)
+def normalized_prompt(text: str) -> str:
+    return " ".join(lexical_tokens(text))
+
+
+@lru_cache(maxsize=8192)
+def prompt_similarity(left: str, right: str) -> float:
+    a, b = normalized_prompt(left), normalized_prompt(right)
+    if a == b:
+        return 1.0
+    sequence = difflib.SequenceMatcher(None, a, b, autojunk=False).ratio()
+    left_counts = Counter(a.split())
+    right_counts = Counter(b.split())
+    vocabulary = left_counts.keys() | right_counts.keys()
+    multiset_union = sum(max(left_counts[token], right_counts[token]) for token in vocabulary)
+    multiset_intersection = sum(min(left_counts[token], right_counts[token]) for token in vocabulary)
+    bag_similarity = multiset_intersection / multiset_union if multiset_union else 1.0
+    return max(sequence, bag_similarity)
+
+
+@lru_cache(maxsize=8192)
+def materially_different_briefs(left: str, right: str) -> bool:
+    if normalized_prompt(left) == normalized_prompt(right):
+        return False
+    left_terms = trace_terms(left) or set(lexical_tokens(left))
+    right_terms = trace_terms(right) or set(lexical_tokens(right))
+    union = left_terms | right_terms
+    similarity = len(left_terms & right_terms) / len(union) if union else 1.0
+    return similarity < 0.6
+
+
+def corpus_duplicate_findings(records: list[dict], arm: str = "skill_formula") -> list[str]:
+    candidates = [record for record in records if record.get("arm") == arm]
+    findings: list[str] = []
+    exact_groups: dict[str, list[dict]] = {}
+    for record in candidates:
+        exact_groups.setdefault(normalized_prompt(record["prompt"]), []).append(record)
+
+    exact_pairs: set[frozenset[str]] = set()
+    for group in exact_groups.values():
+        if len(group) < 2:
+            continue
+        materially_different = any(
+            materially_different_briefs(left["brief"], right["brief"])
+            for index, left in enumerate(group)
+            for right in group[index + 1:]
+        )
+        if materially_different:
+            ids = ", ".join(record["id"] for record in group)
+            findings.append(
+                f"cross-case duplicate prompt across materially different briefs: {ids}"
+            )
+            for index, left in enumerate(group):
+                for right in group[index + 1:]:
+                    exact_pairs.add(frozenset((left["id"], right["id"])))
+
+    for index, left in enumerate(candidates):
+        for right in candidates[index + 1:]:
+            pair = frozenset((left["id"], right["id"]))
+            if pair in exact_pairs or not materially_different_briefs(left["brief"], right["brief"]):
+                continue
+            similarity = prompt_similarity(left["prompt"], right["prompt"])
+            if similarity >= 0.92:
+                findings.append(
+                    f"cross-case near-duplicate prompt ({similarity:.2f}) across materially "
+                    f"different briefs: {left['id']}, {right['id']}"
+                )
+    return findings
 
 
 def score_opening(prompt: str) -> tuple[float, str]:
@@ -240,6 +788,7 @@ def score_refs(prompt: str, mode: str) -> tuple[float, str] | tuple[None, str]:
 
 def score_prompt(rec: dict) -> dict:
     p, mode = rec["prompt"], rec.get("mode", "T2V")
+    brief = rec.get("brief", "")
     dims: dict[str, tuple[float, str]] = {}
     dims["opening_authority"] = score_opening(p)
     dims["length_fit"] = score_length(p)
@@ -249,14 +798,46 @@ def score_prompt(rec: dict) -> dict:
     ref = score_refs(p, mode)
     if ref[0] is not None:
         dims["ref_integrity"] = ref  # type: ignore[assignment]
+    dims["brief_traceability"] = score_brief_traceability(brief, p)
+    dims["coherence"] = score_coherence(p)
+    dims["repetition"] = score_repetition(p)
     overall = statistics.mean(v[0] for v in dims.values())
     return {
-        "id": rec["id"], "arm": rec["arm"], "mode": mode, "brief": rec["brief"],
+        "id": rec["id"], "arm": rec["arm"], "mode": mode, "brief": brief,
         "words": len(words(p)),
         "dims": {k: {"score": round(v[0], 2), "note": v[1]} for k, v in dims.items()},
         "overall": round(overall, 3),
         "ref_note": ref[1],
     }
+
+
+def case_floor_findings(results: list[dict], arm: str = "skill_formula") -> list[str]:
+    findings: list[str] = []
+    for result in results:
+        if result["arm"] != arm:
+            continue
+        if result["overall"] < 3.0:
+            findings.append(f"{result['id']}: overall={result['overall']:.2f} (<3.00)")
+        for dimension, value in result["dims"].items():
+            if value["score"] < 3.0:
+                findings.append(
+                    f"{result['id']}: {dimension}={value['score']:.2f} (<3.00) - "
+                    f"{value['note']}"
+                )
+    return findings
+
+
+def arm_gate_findings(records: list[dict], results: list[dict], arm: str) -> list[str]:
+    arm_results = [result for result in results if result["arm"] == arm]
+    if not arm_results:
+        return [f"no {arm} arm in this corpus"]
+    findings = case_floor_findings(results, arm)
+    average = statistics.mean(result["overall"] for result in arm_results)
+    if average < 3.5:
+        findings.append(f"{arm}: arm average={average:.2f} (<3.50)")
+    if arm == "skill_formula":
+        findings.extend(corpus_duplicate_findings(records, arm))
+    return findings
 
 
 def main() -> int:
@@ -265,7 +846,10 @@ def main() -> int:
     parser.add_argument("--out", help="write per-prompt scores to this JSON file")
     parser.add_argument(
         "--strict", action="store_true",
-        help="exit non-zero if the skill_formula arm misses the eval-rubric release bar",
+        help=(
+            "exit non-zero if any skill_formula case/dimension is below 3, the arm "
+            "average is below 3.5, or materially different briefs reuse a prompt"
+        ),
     )
     args = parser.parse_args()
 
@@ -278,9 +862,9 @@ def main() -> int:
     for r in results:
         arms.setdefault(r["arm"], []).append(r)
 
-    dim_names = ["opening_authority", "length_fit", "slop_free", "coverage", "structure", "ref_integrity"]
+    dim_names = DIM_NAMES
     print(f"Corpus: {len(results)} prompts across {len(arms)} arms\n")
-    header = f"{'arm':<22}{'n':>4}{'overall':>9}" + "".join(f"{d[:9]:>11}" for d in dim_names)
+    header = f"{'arm':<22}{'n':>4}{'overall':>9}" + "".join(f"{d[:11]:>13}" for d in dim_names)
     print(header)
     print("-" * len(header))
     for arm in sorted(arms, key=lambda a: -statistics.mean(x["overall"] for x in arms[a])):
@@ -288,20 +872,22 @@ def main() -> int:
         row = f"{arm:<22}{len(rs):>4}{statistics.mean(x['overall'] for x in rs):>9.2f}"
         for d in dim_names:
             vals = [x["dims"][d]["score"] for x in rs if d in x["dims"]]
-            row += f"{statistics.mean(vals):>11.2f}" if vals else f"{'-':>11}"
+            row += f"{statistics.mean(vals):>13.2f}" if vals else f"{'-':>13}"
         print(row)
 
-    print("\nRelease gate (eval-rubric.md: no dimension below 3, average >= 3.5)")
+    print("\nRelease gate (every case and applicable dimension >= 3; arm average >= 3.5;")
+    print("no cross-case duplicate/near-duplicate prompts for materially different briefs)")
+    gate_findings = {
+        arm: arm_gate_findings(corpus, results, arm)
+        for arm in arms
+    }
     for arm in sorted(arms):
         rs = arms[arm]
         avg = statistics.mean(x["overall"] for x in rs)
-        weak = []
-        for d in dim_names:
-            vals = [x["dims"][d]["score"] for x in rs if d in x["dims"]]
-            if vals and statistics.mean(vals) < 3.0:
-                weak.append(f"{d}={statistics.mean(vals):.2f}")
-        verdict = "PASS" if avg >= 3.5 and not weak else "FAIL"
-        print(f"  {arm:<22} avg={avg:.2f}  {verdict}" + (f"  weak: {', '.join(weak)}" if weak else ""))
+        findings = gate_findings[arm]
+        verdict = "PASS" if not findings else "FAIL"
+        suffix = f"  findings={len(findings)}" if findings else ""
+        print(f"  {arm:<22} avg={avg:.2f}  {verdict}{suffix}")
 
     print("\nPer-mode overall (skill_formula arm)")
     modes: dict[str, list[float]] = {}
@@ -318,21 +904,20 @@ def main() -> int:
         print(f"  {r['id']:<8} {r['overall']:.2f}  {r['brief'][:44]:<44} {'; '.join(bad)[:90]}")
 
     if args.strict:
+        strict_findings = gate_findings.get(
+            "skill_formula",
+            ["no skill_formula arm in this corpus"],
+        )
+        if strict_findings:
+            print("\nskill_formula strict gate failed:")
+            for finding in strict_findings:
+                print(f"- {finding}")
+            print(f"\n{BOUNDARY}")
+            return 1
         doctrine = [r for r in results if r["arm"] == "skill_formula"]
-        if not doctrine:
-            print("\nNo skill_formula arm in this corpus.")
-            return 1
         avg = statistics.mean(r["overall"] for r in doctrine)
-        weak = [
-            d for d in dim_names
-            if (vals := [r["dims"][d]["score"] for r in doctrine if d in r["dims"]])
-            and statistics.mean(vals) < 3.0
-        ]
-        if avg < 3.5 or weak:
-            print(f"\nskill_formula misses the release bar: avg={avg:.2f}"
-                  + (f", weak dimensions: {', '.join(weak)}" if weak else ""))
-            return 1
         print(f"\nskill_formula holds the release bar (avg={avg:.2f}, no dimension below 3).")
+    print(f"\n{BOUNDARY}")
     return 0
 
 
