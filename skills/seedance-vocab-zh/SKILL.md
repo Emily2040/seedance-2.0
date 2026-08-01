@@ -45,6 +45,10 @@ Load `[ref:vocab/zh]` for dense role-binding, first/last-frame, camera, lighting
 
 `@Image1为参考，严格保持[主体/产品/脸部/标志]不变；仅加入[动作/光线/镜头变化]。镜头：[一个动作]。声音：[音效或环境声]。`
 
+## Script Variant Rule
+
+When the deliverable targets 台灣, 香港, or any Traditional-script audience, load Script Variant (简繁) in `references/vocab/zh.md` before writing subtitle or delivery text. Prompt in Simplified; declare the delivery script separately - and never convert between them by find-and-replace (头发 → 頭髮, not 頭發).
+
 ## De-Slop Rule
 
 When the prompt leans on `电影感`, `氛围感`, `高级感`, `大片感`, or bare `质感`, load the Slop Traps table in `references/vocab/zh.md` and decompose each into the physical elements that produce it - 材质, 光线, 色彩, 空气.

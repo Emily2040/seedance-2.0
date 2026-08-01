@@ -69,6 +69,12 @@ Use this reference for Chinese Seedance prompt wording, role binding, and compac
 
 `@Image1为参考，严格保持[主体/产品/脸部/标志]不变；仅加入[动作/光线/镜头变化]。镜头：[一个动作]。声音：[音效或环境声]。`
 
+## Multimodal Template
+
+`@图片1锁定原创人物身份与服装。@视频1仅参考运镜，不复制人物、地点或品牌。@音频1仅参考节奏与氛围。`
+
+On a Latin-tag surface, the same template with unchanged tags: `@Image1锁定原创人物身份。@Video1仅参考运镜。@Audio1仅参考节奏。` Never mix the two tag families in one prompt.
+
 ## Timeline Template
 
 社区常用的长提示词骨架（即梦/Dreamina 平台，约 8 秒以上时使用；field-observed）。保持 `@Image1` 等引用标签不变：

@@ -67,6 +67,17 @@ Use this reference for Korean Seedance prompt wording, role binding, and compact
 
 `@Image1은 오리지널 인물을 고정한다. @Video1은 카메라 움직임만 참고하고 인물, 장소, 브랜드는 복사하지 않는다. @Audio1은 템포와 분위기만 참고한다.`
 
+## Timeline Template
+
+The bracket-timeline skeleton is the Chinese community's long-prompt pattern (`vocab/zh` Timeline Template, field-observed on 即梦/Dreamina). Below is the same structure in Korean: the *structure* is what is field-observed, a Korean-specific version is not independently reported, so treat it as a starting scaffold rather than a community guarantee.
+
+```
+[스타일] [매체·질감·색조를 한 문장으로]
+[타임라인] 0-3s: [화면+카메라+사운드]; 3-6s: [화면+카메라+사운드]; 6-10s: [화면+카메라+사운드]
+[사운드] [대사/환경음/효과음/음악 없음]
+[참조] @Image1 로 인물 동일성 고정; @Video1 은 카메라 움직임만 참조; @Audio1 은 템포만 참조
+```
+
 ## Sequence and Continuation Phrases
 
 Use these when the Korean prompt is part of a v6 sequence project, continuation, or localized delivery workflow.
@@ -95,6 +106,8 @@ Use these when the Korean prompt is part of a v6 sequence project, continuation,
 Field-observed and under-tested as of 2026; test per surface, never promise results. Korean dialogue is supported but quantitatively under-reported - do not assume parity with Mandarin or English.
 
 - Keep to one short line, about one breath; treat Korean as the weaker tier until tested on the active surface.
+- 대사 형식: 화자 이름 + 동작 + 큰따옴표 대사, with the speech level already decided (see below). Example: `남자: 고개를 들며 "다시 한 번만요."` (해요체). Quotation marks separate the words to be spoken from the performance direction.
+- Reference tags stay Latin inside a Korean prompt: `@Image1`, never `@이미지1`. No surface documents translated Korean tags; the localized `@图片1` family belongs to Chinese-UI surfaces only.
 - For reliable Korean voice, prefer a voice reference (attach the spoken line so the model lip-syncs to it) or plan a post-dub.
 
 ## Speech Level (말투)
