@@ -286,6 +286,27 @@ class JudgeIntegrityTests(unittest.TestCase):
                     "system", "user", model, "key", provider, endpoint
                 )
 
+    def test_call_api_bounds_success_response_before_json_decoding(self) -> None:
+        provider, endpoint, model = eval_run.resolve_provider(
+            "anthropic", "global_en", None
+        )
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = (
+            b"x" * (eval_run.MAX_PROVIDER_RESPONSE_BYTES + 1)
+        )
+        with mock.patch.object(
+            eval_run.urllib.request, "urlopen", return_value=response
+        ):
+            with self.assertRaisesRegex(
+                eval_run.ProviderResponseError, "response exceeded"
+            ):
+                eval_run.call_api(
+                    "system", "user", model, "key", provider, endpoint
+                )
+        response.__enter__.return_value.read.assert_called_once_with(
+            eval_run.MAX_PROVIDER_RESPONSE_BYTES + 1
+        )
+
     def test_call_api_wraps_incomplete_response_reads(self) -> None:
         provider, endpoint, model = eval_run.resolve_provider(
             "anthropic", "global_en", None
@@ -829,12 +850,186 @@ class InputContractTests(unittest.TestCase):
                     self.assertNotIn("OUTSIDE-STATE-SENTINEL", output.getvalue())
                     self.assertNotIn("OUTSIDE-SKILL-SENTINEL", output.getvalue())
 
+    def test_nonportable_aliases_are_rejected_before_live_provider_calls(self) -> None:
+        mutations = (
+            ("state_fixture", "fixtures/state.json."),
+            ("state_fixture", "fixtures/state.json "),
+            ("state_fixture", "Fixtures/State.JSON"),
+            ("state_fixture", "fixtures/./state.json"),
+            ("state_fixture", "fixtures//state.json"),
+            ("state_fixture", "fixtures/NUL.json"),
+            ("state_fixture", "fixtures/cafe\u0301.json"),
+            ("state_fixture", "fixtures/state\u200d.json"),
+            ("state_fixture", "fixtures/state\u034f.json"),
+            ("state_fixture", "fixtures/state\x7f.json"),
+            ("skills_expected_to_activate", ["seedance-prompt."]),
+            ("skills_expected_to_activate", ["SEEDANCE-PROMPT"]),
+            ("skills_expected_to_activate", ["CON"]),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+                case[field] = value
+                self.write_case_repo(root, case)
+                fixture = root / "fixtures" / "state.json"
+                fixture.parent.mkdir()
+                fixture.write_text("INSIDE-STATE-SENTINEL", encoding="utf-8")
+                skill = root / "skills" / "seedance-prompt" / "SKILL.md"
+                skill.parent.mkdir()
+                skill.write_text("INSIDE-SKILL-SENTINEL", encoding="utf-8")
+
+                self_output = io.StringIO()
+                with redirect_stdout(self_output):
+                    self_code = eval_run.self_test(root)
+                self.assertEqual(self_code, 1, self_output.getvalue())
+                self.assertNotIn("Traceback", self_output.getvalue())
+
+                api_call = mock.Mock(return_value="candidate response")
+                live_output = io.StringIO()
+                with (
+                    mock.patch.object(
+                        sys, "argv", ["eval_run.py", str(root), "--limit", "1"]
+                    ),
+                    mock.patch.dict(
+                        os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
+                    ),
+                    mock.patch.object(eval_run, "call_api", api_call),
+                    redirect_stdout(live_output),
+                ):
+                    live_code = eval_run.main()
+                self.assertEqual(live_code, 2, live_output.getvalue())
+                self.assertIn("case contract validation failed", live_output.getvalue())
+                self.assertNotIn("Traceback", live_output.getvalue())
+                api_call.assert_not_called()
+
+    def test_portable_exact_case_paths_and_backslashes_remain_valid(self) -> None:
+        cases = (
+            ("state_fixture", "fixtures/state.json", "INSIDE-STATE-SENTINEL"),
+            ("state_fixture", r"fixtures\state.json", "INSIDE-STATE-SENTINEL"),
+            (
+                "skills_expected_to_activate",
+                ["seedance-prompt"],
+                "INSIDE-SKILL-SENTINEL",
+            ),
+        )
+        for field, value, marker in cases:
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+                case[field] = value
+                self.write_case_repo(root, case)
+                fixture = root / "fixtures" / "state.json"
+                fixture.parent.mkdir()
+                fixture.write_text("INSIDE-STATE-SENTINEL", encoding="utf-8")
+                skill = root / "skills" / "seedance-prompt" / "SKILL.md"
+                skill.parent.mkdir()
+                skill.write_text("INSIDE-SKILL-SENTINEL", encoding="utf-8")
+
+                label, errors = eval_run.case_contract_errors(root, case, 0)
+                self.assertEqual(label, "one")
+                self.assertEqual(errors, [])
+                self.assertIn(marker, eval_run.responder_context(root, case))
+
+    def test_responder_context_binds_every_repository_input_identity(self) -> None:
+        cases = (
+            (
+                "skill 'seedance-20'",
+                {"id": "one", "prompt": "test", "assertions": ["works"]},
+                1,
+            ),
+            (
+                "skill 'seedance-prompt'",
+                {
+                    "id": "one",
+                    "prompt": "test",
+                    "assertions": ["works"],
+                    "skills_expected_to_activate": ["seedance-prompt"],
+                },
+                1,
+            ),
+            (
+                "state_fixture",
+                {
+                    "id": "one",
+                    "prompt": "test",
+                    "assertions": ["works"],
+                    "state_fixture": "fixtures/state.json",
+                },
+                2,
+            ),
+        )
+        for target_field, case, original_resolutions in cases:
+            with self.subTest(target_field=target_field), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                self.write_case_repo(root, case)
+                skill = root / "skills" / "seedance-prompt" / "SKILL.md"
+                skill.parent.mkdir()
+                skill.write_text("ORIGINAL-SKILL", encoding="utf-8")
+                fixture = root / "fixtures" / "state.json"
+                fixture.parent.mkdir()
+                fixture.write_text("ORIGINAL-STATE", encoding="utf-8")
+                replacement = root / "replacement.txt"
+                replacement.write_text("REPLACEMENT", encoding="utf-8")
+                original_resolve = eval_run._resolve_repo_file
+                resolutions = 0
+
+                def swap_identity(
+                    candidate_root: Path, relative: str, field: str
+                ) -> Path:
+                    nonlocal resolutions
+                    resolved = original_resolve(candidate_root, relative, field)
+                    if field != target_field:
+                        return resolved
+                    resolutions += 1
+                    return resolved if resolutions <= original_resolutions else replacement
+
+                with mock.patch.object(
+                    eval_run, "_resolve_repo_file", swap_identity
+                ), self.assertRaisesRegex(ValueError, "changed while it was being read"):
+                    eval_run.responder_context(root, case)
+
+    def test_eval_case_file_is_read_from_one_bound_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+            self.write_case_repo(root, case)
+            replacement = root / "replacement-evals.json"
+            replacement.write_text(
+                json.dumps({"cases": [case]}), encoding="utf-8"
+            )
+            original_resolve = eval_run._resolve_repo_file
+            resolutions = 0
+
+            def swap_eval_identity(
+                candidate_root: Path, relative: str, field: str
+            ) -> Path:
+                nonlocal resolutions
+                resolved = original_resolve(candidate_root, relative, field)
+                if field != "evals/evals.json":
+                    return resolved
+                resolutions += 1
+                return resolved if resolutions == 1 else replacement
+
+            with mock.patch.object(
+                eval_run, "_resolve_repo_file", swap_eval_identity
+            ), self.assertRaisesRegex(ValueError, "changed while it was being read"):
+                eval_run.load_cases(root)
+
     def test_live_mode_rejects_case_contract_before_provider_calls(self) -> None:
         mutations = (
+            ("id", "UPPERCASE"),
+            ("id", "line\nbreak"),
+            ("id", "x" * (eval_run.MAX_CASE_ID_CHARACTERS + 1)),
+            ("prompt", "x" * (eval_run.MAX_PROMPT_CHARACTERS + 1)),
             ("assertions", None),
+            ("assertions", ["works", "works"]),
             ("required_output_sections", {}),
+            ("required_output_sections", ["A", "A"]),
             ("forbidden_behaviors", [{}]),
+            ("forbidden_behaviors", ["A", "A"]),
             ("skills_expected_to_activate", ["../outside-skill"]),
+            ("skills_expected_to_activate", ["seedance-20", "seedance-20"]),
             ("state_fixture", "."),
             ("critical", []),
             ("expected_sequence_relation", None),
@@ -861,6 +1056,141 @@ class InputContractTests(unittest.TestCase):
 
                 self.assertEqual(code, 2)
                 self.assertIn("case contract validation failed", output.getvalue())
+                self.assertNotIn("Traceback", output.getvalue())
+                api_call.assert_not_called()
+
+    def test_live_mode_preflights_all_selected_contexts_before_provider_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = {"id": "one", "prompt": "test", "assertions": ["works"]}
+            self.write_case_repo(root, first)
+            eval_path = root / "evals" / "evals.json"
+            data = json.loads(eval_path.read_text(encoding="utf-8"))
+            data["cases"][1]["state_fixture"] = "fixtures/bad-state.json"
+            eval_path.write_text(json.dumps(data), encoding="utf-8")
+            fixture = root / "fixtures" / "bad-state.json"
+            fixture.parent.mkdir()
+            fixture.write_bytes(b"\xff\xfe\x00")
+
+            api_call = mock.Mock(return_value="candidate response")
+            output = io.StringIO()
+            with (
+                mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                mock.patch.dict(
+                    os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
+                ),
+                mock.patch.object(eval_run, "call_api", api_call),
+                redirect_stdout(output),
+            ):
+                code = eval_run.main()
+
+            self.assertEqual(code, 2, output.getvalue())
+            self.assertIn("repository input error", output.getvalue())
+            self.assertNotIn("Traceback", output.getvalue())
+            api_call.assert_not_called()
+
+    def test_live_mode_fails_closed_for_unreadable_or_racy_rubric_inputs(self) -> None:
+        filesystem_mutations = ("missing", "directory", "invalid-utf8")
+        for mutation in filesystem_mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+                self.write_case_repo(root, case)
+                rubric = root / "references" / "eval-rubric.md"
+                if mutation == "missing":
+                    rubric.unlink()
+                elif mutation == "directory":
+                    rubric.unlink()
+                    rubric.mkdir()
+                else:
+                    rubric.write_bytes(b"\xff\xfe\x00")
+
+                api_call = mock.Mock(return_value="candidate response")
+                output = io.StringIO()
+                with (
+                    mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                    mock.patch.dict(
+                        os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
+                    ),
+                    mock.patch.object(eval_run, "call_api", api_call),
+                    redirect_stdout(output),
+                ):
+                    code = eval_run.main()
+
+                self.assertEqual(code, 2, output.getvalue())
+                self.assertIn("Could not load eval rubric", output.getvalue())
+                self.assertNotIn("Traceback", output.getvalue())
+                api_call.assert_not_called()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+            self.write_case_repo(root, case)
+            original_resolve = eval_run._resolve_repo_file
+            replacement = root / "references" / "replacement-rubric.md"
+            replacement.write_text(EXACT_RUBRIC, encoding="utf-8")
+            rubric_resolutions = 0
+
+            def swap_rubric_identity(
+                candidate_root: Path, relative: str, field: str
+            ) -> Path:
+                nonlocal rubric_resolutions
+                resolved = original_resolve(candidate_root, relative, field)
+                if field != "references/eval-rubric.md":
+                    return resolved
+                rubric_resolutions += 1
+                return resolved if rubric_resolutions == 1 else replacement
+
+            api_call = mock.Mock(return_value="candidate response")
+            output = io.StringIO()
+            with (
+                mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                mock.patch.dict(
+                    os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
+                ),
+                mock.patch.object(
+                    eval_run, "_resolve_repo_file", swap_rubric_identity
+                ),
+                mock.patch.object(eval_run, "call_api", api_call),
+                redirect_stdout(output),
+            ):
+                code = eval_run.main()
+
+            self.assertEqual(code, 2, output.getvalue())
+            self.assertIn("changed while it was being read", output.getvalue())
+            self.assertNotIn("Traceback", output.getvalue())
+            api_call.assert_not_called()
+
+        original_open = Path.open
+        for failure in (
+            PermissionError("rubric unreadable"),
+            FileNotFoundError("rubric disappeared after validation"),
+        ):
+            with self.subTest(failure=type(failure).__name__), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                case = {"id": "one", "prompt": "test", "assertions": ["works"]}
+                self.write_case_repo(root, case)
+
+                def fail_rubric_open(path: Path, *args, **kwargs):
+                    if path.name == "eval-rubric.md":
+                        raise failure
+                    return original_open(path, *args, **kwargs)
+
+                api_call = mock.Mock(return_value="candidate response")
+                output = io.StringIO()
+                with (
+                    mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                    mock.patch.dict(
+                        os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
+                    ),
+                    mock.patch.object(Path, "open", fail_rubric_open),
+                    mock.patch.object(eval_run, "call_api", api_call),
+                    redirect_stdout(output),
+                ):
+                    code = eval_run.main()
+
+                self.assertEqual(code, 2, output.getvalue())
+                self.assertIn("Could not load eval rubric", output.getvalue())
                 self.assertNotIn("Traceback", output.getvalue())
                 api_call.assert_not_called()
 

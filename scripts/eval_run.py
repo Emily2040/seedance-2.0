@@ -28,8 +28,10 @@ import http.client
 import json
 import os
 import re
+import stat
 import sys
 import tempfile
+import unicodedata
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
@@ -60,6 +62,14 @@ SEQUENCE_DIMENSIONS = (
     "uncertainty handling",
     "safety and rights",
 )
+
+MAX_EVAL_FILE_CHARACTERS = 5_000_000
+MAX_CASES = 1_000
+MAX_CASE_ID_CHARACTERS = 128
+MAX_PROMPT_CHARACTERS = 20_000
+MAX_CASE_LIST_ITEMS = 64
+MAX_CASE_LIST_ITEM_CHARACTERS = 2_000
+MAX_PROVIDER_RESPONSE_BYTES = 1_000_000
 
 
 @dataclass(frozen=True)
@@ -155,7 +165,13 @@ def repo_root() -> Path:
 
 def load_cases(root: Path) -> list[dict]:
     data = strict_json_loads(
-        (root / "evals" / "evals.json").read_text(encoding="utf-8")
+        _read_repo_text(
+            root,
+            "evals/evals.json",
+            "evals/evals.json",
+            limit=MAX_EVAL_FILE_CHARACTERS,
+            truncate=False,
+        )
     )
     if not isinstance(data, dict):
         raise ValueError("evals.json root must be a JSON object")
@@ -164,14 +180,9 @@ def load_cases(root: Path) -> list[dict]:
         raise ValueError("evals.json 'cases' must be a JSON list")
     if any(not isinstance(case, dict) for case in cases):
         raise ValueError("every eval case must be a JSON object")
+    if len(cases) > MAX_CASES:
+        raise ValueError(f"evals.json may contain at most {MAX_CASES} cases")
     return cases
-
-
-def read_text(path: Path, limit: int = 12000) -> str:
-    if not path.exists():
-        return ""
-    text = path.read_text(encoding="utf-8")
-    return text if len(text) <= limit else text[:limit] + "\n...[truncated]"
 
 
 def is_sequence_case(case: dict) -> bool:
@@ -188,36 +199,86 @@ def _case_string_list(case: dict, field: str) -> list[str]:
         not isinstance(item, str)
         or not item.strip()
         or not _is_utf8_encodable(item)
+        or len(item) > MAX_CASE_LIST_ITEM_CHARACTERS
         for item in value
     ):
-        raise ValueError(f"{field} must contain only non-empty UTF-8 strings")
+        raise ValueError(
+            f"{field} must contain only non-empty UTF-8 strings of at most "
+            f"{MAX_CASE_LIST_ITEM_CHARACTERS} characters"
+        )
+    if len(value) > MAX_CASE_LIST_ITEMS:
+        raise ValueError(f"{field} may contain at most {MAX_CASE_LIST_ITEMS} items")
     return value
 
 
 def _safe_skill_name(name: str) -> str:
     """Reject path syntax where the case contract expects one skill slug."""
 
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) or name in {
+    if len(name) > MAX_CASE_ID_CHARACTERS or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._-]*", name
+    ) or name in {
         ".",
         "..",
-    }:
+    } or not _portable_windows_segment(name):
         raise ValueError(
             "skills_expected_to_activate entries must be portable skill names, not paths"
         )
     return name
 
 
-def _resolve_repo_file(root: Path, relative: str, field: str) -> Path:
-    """Resolve one declared input to an existing regular file inside ``root``."""
+_WINDOWS_FORBIDDEN_PATH_CHARACTERS = frozenset('<>:"|?*')
+_WINDOWS_RESERVED_STEMS = frozenset(
+    {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
+    | {f"COM{number}" for number in "123456789"}
+    | {f"LPT{number}" for number in "123456789"}
+    | {f"COM{number}" for number in "¹²³"}
+    | {f"LPT{number}" for number in "¹²³"}
+)
+_DEFAULT_IGNORABLE_RANGES = (
+    (0x034F, 0x034F),
+    (0x115F, 0x1160),
+    (0x17B4, 0x17B5),
+    (0x180B, 0x180F),
+    (0x3164, 0x3164),
+    (0xFE00, 0xFE0F),
+    (0xFFA0, 0xFFA0),
+    (0xFFF0, 0xFFF8),
+    (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0FFF),
+)
+
+
+def _safe_repo_character(character: str) -> bool:
+    if unicodedata.category(character).startswith("C"):
+        return False
+    codepoint = ord(character)
+    return not any(start <= codepoint <= end for start, end in _DEFAULT_IGNORABLE_RANGES)
+
+
+def _portable_windows_segment(segment: str) -> bool:
+    """Return whether one component has one portable cross-platform spelling."""
 
     if (
-        not relative
-        or not _is_utf8_encodable(relative)
-        or any(ord(character) < 0x20 for character in relative)
-        or ":" in relative
+        not segment
+        or segment in {".", ".."}
+        or segment.endswith((" ", "."))
+        or unicodedata.normalize("NFC", segment) != segment
+        or any(not _safe_repo_character(character) for character in segment)
+        or any(character in _WINDOWS_FORBIDDEN_PATH_CHARACTERS for character in segment)
     ):
+        return False
+    stem = segment.split(".", 1)[0].rstrip(" ").upper()
+    return stem not in _WINDOWS_RESERVED_STEMS
+
+
+def _portable_repo_parts(relative: str, field: str) -> tuple[str, ...]:
+    """Parse a repository path without accepting platform-normalized aliases."""
+
+    if not relative or not _is_utf8_encodable(relative):
         raise ValueError(f"{field} must be a non-empty UTF-8 repository-relative file")
     portable = relative.replace("\\", "/")
+    raw_parts = tuple(portable.split("/"))
     posix = PurePosixPath(portable)
     windows = PureWindowsPath(relative)
     if (
@@ -225,12 +286,49 @@ def _resolve_repo_file(root: Path, relative: str, field: str) -> Path:
         or windows.is_absolute()
         or bool(windows.drive)
         or bool(windows.root)
-        or any(part in {"", ".", ".."} for part in posix.parts)
+        or any(part in {"", ".", ".."} for part in raw_parts)
     ):
         raise ValueError(f"{field} must stay inside the repository")
+    if any(not _portable_windows_segment(part) for part in raw_parts):
+        raise ValueError(
+            f"{field} must use portable path components without aliases"
+        )
+    return raw_parts
+
+
+def _exact_declared_path(root: Path, parts: tuple[str, ...], field: str) -> Path:
+    """Resolve components by exact stored spelling, even on case-insensitive hosts."""
+
+    cursor = root
+    for part in parts:
+        try:
+            with os.scandir(cursor) as entries:
+                exact = next((entry.name for entry in entries if entry.name == part), None)
+        except OSError:
+            raise ValueError(
+                f"{field} must name an existing file inside the repository"
+            ) from None
+        if exact is None:
+            raise ValueError(f"{field} must use the exact checked-in path spelling")
+        cursor = cursor / exact
+    return cursor
+
+
+def _resolve_repo_file(root: Path, relative: str, field: str) -> Path:
+    """Resolve one declared input to an existing regular file inside ``root``."""
+
+    parts = _portable_repo_parts(relative, field)
     try:
         resolved_root = root.resolve(strict=True)
-        resolved = resolved_root.joinpath(*posix.parts).resolve(strict=True)
+        resolved = resolved_root.joinpath(*parts).resolve(strict=True)
+        resolved.relative_to(resolved_root)
+    except (OSError, RuntimeError, ValueError):
+        raise ValueError(
+            f"{field} must name an existing file inside the repository"
+        ) from None
+    exact = _exact_declared_path(resolved_root, parts, field)
+    try:
+        resolved = exact.resolve(strict=True)
         resolved.relative_to(resolved_root)
     except (OSError, RuntimeError, ValueError):
         raise ValueError(
@@ -239,6 +337,44 @@ def _resolve_repo_file(root: Path, relative: str, field: str) -> Path:
     if not resolved.is_file():
         raise ValueError(f"{field} must name a regular file inside the repository")
     return resolved
+
+
+def _read_repo_text(
+    root: Path,
+    relative: str,
+    field: str,
+    limit: int = 12000,
+    *,
+    truncate: bool = True,
+) -> str:
+    """Read one stable contained regular file or return a contract error."""
+
+    path = _resolve_repo_file(root, relative, field)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError(f"{field} must name a regular file inside the repository")
+            text = handle.read(limit + 1)
+            after = os.fstat(handle.fileno())
+        def fingerprint(info: os.stat_result) -> tuple[int, int, int, int]:
+            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        if fingerprint(before) != fingerprint(after):
+            raise ValueError(f"{field} changed while it was being read")
+        current = _resolve_repo_file(root, relative, field)
+        current_stat = current.stat()
+        if (before.st_dev, before.st_ino) != (
+            current_stat.st_dev,
+            current_stat.st_ino,
+        ):
+            raise ValueError(f"{field} changed while it was being read")
+        if len(text) <= limit:
+            return text
+        if not truncate:
+            raise ValueError(f"{field} exceeds {limit} characters")
+        return text[:limit] + "\n...[truncated]"
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"{field} cannot be read as UTF-8: {exc}") from None
 
 
 def _state_fixture_path(root: Path, case: dict) -> Path | None:
@@ -273,12 +409,18 @@ def expected_judge_checks(case: dict) -> list[str]:
 def responder_context(root: Path, case: dict) -> str:
     parts = [
         "# Skill: seedance-20 (root router)",
-        read_text(_skill_file(root, "seedance-20")),
+        _read_repo_text(root, "SKILL.md", "skill 'seedance-20'"),
     ]
     for name in _case_string_list(case, "skills_expected_to_activate"):
         if name == "seedance-20":
             continue  # the root router is already included above
-        body = read_text(_skill_file(root, name), limit=8000)
+        _safe_skill_name(name)
+        body = _read_repo_text(
+            root,
+            f"skills/{name}/SKILL.md",
+            f"skill '{name}'",
+            limit=8000,
+        )
         if body:
             parts.append(f"\n# Sub-skill: {name}\n{body}")
     fixture_path = _state_fixture_path(root, case)
@@ -286,7 +428,7 @@ def responder_context(root: Path, case: dict) -> str:
         fixture = case["state_fixture"]
         parts.append(
             f"\n# Project state fixture ({fixture})\n"
-            f"{read_text(fixture_path, limit=6000)}"
+            f"{_read_repo_text(root, fixture, 'state_fixture', limit=6000)}"
         )
     return "\n\n".join(parts)
 
@@ -298,11 +440,15 @@ def case_contract_errors(root: Path, case: dict, index: int) -> tuple[str, list[
     raw_id = case.get("id")
     if (
         not isinstance(raw_id, str)
-        or not raw_id.strip()
-        or not _is_utf8_encodable(raw_id)
+        or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", raw_id)
+        or len(raw_id) > MAX_CASE_ID_CHARACTERS
     ):
         label = f"case {index + 1}"
-        errors.append(f"{label}: id must be a non-empty UTF-8 string")
+        errors.append(
+            f"{label}: id must be a non-empty UTF-8 string using a lowercase "
+            f"ASCII slug of at most "
+            f"{MAX_CASE_ID_CHARACTERS} characters"
+        )
     else:
         label = raw_id
 
@@ -311,8 +457,12 @@ def case_contract_errors(root: Path, case: dict, index: int) -> tuple[str, list[
         not isinstance(prompt, str)
         or not prompt.strip()
         or not _is_utf8_encodable(prompt)
+        or len(prompt) > MAX_PROMPT_CHARACTERS
     ):
-        errors.append(f"{label}: prompt must be a non-empty UTF-8 string")
+        errors.append(
+            f"{label}: prompt must be a non-empty UTF-8 string of at most "
+            f"{MAX_PROMPT_CHARACTERS} characters"
+        )
 
     judge_fields: dict[str, list[str]] = {}
     for field in ("assertions", "required_output_sections", "forbidden_behaviors"):
@@ -320,6 +470,9 @@ def case_contract_errors(root: Path, case: dict, index: int) -> tuple[str, list[
             judge_fields[field] = _case_string_list(case, field)
         except ValueError as exc:
             errors.append(f"{label}: {exc}")
+        else:
+            if len(judge_fields[field]) != len(set(judge_fields[field])):
+                errors.append(f"{label}: duplicate {field} entry")
     assertions = judge_fields.get("assertions", [])
     if not assertions:
         errors.append(f"{label}: no assertions")
@@ -330,6 +483,8 @@ def case_contract_errors(root: Path, case: dict, index: int) -> tuple[str, list[
 
     try:
         skills = _case_string_list(case, "skills_expected_to_activate")
+        if len(skills) != len(set(skills)):
+            errors.append(f"{label}: duplicate skills_expected_to_activate entry")
         for name in skills:
             _skill_file(root, name)
     except ValueError as exc:
@@ -404,11 +559,15 @@ def call_api(
     req.add_header("content-type", "application/json")
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
-            raw_body = resp.read()
+            raw_body = resp.read(MAX_PROVIDER_RESPONSE_BYTES + 1)
     except (urllib.error.HTTPError, urllib.error.URLError):
         raise
     except (http.client.HTTPException, OSError) as exc:
         raise ProviderResponseError("model API response body could not be read") from exc
+    if len(raw_body) > MAX_PROVIDER_RESPONSE_BYTES:
+        raise ProviderResponseError(
+            f"model API response exceeded {MAX_PROVIDER_RESPONSE_BYTES} bytes"
+        )
     try:
         body = strict_json_loads(raw_body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
@@ -634,8 +793,12 @@ def self_test(root: Path) -> int:
     if len(cases) < 16:
         errors.append("fewer than 16 cases")
     try:
-        rubric = read_text(root / "references" / "eval-rubric.md")
-    except (OSError, UnicodeError) as exc:
+        rubric = _read_repo_text(
+            root,
+            "references/eval-rubric.md",
+            "references/eval-rubric.md",
+        )
+    except (OSError, UnicodeError, ValueError) as exc:
         print("eval_run self-test FAILED:")
         print(f"- invalid references/eval-rubric.md: {exc}")
         return 1
@@ -651,7 +814,11 @@ def self_test(root: Path) -> int:
         cid, contract_errors = case_contract_errors(root, case, index)
         errors.extend(contract_errors)
         raw_id = case.get("id")
-        if isinstance(raw_id, str) and raw_id.strip() and _is_utf8_encodable(raw_id):
+        if (
+            isinstance(raw_id, str)
+            and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", raw_id)
+            and len(raw_id) <= MAX_CASE_ID_CHARACTERS
+        ):
             if cid in seen_ids:
                 errors.append(f"{cid}: duplicate case id")
             seen_ids.add(cid)
@@ -1370,21 +1537,29 @@ def main() -> int:
         )
         return 2
 
-    rubric = read_text(root / "references" / "eval-rubric.md")
     try:
+        rubric = _read_repo_text(
+            root,
+            "references/eval-rubric.md",
+            "references/eval-rubric.md",
+        )
         validate_sequence_dimension_contract(rubric)
-    except ValueError as exc:
+    except (OSError, UnicodeError, ValueError) as exc:
         print(f"Could not load eval rubric: {exc}")
         return 2
 
-    scored: list[dict] = []
-    for case in cases:
+    contexts: list[str] = []
+    try:
+        for case in cases:
+            contexts.append(responder_context(root, case))
+    except (OSError, UnicodeError, ValueError) as exc:
         cid = case.get("id", "?")
-        try:
-            context = responder_context(root, case)
-        except (OSError, UnicodeError, ValueError) as exc:
-            print(f"[{cid}] repository input error: {exc}")
-            return 2
+        print(f"[{cid}] repository input error: {exc}")
+        return 2
+
+    scored: list[dict] = []
+    for case, context in zip(cases, contexts, strict=True):
+        cid = case.get("id", "?")
         try:
             response = call_api(
                 context,
