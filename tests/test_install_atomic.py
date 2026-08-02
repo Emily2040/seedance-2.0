@@ -96,9 +96,27 @@ PAUSE_DURING_COPY = textwrap.dedent(
             time.sleep(120)
         return result
 
-    def controlled_copytree(source, destination, *args, **kwargs):
-        kwargs["copy_function"] = paused_copy
-        return original_copytree(source, destination, *args, **kwargs)
+    def controlled_copytree(
+        source,
+        destination,
+        symlinks=False,
+        ignore=None,
+        copy_function=None,
+        ignore_dangling_symlinks=False,
+        dirs_exist_ok=False,
+    ):
+        # Python 3.11 recursively forwards copy_function positionally, while
+        # newer runtimes may use keyword arguments. Mirror shutil.copytree's
+        # public signature so the pause hook is injected exactly once on both.
+        return original_copytree(
+            source,
+            destination,
+            symlinks=symlinks,
+            ignore=ignore,
+            copy_function=paused_copy,
+            ignore_dangling_symlinks=ignore_dangling_symlinks,
+            dirs_exist_ok=dirs_exist_ok,
+        )
 
     installer.shutil.copytree = controlled_copytree
     sys.argv = ["install_codex_skill.py", "--dest", str(skills_dir)]
