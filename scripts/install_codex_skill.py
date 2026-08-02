@@ -15,7 +15,7 @@ import uuid
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Callable, Iterator, Mapping
+from typing import Callable, Iterator, Mapping, TextIO
 
 
 SKILL_NAME = "seedance-20"
@@ -123,6 +123,36 @@ def _bounded_diagnostic(value: object, limit: int = MAX_DIAGNOSTIC_CHARS) -> str
         return rendered
     omitted = len(rendered) - limit
     return f"{rendered[:limit]}... <{omitted} chars omitted>"
+
+
+def _text_for_stream(text: str, stream: TextIO) -> str:
+    """Preserve Unicode when possible and escape only unsupported characters."""
+    encoding = getattr(stream, "encoding", None)
+    if not isinstance(encoding, str) or not encoding:
+        return text
+    try:
+        text.encode(encoding, errors="strict")
+        return text
+    except UnicodeEncodeError:
+        return text.encode(encoding, errors="backslashreplace").decode(encoding)
+    except LookupError:
+        return text.encode("ascii", errors="backslashreplace").decode("ascii")
+
+
+def safe_print(message: object, *, stream: TextIO | None = None) -> None:
+    """Write one line without letting a narrow console encoding abort the CLI."""
+    output = sys.stdout if stream is None else stream
+    text = f"{message}\n"
+    prepared = _text_for_stream(text, output)
+    try:
+        written = output.write(prepared)
+    except UnicodeEncodeError:
+        prepared = text.encode("ascii", errors="backslashreplace").decode("ascii")
+        written = output.write(prepared)
+    if written is not None and written != len(prepared):
+        raise OSError(
+            f"short console write: expected {len(prepared)} characters, wrote {written}"
+        )
 
 
 def _is_reparse_stat(info: os.stat_result) -> bool:
@@ -4446,7 +4476,9 @@ def _recover_interrupted_transaction_bound(
                 str(transaction["transaction_id"]),
                 transaction_binding,
             )
-            print(f"Recovered the previous {SKILL_NAME} install after an interrupted update.")
+            safe_print(
+                f"Recovered the previous {SKILL_NAME} install after an interrupted update."
+            )
             return
         if live_is_new and stage_snapshot is None:
             _quarantine_and_delete(
@@ -4903,7 +4935,7 @@ def main() -> int:
         _load_payload_contract_once(repo_root)
         assert_safe_preflight(destination, skills_dir, repo_root)
     except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as exc:
-        print(f"Refusing to install: {_bounded_diagnostic(exc)}")
+        safe_print(f"Refusing to install: {_bounded_diagnostic(exc)}")
         return 1
 
     try:
@@ -4924,27 +4956,29 @@ def main() -> int:
             state, reason = classification.state, classification.reason
             if state == "complete" and not args.force:
                 if not destination_existed_at_start:
-                    print(
+                    safe_print(
                         f"{SKILL_NAME} is complete at {_bounded_diagnostic(destination, 240)}; "
                         "another installer finished or recovered it while this process waited."
                     )
                     return 0
-                print(
+                safe_print(
                     f"{SKILL_NAME} is already installed at "
                     f"{_bounded_diagnostic(destination, 240)}"
                 )
-                print("Run again with --force to replace it.")
+                safe_print("Run again with --force to replace it.")
                 return 1
             if state == "unknown" and not args.force:
-                print(
+                safe_print(
                     f"Refusing to replace the existing path at "
                     f"{_bounded_diagnostic(destination, 220)}: "
                     f"{_bounded_diagnostic(reason, 240)}"
                 )
-                print("Run again with --force only if replacing that path is intentional.")
+                safe_print(
+                    "Run again with --force only if replacing that path is intentional."
+                )
                 return 1
             if state == "incomplete" and not args.force:
-                print(
+                safe_print(
                     f"Detected an incomplete {SKILL_NAME} install at "
                     f"{_bounded_diagnostic(destination, 240)}; repairing it."
                 )
@@ -4962,15 +4996,18 @@ def main() -> int:
                 contract,
             )
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as exc:
-        print(f"Installation failed: {_bounded_diagnostic(exc)}", file=sys.stderr)
+        safe_print(
+            f"Installation failed: {_bounded_diagnostic(exc)}",
+            stream=sys.stderr,
+        )
         return 1
 
-    print(f"Installed {SKILL_NAME} to {_bounded_diagnostic(destination, 280)}")
-    print(f"Installed payload size: {payload_size(destination)}")
+    safe_print(f"Installed {SKILL_NAME} to {_bounded_diagnostic(destination, 280)}")
+    safe_print(f"Installed payload size: {payload_size(destination)}")
     # --dest sends this into any client's skills directory, so the closing line
     # cannot name one. Telling a Claude Code user to restart Codex is the kind
     # of instruction that makes a working install look broken.
-    print("Restart your agent client to pick up new skills.")
+    safe_print("Restart your agent client to pick up new skills.")
     return 0
 
 
