@@ -62,7 +62,7 @@ class RepositoryTests(unittest.TestCase):
             cwd=ROOT, check=True, capture_output=True,
         )
         proc = subprocess.run(
-            [sys.executable, "scripts/validate_skills.py", "--strict"],
+            [sys.executable, "scripts/validate_skills.py"],
             cwd=ROOT, capture_output=True, text=True,
         )
         self.assertNotIn("must not be committed", proc.stdout + proc.stderr)

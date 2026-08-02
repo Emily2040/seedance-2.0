@@ -501,24 +501,24 @@ python -I -S -B scripts/build_masthead_outlines.py --install-build-deps
 ```
 
 ```bash
-python scripts/validate_skills.py --strict
-python scripts/content_audit.py --strict
-python scripts/eval_schema_check.py --strict
-python scripts/schema_check.py --strict
-python scripts/design_audit.py --strict
+python scripts/validate_skills.py
+python scripts/content_audit.py
+python scripts/eval_schema_check.py
+python scripts/schema_check.py
+python scripts/design_audit.py
 python -I -S -B scripts/build_masthead_outlines.py --check
 python -I -S -B scripts/build_hero.py --check
-python scripts/source_registry_check.py --strict --enforce-freshness
+python scripts/source_registry_check.py --enforce-freshness
 python scripts/vocab_schema_check.py --strict
 python scripts/project_state_check.py --strict
 python scripts/continuity_chain_check.py --strict
-python scripts/behavior_contract_check.py --strict
-python scripts/sequence_eval_check.py --strict
-python scripts/generation_run_check.py --strict
+python scripts/behavior_contract_check.py
+python scripts/sequence_eval_check.py
+python scripts/generation_run_check.py
 python scripts/prompt_architecture_stress.py --strict
 python scripts/prompt_lint.py --self-test --strict
-python scripts/eval_run.py --self-test --strict
-python scripts/extract_last_frame.py --self-test --strict
+python scripts/eval_run.py --self-test
+python scripts/extract_last_frame.py --self-test
 python -m unittest discover -s tests -v
 python -m compileall scripts tests
 git diff --check

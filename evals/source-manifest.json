@@ -79,7 +79,7 @@
     {
       "path": "references/continuation-handoff.md",
       "role": "responder",
-      "sha256": "b8afd983b3a2293000b8a406d48a26e0e952f6385dadc2bbc211056479b50610"
+      "sha256": "c8bab1bc717850ed6135ef8ba43a5712e08408b3d6c7c802a6bc588ee1a138d5"
     },
     {
       "path": "references/continuity-qc.md",
@@ -97,19 +97,24 @@
       "sha256": "56f5fb1ee320336d3eb09dc0792dcd4d643a048c4efd72dae19ecf92b8556d43"
     },
     {
+      "path": "references/directors-read.md",
+      "role": "responder",
+      "sha256": "065fd48f0767c31e7ab3068db6b74e53850005b05d0d95e4c7e9e755a7afa7c5"
+    },
+    {
       "path": "references/directing-engine.md",
       "role": "responder",
-      "sha256": "754b3cbd9ccb094e61eb6c7025aec1e1c8e4adc09f1db82de005937a85466ca4"
+      "sha256": "12478d5aeb8b61ecee6e101f48e195acbab9d76fd9d33e79c9cb6868ae464291"
     },
     {
       "path": "references/directing-engine-genre-library.md",
       "role": "responder",
-      "sha256": "db2f48fe8a215bb93202c87f223e50f7b38e70dd0d6c318ef49b4bd89ee45ff2"
+      "sha256": "fb72055847bdab690655f757b65740b8d270ccfa4195fc90de1760084819fe18"
     },
     {
       "path": "references/eval-rubric.md",
       "role": "evaluator",
-      "sha256": "ebde922cda2ac9c9a0efa6a5f73e0ca06a2493dd5644817a2845b4b5b5da06ec"
+      "sha256": "b0bef41783fd05dc24cb09ade62c24126ba69c1534dc12ae787ac4316dfbfcea"
     },
     {
       "path": "references/event-density.md",
@@ -324,12 +329,12 @@
     {
       "path": "references/progressive-disclosure.md",
       "role": "responder",
-      "sha256": "524c41c12677a4f438bcd811e589d3ff623c5cc9ec02cf51429f5f0d37b2f0c5"
+      "sha256": "a882215249063b94d68dc8fb9ebe29936e43d133974d7c284d9af7c6c8ff47de"
     },
     {
       "path": "references/prompt-compiler.md",
       "role": "responder",
-      "sha256": "e97c337f8817780f21275a1ec4dcd0944556218042b8d062a8c9f407d491a299"
+      "sha256": "3fb3bd667a3db0ded4d374d5f21810b67089ec4f97b250d1938497701d1d6218"
     },
     {
       "path": "references/prompt-examples.md",
@@ -364,12 +369,12 @@
     {
       "path": "references/sequence-project-state.md",
       "role": "responder",
-      "sha256": "fb6bcbd9cee2fceaa0d209ea8b9cf212cb7111b39534189ee77b565976642a64"
+      "sha256": "35a909bfea6258dc912c18b3bf04c36cdf6c632277f9bc787a68fbaaf02efec0"
     },
     {
       "path": "references/sequence-worked-trace.md",
       "role": "responder",
-      "sha256": "c6b0ed8381d1b308f0199d549648f42cd4c890f8b5b0abf63870bb779eada98a"
+      "sha256": "f47bfd59a77ad82162a44e95e10a240d6165ab7fc9daa3af9eeca67d1a568d8b"
     },
     {
       "path": "references/shot-list-continuity.md",

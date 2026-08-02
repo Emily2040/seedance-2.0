@@ -3269,7 +3269,6 @@ def main() -> int:
     )
     parser.add_argument("--emit-record", action="store_true", help="print the observation-record skeleton")
     parser.add_argument("--self-test", action="store_true", help="offline wiring check, no ffmpeg or media")
-    parser.add_argument("--strict", action="store_true", help="accepted for parity with other validators")
     args = parser.parse_args()
 
     if args.self_test:

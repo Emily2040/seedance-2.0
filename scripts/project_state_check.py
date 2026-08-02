@@ -2786,7 +2786,14 @@ def select_current_projects(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "require complete authoring state, current-project binding, and matching "
+            "generation prompts"
+        ),
+    )
     args = parser.parse_args()
 
     root = Path(args.repo).resolve()

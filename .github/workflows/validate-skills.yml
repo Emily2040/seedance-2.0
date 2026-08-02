@@ -53,21 +53,21 @@ jobs:
       - name: Force-install masthead build dependencies without package-index access
         run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -S -B scripts/build_masthead_outlines.py --install-build-deps --wheelhouse "$RUNNER_TEMP/seedance-wheelhouse" --build-env "/tmp/seedance-masthead-venv-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Validate skill metadata and required files
-        run: python scripts/validate_skills.py --strict
+        run: python scripts/validate_skills.py
       - name: Audit stale and risky active wording
-        run: python scripts/content_audit.py --strict
+        run: python scripts/content_audit.py
       - name: Validate eval schema
-        run: python scripts/eval_schema_check.py --strict
+        run: python scripts/eval_schema_check.py
       - name: Execute JSON Schemas against declared instances
-        run: python scripts/schema_check.py --strict
+        run: python scripts/schema_check.py
       - name: Audit frontend README and SVG assets
-        run: python scripts/design_audit.py --strict
+        run: python scripts/design_audit.py
       - name: Check masthead outline provenance
         run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -S -B scripts/build_masthead_outlines.py --check --build-env "/tmp/seedance-masthead-venv-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Check the masthead matches its generator
         run: python -I -S -B scripts/build_hero.py --check
       - name: Validate source freshness and claim labels
-        run: python scripts/source_registry_check.py --strict
+        run: python scripts/source_registry_check.py
       - name: Validate multilingual vocabulary schema
         run: python scripts/vocab_schema_check.py --strict
       - name: Validate sequence project state
@@ -75,19 +75,19 @@ jobs:
       - name: Validate continuity chains
         run: python scripts/continuity_chain_check.py --strict
       - name: Validate behavior contracts
-        run: python scripts/behavior_contract_check.py --strict
+        run: python scripts/behavior_contract_check.py
       - name: Validate sequence evals
-        run: python scripts/sequence_eval_check.py --strict
+        run: python scripts/sequence_eval_check.py
       - name: Validate generation-run fixtures
-        run: python scripts/generation_run_check.py --strict
+        run: python scripts/generation_run_check.py
       - name: Lint compiled prompts
         run: python scripts/prompt_lint.py --self-test --strict
       - name: Stress-test the prompt architecture
         run: python scripts/prompt_architecture_stress.py --strict
       - name: Check eval harness wiring (offline)
-        run: python scripts/eval_run.py --self-test --strict
+        run: python scripts/eval_run.py --self-test
       - name: Check frame-extraction tool wiring (offline)
-        run: python scripts/extract_last_frame.py --self-test --strict
+        run: python scripts/extract_last_frame.py --self-test
       # The decoded-frame regression must exercise a real executable. Export
       # the verified path and a handoff marker so the unit-test step fails
       # closed if this provisioning step is removed or reordered.

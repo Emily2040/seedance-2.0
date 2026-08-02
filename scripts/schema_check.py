@@ -457,7 +457,6 @@ def check(root: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
     if Draft202012Validator is None:

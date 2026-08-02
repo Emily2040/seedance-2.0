@@ -581,7 +581,6 @@ DOMAIN_FILES = [
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
     root = Path(args.repo).resolve()
     errors: list[str] = []

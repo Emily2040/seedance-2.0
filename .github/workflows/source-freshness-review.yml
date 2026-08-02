@@ -58,7 +58,7 @@ jobs:
           # reading $? afterwards: a bare failure would abort the step before
           # the summary is written.
           status=0
-          python scripts/source_registry_check.py --strict --enforce-freshness \
+          python scripts/source_registry_check.py --enforce-freshness \
             > /tmp/freshness.txt 2>&1 || status=$?
           cat /tmp/freshness.txt
 
@@ -160,7 +160,7 @@ jobs:
           {
             if [[ "$STATE" == stale ]]; then
               echo "\`references/source-registry.md\` is **stale**. The release checklist"
-              echo "(\`source_registry_check.py --strict --enforce-freshness\`) will refuse to"
+              echo "(\`source_registry_check.py --enforce-freshness\`) will refuse to"
               echo "pass until this is resolved."
             else
               echo "\`references/source-registry.md\` is **drifting**. Nothing is blocked yet;"

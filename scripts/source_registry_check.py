@@ -156,7 +156,6 @@ def main() -> int:
         description="Validate checked-in source metadata offline; no URLs are fetched."
     )
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument("--strict", action="store_true")
     parser.add_argument(
         "--enforce-freshness",
         action="store_true",

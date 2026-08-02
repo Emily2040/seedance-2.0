@@ -99,7 +99,7 @@ EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py"})
 FIXTURE_ROOT = "evals/fixtures"
 SOURCE_ROLES = {"root", "responder", "evaluator", "fixture", "archive"}
 EXPECTED_EVALS_SHA256 = "729057eb7b64c2d77638f0b94e62a1885eb00d7b8533e26165bad71dadb129ea"
-EXPECTED_RUBRIC_SHA256 = "ebde922cda2ac9c9a0efa6a5f73e0ca06a2493dd5644817a2845b4b5b5da06ec"
+EXPECTED_RUBRIC_SHA256 = "b0bef41783fd05dc24cb09ade62c24126ba69c1534dc12ae787ac4316dfbfcea"
 # Thresholds sourced from references/eval-rubric.md.
 LEGACY_MIN, LEGACY_AVG = 2, 2.6          # 0-3 scale
 SEQUENCE_CRIT, SEQUENCE_AVG, SEQUENCE_FLOOR = 4, 3.5, 3  # 0-4 scale
@@ -4588,7 +4588,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Model-in-the-loop eval harness for seedance-20.")
     parser.add_argument("repo", nargs="?", default=".")
     parser.add_argument("--self-test", action="store_true", help="offline wiring check, no network")
-    parser.add_argument("--strict", action="store_true", help="accepted for parity with other validators")
     parser.add_argument("--provider", choices=sorted(PROVIDER_CONFIGS), default="anthropic")
     parser.add_argument("--region", choices=REGIONS, default="global_en")
     parser.add_argument(

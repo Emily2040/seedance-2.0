@@ -122,7 +122,11 @@ def validate(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="treat transient continuity warnings as validation errors",
+    )
     args = parser.parse_args()
     root = Path(args.repo).resolve()
     errors: list[str] = []

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class BehaviorContractTests(unittest.TestCase):
     def test_behavior_contract_is_present(self) -> None:
         result = subprocess.run(
-            [sys.executable, "scripts/behavior_contract_check.py", "--strict"],
+            [sys.executable, "scripts/behavior_contract_check.py"],
             cwd=ROOT,
             text=True,
             capture_output=True,

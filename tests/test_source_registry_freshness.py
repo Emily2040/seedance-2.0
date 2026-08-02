@@ -217,7 +217,7 @@ class CommandLineBehaviourTests(unittest.TestCase):
             )
             if commit_date is not None:
                 commit_fixture(repo, commit_date)
-            command = [sys.executable, str(self.script), str(repo), "--strict"]
+            command = [sys.executable, str(self.script), str(repo)]
             if enforce_freshness:
                 command.append("--enforce-freshness")
             return subprocess.run(
@@ -227,7 +227,7 @@ class CommandLineBehaviourTests(unittest.TestCase):
             )
 
     def test_default_run_passes_on_this_repository(self) -> None:
-        result = self.run_checker("--strict")
+        result = self.run_checker()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_default_pr_mode_does_not_read_the_wall_clock(self) -> None:
@@ -242,7 +242,7 @@ class CommandLineBehaviourTests(unittest.TestCase):
             mock.patch.object(
                 sys,
                 "argv",
-                ["source_registry_check.py", str(self.root), "--strict"],
+                ["source_registry_check.py", str(self.root)],
             ),
             redirect_stdout(output),
         ):
