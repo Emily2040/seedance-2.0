@@ -774,6 +774,23 @@ class ContinuityChainTests(unittest.TestCase):
 
         self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
 
+    def test_singleton_fields_on_different_named_entities_are_not_compared(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": {
+                    "hero": {"wardrobe": "red coat", "pose": "standing"}
+                }
+            },
+            {
+                "characters": {
+                    "guide": {"wardrobe": "blue coat", "pose": "seated"}
+                }
+            },
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
     def test_duplicate_canonical_identity_cannot_collapse_field_drift(self) -> None:
         errors, _ = self.validate_states(
             {

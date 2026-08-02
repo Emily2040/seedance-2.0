@@ -897,24 +897,37 @@ def comparable_values(
         )
     )
     shared_structural = end_by_structural.keys() & start_by_structural.keys()
-    comparisons.extend(
-        (
-            end_by_structural[locator][0],
-            end_by_structural[locator][1],
-            MISSING,
-            end_by_structural[locator][2],
-        )
-        for locator in sorted(end_by_structural.keys() - shared_structural, key=repr)
+    unmatched_singletons_are_distinct = (
+        len(end_values) == 1
+        and len(start_values) == 1
+        and not shared_semantic
+        and not shared_structural
     )
-    comparisons.extend(
-        (
-            start_by_structural[locator][0],
-            MISSING,
-            start_by_structural[locator][1],
-            start_by_structural[locator][2],
+    if not unmatched_singletons_are_distinct:
+        comparisons.extend(
+            (
+                end_by_structural[locator][0],
+                end_by_structural[locator][1],
+                MISSING,
+                end_by_structural[locator][2],
+            )
+            for locator in sorted(
+                end_by_structural.keys() - shared_structural,
+                key=repr,
+            )
         )
-        for locator in sorted(start_by_structural.keys() - shared_structural, key=repr)
-    )
+        comparisons.extend(
+            (
+                start_by_structural[locator][0],
+                MISSING,
+                start_by_structural[locator][1],
+                start_by_structural[locator][2],
+            )
+            for locator in sorted(
+                start_by_structural.keys() - shared_structural,
+                key=repr,
+            )
+        )
     return comparisons
 
 
