@@ -217,6 +217,10 @@ class JudgeContractTests(unittest.TestCase):
                     size,
                     eval_run._canonical_judge_response_size(case, notes),
                 )
+                self.assertLessEqual(
+                    eval_run._maximum_judge_response_size(case, notes),
+                    eval_run.JUDGE_RESPONSE_MAX_BYTES,
+                )
                 normalized = eval_run.normalize_verdict(
                     case, json.loads(raw)
                 )
@@ -224,60 +228,60 @@ class JudgeContractTests(unittest.TestCase):
         self.assertGreater(largest[0], 0)
 
     def test_legacy_assertion_only_boundary_is_exact(self) -> None:
-        last_fit = sizing_case(58)
-        first_failure = sizing_case(59)
+        last_fit = sizing_case(53)
+        first_failure = sizing_case(54)
 
-        self.assertEqual(len(eval_run.expected_judge_checks(last_fit)), 60)
+        self.assertEqual(len(eval_run.expected_judge_checks(last_fit)), 55)
         self.assertEqual(
-            eval_run._canonical_judge_response_size(last_fit, "x" * 160),
-            893,
+            eval_run._maximum_judge_response_size(last_fit, "x" * 160),
+            894,
         )
         eval_run.validate_case_contract(self.snapshot, [last_fit])
 
-        self.assertEqual(len(eval_run.expected_judge_checks(first_failure)), 61)
+        self.assertEqual(len(eval_run.expected_judge_checks(first_failure)), 56)
         self.assertEqual(
-            eval_run._canonical_judge_response_size(first_failure, "x" * 160),
-            904,
+            eval_run._maximum_judge_response_size(first_failure, "x" * 160),
+            906,
         )
         with self.assertRaisesRegex(
             eval_run.HarnessError,
-            "requires 904 UTF-8 bytes.*900-byte limit",
+            "requires 906 UTF-8 bytes.*900-byte limit",
         ):
             eval_run.validate_case_contract(self.snapshot, [first_failure])
 
     def test_sequence_assertion_only_boundary_is_exact(self) -> None:
-        last_fit = sizing_case(49, sequence=True)
-        first_failure = sizing_case(50, sequence=True)
+        last_fit = sizing_case(45, sequence=True)
+        first_failure = sizing_case(46, sequence=True)
 
-        self.assertEqual(len(eval_run.expected_judge_checks(last_fit)), 53)
+        self.assertEqual(len(eval_run.expected_judge_checks(last_fit)), 49)
         self.assertEqual(
-            eval_run._canonical_judge_response_size(last_fit, "x" * 160),
-            891,
+            eval_run._maximum_judge_response_size(last_fit, "x" * 160),
+            897,
         )
         eval_run.validate_case_contract(self.snapshot, [last_fit])
 
-        self.assertEqual(len(eval_run.expected_judge_checks(first_failure)), 54)
+        self.assertEqual(len(eval_run.expected_judge_checks(first_failure)), 50)
         self.assertEqual(
-            eval_run._canonical_judge_response_size(first_failure, "x" * 160),
-            902,
+            eval_run._maximum_judge_response_size(first_failure, "x" * 160),
+            909,
         )
         with self.assertRaisesRegex(
             eval_run.HarnessError,
-            "requires 902 UTF-8 bytes.*900-byte limit",
+            "requires 909 UTF-8 bytes.*900-byte limit",
         ):
             eval_run.validate_case_contract(self.snapshot, [first_failure])
 
     def test_both_scales_accept_899_and_900_but_preflight_rejects_901(self) -> None:
         boundaries = {
             False: {
-                899: (6, 24, 30),
-                900: (5, 25, 30),
-                901: (4, 26, 30),
+                899: (1, 6, 47),
+                900: (1, 5, 48),
+                901: (1, 4, 49),
             },
             True: {
-                899: (4, 17, 30),
-                900: (3, 18, 30),
-                901: (2, 19, 30),
+                899: (1, 9, 36),
+                900: (1, 8, 37),
+                901: (1, 7, 38),
             },
         }
 
@@ -292,7 +296,7 @@ class JudgeContractTests(unittest.TestCase):
                 )
                 with self.subTest(sequence=sequence, size=expected_size):
                     self.assertEqual(
-                        eval_run._canonical_judge_response_size(
+                        eval_run._maximum_judge_response_size(
                             case, "x" * eval_run.JUDGE_NOTES_MAX_BYTES
                         ),
                         expected_size,
@@ -306,27 +310,47 @@ class JudgeContractTests(unittest.TestCase):
                         ):
                             eval_run.validate_case_contract(self.snapshot, [case])
 
-    def test_huge_804_id_contract_is_rejected_before_live_evaluation(self) -> None:
-        case = sizing_case(802)
-        self.assertEqual(len(eval_run.expected_judge_checks(case)), 804)
+    def test_preflight_accounts_for_false_values_in_a_near_limit_verdict(self) -> None:
+        case = sizing_case(5, required_count=25, forbidden_count=30)
+        self.assertEqual(
+            eval_run._canonical_judge_response_size(
+                case, "x" * eval_run.JUDGE_NOTES_MAX_BYTES
+            ),
+            900,
+        )
+        self.assertEqual(
+            eval_run._maximum_judge_response_size(
+                case, "x" * eval_run.JUDGE_NOTES_MAX_BYTES
+            ),
+            963,
+        )
+        with self.assertRaisesRegex(
+            eval_run.HarnessError,
+            "requires 963 UTF-8 bytes.*900-byte limit",
+        ):
+            eval_run.validate_case_contract(self.snapshot, [case])
+
+    def test_maximal_legal_list_contract_is_rejected_before_live_evaluation(self) -> None:
+        case = sizing_case(64, required_count=64, forbidden_count=64)
+        self.assertEqual(len(eval_run.expected_judge_checks(case)), 194)
         self.assertGreater(
-            eval_run._canonical_judge_response_size(case, "x" * 160),
+            eval_run._maximum_judge_response_size(case, "x" * 160),
             eval_run.JUDGE_RESPONSE_MAX_BYTES,
         )
         with self.assertRaisesRegex(
             eval_run.HarnessError,
-            "canonical judge response requires.*900-byte limit",
+            "maximum canonical judge response requires.*900-byte limit",
         ):
             eval_run.validate_case_contract(self.snapshot, [case])
 
     def test_live_main_rejects_oversized_contract_before_any_api_call(self) -> None:
         case = sizing_case(
-            4,
-            required_count=26,
-            forbidden_count=30,
+            1,
+            required_count=4,
+            forbidden_count=49,
         )
         self.assertEqual(
-            eval_run._canonical_judge_response_size(
+            eval_run._maximum_judge_response_size(
                 case, "x" * eval_run.JUDGE_NOTES_MAX_BYTES
             ),
             901,
@@ -350,7 +374,7 @@ class JudgeContractTests(unittest.TestCase):
             code = eval_run.main()
 
         self.assertEqual(code, 2)
-        self.assertIn("canonical judge response requires", output.getvalue())
+        self.assertIn("maximum canonical judge response requires", output.getvalue())
         call.assert_not_called()
 
     def test_response_sizing_counts_multibyte_notes_as_utf8_bytes(self) -> None:
@@ -429,11 +453,11 @@ class JudgeContractTests(unittest.TestCase):
         self,
     ) -> None:
         cases = (
-            sizing_case(5, required_count=25, forbidden_count=30),
+            sizing_case(1, required_count=5, forbidden_count=48),
             sizing_case(
-                3,
-                required_count=18,
-                forbidden_count=30,
+                1,
+                required_count=8,
+                forbidden_count=37,
                 sequence=True,
             ),
         )
@@ -451,7 +475,7 @@ class JudgeContractTests(unittest.TestCase):
 
         for case in cases:
             eval_run.validate_case_contract(self.snapshot, [case])
-            preflight_size = eval_run._canonical_judge_response_size(
+            preflight_size = eval_run._maximum_judge_response_size(
                 case, "x" * eval_run.JUDGE_NOTES_MAX_BYTES
             )
             self.assertEqual(preflight_size, eval_run.JUDGE_RESPONSE_MAX_BYTES)
@@ -471,6 +495,18 @@ class JudgeContractTests(unittest.TestCase):
                     self.assertLessEqual(response_size, preflight_size)
                     self.assertLessEqual(
                         response_size, eval_run.JUDGE_RESPONSE_MAX_BYTES
+                    )
+                    failing_size = eval_run._judge_response_size(
+                        case,
+                        notes,
+                        criterion_met=False,
+                        dimension_score=0,
+                        overall_score=0,
+                        passed=False,
+                    )
+                    self.assertLessEqual(failing_size, preflight_size)
+                    self.assertLessEqual(
+                        failing_size, eval_run.JUDGE_RESPONSE_MAX_BYTES
                     )
 
     def test_fenced_json_compatibility_survives_escaped_notes(self) -> None:
@@ -544,6 +580,24 @@ class JudgeContractTests(unittest.TestCase):
         self.assertFalse(verdict["pass"])
         self.assertIn("900-byte", verdict["notes"])
 
+    def test_judge_context_is_bounded_before_the_provider_call(self) -> None:
+        case = self.cases[0]
+        with (
+            mock.patch.object(eval_run, "MAX_JUDGE_CONTEXT_CHARACTERS", 100),
+            mock.patch.object(eval_run, "call_api") as call,
+            self.assertRaisesRegex(eval_run.HarnessError, "judge context exceeds"),
+        ):
+            eval_run.judge(
+                case,
+                "candidate response",
+                self.model,
+                "key",
+                "rubric",
+                self.provider,
+                self.endpoint,
+            )
+        call.assert_not_called()
+
     def test_partial_and_unknown_sequence_contracts_fail_validation(self) -> None:
         base = copy.deepcopy(self.sequence_case)
         invalid_cases = []
@@ -559,6 +613,15 @@ class JudgeContractTests(unittest.TestCase):
         blank = copy.deepcopy(base)
         blank["expected_prompt_architecture"] = " "
         invalid_cases.append(blank)
+
+        for field in (
+            "expected_state_delta",
+            "expected_prompt_architecture",
+            "expected_sequence_relation",
+        ):
+            oversized = copy.deepcopy(base)
+            oversized[field] = "x" * (eval_run.MAX_CASE_LIST_ITEM_CHARACTERS + 1)
+            invalid_cases.append(oversized)
 
         for case in invalid_cases:
             with self.subTest(case=case):

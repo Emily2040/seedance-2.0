@@ -1106,7 +1106,7 @@ class InputContractTests(unittest.TestCase):
             (
                 "expected_sequence_relation",
                 None,
-                "expected_sequence_relation must be a non-empty UTF-8 string",
+                "sequence cases must declare every sequence judge contract",
             ),
         )
         for field, value, expected in mutations:
