@@ -28,7 +28,7 @@ PROVENANCE_MARKER = f".{SKILL_NAME}.install-provenance.json"
 QUARANTINE_MARKER = f".{SKILL_NAME}.install-quarantine.json"
 QUARANTINE_PREFIX = f".{SKILL_NAME}.install-quarantine-"
 TRANSACTION_DONE_PREFIX = f".{SKILL_NAME}.install-transaction-done-"
-TRANSACTION_FORMAT_VERSION = 1
+TRANSACTION_FORMAT_VERSION = 2
 LOCK_TIMEOUT_SECONDS = 300.0
 MAX_RECORD_BYTES = 8 * 1024 * 1024
 MAX_MANIFEST_ENTRIES = 50_000
@@ -124,6 +124,12 @@ def _stat_identity(info: os.stat_result) -> tuple[int, int, int, int, int, int]:
     )
 
 
+def _object_identity(info: os.stat_result) -> tuple[int, int]:
+    """Return the stable filesystem object coordinates used by a transaction."""
+
+    return (int(info.st_dev), int(info.st_ino))
+
+
 def _regular_file_metadata(path: Path) -> dict[str, object]:
     """Hash one stable, non-link regular file and detect a concurrent swap."""
     before = path.lstat()
@@ -158,6 +164,20 @@ def _regular_file_metadata(path: Path) -> dict[str, object]:
     ):
         raise RuntimeError(f"file changed while hashing: {_bounded_diagnostic(path)}")
     return {"type": "file", "size": opened.st_size, "sha256": digest.hexdigest()}
+
+
+def _bound_regular_file_metadata(path: Path) -> dict[str, object]:
+    """Capture content plus the identity of the exact current path occupant."""
+
+    metadata = _regular_file_metadata(path)
+    info = path.lstat()
+    if _is_reparse_stat(info) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise RuntimeError(
+            f"bound deletion handle is linked, reparse, or non-regular: "
+            f"{_bounded_diagnostic(path)}"
+        )
+    device, inode = _object_identity(info)
+    return {**metadata, "device": device, "inode": inode}
 
 
 WINDOWS_RESERVED_BASENAMES = {
@@ -211,11 +231,22 @@ def _canonical_sha256(value: object) -> str:
 class PathSnapshot:
     root_type: str
     entries: dict[str, dict[str, object]]
+    root_identity: tuple[int, int]
     sha256: str
 
 
-def _snapshot_sha256(root_type: str, entries: Mapping[str, Mapping[str, object]]) -> str:
-    return _canonical_sha256({"root_type": root_type, "entries": entries})
+def _snapshot_sha256(
+    root_type: str,
+    entries: Mapping[str, Mapping[str, object]],
+    root_identity: tuple[int, int],
+) -> str:
+    return _canonical_sha256(
+        {
+            "root_type": root_type,
+            "root_identity": list(root_identity),
+            "entries": entries,
+        }
+    )
 
 
 def _capture_path_snapshot(path: Path) -> PathSnapshot:
@@ -223,9 +254,20 @@ def _capture_path_snapshot(path: Path) -> PathSnapshot:
     root_info = path.lstat()
     if _is_reparse_stat(root_info) or stat.S_ISLNK(root_info.st_mode):
         raise RuntimeError(f"refusing link or reparse artifact: {_bounded_diagnostic(path)}")
+    root_identity = _object_identity(root_info)
     if stat.S_ISREG(root_info.st_mode):
-        entries = {"": _regular_file_metadata(path)}
-        return PathSnapshot("file", entries, _snapshot_sha256("file", entries))
+        entries = {"": _bound_regular_file_metadata(path)}
+        if (
+            int(entries[""]["device"]),
+            int(entries[""]["inode"]),
+        ) != root_identity:
+            raise RuntimeError(f"file root changed during capture: {_bounded_diagnostic(path)}")
+        return PathSnapshot(
+            "file",
+            entries,
+            root_identity,
+            _snapshot_sha256("file", entries, root_identity),
+        )
     if not stat.S_ISDIR(root_info.st_mode):
         raise RuntimeError(f"refusing special artifact: {_bounded_diagnostic(path)}")
 
@@ -236,6 +278,20 @@ def _capture_path_snapshot(path: Path) -> PathSnapshot:
         if _is_reparse_stat(current_info) or not stat.S_ISDIR(current_info.st_mode):
             raise RuntimeError(
                 f"directory changed or became a reparse point: {_bounded_diagnostic(current_path)}"
+            )
+        current_relative = current_path.relative_to(path).as_posix()
+        expected_identity = (
+            root_identity
+            if current_path == path
+            else (
+                int(entries[current_relative]["device"]),
+                int(entries[current_relative]["inode"]),
+            )
+        )
+        if _object_identity(current_info) != expected_identity:
+            raise RuntimeError(
+                f"directory identity changed during capture: "
+                f"{_bounded_diagnostic(current_path)}"
             )
         directory_names.sort()
         file_names.sort()
@@ -249,13 +305,26 @@ def _capture_path_snapshot(path: Path) -> PathSnapshot:
             if not stat.S_ISDIR(info.st_mode):
                 raise RuntimeError(f"directory changed type: {_bounded_diagnostic(child)}")
             relative = child.relative_to(path).as_posix()
-            entries[relative] = {"type": "dir"}
+            device, inode = _object_identity(info)
+            entries[relative] = {"type": "dir", "device": device, "inode": inode}
         for name in file_names:
             child = current_path / name
             relative = child.relative_to(path).as_posix()
-            entries[relative] = _regular_file_metadata(child)
+            entries[relative] = _bound_regular_file_metadata(child)
     ordered = dict(sorted(entries.items()))
-    return PathSnapshot("dir", ordered, _snapshot_sha256("dir", ordered))
+    final_root = path.lstat()
+    if (
+        _is_reparse_stat(final_root)
+        or not stat.S_ISDIR(final_root.st_mode)
+        or _object_identity(final_root) != root_identity
+    ):
+        raise RuntimeError(f"directory root changed during capture: {_bounded_diagnostic(path)}")
+    return PathSnapshot(
+        "dir",
+        ordered,
+        root_identity,
+        _snapshot_sha256("dir", ordered, root_identity),
+    )
 
 
 def _expected_directories(manifest: Mapping[str, Mapping[str, object]]) -> list[str]:
@@ -786,23 +855,52 @@ def _validate_tree_entries(
         if not isinstance(metadata, dict):
             raise ValueError("tree manifest entry must be an object")
         entry_type = metadata.get("type")
+        device = metadata.get("device")
+        inode = metadata.get("inode")
+        if (
+            type(device) is not int
+            or device < 0
+            or type(inode) is not int
+            or inode < 0
+        ):
+            raise ValueError("tree manifest filesystem identity is invalid")
         if entry_type == "dir":
-            if set(metadata) != {"type"} or root_type != "dir":
+            if set(metadata) != {"device", "inode", "type"} or root_type != "dir":
                 raise ValueError("tree directory metadata is invalid")
-            validated[relative] = {"type": "dir"}
+            validated[relative] = {
+                "type": "dir",
+                "device": device,
+                "inode": inode,
+            }
         elif entry_type == "file":
-            if set(metadata) != {"sha256", "size", "type"}:
+            if set(metadata) != {"device", "inode", "sha256", "size", "type"}:
                 raise ValueError("tree file metadata is invalid")
             size = metadata.get("size")
             digest = metadata.get("sha256")
             if type(size) is not int or size < 0 or not _is_sha256(digest):
                 raise ValueError("tree file metadata is invalid")
-            validated[relative] = {"type": "file", "size": size, "sha256": digest}
+            validated[relative] = {
+                "type": "file",
+                "size": size,
+                "sha256": digest,
+                "device": device,
+                "inode": inode,
+            }
         else:
             raise ValueError("tree manifest contains an unsupported entry type")
     if root_type == "file" and set(validated) != {""}:
         raise ValueError("file-root tree manifest is incomplete")
     return validated
+
+
+def _validate_root_identity(value: object) -> tuple[int, int]:
+    if (
+        not isinstance(value, list)
+        or len(value) != 2
+        or any(type(item) is not int or item < 0 for item in value)
+    ):
+        raise ValueError("tree root filesystem identity is invalid")
+    return (value[0], value[1])
 
 
 def _transaction_path(skills_dir: Path) -> Path:
@@ -822,6 +920,7 @@ def _transaction_record(
         "format_version": TRANSACTION_FORMAT_VERSION,
         "had_destination": old_snapshot is not None,
         "old_entry_count": len(old_snapshot.entries) if old_snapshot else 0,
+        "old_root_identity": list(old_snapshot.root_identity) if old_snapshot else None,
         "old_root_type": old_snapshot.root_type if old_snapshot else "missing",
         "old_tree_entries": old_snapshot.entries if old_snapshot else {},
         "old_tree_sha256": old_snapshot.sha256 if old_snapshot else None,
@@ -845,6 +944,7 @@ def _load_transaction(skills_dir: Path) -> tuple[dict[str, object], bytes]:
         "format_version",
         "had_destination",
         "old_entry_count",
+        "old_root_identity",
         "old_root_type",
         "old_tree_entries",
         "old_tree_sha256",
@@ -910,19 +1010,40 @@ def _load_transaction(skills_dir: Path) -> tuple[dict[str, object], bytes]:
     old_entries = _validate_tree_entries(
         record.get("old_tree_entries"), "dir" if old_root_type == "missing" else old_root_type
     )
+    old_root_identity_value = record.get("old_root_identity")
+    old_root_identity = (
+        _validate_root_identity(old_root_identity_value)
+        if old_root_identity_value is not None
+        else None
+    )
     old_digest = record.get("old_tree_sha256")
     old_count = record.get("old_entry_count")
     if type(old_count) is not int or old_count != len(old_entries):
         raise ValueError("transaction old-tree entry count does not match")
     if had_destination:
-        if old_root_type == "missing" or not _is_sha256(old_digest):
+        if (
+            old_root_type == "missing"
+            or old_root_identity is None
+            or not _is_sha256(old_digest)
+        ):
             raise ValueError("transaction old-tree identity is missing")
-        if old_digest != _snapshot_sha256(old_root_type, old_entries):
+        if old_digest != _snapshot_sha256(
+            old_root_type,
+            old_entries,
+            old_root_identity,
+        ):
             raise ValueError("transaction old-tree digest does not match")
-    elif old_root_type != "missing" or old_entries or old_digest is not None or old_count != 0:
+    elif (
+        old_root_type != "missing"
+        or old_entries
+        or old_root_identity is not None
+        or old_digest is not None
+        or old_count != 0
+    ):
         raise ValueError("fresh transaction contains an old-tree identity")
     record["payload_manifest"] = manifest
     record["old_tree_entries"] = old_entries
+    record["old_root_identity"] = old_root_identity
     return record, raw
 
 
@@ -1012,6 +1133,24 @@ def _metadata_for_bytes(raw: bytes) -> dict[str, object]:
     return {"type": "file", "size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
 
 
+def _content_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
+    return {
+        key: metadata[key]
+        for key in ("type", "size", "sha256")
+        if key in metadata
+    }
+
+
+def _bound_metadata_for_bytes(path: Path, raw: bytes) -> dict[str, object]:
+    metadata = _bound_regular_file_metadata(path)
+    if _content_metadata(metadata) != _metadata_for_bytes(raw):
+        raise RuntimeError(
+            f"bound authority file differs from verified bytes: "
+            f"{_bounded_diagnostic(path, 220)}"
+        )
+    return metadata
+
+
 def _inspect_owned_stage(
     path: Path,
     transaction: Mapping[str, object],
@@ -1040,7 +1179,7 @@ def _inspect_owned_stage(
                 )
             continue
         if relative == PROVENANCE_MARKER:
-            if metadata != _metadata_for_bytes(provenance_raw):
+            if _content_metadata(metadata) != _metadata_for_bytes(provenance_raw):
                 raise RuntimeError("owned stage provenance changed during inspection")
             continue
         if relative == COMPLETION_MARKER:
@@ -1072,9 +1211,15 @@ def _snapshot_from_transaction(transaction: Mapping[str, object]) -> PathSnapsho
         return None
     root_type = transaction["old_root_type"]
     entries = transaction["old_tree_entries"]
+    root_identity = transaction["old_root_identity"]
     digest = transaction["old_tree_sha256"]
-    assert isinstance(root_type, str) and isinstance(entries, dict) and isinstance(digest, str)
-    return PathSnapshot(root_type, entries, digest)
+    assert (
+        isinstance(root_type, str)
+        and isinstance(entries, dict)
+        and isinstance(root_identity, tuple)
+        and isinstance(digest, str)
+    )
+    return PathSnapshot(root_type, entries, root_identity, digest)
 
 
 def _assert_snapshot_equal(actual: PathSnapshot, expected: PathSnapshot, label: str) -> None:
@@ -1142,7 +1287,10 @@ def _quarantine_record_and_remove(
         _, quarantined_raw = _read_json_record(done)
         if quarantined_raw != expected_raw:
             raise RuntimeError("transaction record changed during quarantine")
-        _delete_regular_file_by_handle(done, _metadata_for_bytes(expected_raw))
+        _delete_regular_file_by_handle(
+            done,
+            _bound_metadata_for_bytes(done, expected_raw),
+        )
     except Exception:
         raise
 
@@ -1155,6 +1303,7 @@ def _quarantine_record(
 ) -> dict[str, object]:
     record: dict[str, object] = {
         "authorized_entries": authorized.entries,
+        "authorized_root_identity": list(authorized.root_identity),
         "authorized_root_type": authorized.root_type,
         "authorized_sha256": authorized.sha256,
         "format_version": TRANSACTION_FORMAT_VERSION,
@@ -1172,6 +1321,7 @@ def _load_quarantine_record(
     record, raw = _read_json_record(path / QUARANTINE_MARKER)
     expected_keys = {
         "authorized_entries",
+        "authorized_root_identity",
         "authorized_root_type",
         "authorized_sha256",
         "format_version",
@@ -1198,10 +1348,15 @@ def _load_quarantine_record(
     if root_type not in {"file", "dir"}:
         raise ValueError("quarantine marker root type is invalid")
     entries = _validate_tree_entries(record.get("authorized_entries"), root_type)
+    root_identity = _validate_root_identity(record.get("authorized_root_identity"))
     digest = record.get("authorized_sha256")
-    if not _is_sha256(digest) or digest != _snapshot_sha256(root_type, entries):
+    if not _is_sha256(digest) or digest != _snapshot_sha256(
+        root_type,
+        entries,
+        root_identity,
+    ):
         raise ValueError("quarantine marker authorized digest does not match")
-    return record, raw, PathSnapshot(root_type, entries, digest)
+    return record, raw, PathSnapshot(root_type, entries, root_identity, digest)
 
 
 def _entry_matches(actual: Mapping[str, object], expected: Mapping[str, object]) -> bool:
@@ -1217,6 +1372,8 @@ def _validate_bound_subset(
 ) -> None:
     if snapshot.root_type != authorized.root_type:
         raise RuntimeError("quarantined artifact changed root type")
+    if snapshot.root_identity != authorized.root_identity:
+        raise RuntimeError("quarantined artifact changed root filesystem identity")
     allowed = dict(authorized.entries)
     if extra_entries:
         allowed.update({key: dict(value) for key, value in extra_entries.items()})
@@ -1252,7 +1409,13 @@ def _descriptor_file_metadata(descriptor: int) -> tuple[dict[str, object], os.st
     if _stat_identity(after) != _stat_identity(before) or total != before.st_size:
         raise RuntimeError("bound deletion handle changed while it was verified")
     return (
-        {"type": "file", "size": total, "sha256": digest.hexdigest()},
+        {
+            "type": "file",
+            "size": total,
+            "sha256": digest.hexdigest(),
+            "device": int(after.st_dev),
+            "inode": int(after.st_ino),
+        },
         after,
     )
 
@@ -1361,7 +1524,10 @@ def _delete_regular_file_by_handle(
         os.close(descriptor)
 
 
-def _delete_empty_directory_by_handle(path: Path) -> None:
+def _delete_empty_directory_by_handle(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> None:
     """Delete the opened empty directory object, not a later path occupant."""
     before = path.lstat()
     if _is_reparse_stat(before) or not stat.S_ISDIR(before.st_mode):
@@ -1369,6 +1535,8 @@ def _delete_empty_directory_by_handle(path: Path) -> None:
             f"quarantined directory changed before deletion: "
             f"{_bounded_diagnostic(path, 200)}"
         )
+    if _object_identity(before) != expected_identity:
+        raise RuntimeError("quarantined directory object is not transaction-authorized")
 
     if os.name == "nt":
         import ctypes
@@ -1437,6 +1605,7 @@ def _delete_empty_directory_by_handle(path: Path) -> None:
             if (
                 _is_reparse_stat(current)
                 or not stat.S_ISDIR(current.st_mode)
+                or _object_identity(current) != expected_identity
                 or _stat_identity(current) != _stat_identity(before)
                 or (current.st_ino and current.st_ino != file_index)
             ):
@@ -1478,6 +1647,7 @@ def _delete_empty_directory_by_handle(path: Path) -> None:
         if (
             _is_reparse_stat(opened)
             or not stat.S_ISDIR(opened.st_mode)
+            or _object_identity(opened) != expected_identity
             or _stat_identity(opened) != _stat_identity(before)
             or _stat_identity(current) != _stat_identity(opened)
         ):
@@ -1505,7 +1675,7 @@ def _delete_bound_tree(
     if extra_entries:
         allowed.update({key: dict(value) for key, value in extra_entries.items()})
     if authorized.root_type == "file":
-        actual = _regular_file_metadata(root)
+        actual = _bound_regular_file_metadata(root)
         if actual != allowed[""]:
             raise RuntimeError("quarantined file changed immediately before deletion")
         _delete_regular_file_by_handle(root, allowed[""])
@@ -1522,7 +1692,7 @@ def _delete_bound_tree(
         target = root.joinpath(*relative.split("/"))
         if not _path_exists(target):
             continue
-        actual = _regular_file_metadata(target)
+        actual = _bound_regular_file_metadata(target)
         if actual != allowed[relative]:
             raise RuntimeError(
                 f"quarantined file changed immediately before deletion: "
@@ -1542,15 +1712,19 @@ def _delete_bound_tree(
         target = root.joinpath(*relative.split("/"))
         if not _path_exists(target):
             continue
+        expected_identity = (
+            int(allowed[relative]["device"]),
+            int(allowed[relative]["inode"]),
+        )
         try:
-            _delete_empty_directory_by_handle(target)
+            _delete_empty_directory_by_handle(target, expected_identity)
         except OSError as exc:
             raise RuntimeError(
                 f"late data preserved in quarantine at {_bounded_diagnostic(target, 200)}: "
                 f"{_bounded_diagnostic(exc, 180)}"
             ) from exc
     try:
-        _delete_empty_directory_by_handle(root)
+        _delete_empty_directory_by_handle(root, authorized.root_identity)
     except OSError as exc:
         raise RuntimeError(
             f"late data preserved in quarantine at {_bounded_diagnostic(root, 220)}: "
@@ -1577,8 +1751,14 @@ def _quarantine_and_delete(
         return
     marker_record = _quarantine_record(transaction, transaction_raw, purpose, quarantined)
     marker_raw = _write_json_exclusive(quarantine / QUARANTINE_MARKER, marker_record)
-    marker_entry = {QUARANTINE_MARKER: _metadata_for_bytes(marker_raw)}
     with_marker = _capture_path_snapshot(quarantine)
+    marker_metadata = with_marker.entries.get(QUARANTINE_MARKER)
+    if (
+        marker_metadata is None
+        or _content_metadata(marker_metadata) != _metadata_for_bytes(marker_raw)
+    ):
+        raise RuntimeError("quarantine authority marker changed after creation")
+    marker_entry = {QUARANTINE_MARKER: marker_metadata}
     _validate_bound_subset(with_marker, quarantined, marker_entry, require_exact=True)
     _delete_bound_tree(quarantine, quarantined, marker_entry)
 
@@ -1591,8 +1771,14 @@ def _resume_quarantine(
     record, marker_raw, authorized = _load_quarantine_record(
         quarantine, transaction, transaction_raw
     )
-    marker_entry = {QUARANTINE_MARKER: _metadata_for_bytes(marker_raw)}
     current = _capture_path_snapshot(quarantine)
+    marker_metadata = current.entries.get(QUARANTINE_MARKER)
+    if (
+        marker_metadata is None
+        or _content_metadata(marker_metadata) != _metadata_for_bytes(marker_raw)
+    ):
+        raise RuntimeError("quarantine authority marker changed before recovery")
+    marker_entry = {QUARANTINE_MARKER: marker_metadata}
     _validate_bound_subset(current, authorized, marker_entry, require_exact=False)
     _delete_bound_tree(quarantine, authorized, marker_entry)
     purpose = record["purpose"]
@@ -1826,10 +2012,14 @@ def promote_staged_install(stage: Path, destination: Path, skills_dir: Path) -> 
                 marker_raw = _write_json_exclusive(
                     quarantine / QUARANTINE_MARKER, marker_record
                 )
+                marker_metadata = _bound_metadata_for_bytes(
+                    quarantine / QUARANTINE_MARKER,
+                    marker_raw,
+                )
                 _delete_bound_tree(
                     quarantine,
                     failed_snapshot,
-                    {QUARANTINE_MARKER: _metadata_for_bytes(marker_raw)},
+                    {QUARANTINE_MARKER: marker_metadata},
                 )
         if old_snapshot is not None and _path_exists(backup):
             _assert_snapshot_equal(

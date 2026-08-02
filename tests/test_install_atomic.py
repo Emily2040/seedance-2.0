@@ -731,6 +731,73 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertTrue(outside.is_dir())
             self.assertFalse(owned.exists())
 
+    def test_preopen_equal_byte_file_replacement_is_not_authorized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            quarantine = root / "quarantine"
+            quarantine.mkdir()
+            owned = quarantine / "owned.txt"
+            owned.write_bytes(b"same bytes")
+            authorized = installer._capture_path_snapshot(quarantine)
+            stashed = root / "authorized-file-stashed"
+            outside = root / "outside-user-file"
+            outside.write_bytes(b"same bytes")
+            original_delete = installer._delete_regular_file_by_handle
+            swapped = False
+
+            def swap_before_open(path: Path, expected):
+                nonlocal swapped
+                if path == owned and not swapped:
+                    swapped = True
+                    path.rename(stashed)
+                    outside.rename(path)
+                return original_delete(path, expected)
+
+            with mock.patch.object(
+                installer,
+                "_delete_regular_file_by_handle",
+                swap_before_open,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "changed immediately"):
+                    installer._delete_bound_tree(quarantine, authorized)
+
+            self.assertTrue(swapped)
+            self.assertEqual(owned.read_bytes(), b"same bytes")
+            self.assertEqual(stashed.read_bytes(), b"same bytes")
+
+    def test_preopen_empty_directory_replacement_is_not_authorized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            quarantine = root / "quarantine"
+            owned = quarantine / "owned-empty-directory"
+            owned.mkdir(parents=True)
+            authorized = installer._capture_path_snapshot(quarantine)
+            stashed = root / "authorized-directory-stashed"
+            outside = root / "outside-user-directory"
+            outside.mkdir()
+            original_delete = installer._delete_empty_directory_by_handle
+            swapped = False
+
+            def swap_before_open(path: Path, expected_identity):
+                nonlocal swapped
+                if path == owned and not swapped:
+                    swapped = True
+                    path.rename(stashed)
+                    outside.rename(path)
+                return original_delete(path, expected_identity)
+
+            with mock.patch.object(
+                installer,
+                "_delete_empty_directory_by_handle",
+                swap_before_open,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "not transaction-authorized"):
+                    installer._delete_bound_tree(quarantine, authorized)
+
+            self.assertTrue(swapped)
+            self.assertTrue(owned.is_dir())
+            self.assertTrue(stashed.is_dir())
+
     def test_bound_deletion_refuses_hard_linked_leaf(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
