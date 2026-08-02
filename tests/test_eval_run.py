@@ -876,6 +876,52 @@ class EvalRunProviderTests(unittest.TestCase):
         }
         self.assertEqual(len(suffixes), 1)
 
+    def test_secret_redaction_is_stable_and_exception_stringification_fails_closed(self) -> None:
+        detail = eval_run._safe_exception_detail(
+            Exception(
+                "Authorization: Bearer header-secret "
+                "X-Api-Key: secondary-secret exact-secret"
+            ),
+            "exact-secret",
+        )
+        self.assertEqual(
+            detail,
+            "Authorization: Bearer [REDACTED] X-Api-Key: [REDACTED] [REDACTED]",
+        )
+
+        class BrokenStringError(Exception):
+            def __str__(self) -> str:
+                raise RuntimeError("stringification failed")
+
+        self.assertEqual(
+            eval_run._safe_exception_detail(BrokenStringError(), "secret"),
+            "BrokenStringError",
+        )
+        surrogate_detail = eval_run._safe_exception_detail(
+            Exception("bad surrogate \ud800 exact-secret"), "exact-secret"
+        )
+        self.assertEqual(surrogate_detail, "bad surrogate \\ud800 [REDACTED]")
+        surrogate_detail.encode("utf-8")
+
+    def test_transport_rejects_non_byte_success_bodies_after_closing(self) -> None:
+        provider, endpoint, model = eval_run.resolve_provider(
+            "minimax", "global_en", None
+        )
+        manager = mock.MagicMock()
+        manager.__enter__.return_value.read.return_value = "not bytes"
+        with (
+            mock.patch.object(
+                eval_run.urllib.request, "urlopen", return_value=manager
+            ),
+            self.assertRaisesRegex(
+                eval_run.ProviderResponseError, "body must be bytes"
+            ),
+        ):
+            eval_run.call_api(
+                "system", "user", model, "test-key", provider, endpoint
+            )
+        manager.__exit__.assert_called_once_with(None, None, None)
+
     def test_http_url_and_schema_errors_never_expose_credentials(self) -> None:
         provider, endpoint, model = eval_run.resolve_provider(
             "minimax", "global_en", None

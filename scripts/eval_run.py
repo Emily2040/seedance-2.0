@@ -233,11 +233,23 @@ def _safe_exception_detail(
     limit: int = 240,
 ) -> str:
     """Redact credentials and keep a bounded, single-line transport reason."""
-    detail = str(exc) or type(exc).__name__
+    try:
+        detail = str(exc) or type(exc).__name__
+    except Exception:
+        detail = type(exc).__name__
+    if not _is_utf8_encodable(detail):
+        detail = detail.encode("utf-8", errors="backslashreplace").decode("utf-8")
+    redaction_sentinel = '"<seedance-redacted>"'
     if api_key:
-        detail = re.sub(re.escape(api_key), "[REDACTED]", detail, flags=re.I)
+        detail = re.sub(
+            re.escape(api_key), redaction_sentinel, detail, flags=re.I
+        )
     for pattern in SECRET_PATTERNS:
-        detail = pattern.sub(lambda match: match.group(1) + "[REDACTED]", detail)
+        detail = pattern.sub(
+            lambda match: match.group(1) + redaction_sentinel,
+            detail,
+        )
+    detail = detail.replace(redaction_sentinel, "[REDACTED]")
     detail = re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]+", " ", detail).strip()
     return (detail or type(exc).__name__)[:limit]
 
@@ -278,6 +290,8 @@ def _read_api_response(
         manager.__exit__(None, None, None)
     except Exception as exc:
         raise _transport_failure("exit", exc, api_key) from None
+    if not isinstance(raw_body, bytes):
+        raise ProviderResponseError("model API response body must be bytes")
     if len(raw_body) > MAX_PROVIDER_RESPONSE_BYTES:
         raise ProviderResponseError(
             f"model API response exceeded {MAX_PROVIDER_RESPONSE_BYTES} bytes"
