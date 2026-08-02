@@ -159,12 +159,14 @@ scripts/eval_schema_check.py
 scripts/extract_last_frame.py
 scripts/generation_run_check.py
 scripts/install_codex_skill.py
+scripts/lineage_contract.py
 scripts/project_state_check.py
 scripts/prompt_architecture_stress.py
 scripts/prompt_lint.py
 scripts/schema_check.py
 scripts/sequence_eval_check.py
 scripts/source_registry_check.py
+scripts/strict_json.py
 scripts/validate_skills.py
 scripts/vocab_schema_check.py
 skills/seedance-antislop/SKILL.md

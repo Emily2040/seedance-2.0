@@ -988,6 +988,8 @@ class InstallPayloadTests(unittest.TestCase):
             "SKILL.md",
             "agents/openai.yaml",
             "scripts/install_codex_skill.py",
+            "scripts/lineage_contract.py",
+            "scripts/strict_json.py",
             installer.PAYLOAD_MANIFEST.as_posix(),
             *validate_skills.REQUIRED_REFERENCES,
             *(
