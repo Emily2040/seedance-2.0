@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from datetime import date
 from pathlib import Path
 
@@ -21,6 +22,53 @@ def parse_date(text: str) -> date | None:
         return date.fromisoformat(text)
     except ValueError:
         return None
+
+
+def repository_head_date(root: Path) -> date | None:
+    """Return HEAD's stable committer date, or None outside a Git checkout.
+
+    Pull-request validation needs an upper bound for impossible future
+    verification stamps, but the wall clock is not a property of the commit.
+    Git's ``%cs`` value is stored in the commit object, so every runner judging
+    the same HEAD uses the same date.  Downloaded archives have no such anchor;
+    they still receive syntax and checked-in cross-file consistency checks.
+    """
+    try:
+        top_level_result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    # `git -C` searches parent directories.  Without this containment check,
+    # an extracted archive nested inside an unrelated checkout would inherit
+    # that checkout's HEAD date and receive a false future-date verdict.
+    top_level = top_level_result.stdout.rstrip("\r\n")
+    try:
+        if not top_level or Path(top_level).resolve() != root.resolve():
+            return None
+    except OSError:
+        return None
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "show", "-s", "--format=%cs", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    raw = result.stdout.strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        return None
+    return parse_date(raw)
 
 
 def checked_in_last_verified(
@@ -46,9 +94,10 @@ def checked_in_last_verified(
     if verified is None:
         errors.append(f"{label} has invalid last_verified date `{raw}`")
         return None
-    # Calendar ordering is release/scheduled evidence, not a property of a
-    # commit.  Ordinary pull-request validation passes ``None`` so the same
-    # tree cannot fail in one timezone and pass after the date boundary.
+    # The caller supplies either today's date for explicit freshness
+    # enforcement or the stable HEAD date for pull-request validation.  It
+    # passes None only when no deterministic anchor exists (for example, a
+    # downloaded archive with no Git metadata).
     if today is not None and verified > today:
         days = (verified - today).days
         errors.append(
@@ -105,7 +154,8 @@ def main() -> int:
     root = Path(args.repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
-    enforcement_date = date.today() if args.enforce_freshness else None
+    freshness_date = date.today() if args.enforce_freshness else None
+    ordering_date = freshness_date or repository_head_date(root)
 
     registry = root / "references" / "source-registry.md"
     if not registry.exists():
@@ -113,11 +163,11 @@ def main() -> int:
     else:
         text = registry.read_text(encoding="utf-8")
         verified = checked_in_last_verified(
-            text, "source-registry.md", enforcement_date, errors
+            text, "source-registry.md", ordering_date, errors
         )
-        if verified and enforcement_date is not None:
+        if verified and freshness_date is not None:
             stale_errors, stale_warnings = freshness_findings(
-                verified, enforcement_date, True
+                verified, freshness_date, True
             )
             errors.extend(stale_errors)
             warnings.extend(stale_warnings)
@@ -171,7 +221,7 @@ def main() -> int:
         anchor = checked_in_last_verified(
             api_status.read_text(encoding="utf-8"),
             "api-status.md",
-            enforcement_date,
+            ordering_date,
             errors,
         )
         if anchor:
@@ -186,7 +236,7 @@ def main() -> int:
                 ref_verified = checked_in_last_verified(
                     ref.read_text(encoding="utf-8"),
                     name,
-                    enforcement_date,
+                    ordering_date,
                     errors,
                 )
                 if ref_verified is None:

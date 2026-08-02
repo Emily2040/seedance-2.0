@@ -3,14 +3,17 @@
 The source registry carries a `last_verified` date. Comparing it against the
 wall clock is useful signal, but it is not a property of the commit: the same
 tree flips from passing to failing as the calendar advances. These tests pin
-the boundaries so per-pull-request validation stays deterministic and only
-explicit enforcement can fail.
+the boundaries so per-pull-request validation uses the stable HEAD date to
+reject impossible future stamps, while only explicit enforcement can fail on
+wall-clock age.
 """
 
 from __future__ import annotations
 
 import io
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -31,6 +34,41 @@ VERIFIED = date(2026, 6, 20)
 def findings(age_days: int, enforce: bool) -> tuple[list[str], list[str]]:
     today = date.fromordinal(VERIFIED.toordinal() + age_days)
     return checker.freshness_findings(VERIFIED, today, enforce)
+
+
+def commit_fixture(repo: Path, commit_date: date) -> None:
+    """Create one deterministic commit rooted exactly at ``repo``."""
+    commit_timestamp = f"{commit_date.isoformat()}T12:00:00+00:00"
+    git_environment = os.environ.copy()
+    git_environment.update(
+        {
+            "GIT_AUTHOR_DATE": commit_timestamp,
+            "GIT_COMMITTER_DATE": commit_timestamp,
+        }
+    )
+    subprocess.run(
+        ["git", "init", "--quiet"], cwd=repo, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "add", "."], cwd=repo, check=True, capture_output=True
+    )
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "fixture",
+        ],
+        cwd=repo,
+        env=git_environment,
+        check=True,
+        capture_output=True,
+    )
 
 
 class FreshnessClassificationTests(unittest.TestCase):
@@ -123,6 +161,7 @@ class CommandLineBehaviourTests(unittest.TestCase):
         reference_text: str | None = None,
         fixture_observer: Callable[[Path], None] | None = None,
         enforce_freshness: bool = True,
+        commit_date: date | None = None,
     ) -> subprocess.CompletedProcess[str]:
         today = date.today()
         registry_verified = registry_verified or today
@@ -176,6 +215,8 @@ class CommandLineBehaviourTests(unittest.TestCase):
             (data_dir / "sources.seedance-2026-05-30.json").write_text(
                 json.dumps({"sources": sources}), encoding="utf-8"
             )
+            if commit_date is not None:
+                commit_fixture(repo, commit_date)
             command = [sys.executable, str(self.script), str(repo), "--strict"]
             if enforce_freshness:
                 command.append("--enforce-freshness")
@@ -239,18 +280,45 @@ class CommandLineBehaviourTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("future", result.stdout.lower())
 
-    def test_default_pr_mode_is_independent_of_future_calendar_ordering(self) -> None:
-        future = date.today() + timedelta(days=3650)
+    @unittest.skipUnless(shutil.which("git"), "requires Git for a stable PR commit date")
+    def test_default_pr_mode_rejects_stamps_after_the_commit_date(self) -> None:
+        future = VERIFIED + timedelta(days=1)
         stamp = f"last_verified: {future.isoformat()}\n"
         result = self.run_fixture(
             registry_verified=future,
             api_status_text=stamp,
             reference_text=stamp,
             enforce_freshness=False,
+            commit_date=VERIFIED,
         )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertNotIn("future", result.stdout.lower())
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("future", result.stdout.lower())
         self.assertNotIn("days old", result.stdout.lower())
+
+    @unittest.skipUnless(shutil.which("git"), "requires Git for repository containment")
+    def test_nested_non_repository_does_not_inherit_parent_head_date(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-anchor-parent-") as temp_dir:
+            parent = Path(temp_dir)
+            (parent / "tracked.txt").write_text("parent\n", encoding="utf-8")
+            commit_fixture(parent, VERIFIED)
+            nested_archive = parent / "downloaded archive"
+            nested_archive.mkdir()
+
+            self.assertIsNone(checker.repository_head_date(nested_archive))
+
+    @unittest.skipUnless(shutil.which("git"), "requires Git for a stable PR commit date")
+    def test_linked_worktree_root_uses_its_own_head_date(self) -> None:
+        expected = subprocess.run(
+            ["git", "-C", str(self.root), "show", "-s", "--format=%cs", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        self.assertEqual(
+            checker.repository_head_date(self.root),
+            date.fromisoformat(expected),
+        )
 
     def test_green_output_refuses_live_verification_claim(self) -> None:
         result = self.run_fixture()
