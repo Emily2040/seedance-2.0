@@ -204,6 +204,54 @@ class ContinuityChainTests(unittest.TestCase):
                 project_errors, continuity_errors = self.validate_mutated_project_with_both(mutate)
                 self.assertTrue(project_errors, label)
                 self.assertTrue(continuity_errors, label)
+    def test_malformed_public_inputs_return_diagnostics_instead_of_crashing(self) -> None:
+        malformed_documents = (
+            [],
+            {"clips": {}},
+            {"clips": ["not-an-object"]},
+            {"clips": [{"clip_id": []}]},
+            {
+                "clips": [
+                    {"clip_id": "parent", "status": "accepted"},
+                    {
+                        "clip_id": "child",
+                        "parent_clip_id": [],
+                        "status": "ready",
+                    },
+                ]
+            },
+            {
+                "clips": [
+                    {
+                        "clip_id": "parent",
+                        "status": "accepted",
+                        "observed_end_state": [],
+                    },
+                    {
+                        "clip_id": "child",
+                        "parent_clip_id": "parent",
+                        "status": "ready",
+                        "planned_start_state": [],
+                    },
+                ]
+            },
+        )
+        for document in malformed_documents:
+            with self.subTest(document=document), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                path = root / "project-state.json"
+                path.write_text(json.dumps(document), encoding="utf-8")
+                errors, warnings = continuity_chain_check.validate(path, root)
+                self.assertTrue(errors)
+                self.assertEqual(warnings, [])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "project-state.json"
+            path.write_text('{"clips": [', encoding="utf-8")
+            errors, warnings = continuity_chain_check.validate(path, root)
+            self.assertTrue(any("cannot load" in error for error in errors), errors)
+            self.assertEqual(warnings, [])
 
     def test_generic_intentional_transition_does_not_waive_immutable_fields(self) -> None:
         errors, _ = self.validate_states(
@@ -286,6 +334,157 @@ class ContinuityChainTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(warnings, [])
 
+    def test_negated_allowed_change_does_not_waive_wardrobe(self) -> None:
+        errors, _ = self.validate_states(
+            {"character": {"wardrobe": "red coat"}},
+            {"character": {"wardrobe": "blue coat"}},
+            allowed_changes=["do not change wardrobe"],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_unchanged_deviation_does_not_waive_wardrobe(self) -> None:
+        errors, _ = self.validate_states(
+            {"character": {"wardrobe": "red coat"}},
+            {"character": {"wardrobe": "blue coat"}},
+            accepted_deviations=["wardrobe remains unchanged"],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_negated_transition_does_not_waive_wardrobe(self) -> None:
+        errors, _ = self.validate_states(
+            {"character": {"wardrobe": "red coat"}},
+            {"character": {"wardrobe": "blue coat"}},
+            transition_in="wardrobe doesn't change in this transition",
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_positive_clause_after_negated_clause_still_waives_wardrobe(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "character": {"wardrobe": "red coat"},
+                "environment": {"location": "studio-a"},
+            },
+            {
+                "character": {"wardrobe": "blue coat"},
+                "environment": {"location": "studio-b"},
+            },
+            allowed_changes=["location must not change; wardrobe may change"],
+        )
+
+        self.assertFalse(any("wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("location" in error for error in errors), errors)
+        self.assertEqual(warnings, [])
+
+    def test_negated_mapping_value_does_not_turn_its_key_into_a_waiver(self) -> None:
+        errors, _ = self.validate_states(
+            {"character": {"wardrobe": "red coat"}},
+            {"character": {"wardrobe": "blue coat"}},
+            allowed_changes=[{"wardrobe": "must not change"}],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_bare_field_name_remains_an_explicit_waiver_shorthand(self) -> None:
+        errors, warnings = self.validate_states(
+            {"character": {"wardrobe": "red coat"}},
+            {"character": {"wardrobe": "blue coat"}},
+            allowed_changes=["wardrobe"],
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_vague_continuity_mention_does_not_waive_wardrobe(self) -> None:
+        errors, _ = self.validate_states(
+            {"character": {"wardrobe": "red coat"}},
+            {"character": {"wardrobe": "blue coat"}},
+            allowed_changes=["wardrobe continuity"],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_structured_allowance_placeholders_do_not_create_waivers(self) -> None:
+        for allowance in (
+            {"wardrobe": {}},
+            {"wardrobe": []},
+            {"wardrobe": None},
+            {"wardrobe": {"location": "may change"}},
+        ):
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {"character": {"wardrobe": "red coat"}},
+                    {"character": {"wardrobe": "blue coat"}},
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_additional_denial_language_does_not_create_waivers(self) -> None:
+        for allowance in ("wardrobe changes prohibited", "avoid wardrobe change"):
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {"character": {"wardrobe": "red coat"}},
+                    {"character": {"wardrobe": "blue coat"}},
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_entity_qualified_waiver_only_applies_to_that_entity(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "white coat",
+                    },
+                }
+            },
+            allowed_changes=["hero wardrobe may change"],
+        )
+
+        self.assertFalse(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("characters.guide.wardrobe" in error for error in errors), errors)
+        self.assertEqual(warnings, [])
+
+    def test_entity_qualified_waiver_does_not_excuse_collection_replacement(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero", "wardrobe": "red coat"},
+                    {"canonical_identity_id": "guide", "wardrobe": "black coat"},
+                ]
+            },
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero", "wardrobe": "red coat"},
+                    {"canonical_identity_id": "newcomer", "wardrobe": "black coat"},
+                ]
+            },
+            allowed_changes=["guide canonical identity may change"],
+        )
+
+        self.assertTrue(any("inventory changes" in error for error in errors), errors)
+
     def test_product_identity_allowance_does_not_waive_character_identity(self) -> None:
         errors, _ = self.validate_states(
             {
@@ -334,6 +533,15 @@ class ContinuityChainTests(unittest.TestCase):
         self.assertTrue(any("location" in error for error in errors), errors)
         self.assertFalse(any("travel_direction" in warning for warning in warnings), warnings)
 
+    def test_negated_axis_reset_does_not_waive_travel_direction(self) -> None:
+        _, warnings = self.validate_states(
+            {"character": {"travel_direction": "left-to-right"}},
+            {"character": {"travel_direction": "right-to-left"}},
+            allowed_changes=["no axis reset"],
+        )
+
+        self.assertTrue(any("travel_direction" in warning for warning in warnings), warnings)
+
     def test_null_state_values_remain_not_comparable(self) -> None:
         errors, warnings = self.validate_states(
             {"character": {"wardrobe": None}},
@@ -342,6 +550,77 @@ class ContinuityChainTests(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(warnings, [])
+
+    def test_non_null_immutable_field_cannot_disappear(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                }
+            },
+            {"character": {"canonical_identity_id": "hero"}},
+        )
+
+        self.assertTrue(
+            any("wardrobe disappears without allowance" in error for error in errors),
+            errors,
+        )
+
+    def test_non_null_immutable_field_cannot_appear(self) -> None:
+        errors, _ = self.validate_states(
+            {"character": {"canonical_identity_id": "hero"}},
+            {
+                "character": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                }
+            },
+        )
+
+        self.assertTrue(
+            any("wardrobe appears without allowance" in error for error in errors),
+            errors,
+        )
+
+    def test_positional_tracked_collection_cannot_disappear(self) -> None:
+        errors, _ = self.validate_states(
+            {"characters": [{"wardrobe": "red coat"}]},
+            {"characters": []},
+        )
+
+        self.assertTrue(
+            any("wardrobe disappears without allowance" in error for error in errors),
+            errors,
+        )
+
+    def test_cjk_entity_qualified_waiver_does_not_become_global(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": "英雄", "wardrobe": "red coat"},
+                    {"canonical_identity_id": "向导", "wardrobe": "black coat"},
+                ]
+            },
+            {
+                "characters": [
+                    {"canonical_identity_id": "英雄", "wardrobe": "blue coat"},
+                    {"canonical_identity_id": "向导", "wardrobe": "white coat"},
+                ]
+            },
+            allowed_changes=["英雄 wardrobe may change"],
+        )
+
+        self.assertFalse(any("英雄.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("向导.wardrobe" in error for error in errors), errors)
+
+    def test_whitespace_only_canonical_identity_is_rejected(self) -> None:
+        errors, _ = self.validate_states(
+            {"character": {"canonical_identity_id": "   ", "wardrobe": "red"}},
+            {"character": {"canonical_identity_id": "   ", "wardrobe": "red"}},
+        )
+
+        self.assertTrue(any("canonical_identity_id" in error for error in errors), errors)
 
     def test_all_nested_characters_are_compared_by_character_id(self) -> None:
         errors, _ = self.validate_states(
@@ -464,7 +743,7 @@ class ContinuityChainTests(unittest.TestCase):
 
         self.assertTrue(any("canonical_identity_id" in error for error in errors), errors)
 
-    def test_singleton_fields_on_different_named_entities_are_not_compared(self) -> None:
+    def test_singleton_canonical_entity_replacement_is_rejected(self) -> None:
         errors, warnings = self.validate_states(
             {
                 "characters": {
@@ -484,7 +763,7 @@ class ContinuityChainTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(errors, [])
+        self.assertTrue(any("inventory changes" in error for error in errors), errors)
         self.assertEqual(warnings, [])
 
     def test_singleton_fields_on_the_same_named_entity_are_still_compared(self) -> None:
@@ -494,6 +773,407 @@ class ContinuityChainTests(unittest.TestCase):
         )
 
         self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
+
+    def test_duplicate_canonical_identity_cannot_collapse_field_drift(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero", "wardrobe": "red coat"},
+                    {"canonical_identity_id": "hero", "wardrobe": "blue coat"},
+                ]
+            },
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero", "wardrobe": "green coat"},
+                    {"canonical_identity_id": "hero", "wardrobe": "blue coat"},
+                ]
+            },
+        )
+
+        self.assertTrue(any("is duplicated" in error for error in errors), errors)
+
+    def test_canonical_identity_matches_across_dictionary_key_rename(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    }
+                }
+            },
+            {
+                "characters": {
+                    "lead": {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "blue coat",
+                    }
+                }
+            },
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_canonical_identity_matches_across_list_to_dictionary_reshape(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    }
+                ]
+            },
+            {
+                "characters": {
+                    "lead": {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "blue coat",
+                    }
+                }
+            },
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_canonical_field_matches_after_nested_container_move(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    }
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero-a",
+                        "appearance": {"wardrobe": "blue coat"},
+                    }
+                }
+            },
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_mixed_canonical_and_positional_records_are_rejected(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero-a", "wardrobe": "red coat"},
+                    {"wardrobe": "blue coat"},
+                ]
+            },
+            {
+                "characters": [
+                    {"wardrobe": "green coat"},
+                    {"canonical_identity_id": "hero-a", "wardrobe": "red coat"},
+                ]
+            },
+        )
+
+        self.assertTrue(any("mixes canonical-identity" in error for error in errors), errors)
+
+    def test_integer_and_string_canonical_identities_do_not_collide(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": 1, "wardrobe": "red coat"},
+                    {"canonical_identity_id": "1", "wardrobe": "blue coat"},
+                ]
+            },
+            {
+                "characters": [
+                    {"canonical_identity_id": "1", "wardrobe": "blue coat"},
+                    {"canonical_identity_id": 1, "wardrobe": "red coat"},
+                ]
+            },
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_repeated_field_within_one_canonical_entity_is_rejected(self) -> None:
+        state = {
+            "character": {
+                "canonical_identity_id": "hero-a",
+                "wardrobe": "red coat",
+                "appearance": {"wardrobe": "blue coat"},
+            }
+        }
+        errors, _ = self.validate_states(state, state)
+
+        self.assertTrue(any("ambiguous repeated" in error for error in errors), errors)
+
+    def test_duplicate_fallback_list_identity_is_rejected(self) -> None:
+        state = {
+            "characters": [
+                {"id": "hero", "wardrobe": "red coat"},
+                {"id": "hero", "wardrobe": "blue coat"},
+            ]
+        }
+        errors, _ = self.validate_states(state, state)
+
+        self.assertTrue(any("duplicate list identities" in error for error in errors), errors)
+
+    def test_canonical_collection_cannot_disappear_into_an_empty_list(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero-a", "wardrobe": "red coat"}
+                ]
+            },
+            {"characters": []},
+        )
+
+        self.assertTrue(any("inventory changes" in error for error in errors), errors)
+
+    def test_canonical_collection_cannot_become_positional_records(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero-a", "wardrobe": "red coat"}
+                ]
+            },
+            {"characters": [{"wardrobe": "red coat"}]},
+        )
+
+        self.assertTrue(any("inventory changes" in error for error in errors), errors)
+
+    def test_nested_collection_inventory_survives_parent_path_rename(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "groups": {
+                    "primary": {
+                        "canonical_identity_id": "team-a",
+                        "members": [
+                            {"canonical_identity_id": "hero-a", "wardrobe": "red coat"}
+                        ],
+                    }
+                }
+            },
+            {
+                "groups": {
+                    "renamed": {
+                        "canonical_identity_id": "team-a",
+                        "members": [
+                            {"canonical_identity_id": "guide-a", "wardrobe": "red coat"}
+                        ],
+                    }
+                }
+            },
+        )
+
+        self.assertTrue(any("inventory changes" in error for error in errors), errors)
+
+    def test_wrapped_list_records_cannot_hide_reorder_and_replacement(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "slots": [
+                    {
+                        "record": {
+                            "canonical_identity_id": "hero",
+                            "wardrobe": "red coat",
+                        }
+                    },
+                    {
+                        "record": {
+                            "canonical_identity_id": "guide",
+                            "wardrobe": "blue coat",
+                        }
+                    },
+                ]
+            },
+            {
+                "slots": [
+                    {
+                        "record": {
+                            "canonical_identity_id": "guide",
+                            "wardrobe": "blue coat",
+                        }
+                    },
+                    {
+                        "record": {
+                            "canonical_identity_id": "newcomer",
+                            "wardrobe": "green coat",
+                        }
+                    },
+                ]
+            },
+        )
+
+        self.assertTrue(any("inventory changes" in error for error in errors), errors)
+
+    def test_longest_identity_alias_prevents_overlapping_scope_leak(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "super_hero": {
+                        "canonical_identity_id": "super hero",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "super_hero": {
+                        "canonical_identity_id": "super hero",
+                        "wardrobe": "white coat",
+                    },
+                }
+            },
+            allowed_changes=["super hero wardrobe may change"],
+        )
+
+        self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertFalse(
+            any("characters.super_hero.wardrobe" in error for error in errors),
+            errors,
+        )
+
+    def test_multi_identity_clause_is_not_treated_as_scoped_waiver(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            allowed_changes=["hero wardrobe may change while guide watches"],
+        )
+
+        self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
+
+    def test_dictionary_key_alias_scopes_nonexact_canonical_id(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide-a",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero-a",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide-a",
+                        "wardrobe": "white coat",
+                    },
+                }
+            },
+            allowed_changes=["hero wardrobe may change"],
+        )
+
+        self.assertFalse(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("characters.guide.wardrobe" in error for error in errors), errors)
+
+    def test_unknown_entity_qualifier_does_not_become_global_waiver(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {
+                    "canonical_identity_id": "hero-a",
+                    "wardrobe": "red coat",
+                }
+            },
+            {
+                "character": {
+                    "canonical_identity_id": "hero-a",
+                    "wardrobe": "blue coat",
+                }
+            },
+            allowed_changes=["hero wardrobe may change"],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_fallback_list_identity_replacement_is_rejected(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"id": "hero", "wardrobe": "red coat"},
+                    {"id": "guide", "wardrobe": "black coat"},
+                ]
+            },
+            {
+                "characters": [
+                    {"id": "hero", "wardrobe": "red coat"},
+                    {"id": "newcomer", "wardrobe": "black coat"},
+                ]
+            },
+        )
+
+        self.assertTrue(any("fallback list identity" in error for error in errors), errors)
+
+    def test_wrapped_fallback_identity_replacement_is_rejected(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"record": {"id": "hero", "wardrobe": "red coat"}},
+                    {"record": {"id": "guide", "wardrobe": "black coat"}},
+                ]
+            },
+            {
+                "characters": [
+                    {"record": {"id": "guide", "wardrobe": "black coat"}},
+                    {"record": {"id": "newcomer", "wardrobe": "red coat"}},
+                ]
+            },
+        )
+
+        self.assertTrue(any("fallback list identity" in error for error in errors), errors)
+
+    def test_renamed_collection_cannot_hide_canonical_replacement(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"canonical_identity_id": "hero", "wardrobe": "red coat"}
+                ]
+            },
+            {
+                "cast": [
+                    {"canonical_identity_id": "guide", "wardrobe": "red coat"}
+                ]
+            },
+        )
+
+        self.assertTrue(any("canonical_identity_id inventory" in error for error in errors), errors)
 
 
 if __name__ == "__main__":
