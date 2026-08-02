@@ -78,6 +78,7 @@ references/delivery-qc.md
 references/dense-storyboard-mode.md
 references/directing-engine-genre-library.md
 references/directing-engine.md
+references/directors-read.md
 references/eval-rubric.md
 references/event-density.md
 references/examples-by-mode.md
@@ -197,6 +198,7 @@ skills/seedance-vocab-ja/SKILL.md
 skills/seedance-vocab-ko/SKILL.md
 skills/seedance-vocab-ru/SKILL.md
 skills/seedance-vocab-zh/SKILL.md
+validation/fixtures/directors-read-cases.json
 validation/fixtures/generation-run.valid.json
 validation/fixtures/prompt-spec.valid.json
 validation/install-payload.txt
