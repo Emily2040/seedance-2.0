@@ -54,6 +54,7 @@ examples/sequence-airport-arrival/clip-02-continuation-contract.json
 examples/sequence-airport-arrival/clip-02-prompt.md
 examples/sequence-airport-arrival/project-state.json
 examples/sequence-airport-arrival/sequence-plan.md
+examples/sequence-mixed-lane/project-state.json
 examples/sequence-observed-deviation/project-state-after.json
 examples/sequence-observed-deviation/project-state-before.json
 examples/sequence-observed-deviation/take-review.json
@@ -198,6 +199,7 @@ skills/seedance-vocab-ja/SKILL.md
 skills/seedance-vocab-ko/SKILL.md
 skills/seedance-vocab-ru/SKILL.md
 skills/seedance-vocab-zh/SKILL.md
+validation/authoring-state-provenance-ledger.json
 validation/fixtures/directors-read-cases.json
 validation/fixtures/generation-run.valid.json
 validation/fixtures/prompt-spec.valid.json
