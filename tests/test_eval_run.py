@@ -22,8 +22,9 @@ class FakeResponse:
     def __exit__(self, *_args: object) -> None:
         return None
 
-    def read(self) -> bytes:
-        return b'{"content":[{"type":"text","text":"ok"}]}'
+    def read(self, amount: int = -1) -> bytes:
+        body = b'{"content":[{"type":"text","text":"ok"}]}'
+        return body if amount < 0 else body[:amount]
 
 
 class EvalRunProviderTests(unittest.TestCase):
