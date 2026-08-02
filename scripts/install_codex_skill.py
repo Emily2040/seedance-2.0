@@ -51,6 +51,10 @@ RUNTIME_DEPENDENCY_PREFIXES = ((b"[ref:", "ref"), (b"[skill:", "skill"))
 REPLACEMENT_STATES = frozenset({"missing", "complete", "incomplete", "unknown"})
 PORTABLE_DIRECTORY_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
 PORTABLE_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
+WINDOWS_PORTABLE_DIRECTORY_LIMIT = 247
+WINDOWS_PORTABLE_FILE_LIMIT = 259
+WINDOWS_PORTABLE_COMPONENT_LIMIT = 255
+WINDOWS_MAX_PID_DIGITS = 10
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -981,6 +985,112 @@ def payload_allowlist_filter(repo_root: Path, declared: tuple[str, ...]):
         return ignored
 
     return ignore_undeclared
+
+
+def windows_utf16_units(value: Path | str) -> int:
+    """Count Windows path units, where non-BMP characters consume two units."""
+    return len(str(value).encode("utf-16-le", errors="surrogatepass")) // 2
+
+
+def planned_windows_install_paths(
+    skills_dir: Path,
+    contract: PayloadContract,
+) -> Iterator[tuple[str, Path, bool]]:
+    """Yield every predictable live and transactional path the installer may use."""
+    if not isinstance(contract, PayloadContract):
+        raise TypeError("Windows path planning requires a frozen payload contract")
+    root = _absolute_lexical(skills_dir)
+    transaction_id = "f" * 32
+    roots = (
+        ("live install", root / SKILL_NAME),
+        (
+            "transaction stage",
+            root / f"{STAGE_PREFIX}{'9' * WINDOWS_MAX_PID_DIGITS}-{transaction_id}",
+        ),
+        ("transaction quarantine", root / f"{QUARANTINE_PREFIX}{transaction_id}"),
+        ("transaction backup", root / BACKUP_NAME),
+    )
+    yield ("skills directory", root, True)
+    for label, filename in (
+        ("install lock", LOCK_NAME),
+        ("transaction record", TRANSACTION_NAME),
+        ("completed transaction record", f"{TRANSACTION_DONE_PREFIX}{transaction_id}"),
+    ):
+        yield (label, root / filename, False)
+
+    payload_directories = sorted(_implied_payload_directories(contract.declared))
+    internal_files = (COMPLETION_MARKER, PROVENANCE_MARKER)
+    for root_label, install_root in roots:
+        yield (f"{root_label} root", install_root, True)
+        for relative in payload_directories:
+            path = install_root.joinpath(*PurePosixPath(relative).parts)
+            yield (f"{root_label} payload directory: {relative}", path, True)
+        for relative in contract.declared:
+            path = install_root.joinpath(*PurePosixPath(relative).parts)
+            yield (f"{root_label} payload file: {relative}", path, False)
+        for relative in internal_files:
+            yield (f"{root_label} metadata file: {relative}", install_root / relative, False)
+        if root_label == "transaction quarantine":
+            yield (
+                f"{root_label} metadata file: {QUARANTINE_MARKER}",
+                install_root / QUARANTINE_MARKER,
+                False,
+            )
+
+
+def _overlong_component(path: Path) -> tuple[str, int] | None:
+    anchor = path.anchor
+    for component in path.parts:
+        if component == anchor:
+            continue
+        units = windows_utf16_units(component)
+        if units > WINDOWS_PORTABLE_COMPONENT_LIMIT:
+            return component, units
+    return None
+
+
+def assert_windows_portable_install_path(
+    skills_dir: Path,
+    contract: PayloadContract,
+) -> None:
+    """Refuse a plan that requires legacy-incompatible Windows paths."""
+    worst: tuple[int, int, int, str, Path, str] | None = None
+    for label, path, is_directory in planned_windows_install_paths(skills_dir, contract):
+        component = _overlong_component(path)
+        if component is not None:
+            name, units = component
+            raise ValueError(
+                "Windows portable component limit would be exceeded.\n"
+                f"Component uses {units} UTF-16 code units; safe limit is "
+                f"{WINDOWS_PORTABLE_COMPONENT_LIMIT}.\n"
+                "Choose a shorter --dest with components of 255 units or fewer. "
+                "No installer files were written.\n"
+                f"Installer artifact: {label}\n"
+                f"Component: {_bounded_diagnostic(name, 180)}"
+            )
+        limit = (
+            WINDOWS_PORTABLE_DIRECTORY_LIMIT
+            if is_directory
+            else WINDOWS_PORTABLE_FILE_LIMIT
+        )
+        units = windows_utf16_units(path)
+        if units <= limit:
+            continue
+        kind = "directory" if is_directory else "file"
+        violation = (units - limit, units, limit, label, path, kind)
+        if worst is None or violation[:4] > worst[:4]:
+            worst = violation
+    if worst is None:
+        return
+    _excess, units, limit, label, path, kind = worst
+    raise ValueError(
+        "Windows portable path limit would be exceeded.\n"
+        f"Predicted {kind} path uses {units} UTF-16 code units; safe limit is {limit}.\n"
+        "Choose a shorter --dest (for example C:\\Codex\\skills), or set "
+        "CODEX_HOME closer to the drive root. No installer files were written.\n"
+        f"Installer artifact: {label}\n"
+        f"Predicted path: {path}"
+    )
 
 
 def _capture_path_snapshot(path: Path) -> PathSnapshot:
@@ -4934,7 +5044,9 @@ def main() -> int:
     # Reported as a message rather than a traceback: this is the first command a
     # new user runs, and a stack trace reads as "the tool is broken".
     try:
-        _load_payload_contract_once(repo_root)
+        preflight_contract = _load_payload_contract_once(repo_root)
+        if os.name == "nt":
+            assert_windows_portable_install_path(skills_dir, preflight_contract)
         assert_safe_preflight(destination, skills_dir, repo_root)
     except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as exc:
         safe_print(f"Refusing to install: {_bounded_diagnostic(exc)}")
