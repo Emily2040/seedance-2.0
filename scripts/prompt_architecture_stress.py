@@ -884,6 +884,8 @@ def opposite_action_mutation(left: str, right: str) -> bool:
 def materially_different_briefs(left: str, right: str) -> bool:
     if normalized_prompt(left) == normalized_prompt(right):
         return False
+    if opposite_action_mutation(left, right):
+        return True
     left_terms = trace_terms(left) or set(lexical_tokens(left))
     right_terms = trace_terms(right) or set(lexical_tokens(right))
     union = left_terms | right_terms

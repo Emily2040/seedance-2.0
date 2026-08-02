@@ -263,6 +263,36 @@ class AdversarialMutationTests(unittest.TestCase):
                     findings,
                 )
 
+    def test_opposite_action_briefs_are_materially_different_for_duplicate_gate(self) -> None:
+        prompt = "A courier handles the red case in the warehouse."
+        records = [
+            {
+                "id": "case-open",
+                "arm": "skill_formula",
+                "mode": "T2V",
+                "brief": "Courier opens the red case in the warehouse",
+                "prompt": prompt,
+            },
+            {
+                "id": "case-close",
+                "arm": "skill_formula",
+                "mode": "T2V",
+                "brief": "Courier closes the red case in the warehouse",
+                "prompt": prompt,
+            },
+        ]
+
+        self.assertTrue(
+            stress.materially_different_briefs(
+                records[0]["brief"], records[1]["brief"]
+            )
+        )
+        findings = stress.corpus_duplicate_findings(records)
+        self.assertTrue(
+            any("duplicate prompt" in finding for finding in findings),
+            findings,
+        )
+
     def test_duplicate_prompt_for_the_same_brief_is_not_called_cross_case_drift(self) -> None:
         prompt = next(r["prompt"] for r in shipped_corpus() if r["id"] == "b09-s")
         records = [
