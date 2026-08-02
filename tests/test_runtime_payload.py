@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sys
 import tempfile
@@ -64,6 +66,33 @@ class RuntimePayloadContractTests(unittest.TestCase):
         finally:
             sys.argv = argv
         return destination / installer.SKILL_NAME
+
+    def fixture_source(self, root: Path) -> Path:
+        source = root / "source"
+        declared = [
+            "README.md",
+            "SKILL.md",
+            "scripts/install_codex_skill.py",
+            installer.PAYLOAD_MANIFEST.as_posix(),
+        ]
+        readme = (
+            "# Fixture\n\n"
+            f"{installer.README_GALLERY_START}\n\n![missing](assets/missing.png)\n\n"
+            f"{installer.README_GALLERY_END}\n\n"
+            f"{installer.README_VALIDATION_START}\n\npython tests/missing.py\n\n"
+            f"{installer.README_VALIDATION_END}\n"
+        )
+        files = {
+            "README.md": readme,
+            "SKILL.md": "fixture skill\n",
+            "scripts/install_codex_skill.py": "# fixture installer\n",
+            installer.PAYLOAD_MANIFEST.as_posix(): "\n".join(declared) + "\n",
+        }
+        for relative, content in files.items():
+            path = source.joinpath(*relative.split("/"))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8", newline="\n")
+        return source
 
     def test_quarantined_migrated_guidance_is_not_installed(self) -> None:
         archive = ROOT / "references" / "migrated"
@@ -133,26 +162,77 @@ class RuntimePayloadContractTests(unittest.TestCase):
                 Path("references/migrated/v5.2-legacy-skill-bodies/seedance-audio.md")
             )
         )
+        self.assertTrue(installer.is_archive_only_path(Path("REFERENCES/MIGRATED/README.md")))
         self.assertFalse(installer.is_archive_only_path(Path("examples/migrated")))
         self.assertFalse(installer.is_archive_only_path(Path("references/quick-ref.md")))
+
+    def test_completion_marker_binds_the_transformed_readme_bytes(self) -> None:
+        source_before = (ROOT / "README.md").read_bytes()
+        source_contract = installer.load_payload_contract(ROOT)
+        plan = installer.build_install_payload_plan(ROOT, source_contract)
+        self.assertIsNotNone(plan.installed_readme_bytes)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self.install(Path(tmp))
+            installed_bytes = (payload / "README.md").read_bytes()
+            marker = json.loads(
+                (payload / installer.COMPLETION_MARKER).read_text(encoding="utf-8")
+            )
+
+        self.assertEqual((ROOT / "README.md").read_bytes(), source_before)
+        self.assertNotEqual(installed_bytes, source_before)
+        self.assertEqual(installed_bytes, plan.installed_readme_bytes)
+        self.assertEqual(
+            marker["files"]["README.md"],
+            {
+                "size": len(installed_bytes),
+                "sha256": hashlib.sha256(installed_bytes).hexdigest(),
+            },
+        )
+        self.assertEqual(marker["contract_sha256"], plan.installed_contract.contract_sha256)
+        self.assertNotEqual(
+            source_contract.file_manifest()["README.md"],
+            plan.installed_contract.file_manifest()["README.md"],
+        )
+
+    def test_frozen_plan_rejects_readme_mutation_and_cleans_the_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            source_contract = installer.load_payload_contract(source)
+            plan = installer.build_install_payload_plan(source, source_contract)
+            (source / "README.md").write_text(
+                "changed after plan freeze\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "source .* changed"):
+                installer.stage_validated_install(
+                    source,
+                    skills_dir,
+                    source_contract,
+                    plan,
+                )
+
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
 
     def test_installed_readme_rewrite_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload = self.install(Path(tmp))
             readme = payload / "README.md"
             first = readme.read_text(encoding="utf-8")
-            installer.rewrite_installed_readme(payload)
+            self.assertEqual(installer.rewrite_installed_readme_text(first), first)
             self.assertEqual(readme.read_text(encoding="utf-8"), first)
 
     def test_installed_readme_rewrite_fails_closed_if_markers_drift(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            payload = Path(tmp)
-            (payload / "README.md").write_text(
-                "## Visual Gallery\n\n![missing](assets/missing.png)\n",
-                encoding="utf-8",
+        with self.assertRaisesRegex(ValueError, "must each appear exactly once"):
+            installer.rewrite_installed_readme_text(
+                "## Visual Gallery\n\n![missing](assets/missing.png)\n"
             )
-            with self.assertRaisesRegex(ValueError, "must each appear exactly once"):
-                installer.rewrite_installed_readme(payload)
 
     def test_source_readme_has_one_ordered_marker_pair_per_rewritten_section(self) -> None:
         source_readme = (ROOT / "README.md").read_text(encoding="utf-8")

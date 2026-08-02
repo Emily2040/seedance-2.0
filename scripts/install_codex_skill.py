@@ -51,6 +51,16 @@ RUNTIME_DEPENDENCY_PREFIXES = ((b"[ref:", "ref"), (b"[skill:", "skill"))
 REPLACEMENT_STATES = frozenset({"missing", "complete", "incomplete", "unknown"})
 PORTABLE_DIRECTORY_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
 PORTABLE_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
+MAX_INSTALL_FILE_BYTES = 64 * 1024 * 1024
+MAX_INSTALL_PAYLOAD_BYTES = 256 * 1024 * 1024
+MAX_INSTALLED_README_BYTES = 4 * 1024 * 1024
+REPOSITORY_URL = "https://github.com/Emily2040/seedance-2.0"
+ARCHIVE_ONLY_PATHS = frozenset({"references/migrated"})
+INSTALLED_README_PATH = "README.md"
+README_GALLERY_START = "<!-- installed-readme-gallery:start -->"
+README_GALLERY_END = "<!-- installed-readme-gallery:end -->"
+README_VALIDATION_START = "<!-- installed-readme-validation:start -->"
+README_VALIDATION_END = "<!-- installed-readme-validation:end -->"
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -465,6 +475,13 @@ class PayloadContract:
         }
 
 
+@dataclass(frozen=True)
+class InstallPayloadPlan:
+    source_contract: PayloadContract
+    installed_contract: PayloadContract
+    installed_readme_bytes: bytes | None
+
+
 def _absolute_lexical(path: Path) -> Path:
     return Path(os.path.abspath(path))
 
@@ -781,6 +798,16 @@ def _normalized_payload_path(entry: str) -> bool:
     )
 
 
+def is_archive_only_path(relative_path: Path | PurePosixPath) -> bool:
+    """Return whether a source-relative path belongs only to repository history."""
+    normalized = relative_path.as_posix().strip("/").casefold()
+    return any(
+        normalized == archive.casefold()
+        or normalized.startswith(f"{archive.casefold()}/")
+        for archive in ARCHIVE_ONLY_PATHS
+    )
+
+
 def _parse_payload_manifest_bytes(manifest_path: Path, data: bytes) -> tuple[str, ...]:
     try:
         text = data.decode("utf-8")
@@ -802,6 +829,11 @@ def _parse_payload_manifest_bytes(manifest_path: Path, data: bytes) -> tuple[str
         if entry in internal:
             raise ValueError(
                 f"{manifest_path}:{line_number}: installer metadata is not payload"
+            )
+        if is_archive_only_path(PurePosixPath(entry)):
+            raise ValueError(
+                f"{manifest_path}:{line_number}: archive-only path cannot be installed: "
+                f"{_bounded_diagnostic(entry, 180)}"
             )
         if entry in declared or entry.casefold() in casefolded:
             raise ValueError(
@@ -1722,6 +1754,8 @@ def _copy_payload_file_atomic(
     transaction_raw: bytes,
     transaction_digest: str | None = None,
     component_name_max: int | None = None,
+    source_snapshot: FileSnapshot | None = None,
+    output_bytes: bytes | None = None,
 ) -> str:
     """Copy one manifest file without ever exposing a partial final pathname.
 
@@ -1752,6 +1786,19 @@ def _copy_payload_file_atomic(
     expected_digest = expected.get("sha256")
     if type(expected_size) is not int or expected_size < 0 or not _is_sha256(expected_digest):
         raise RuntimeError("copy manifest metadata is invalid")
+    if source_snapshot is None:
+        source_size = expected_size
+        source_digest = expected_digest
+    else:
+        if source_snapshot.relative != relative:
+            raise RuntimeError("copy source snapshot names a different payload path")
+        source_size = source_snapshot.size
+        source_digest = source_snapshot.sha256
+    if output_bytes is not None and (
+        len(output_bytes) != expected_size
+        or hashlib.sha256(output_bytes).hexdigest() != expected_digest
+    ):
+        raise RuntimeError("planned payload bytes differ from the transaction manifest")
 
     authenticated_digest = hashlib.sha256(transaction_raw).hexdigest()
     if transaction_digest is None:
@@ -1776,6 +1823,11 @@ def _copy_payload_file_atomic(
         or not stat.S_ISREG(before.st_mode)
     ):
         raise RuntimeError(f"refusing non-regular copy source: {_bounded_diagnostic(source_path)}")
+    if source_snapshot is not None and _stat_identity(before) != source_snapshot.identity:
+        raise RuntimeError(
+            f"copy source differs from the frozen payload: "
+            f"{_bounded_diagnostic(source_path)}"
+        )
     source_descriptor = _open_regular_read_descriptor(source_path)
     try:
         opened = os.fstat(source_descriptor)
@@ -1786,17 +1838,22 @@ def _copy_payload_file_atomic(
         digest = hashlib.sha256()
         copied = 0
         try:
-            while copied < expected_size:
+            while copied < source_size:
                 chunk = os.read(
-                    source_descriptor, min(1024 * 1024, expected_size - copied)
+                    source_descriptor, min(1024 * 1024, source_size - copied)
                 )
                 if not chunk:
                     raise RuntimeError("copy source ended before its manifest size")
-                _write_payload_chunk(temp_descriptor, chunk)
+                if output_bytes is None:
+                    _write_payload_chunk(temp_descriptor, chunk)
                 digest.update(chunk)
                 copied += len(chunk)
             if os.read(source_descriptor, 1):
                 raise RuntimeError("copy source exceeds its manifest size")
+            if copied != source_size or digest.hexdigest() != source_digest:
+                raise RuntimeError("copy source differs from the frozen payload")
+            if output_bytes is not None:
+                _write_payload_chunk(temp_descriptor, output_bytes)
             if hasattr(os, "fchmod"):
                 os.fchmod(temp_descriptor, PORTABLE_FILE_MODE)
             os.fsync(temp_descriptor)
@@ -1813,8 +1870,6 @@ def _copy_payload_file_atomic(
         or _is_reparse_stat(after_path)
     ):
         raise RuntimeError(f"copy source changed while reading: {_bounded_diagnostic(source_path)}")
-    if copied != expected_size or digest.hexdigest() != expected_digest:
-        raise RuntimeError("copied bytes differ from the transaction manifest")
     temp_metadata = _regular_file_metadata(temp_path)
     if (
         temp_metadata["size"] != expected_size
@@ -1865,6 +1920,20 @@ def _load_payload_contract_once(repo_root: Path) -> PayloadContract:
             scanner.raise_for_error()
         snapshots.append(snapshot)
     source_files = tuple(snapshots)
+    oversized = next(
+        (item for item in source_files if item.size > MAX_INSTALL_FILE_BYTES),
+        None,
+    )
+    if oversized is not None:
+        raise ValueError(
+            f"declared payload file exceeds {MAX_INSTALL_FILE_BYTES} bytes: "
+            f"{_bounded_diagnostic(oversized.relative, 180)}"
+        )
+    total_size = sum(item.size for item in source_files)
+    if total_size > MAX_INSTALL_PAYLOAD_BYTES:
+        raise ValueError(
+            f"declared payload exceeds {MAX_INSTALL_PAYLOAD_BYTES} bytes in total"
+        )
     files = {
         item.relative: {"size": item.size, "sha256": item.sha256}
         for item in source_files
@@ -1886,6 +1955,179 @@ def load_payload_contract(repo_root: Path) -> PayloadContract:
     if first != second:
         raise RuntimeError("source payload changed while its install contract was captured")
     return first
+
+
+def replace_marked_section(
+    text: str,
+    start_marker: str,
+    end_marker: str,
+    installed_body: str,
+    label: str,
+) -> str:
+    """Replace one source-only README section, refusing marker drift."""
+    if text.count(start_marker) != 1 or text.count(end_marker) != 1:
+        raise ValueError(f"README {label} install markers must each appear exactly once")
+    start = text.index(start_marker)
+    end = text.index(end_marker)
+    if end <= start:
+        raise ValueError(f"README {label} install markers are out of order")
+    installed_section = f"{start_marker}\n\n{installed_body}\n\n{end_marker}"
+    return text[:start] + installed_section + text[end + len(end_marker) :]
+
+
+def rewrite_installed_readme_text(text: str) -> str:
+    """Return the runtime README with source-only sections made reachable."""
+    text = replace_marked_section(
+        text,
+        README_GALLERY_START,
+        README_GALLERY_END,
+        "The generated bitmap gallery is kept in the source repository rather "
+        "than the installed runtime package. "
+        f"[View the full visual gallery in the source repository]({REPOSITORY_URL}#visual-gallery).",
+        "gallery",
+    )
+    return replace_marked_section(
+        text,
+        README_VALIDATION_START,
+        README_VALIDATION_END,
+        "Release validators, tests, and the credential-reading live evaluator are "
+        "maintainer tools and are not shipped in the installed runtime package. "
+        f"[Run validation from a source checkout]({REPOSITORY_URL}#validation).",
+        "validation",
+    )
+
+
+def _installed_readme_bytes(source_bytes: bytes) -> bytes:
+    try:
+        text = source_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"README is not valid UTF-8: {exc}") from None
+    transformed = rewrite_installed_readme_text(text).encode("utf-8")
+    if len(transformed) > MAX_INSTALLED_README_BYTES:
+        raise ValueError(
+            f"installed README exceeds {MAX_INSTALLED_README_BYTES} bytes"
+        )
+    return transformed
+
+
+def build_install_payload_plan(
+    repo_root: Path,
+    source_contract: PayloadContract,
+) -> InstallPayloadPlan:
+    """Derive the exact installed-byte contract from one frozen source contract."""
+    if not isinstance(source_contract, PayloadContract):
+        raise TypeError("install plan requires a frozen source payload contract")
+    if INSTALLED_README_PATH not in source_contract.declared:
+        return InstallPayloadPlan(source_contract, source_contract, None)
+
+    frozen_by_path = {
+        item.relative: item for item in source_contract.source_files
+    }
+    if (
+        len(source_contract.source_files) != len(source_contract.declared)
+        or tuple(sorted(frozen_by_path)) != source_contract.declared
+    ):
+        raise ValueError("source payload contract files do not match its declared paths")
+    frozen = frozen_by_path[INSTALLED_README_PATH]
+    current, source_bytes = _read_stable_regular_bytes(
+        _absolute_lexical(repo_root),
+        INSTALLED_README_PATH,
+        label="source README",
+        max_bytes=MAX_INSTALLED_README_BYTES,
+    )
+    if current != frozen:
+        raise RuntimeError("source README changed after the payload contract was frozen")
+    installed_bytes = _installed_readme_bytes(source_bytes)
+    installed_snapshot = FileSnapshot(
+        frozen.relative,
+        frozen.identity,
+        len(installed_bytes),
+        hashlib.sha256(installed_bytes).hexdigest(),
+    )
+    installed_files = tuple(
+        installed_snapshot if item.relative == INSTALLED_README_PATH else item
+        for item in source_contract.source_files
+    )
+    installed_manifest = {
+        item.relative: {"size": item.size, "sha256": item.sha256}
+        for item in installed_files
+    }
+    installed_contract = PayloadContract(
+        source_contract.manifest_bytes,
+        source_contract.declared,
+        installed_files,
+        source_contract.payload_manifest_sha256,
+        _contract_sha256(
+            source_contract.payload_manifest_sha256,
+            source_contract.declared,
+            installed_manifest,
+        ),
+    )
+    return InstallPayloadPlan(source_contract, installed_contract, installed_bytes)
+
+
+def _write_regular_bytes_exclusive(path: Path, raw: bytes) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        offset = 0
+        while offset < len(raw):
+            written = os.write(descriptor, raw[offset:])
+            if written <= 0:
+                raise OSError("short write while materializing installed payload")
+            offset += written
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    if _regular_file_metadata(path) != {
+        "type": "file",
+        "size": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }:
+        raise RuntimeError("installed payload file changed while it was materialized")
+
+
+def payload_copy_function(repo_root: Path, plan: InstallPayloadPlan):
+    """Materialize exact frozen source bytes plus the planned runtime README."""
+    root = _absolute_lexical(repo_root)
+    frozen_by_path = {
+        item.relative: item for item in plan.source_contract.source_files
+    }
+
+    def copy_payload_file(source: str, destination: str) -> str:
+        source_path = _absolute_lexical(Path(source))
+        try:
+            relative_path = source_path.relative_to(root)
+        except ValueError as exc:
+            raise RuntimeError("copy source escaped the frozen repository root") from exc
+        relative = PurePosixPath(*relative_path.parts).as_posix()
+        frozen = frozen_by_path.get(relative)
+        if frozen is None:
+            raise RuntimeError(
+                f"copy source is outside the declared payload: "
+                f"{_bounded_diagnostic(relative, 180)}"
+            )
+        current, source_bytes = _read_stable_regular_bytes(
+            root,
+            relative,
+            label="declared payload source",
+            max_bytes=frozen.size,
+        )
+        if current != frozen:
+            raise RuntimeError(
+                f"declared payload source changed while it was copied: "
+                f"{_bounded_diagnostic(relative, 180)}"
+            )
+        output_bytes = source_bytes
+        if relative == INSTALLED_README_PATH and plan.installed_readme_bytes is not None:
+            if _installed_readme_bytes(source_bytes) != plan.installed_readme_bytes:
+                raise RuntimeError("installed README plan changed while the payload was copied")
+            output_bytes = plan.installed_readme_bytes
+        destination_path = Path(destination)
+        _write_regular_bytes_exclusive(destination_path, output_bytes)
+        return str(destination_path)
+
+    return copy_payload_file
 
 
 def load_payload_manifest(repo_root: Path) -> frozenset[str]:
@@ -4674,6 +4916,7 @@ def stage_validated_install(
     repo_root: Path,
     skills_dir: Path,
     contract: PayloadContract,
+    plan: InstallPayloadPlan | None = None,
     *,
     force: bool = False,
 ) -> Path:
@@ -4690,7 +4933,15 @@ def stage_validated_install(
     if current_contract != contract:
         raise RuntimeError("source payload changed before transaction publication")
     _assert_supported_source_metadata(repo_root, contract.declared)
-    expected_manifest = contract.file_manifest()
+    fresh_plan = build_install_payload_plan(repo_root, contract)
+    if plan is None:
+        plan = fresh_plan
+    if not isinstance(plan, InstallPayloadPlan) or plan.source_contract != contract:
+        raise ValueError("staging plan does not match the frozen source contract")
+    if plan != fresh_plan:
+        raise RuntimeError("source payload changed after the install plan was frozen")
+    expected_contract = plan.installed_contract
+    expected_manifest = expected_contract.file_manifest()
     expected_manifest = _validate_payload_manifest(dict(sorted(expected_manifest.items())))
     if _path_exists(_transaction_path(skills_dir)) or _path_exists(skills_dir / BACKUP_NAME):
         raise RuntimeError("reserved installer artifacts were not recovered before staging")
@@ -4705,7 +4956,7 @@ def stage_validated_install(
     quarantine = skills_dir / f"{QUARANTINE_PREFIX}{transaction_id}"
     if _path_exists(stage) or _path_exists(quarantine):
         raise RuntimeError("random transaction artifact name already exists")
-    classification = _classify_existing_install_bound(destination, contract)
+    classification = _classify_existing_install_bound(destination, expected_contract)
     replacement_state = classification.state
     old_snapshot = classification.snapshot
     if replacement_state not in REPLACEMENT_STATES:
@@ -4758,6 +5009,22 @@ def stage_validated_install(
         _expected_copy_temps(transaction, transaction_raw, component_name_max)
 
         def atomic_copy(source: str, destination: str) -> str:
+            source_path = _absolute_lexical(Path(source))
+            try:
+                relative = source_path.relative_to(repo_root).as_posix()
+            except ValueError as exc:
+                raise RuntimeError("copy source escaped the payload root") from exc
+            frozen_sources = {
+                item.relative: item for item in plan.source_contract.source_files
+            }
+            source_snapshot = frozen_sources.get(relative)
+            if source_snapshot is None:
+                raise RuntimeError("copy source is absent from the frozen payload")
+            output_bytes = (
+                plan.installed_readme_bytes
+                if relative == INSTALLED_README_PATH
+                else None
+            )
             return _copy_payload_file_atomic(
                 source,
                 destination,
@@ -4767,6 +5034,8 @@ def stage_validated_install(
                 transaction_raw=transaction_raw,
                 transaction_digest=transaction_digest,
                 component_name_max=component_name_max,
+                source_snapshot=source_snapshot,
+                output_bytes=output_bytes,
             )
 
         _copy_declared_payload(
@@ -4797,7 +5066,7 @@ def stage_validated_install(
             staged,
             "owned stage after directory permission repair",
         )
-        write_completion_marker(stage, contract)
+        write_completion_marker(stage, expected_contract)
         _inspect_owned_stage(
             stage, transaction, transaction_raw, require_complete=True
         )
@@ -4900,7 +5169,8 @@ def main() -> int:
     # Reported as a message rather than a traceback: this is the first command a
     # new user runs, and a stack trace reads as "the tool is broken".
     try:
-        _load_payload_contract_once(repo_root)
+        preflight_contract = load_payload_contract(repo_root)
+        build_install_payload_plan(repo_root, preflight_contract)
         assert_safe_preflight(destination, skills_dir, repo_root)
     except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as exc:
         print(f"Refusing to install: {_bounded_diagnostic(exc)}")
@@ -4918,8 +5188,10 @@ def main() -> int:
             # Exact manifest bytes, parsed allowlist, source snapshots, stage,
             # transaction, and completion marker all bind to this one contract.
             contract = load_payload_contract(repo_root)
+            plan = build_install_payload_plan(repo_root, contract)
+            installed_contract = plan.installed_contract
             classification = _classify_existing_install_bound(
-                destination, contract
+                destination, installed_contract
             )
             state, reason = classification.state, classification.reason
             if state == "complete" and not args.force:
@@ -4953,13 +5225,14 @@ def main() -> int:
                 repo_root,
                 skills_dir,
                 contract,
+                plan,
                 force=args.force,
             )
             promote_staged_install(
                 stage,
                 destination,
                 skills_dir,
-                contract,
+                installed_contract,
             )
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as exc:
         print(f"Installation failed: {_bounded_diagnostic(exc)}", file=sys.stderr)
