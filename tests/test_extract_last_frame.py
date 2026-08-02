@@ -72,8 +72,20 @@ class RealFfmpegFrameTests(unittest.TestCase):
             "-y", "-i", str(clip), "-vf", "reverse", "-frames:v", "1", str(output)
         )
 
-    def assert_true_last_frame(self, clip: Path, actual: Path, expected: Path) -> None:
-        self.assertEqual(extractor.run_ffmpeg(str(FFMPEG), clip, actual, first=False), 0)
+    def assert_true_last_frame(
+        self,
+        clip: Path,
+        actual: Path,
+        expected: Path,
+        *,
+        force: bool = False,
+    ) -> None:
+        self.assertEqual(
+            extractor.run_ffmpeg(
+                str(FFMPEG), clip, actual, first=False, force=force
+            ),
+            0,
+        )
         self.true_last_frame(clip, expected)
         self.assertEqual(
             self.raw_rgb(actual),
@@ -172,7 +184,7 @@ class RealFfmpegFrameTests(unittest.TestCase):
             sentinel = b"pre-existing output that must be replaced"
             actual.write_bytes(sentinel)
 
-            self.assert_true_last_frame(clip, actual, expected)
+            self.assert_true_last_frame(clip, actual, expected, force=True)
             self.assertNotEqual(actual.read_bytes(), sentinel)
 
 

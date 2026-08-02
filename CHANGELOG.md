@@ -8,7 +8,7 @@ Current active release: **6.7.0**. Older entries below are preserved as release 
 
 ### Fixed
 
-- Protected final-frame extraction outputs from accidental or partial replacement. Existing destinations are refused by default, `--force` is required for an intentional regular-file replacement, and FFmpeg now writes to an identity-checked same-directory staging file before atomic publication. Late destination collisions are preserved instead of overwritten, and failed extraction leaves the prior output untouched.
+- Protected final-frame extraction outputs from accidental or partial replacement. Existing destinations are refused by default, `--force` is required for an intentional regular-file replacement, and FFmpeg now streams decoded frames back to the helper instead of reopening a mutable staging pathname. The complete retained frame is written through an owned handle before atomic publication; late destination collisions are preserved, failed extraction leaves the prior output untouched, and Windows cleanup deletes the owned handle rather than a re-looked-up path.
 
 ## [6.7.0] — 2026-08-01
 

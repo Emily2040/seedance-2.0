@@ -23,21 +23,31 @@ stays aligned with the take-review schema and that no frame-readable category
 is misfiled as frame-blind.
 
 Existing output images are preserved by default. Pass --force only when replacing
-one is intentional. Extraction always happens in a private same-directory staging
-file; a complete frame is published atomically so a failed run cannot expose a
-partial final output.
+one is intentional. FFmpeg streams decoded frames back to this process instead of
+opening a mutable staging pathname. The retained complete frame is written through
+an owned handle and published atomically, so a failed run cannot expose a partial
+final output.
 """
 from __future__ import annotations
 
 import argparse
 import os
+import secrets
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
+
+if os.name == "nt":
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
 
 # Categories the agent can read directly off the extracted still.
 FRAME_READABLE = [
@@ -58,18 +68,90 @@ FRAME_BLIND = [
 ]
 # Take-review fields this record feeds (schemas/take-review.schema.json).
 TAKE_REVIEW_FIELDS = ["observed_end_state", "observation_confidence", "accepted_deviations"]
+WINDOWS_RESERVED_STEMS = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "CLOCK$",
+    *(f"COM{index}" for index in range(1, 10)),
+    *(f"LPT{index}" for index in range(1, 10)),
+}
 
 
 class OutputPolicyError(RuntimeError):
     """The requested output operation would violate the fail-closed policy."""
 
 
-@dataclass(frozen=True)
+class FrameExtractionError(RuntimeError):
+    """FFmpeg did not yield one complete frame."""
+
+
+@dataclass
 class OutputStage:
-    """A staging path and the stable identity of the file created there."""
+    """An open staging object; its descriptor is the authority, not its name."""
 
     path: Path
     identity: tuple[int, int]
+    descriptor: int
+    published: bool = False
+
+
+if os.name == "nt":
+    _GENERIC_READ = 0x80000000
+    _GENERIC_WRITE = 0x40000000
+    _DELETE = 0x00010000
+    _CREATE_NEW = 1
+    _FILE_ATTRIBUTE_NORMAL = 0x00000080
+    _FILE_RENAME_INFO_EX_CLASS = 22
+    _FILE_RENAME_FLAG_REPLACE_IF_EXISTS = 0x00000001
+    _FILE_DISPOSITION_INFO_CLASS = 4
+    _ERROR_FILE_EXISTS = 80
+    _ERROR_ALREADY_EXISTS = 183
+    _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _CreateFileW = _kernel32.CreateFileW
+    _CreateFileW.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    _CreateFileW.restype = wintypes.HANDLE
+    _SetFileInformationByHandle = _kernel32.SetFileInformationByHandle
+    _SetFileInformationByHandle.argtypes = (
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    )
+    _SetFileInformationByHandle.restype = wintypes.BOOL
+    _CloseHandle = _kernel32.CloseHandle
+    _CloseHandle.argtypes = (wintypes.HANDLE,)
+    _CloseHandle.restype = wintypes.BOOL
+    _GetFinalPathNameByHandleW = _kernel32.GetFinalPathNameByHandleW
+    _GetFinalPathNameByHandleW.argtypes = (
+        wintypes.HANDLE,
+        wintypes.LPWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+    )
+    _GetFinalPathNameByHandleW.restype = wintypes.DWORD
+
+    class _FileRenameInfoEx(ctypes.Structure):
+        _fields_ = (
+            ("Flags", wintypes.DWORD),
+            ("RootDirectory", wintypes.HANDLE),
+            ("FileNameLength", wintypes.DWORD),
+            ("FileName", wintypes.WCHAR * 1),
+        )
+
+    class _FileDispositionInfo(ctypes.Structure):
+        _fields_ = (("DeleteFile", wintypes.BOOL),)
 
 
 def _identity(info: os.stat_result) -> tuple[int, int]:
@@ -102,6 +184,12 @@ def _paths_alias(left: Path, right: Path) -> bool:
 
 
 def _validate_output_target(clip: Path, out: Path, force: bool) -> None:
+    if os.name == "nt":
+        name = out.name
+        normalized = name.rstrip(" .")
+        device_stem = normalized.split(".", 1)[0].upper()
+        if normalized != name or ":" in name or device_stem in WINDOWS_RESERVED_STEMS:
+            raise OutputPolicyError(f"unsafe Windows output filename: {name!r}")
     parent = out.parent
     if not parent.is_dir():
         raise OutputPolicyError(f"output directory not found: {parent}")
@@ -122,107 +210,291 @@ def _validate_output_target(clip: Path, out: Path, force: bool) -> None:
         raise OutputPolicyError(f"--force only replaces a regular output file: {out}")
 
 
+def _win32_extended_path(path: Path) -> str:
+    absolute = str(path.resolve())
+    if absolute.startswith("\\\\?\\"):
+        return absolute
+    if absolute.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + absolute[2:]
+    return "\\\\?\\" + absolute
+
+
+def _win32_stage_descriptor(path: Path) -> int:
+    handle = _CreateFileW(
+        _win32_extended_path(path),
+        _GENERIC_READ | _GENERIC_WRITE | _DELETE,
+        0,  # deny read/write/delete sharing while the staging name exists
+        None,
+        _CREATE_NEW,
+        _FILE_ATTRIBUTE_NORMAL,
+        None,
+    )
+    if handle == _INVALID_HANDLE_VALUE:
+        error = ctypes.get_last_error()
+        if error in (_ERROR_FILE_EXISTS, _ERROR_ALREADY_EXISTS):
+            raise FileExistsError(error, "staging path already exists", str(path))
+        raise OSError(error, ctypes.FormatError(error), str(path))
+    try:
+        return msvcrt.open_osfhandle(
+            int(handle), os.O_RDWR | getattr(os, "O_BINARY", 0)
+        )
+    except Exception:
+        _CloseHandle(handle)
+        raise
+
+
+def _win32_target_from_stage_handle(stage: OutputStage, out: Path) -> str:
+    """Bind the destination to the staging handle's resolved parent directory."""
+
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(stage.descriptor))
+    required = _GetFinalPathNameByHandleW(handle, None, 0, 0)
+    if not required:
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            "could not resolve the owned staging handle: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    buffer = ctypes.create_unicode_buffer(required + 1)
+    written = _GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
+    if not written or written >= len(buffer):
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            "could not read the owned staging path: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+
+    resolved = buffer.value
+    if resolved.startswith("\\\\?\\UNC\\"):
+        dos_stage = "\\\\" + resolved[8:]
+    elif resolved.startswith("\\\\?\\"):
+        dos_stage = resolved[4:]
+    else:
+        raise OutputPolicyError("owned staging handle returned an unsupported Windows path")
+    anchored_stage = Path(dos_stage)
+    if anchored_stage.name.casefold() != stage.path.name.casefold():
+        raise OutputPolicyError("owned staging handle name changed; refusing publication")
+
+    try:
+        anchored_parent = os.stat(anchored_stage.parent)
+        requested_parent = os.stat(out.parent)
+    except OSError as exc:
+        raise OutputPolicyError(f"cannot verify output directory identity: {exc}") from exc
+    if _identity(anchored_parent) != _identity(requested_parent):
+        raise OutputPolicyError("output directory identity changed; refusing publication")
+
+    dos_target = str(anchored_stage.with_name(out.name))
+    if dos_target.startswith("\\\\"):
+        return "\\??\\UNC\\" + dos_target[2:]
+    return "\\??\\" + dos_target
+
+
+def _win32_rename_by_handle(stage: OutputStage, out: Path, force: bool) -> None:
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(stage.descriptor))
+    # SetFileInformationByHandle consumes the NT object-manager spelling here.
+    # A DOS path can fail with ERROR_INVALID_NAME under the Windows sandbox,
+    # while a bare filename is resolved against the process cwd. Deriving the
+    # absolute target from the open staging handle also prevents a replaced
+    # parent junction from redirecting publication.
+    encoded_name = _win32_target_from_stage_handle(stage, out).encode("utf-16-le")
+    offset = _FileRenameInfoEx.FileName.offset
+    # Microsoft's FILE_RENAME_INFORMATION contract requires at least the fixed
+    # structure size plus the variable filename bytes, not merely the offset of
+    # FileName plus those bytes.
+    buffer = ctypes.create_string_buffer(ctypes.sizeof(_FileRenameInfoEx) + len(encoded_name))
+    info = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfoEx)).contents
+    info.Flags = _FILE_RENAME_FLAG_REPLACE_IF_EXISTS if force else 0
+    info.RootDirectory = None
+    info.FileNameLength = len(encoded_name)
+    ctypes.memmove(ctypes.addressof(buffer) + offset, encoded_name, len(encoded_name))
+    if _SetFileInformationByHandle(
+        handle, _FILE_RENAME_INFO_EX_CLASS, buffer, len(buffer)
+    ):
+        return
+    error = ctypes.get_last_error()
+    if not force and error in (_ERROR_FILE_EXISTS, _ERROR_ALREADY_EXISTS):
+        raise OutputPolicyError(f"output appeared during extraction and was preserved: {out}")
+    raise OutputPolicyError(
+        f"could not atomically {'replace' if force else 'publish'} output {out}: "
+        f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+    )
+
+
+def _win32_mark_stage_for_deletion(stage: OutputStage) -> bool:
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(stage.descriptor))
+    disposition = _FileDispositionInfo(1)
+    if _SetFileInformationByHandle(
+        handle,
+        _FILE_DISPOSITION_INFO_CLASS,
+        ctypes.byref(disposition),
+        ctypes.sizeof(disposition),
+    ):
+        return True
+    error = ctypes.get_last_error()
+    sys.stderr.write(
+        f"warning: could not delete owned staging handle for {stage.path}: "
+        f"[WinError {error}] {ctypes.FormatError(error).strip()}\n"
+    )
+    return False
+
+
 def _create_output_stage(out: Path) -> OutputStage:
     suffix = out.suffix or ".img"
     prefix = f".{out.stem}.atomic-"
+    if os.name == "nt":
+        for _attempt in range(64):
+            path = out.parent / f"{prefix}{secrets.token_hex(16)}{suffix}"
+            try:
+                descriptor = _win32_stage_descriptor(path)
+            except FileExistsError:
+                continue
+            except OSError as exc:
+                raise OutputPolicyError(
+                    f"cannot create locked output staging file beside {out}: {exc}"
+                ) from exc
+            info = os.fstat(descriptor)
+            return OutputStage(path, _identity(info), descriptor)
+        raise OutputPolicyError("could not allocate a unique output staging name")
+
     try:
         descriptor, raw_path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=out.parent)
     except OSError as exc:
         raise OutputPolicyError(f"cannot create output staging file beside {out}: {exc}") from exc
-    try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or _is_reparse_point(info):
-            raise OutputPolicyError("output staging object is not a regular file")
-        return OutputStage(Path(raw_path), _identity(info))
-    finally:
-        os.close(descriptor)
+    info = os.fstat(descriptor)
+    return OutputStage(Path(raw_path), _identity(info), descriptor)
 
 
 def _verify_output_stage(stage: OutputStage, *, require_content: bool) -> None:
-    """Refuse swapped, linked, special, or incomplete staging objects."""
-
+    """Verify the open object; a pathname lookup is never the authority on Windows."""
     try:
-        before = os.lstat(stage.path)
+        opened = os.fstat(stage.descriptor)
     except OSError as exc:
-        raise OutputPolicyError(f"output staging file disappeared: {stage.path}") from exc
+        raise OutputPolicyError(f"cannot verify output staging file: {exc}") from exc
     if (
-        not stat.S_ISREG(before.st_mode)
-        or _is_reparse_point(before)
-        or _identity(before) != stage.identity
-        or before.st_nlink != 1
+        not stat.S_ISREG(opened.st_mode)
+        or _identity(opened) != stage.identity
+        or opened.st_nlink != 1
     ):
-        raise OutputPolicyError("output staging file identity changed; refusing publication")
+        raise OutputPolicyError("output staging handle identity changed; refusing publication")
+    if require_content and opened.st_size == 0:
+        raise OutputPolicyError("frame encoder produced an empty output staging file")
+    os.fsync(stage.descriptor)
 
+    if os.name != "nt":
+        try:
+            named = os.lstat(stage.path)
+        except OSError as exc:
+            raise OutputPolicyError("output staging name disappeared while verifying") from exc
+        if (
+            not stat.S_ISREG(named.st_mode)
+            or _is_reparse_point(named)
+            or _identity(named) != stage.identity
+            or named.st_nlink != 1
+        ):
+            raise OutputPolicyError("output staging name changed; refusing publication")
+
+
+def _write_output_stage(stage: OutputStage, content: bytes) -> None:
     try:
-        # Windows rejects FlushFileBuffers on a read-only handle, so open the
-        # owned stage read/write before fsyncing its completed contents.
-        with stage.path.open("r+b", buffering=0) as handle:
-            opened = os.fstat(handle.fileno())
-            if (
-                not stat.S_ISREG(opened.st_mode)
-                or _is_reparse_point(opened)
-                or _identity(opened) != stage.identity
-                or opened.st_nlink != 1
-            ):
-                raise OutputPolicyError("output staging file identity changed while verifying")
-            if require_content and opened.st_size == 0:
-                raise OutputPolicyError("ffmpeg produced an empty output staging file")
-            os.fsync(handle.fileno())
+        os.lseek(stage.descriptor, 0, os.SEEK_SET)
+        os.ftruncate(stage.descriptor, 0)
+        remaining = memoryview(content)
+        while remaining:
+            written = os.write(stage.descriptor, remaining)
+            if written <= 0:
+                raise OSError("short write to output staging handle")
+            remaining = remaining[written:]
+        _verify_output_stage(stage, require_content=True)
     except OutputPolicyError:
         raise
     except OSError as exc:
-        raise OutputPolicyError(f"cannot verify output staging file: {exc}") from exc
-
-    try:
-        after = os.lstat(stage.path)
-    except OSError as exc:
-        raise OutputPolicyError("output staging file disappeared while verifying") from exc
-    if (
-        not stat.S_ISREG(after.st_mode)
-        or _is_reparse_point(after)
-        or _identity(after) != stage.identity
-        or after.st_nlink != 1
-    ):
-        raise OutputPolicyError("output staging file identity changed while verifying")
+        raise OutputPolicyError(f"could not write output staging handle: {exc}") from exc
 
 
 def _cleanup_output_stage(stage: OutputStage) -> bool:
-    """Remove only the exact regular staging file we created."""
+    """Delete the owned handle on Windows; never unlink a re-looked-up name."""
 
+    success = True
     try:
-        info = os.lstat(stage.path)
-    except FileNotFoundError:
-        return True
-    except OSError as exc:
-        sys.stderr.write(f"warning: could not inspect staging path {stage.path}: {exc}\n")
-        return False
-    if (
-        not stat.S_ISREG(info.st_mode)
-        or _is_reparse_point(info)
-        or _identity(info) != stage.identity
-    ):
-        sys.stderr.write(
-            f"warning: staging path identity changed; leaving unexpected path untouched: {stage.path}\n"
-        )
-        return False
-    try:
-        stage.path.unlink()
-    except OSError as exc:
-        sys.stderr.write(f"warning: could not remove staging file {stage.path}: {exc}\n")
-        return False
-    return True
+        if os.name == "nt":
+            if not stage.published:
+                success = _win32_mark_stage_for_deletion(stage)
+        else:
+            try:
+                info = os.lstat(stage.path)
+            except FileNotFoundError:
+                info = None
+            except OSError as exc:
+                sys.stderr.write(f"warning: could not inspect staging path {stage.path}: {exc}\n")
+                success = False
+                info = None
+            if info is not None:
+                if (
+                    not stat.S_ISREG(info.st_mode)
+                    or _is_reparse_point(info)
+                    or _identity(info) != stage.identity
+                ):
+                    sys.stderr.write(
+                        "warning: staging path identity changed; leaving unexpected path "
+                        f"untouched: {stage.path}\n"
+                    )
+                    success = False
+                else:
+                    try:
+                        stage.path.unlink()
+                    except OSError as exc:
+                        sys.stderr.write(
+                            f"warning: could not remove staging file {stage.path}: {exc}\n"
+                        )
+                        success = False
+    finally:
+        try:
+            os.close(stage.descriptor)
+        except OSError as exc:
+            sys.stderr.write(f"warning: could not close staging handle: {exc}\n")
+            success = False
+        stage.descriptor = -1
+    return success
 
 
 def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> None:
     _verify_output_stage(stage, require_content=True)
+    # Re-check immediately before publication. The locked Windows staging name
+    # cannot be swapped before the atomic link/handle-rename operations below.
+    _validate_output_target(clip, out, force)
+    if os.name == "nt":
+        if not force:
+            try:
+                # The exclusive handle prevents the source name from being
+                # swapped; hard-link creation is an atomic no-replace claim on
+                # the destination. Cleanup then deletes only the staging link.
+                os.link(stage.path, out)
+            except FileExistsError as exc:
+                raise OutputPolicyError(
+                    f"output appeared during extraction and was preserved: {out}"
+                ) from exc
+            except OSError as exc:
+                raise OutputPolicyError(
+                    f"could not atomically publish output {out}: {exc}"
+                ) from exc
+            return
+        # Mark first so an asynchronous interruption immediately after the
+        # native rename can never make cleanup delete a successfully published
+        # replacement. Ordinary failures reset the marker and delete the exact
+        # still-owned staging handle.
+        stage.published = True
+        try:
+            _win32_rename_by_handle(stage, out, force)
+        except Exception:
+            stage.published = False
+            raise
+        return
+
     if force:
-        # Re-check immediately before the atomic replacement so a late path
-        # alias or special-file collision is also refused.
-        _validate_output_target(clip, out, force=True)
         try:
             os.replace(stage.path, out)
         except OSError as exc:
             raise OutputPolicyError(f"could not atomically replace output {out}: {exc}") from exc
+        stage.published = True
         return
 
     try:
@@ -233,15 +505,157 @@ def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> N
         raise OutputPolicyError(f"output appeared during extraction and was preserved: {out}") from exc
     except OSError as exc:
         raise OutputPolicyError(f"could not atomically publish output {out}: {exc}") from exc
+    stage.published = True
+
+
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_MAX_PNG_CHUNK_BYTES = 256 * 1024 * 1024
+_MAX_FRAME_BYTES = 512 * 1024 * 1024
+_OUTPUT_CODECS = {
+    ".png": "png",
+    ".jpg": "mjpeg",
+    ".jpeg": "mjpeg",
+    ".webp": "webp",
+    ".bmp": "bmp",
+    ".tif": "tiff",
+    ".tiff": "tiff",
+}
+
+
+def _read_exact(stream: BinaryIO, size: int, *, allow_clean_eof: bool = False) -> bytes | None:
+    chunks: list[bytes] = []
+    remaining = size
+    while remaining:
+        chunk = stream.read(remaining)
+        if not chunk:
+            if allow_clean_eof and remaining == size:
+                return None
+            raise FrameExtractionError("truncated PNG stream from ffmpeg")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def _read_png_frame(stream: BinaryIO) -> bytes | None:
+    signature = _read_exact(stream, len(_PNG_SIGNATURE), allow_clean_eof=True)
+    if signature is None:
+        return None
+    if signature != _PNG_SIGNATURE:
+        raise FrameExtractionError("ffmpeg emitted a malformed PNG frame stream")
+    frame = bytearray(signature)
+    while True:
+        header = _read_exact(stream, 8)
+        assert header is not None
+        length = struct.unpack(">I", header[:4])[0]
+        chunk_type = header[4:]
+        if length > _MAX_PNG_CHUNK_BYTES:
+            raise FrameExtractionError("ffmpeg PNG chunk exceeds the safety limit")
+        payload_and_crc = _read_exact(stream, length + 4)
+        assert payload_and_crc is not None
+        payload = payload_and_crc[:length]
+        expected_crc = struct.unpack(">I", payload_and_crc[length:])[0]
+        actual_crc = zlib.crc32(payload, zlib.crc32(chunk_type)) & 0xFFFFFFFF
+        if actual_crc != expected_crc:
+            raise FrameExtractionError("ffmpeg emitted a PNG frame with an invalid checksum")
+        frame.extend(header)
+        frame.extend(payload_and_crc)
+        if len(frame) > _MAX_FRAME_BYTES:
+            raise FrameExtractionError("ffmpeg frame exceeds the safety limit")
+        if chunk_type == b"IEND":
+            if length != 0:
+                raise FrameExtractionError("ffmpeg emitted an invalid PNG terminator")
+            return bytes(frame)
+
+
+def render_frame_png(ffmpeg: str, clip: Path, first: bool) -> bytes:
+    """Stream every decoded frame and retain only the final complete PNG."""
+
+    cmd = [
+        ffmpeg,
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(clip),
+    ]
+    if first:
+        cmd += ["-frames:v", "1"]
+    cmd += ["-an", "-vsync", "0", "-f", "image2pipe", "-vcodec", "png", "pipe:1"]
+
+    with tempfile.TemporaryFile(mode="w+b") as stderr_file:
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=stderr_file,
+            )
+        except OSError as exc:
+            raise FrameExtractionError(f"could not start ffmpeg: {exc}") from exc
+        assert process.stdout is not None
+        last_frame: bytes | None = None
+        try:
+            while True:
+                frame = _read_png_frame(process.stdout)
+                if frame is None:
+                    break
+                last_frame = frame
+        except Exception:
+            process.kill()
+            process.wait()
+            raise
+        finally:
+            process.stdout.close()
+        returncode = process.wait()
+        stderr_file.seek(0)
+        stderr_text = stderr_file.read().decode("utf-8", errors="replace")[-800:].strip()
+    if returncode != 0 or last_frame is None:
+        detail = stderr_text or "ffmpeg returned no complete video frame"
+        raise FrameExtractionError(detail)
+    return last_frame
+
+
+def _encode_frame_for_output(ffmpeg: str, png_frame: bytes, out: Path) -> bytes:
+    codec = _OUTPUT_CODECS.get(out.suffix.lower())
+    if codec is None:
+        supported = ", ".join(sorted(_OUTPUT_CODECS))
+        raise OutputPolicyError(f"unsupported output image suffix {out.suffix!r}; use one of: {supported}")
+    if codec == "png":
+        return png_frame
+    cmd = [
+        ffmpeg,
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        "pipe:0",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        codec,
+        "pipe:1",
+    ]
+    process = subprocess.run(cmd, input=png_frame, capture_output=True)
+    if process.returncode != 0 or not process.stdout:
+        detail = process.stderr.decode("utf-8", errors="replace")[-800:].strip()
+        raise FrameExtractionError(detail or f"ffmpeg could not encode {out.suffix}")
+    return process.stdout
 
 
 def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) -> int:
     _validate_output_target(clip, out, force)
+    if out.suffix.lower() not in _OUTPUT_CODECS:
+        supported = ", ".join(sorted(_OUTPUT_CODECS))
+        raise OutputPolicyError(f"unsupported output image suffix {out.suffix!r}; use one of: {supported}")
+    png_frame = render_frame_png(ffmpeg, clip, first)
+    content = _encode_frame_for_output(ffmpeg, png_frame, out)
     stage = _create_output_stage(out)
     try:
-        rc = run_ffmpeg(ffmpeg, clip, stage.path, first)
-        if rc != 0:
-            return rc
+        _write_output_stage(stage, content)
         _publish_output(stage, clip, out, force)
         print(f"{'first' if first else 'last'} frame -> {out}")
         return 0
@@ -260,22 +674,29 @@ def build_record() -> str:
     return "\n".join(lines)
 
 
-def run_ffmpeg(ffmpeg: str, clip: Path, out: Path, first: bool) -> int:
-    if first:
-        cmd = [ffmpeg, "-y", "-i", str(clip), "-frames:v", "1", "-q:v", "2", str(out)]
-    else:
-        # Decode the stream through EOF and overwrite the same image for every
-        # decoded frame.  ``-frames:v 1`` must not be used here: it stops at the
-        # first frame after a seek instead of allowing the true final frame to
-        # win.  Full decoding also avoids depending on container duration or
-        # keyframe-seek accuracy.
-        cmd = [ffmpeg, "-y", "-i", str(clip), "-update", "1", "-q:v", "2", str(out)]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0 or not out.exists() or out.stat().st_size == 0:
-        sys.stderr.write(proc.stderr[-800:] + "\n")
-        print(f"extraction failed for {clip}")
-        return 1
-    return 0
+def run_ffmpeg(
+    ffmpeg: str,
+    clip: Path,
+    out: Path,
+    first: bool,
+    force: bool = False,
+) -> int:
+    """Compatibility entry point with the same fail-closed policy as the CLI.
+
+    Earlier callers imported this helper directly, so leaving its historical
+    unconditional ``-y`` command in place would preserve an overwrite bypass
+    after the CLI was repaired. Keep the integer-returning interface, but route
+    every caller through the owned-stage and atomic-publication implementation.
+    """
+    try:
+        return extract_frame(ffmpeg, clip, out, first, force)
+    except OutputPolicyError as exc:
+        print(f"output refused: {exc}")
+    except FrameExtractionError as exc:
+        print(f"extraction failed for {clip}: {exc}")
+    except OSError as exc:
+        print(f"output failed safely: {exc}")
+    return 1
 
 
 def self_test() -> int:
@@ -314,7 +735,14 @@ def main() -> int:
         )
     )
     parser.add_argument("clip", nargs="?", help="path to the accepted take (mp4/mov/webm)")
-    parser.add_argument("-o", "--output", help="output image path (default: <clip>.last.png / .first.png)")
+    parser.add_argument(
+        "-o",
+        "--output",
+        help=(
+            "output image path: png/jpg/jpeg/webp/bmp/tif/tiff "
+            "(default: <clip>.last.png / .first.png)"
+        ),
+    )
     parser.add_argument("--first-frame", action="store_true", help="extract the first frame instead")
     parser.add_argument("--ffmpeg", default=None, help="path to ffmpeg if not on PATH")
     parser.add_argument(
@@ -349,6 +777,9 @@ def main() -> int:
         rc = extract_frame(ffmpeg, clip, out, args.first_frame, args.force)
     except OutputPolicyError as exc:
         print(f"output refused: {exc}")
+        return 1
+    except FrameExtractionError as exc:
+        print(f"extraction failed for {clip}: {exc}")
         return 1
     except OSError as exc:
         print(f"output failed safely: {exc}")
