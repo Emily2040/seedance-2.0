@@ -779,52 +779,66 @@ class InputContractTests(unittest.TestCase):
         (root / "references" / "eval-rubric.md").write_text(
             EXACT_RUBRIC, encoding="utf-8"
         )
-        cases = [first_case]
-        cases.extend(
-            {
-                "id": f"valid-{index}",
-                "prompt": "test",
-                "assertions": ["works"],
+        def complete(case: dict) -> dict:
+            return {
+                "expected_output": "usable answer",
+                "failure_mode": "incorrect answer",
+                "skills_expected_to_activate": ["seedance-20"],
+                **case,
             }
+
+        cases = [complete(first_case)]
+        cases.extend(
+            complete(
+                {
+                    "id": f"valid-{index}",
+                    "prompt": "test",
+                    "assertions": ["works"],
+                }
+            )
             for index in range(2, 17)
+        )
+        (root / "skills" / "seedance-prompt").mkdir()
+        (root / "skills" / "seedance-prompt" / "SKILL.md").write_text(
+            "INSIDE-SKILL-SENTINEL", encoding="utf-8"
+        )
+        (root / "evals" / "fixtures").mkdir()
+        (root / "evals" / "fixtures" / "state.json").write_text(
+            json.dumps({"state": "INSIDE-STATE-SENTINEL"}), encoding="utf-8"
         )
         (root / "evals" / "evals.json").write_text(
             json.dumps({"cases": cases}), encoding="utf-8"
         )
+        write_source_manifest(root)
 
     def test_self_test_rejects_unhashable_case_ids_without_a_traceback(self) -> None:
         for invalid_id in ([], {}):
             with self.subTest(invalid_id=invalid_id), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
-                (root / "evals").mkdir()
-                (root / "references").mkdir()
-                (root / "SKILL.md").write_text("# test skill\n", encoding="utf-8")
-                (root / "references" / "eval-rubric.md").write_text(
-                    EXACT_RUBRIC, encoding="utf-8"
-                )
-                cases = [
-                    {
-                        "id": invalid_id,
-                        "prompt": "test",
-                        "assertions": ["works"],
-                    }
-                ]
-                (root / "evals" / "evals.json").write_text(
-                    json.dumps({"cases": cases}), encoding="utf-8"
+                self.write_case_repo(
+                    root,
+                    {"id": invalid_id, "prompt": "test", "assertions": ["works"]},
                 )
 
                 output = io.StringIO()
                 with redirect_stdout(output):
-                    code = eval_run.self_test(root)
+                    code = eval_run.self_test(
+                        root, enforce_canonical_contract=False
+                    )
 
                 self.assertEqual(code, 1)
-                self.assertIn("id must be a non-empty UTF-8 string", output.getvalue())
+                self.assertIn("id must be a lowercase ASCII slug", output.getvalue())
                 self.assertNotIn("Traceback", output.getvalue())
 
     def test_deeply_nested_eval_json_fails_cleanly_at_both_cli_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "evals").mkdir()
+            (root / "references").mkdir()
+            (root / "SKILL.md").write_text("# test skill\n", encoding="utf-8")
+            (root / "references" / "eval-rubric.md").write_text(
+                EXACT_RUBRIC, encoding="utf-8"
+            )
             nested_id = "[" * 1100 + '"x"' + "]" * 1100
             (root / "evals" / "evals.json").write_text(
                 '{"cases":[{"id":'
@@ -832,14 +846,26 @@ class InputContractTests(unittest.TestCase):
                 + ',"prompt":"test","assertions":["works"]}]}',
                 encoding="utf-8",
             )
+            write_source_manifest(root)
+            real_freeze = eval_run.freeze_repository
 
             for argv, expected_code, expected_message in (
                 (["eval_run.py", str(root), "--self-test"], 1, "self-test FAILED"),
-                (["eval_run.py", str(root)], 2, "Could not load eval cases"),
+                (["eval_run.py", str(root)], 2, "Could not freeze evaluation inputs"),
             ):
                 with self.subTest(argv=argv):
                     output = io.StringIO()
-                    with mock.patch.object(sys, "argv", argv), redirect_stdout(output):
+                    with (
+                        mock.patch.object(sys, "argv", argv),
+                        mock.patch.object(
+                            eval_run,
+                            "freeze_repository",
+                            side_effect=lambda candidate, **_: real_freeze(
+                                candidate, enforce_canonical_contract=False
+                            ),
+                        ),
+                        redirect_stdout(output),
+                    ):
                         code = eval_run.main()
                     self.assertEqual(code, expected_code)
                     self.assertIn(expected_message, output.getvalue())
@@ -864,9 +890,9 @@ class InputContractTests(unittest.TestCase):
             (
                 "state_fixture",
                 [],
-                "state_fixture must be a non-empty UTF-8 repository-relative file",
+                "state_fixture must be a non-empty UTF-8 string",
             ),
-            ("critical", [], "critical must be a boolean when present"),
+            ("critical", [], "critical must be a boolean"),
             (
                 "expected_sequence_relation",
                 None,
@@ -876,21 +902,15 @@ class InputContractTests(unittest.TestCase):
         for field, value, expected in mutations:
             with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
-                (root / "evals").mkdir()
-                (root / "references").mkdir()
-                (root / "SKILL.md").write_text("# test skill\n", encoding="utf-8")
-                (root / "references" / "eval-rubric.md").write_text(
-                    EXACT_RUBRIC, encoding="utf-8"
-                )
                 case = {"id": "one", "prompt": "test", "assertions": ["works"]}
                 case[field] = value
-                (root / "evals" / "evals.json").write_text(
-                    json.dumps({"cases": [case]}), encoding="utf-8"
-                )
+                self.write_case_repo(root, case)
 
                 output = io.StringIO()
                 with redirect_stdout(output):
-                    code = eval_run.self_test(root)
+                    code = eval_run.self_test(
+                        root, enforce_canonical_contract=False
+                    )
 
                 self.assertEqual(code, 1)
                 self.assertIn(expected, output.getvalue())
@@ -910,7 +930,7 @@ class InputContractTests(unittest.TestCase):
                 ("state_fixture", "."),
                 ("state_fixture", "missing-state.json"),
                 ("state_fixture", "bad\x00state.json"),
-                ("state_fixture", "fixtures/state.json:alternate"),
+                ("state_fixture", "evals/fixtures/state.json:alternate"),
                 ("state_fixture", "../outside-state.txt"),
                 ("state_fixture", str(outside_file)),
                 ("skills_expected_to_activate", ["bad\x00skill"]),
@@ -926,7 +946,9 @@ class InputContractTests(unittest.TestCase):
 
                     output = io.StringIO()
                     with redirect_stdout(output):
-                        code = eval_run.self_test(root)
+                        code = eval_run.self_test(
+                            root, enforce_canonical_contract=False
+                        )
 
                     self.assertEqual(code, 1)
                     self.assertNotIn("Traceback", output.getvalue())
@@ -935,16 +957,17 @@ class InputContractTests(unittest.TestCase):
 
     def test_nonportable_aliases_are_rejected_before_live_provider_calls(self) -> None:
         mutations = (
-            ("state_fixture", "fixtures/state.json."),
-            ("state_fixture", "fixtures/state.json "),
+            ("state_fixture", "evals/fixtures/state.json."),
+            ("state_fixture", "evals/fixtures/state.json "),
             ("state_fixture", "Fixtures/State.JSON"),
-            ("state_fixture", "fixtures/./state.json"),
-            ("state_fixture", "fixtures//state.json"),
-            ("state_fixture", "fixtures/NUL.json"),
-            ("state_fixture", "fixtures/cafe\u0301.json"),
-            ("state_fixture", "fixtures/state\u200d.json"),
-            ("state_fixture", "fixtures/state\u034f.json"),
-            ("state_fixture", "fixtures/state\x7f.json"),
+            ("state_fixture", "evals/fixtures/./state.json"),
+            ("state_fixture", "evals/fixtures//state.json"),
+            ("state_fixture", "evals/fixtures/NUL.json"),
+            ("state_fixture", "evals/fixtures/cafe\u0301.json"),
+            ("state_fixture", "evals/fixtures/state\u200d.json"),
+            ("state_fixture", "evals/fixtures/state\u034f.json"),
+            ("state_fixture", "evals/fixtures/state\x7f.json"),
+            ("state_fixture", r"evals\fixtures\state.json"),
             ("skills_expected_to_activate", ["seedance-prompt."]),
             ("skills_expected_to_activate", ["SEEDANCE-PROMPT"]),
             ("skills_expected_to_activate", ["CON"]),
@@ -955,21 +978,18 @@ class InputContractTests(unittest.TestCase):
                 case = {"id": "one", "prompt": "test", "assertions": ["works"]}
                 case[field] = value
                 self.write_case_repo(root, case)
-                fixture = root / "fixtures" / "state.json"
-                fixture.parent.mkdir()
-                fixture.write_text("INSIDE-STATE-SENTINEL", encoding="utf-8")
-                skill = root / "skills" / "seedance-prompt" / "SKILL.md"
-                skill.parent.mkdir()
-                skill.write_text("INSIDE-SKILL-SENTINEL", encoding="utf-8")
 
                 self_output = io.StringIO()
                 with redirect_stdout(self_output):
-                    self_code = eval_run.self_test(root)
+                    self_code = eval_run.self_test(
+                        root, enforce_canonical_contract=False
+                    )
                 self.assertEqual(self_code, 1, self_output.getvalue())
                 self.assertNotIn("Traceback", self_output.getvalue())
 
                 api_call = mock.Mock(return_value="candidate response")
                 live_output = io.StringIO()
+                real_freeze = eval_run.freeze_repository
                 with (
                     mock.patch.object(
                         sys, "argv", ["eval_run.py", str(root), "--limit", "1"]
@@ -978,18 +998,24 @@ class InputContractTests(unittest.TestCase):
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                     ),
                     mock.patch.object(eval_run, "call_api", api_call),
+                    mock.patch.object(
+                        eval_run,
+                        "freeze_repository",
+                        side_effect=lambda candidate, **_: real_freeze(
+                            candidate, enforce_canonical_contract=False
+                        ),
+                    ),
                     redirect_stdout(live_output),
                 ):
                     live_code = eval_run.main()
                 self.assertEqual(live_code, 2, live_output.getvalue())
-                self.assertIn("case contract validation failed", live_output.getvalue())
+                self.assertIn("Could not freeze evaluation inputs", live_output.getvalue())
                 self.assertNotIn("Traceback", live_output.getvalue())
                 api_call.assert_not_called()
 
-    def test_portable_exact_case_paths_and_backslashes_remain_valid(self) -> None:
+    def test_portable_exact_case_paths_remain_valid(self) -> None:
         cases = (
-            ("state_fixture", "fixtures/state.json", "INSIDE-STATE-SENTINEL"),
-            ("state_fixture", r"fixtures\state.json", "INSIDE-STATE-SENTINEL"),
+            ("state_fixture", "evals/fixtures/state.json", "INSIDE-STATE-SENTINEL"),
             (
                 "skills_expected_to_activate",
                 ["seedance-prompt"],
@@ -1002,75 +1028,61 @@ class InputContractTests(unittest.TestCase):
                 case = {"id": "one", "prompt": "test", "assertions": ["works"]}
                 case[field] = value
                 self.write_case_repo(root, case)
-                fixture = root / "fixtures" / "state.json"
-                fixture.parent.mkdir()
-                fixture.write_text("INSIDE-STATE-SENTINEL", encoding="utf-8")
-                skill = root / "skills" / "seedance-prompt" / "SKILL.md"
-                skill.parent.mkdir()
-                skill.write_text("INSIDE-SKILL-SENTINEL", encoding="utf-8")
+                snapshot = eval_run.freeze_repository(
+                    root, enforce_canonical_contract=False
+                )
+                loaded = eval_run.load_cases(snapshot)
+                eval_run.validate_case_contract(snapshot, loaded)
+                selected = (
+                    ["skills/seedance-prompt/SKILL.md"]
+                    if field == "skills_expected_to_activate"
+                    else []
+                )
+                payload = (
+                    eval_run.responder_context(snapshot, selected)
+                    + eval_run.responder_user_input(snapshot, loaded[0])
+                )
+                self.assertIn(marker, payload)
 
-                label, errors = eval_run.case_contract_errors(root, case, 0)
-                self.assertEqual(label, "one")
-                self.assertEqual(errors, [])
-                self.assertIn(marker, eval_run.responder_context(root, case))
-
-    def test_responder_context_binds_every_repository_input_identity(self) -> None:
-        cases = (
-            (
-                "skill 'seedance-20'",
-                {"id": "one", "prompt": "test", "assertions": ["works"]},
-                1,
-            ),
-            (
-                "skill 'seedance-prompt'",
-                {
-                    "id": "one",
-                    "prompt": "test",
-                    "assertions": ["works"],
-                    "skills_expected_to_activate": ["seedance-prompt"],
-                },
-                1,
-            ),
-            (
-                "state_fixture",
-                {
-                    "id": "one",
-                    "prompt": "test",
-                    "assertions": ["works"],
-                    "state_fixture": "fixtures/state.json",
-                },
-                2,
-            ),
+    def test_freezer_binds_every_repository_input_identity(self) -> None:
+        targets = (
+            eval_run.SOURCE_MANIFEST_PATH,
+            "SKILL.md",
+            "skills/seedance-prompt/SKILL.md",
+            "evals/fixtures/state.json",
         )
-        for target_field, case, original_resolutions in cases:
-            with self.subTest(target_field=target_field), tempfile.TemporaryDirectory() as tmp:
+        for target in targets:
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
-                self.write_case_repo(root, case)
-                skill = root / "skills" / "seedance-prompt" / "SKILL.md"
-                skill.parent.mkdir()
-                skill.write_text("ORIGINAL-SKILL", encoding="utf-8")
-                fixture = root / "fixtures" / "state.json"
-                fixture.parent.mkdir()
-                fixture.write_text("ORIGINAL-STATE", encoding="utf-8")
+                self.write_case_repo(
+                    root,
+                    {
+                        "id": "one",
+                        "prompt": "test",
+                        "assertions": ["works"],
+                        "skills_expected_to_activate": ["seedance-prompt"],
+                        "state_fixture": "evals/fixtures/state.json",
+                    },
+                )
                 replacement = root / "replacement.txt"
                 replacement.write_text("REPLACEMENT", encoding="utf-8")
-                original_resolve = eval_run._resolve_repo_file
+                original_resolve = eval_run._resolve_confined_file
                 resolutions = 0
 
-                def swap_identity(
-                    candidate_root: Path, relative: str, field: str
-                ) -> Path:
+                def swap_identity(candidate_root: Path, relative: str) -> Path:
                     nonlocal resolutions
-                    resolved = original_resolve(candidate_root, relative, field)
-                    if field != target_field:
+                    resolved = original_resolve(candidate_root, relative)
+                    if relative != target:
                         return resolved
                     resolutions += 1
-                    return resolved if resolutions <= original_resolutions else replacement
+                    return resolved if resolutions == 1 else replacement
 
                 with mock.patch.object(
-                    eval_run, "_resolve_repo_file", swap_identity
-                ), self.assertRaisesRegex(ValueError, "changed while it was being read"):
-                    eval_run.responder_context(root, case)
+                    eval_run, "_resolve_confined_file", swap_identity
+                ), self.assertRaisesRegex(eval_run.HarnessError, "changed while"):
+                    eval_run.freeze_repository(
+                        root, enforce_canonical_contract=False
+                    )
 
     def test_eval_case_file_is_read_from_one_bound_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1081,23 +1093,21 @@ class InputContractTests(unittest.TestCase):
             replacement.write_text(
                 json.dumps({"cases": [case]}), encoding="utf-8"
             )
-            original_resolve = eval_run._resolve_repo_file
+            original_resolve = eval_run._resolve_confined_file
             resolutions = 0
 
-            def swap_eval_identity(
-                candidate_root: Path, relative: str, field: str
-            ) -> Path:
+            def swap_eval_identity(candidate_root: Path, relative: str) -> Path:
                 nonlocal resolutions
-                resolved = original_resolve(candidate_root, relative, field)
-                if field != "evals/evals.json":
+                resolved = original_resolve(candidate_root, relative)
+                if relative != "evals/evals.json":
                     return resolved
                 resolutions += 1
                 return resolved if resolutions == 1 else replacement
 
             with mock.patch.object(
-                eval_run, "_resolve_repo_file", swap_eval_identity
-            ), self.assertRaisesRegex(ValueError, "changed while it was being read"):
-                eval_run.load_cases(root)
+                eval_run, "_resolve_confined_file", swap_eval_identity
+            ), self.assertRaisesRegex(eval_run.HarnessError, "changed while"):
+                eval_run.freeze_repository(root, enforce_canonical_contract=False)
 
     def test_live_mode_rejects_case_contract_before_provider_calls(self) -> None:
         mutations = (
@@ -1125,6 +1135,7 @@ class InputContractTests(unittest.TestCase):
                 self.write_case_repo(root, case)
                 api_call = mock.Mock(return_value="candidate response")
                 output = io.StringIO()
+                real_freeze = eval_run.freeze_repository
                 with (
                     mock.patch.object(
                         sys, "argv", ["eval_run.py", str(root), "--limit", "1"]
@@ -1133,12 +1144,19 @@ class InputContractTests(unittest.TestCase):
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                     ),
                     mock.patch.object(eval_run, "call_api", api_call),
+                    mock.patch.object(
+                        eval_run,
+                        "freeze_repository",
+                        side_effect=lambda candidate, **_: real_freeze(
+                            candidate, enforce_canonical_contract=False
+                        ),
+                    ),
                     redirect_stdout(output),
                 ):
                     code = eval_run.main()
 
                 self.assertEqual(code, 2)
-                self.assertIn("case contract validation failed", output.getvalue())
+                self.assertIn("Could not freeze evaluation inputs", output.getvalue())
                 self.assertNotIn("Traceback", output.getvalue())
                 api_call.assert_not_called()
 
@@ -1149,26 +1167,35 @@ class InputContractTests(unittest.TestCase):
             self.write_case_repo(root, first)
             eval_path = root / "evals" / "evals.json"
             data = json.loads(eval_path.read_text(encoding="utf-8"))
-            data["cases"][1]["state_fixture"] = "fixtures/bad-state.json"
+            data["cases"][1]["state_fixture"] = "evals/fixtures/bad-state.json"
             eval_path.write_text(json.dumps(data), encoding="utf-8")
-            fixture = root / "fixtures" / "bad-state.json"
-            fixture.parent.mkdir()
+            fixture = root / "evals" / "fixtures" / "bad-state.json"
             fixture.write_bytes(b"\xff\xfe\x00")
+            write_source_manifest(root)
 
             api_call = mock.Mock(return_value="candidate response")
             output = io.StringIO()
+            real_freeze = eval_run.freeze_repository
             with (
                 mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
                 mock.patch.dict(
                     os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                 ),
                 mock.patch.object(eval_run, "call_api", api_call),
+                mock.patch.object(
+                    eval_run,
+                    "freeze_repository",
+                    side_effect=lambda candidate, **_: real_freeze(
+                        candidate, enforce_canonical_contract=False
+                    ),
+                ),
                 redirect_stdout(output),
             ):
                 code = eval_run.main()
 
             self.assertEqual(code, 2, output.getvalue())
-            self.assertIn("repository input error", output.getvalue())
+            self.assertIn("Could not freeze evaluation inputs", output.getvalue())
+            self.assertIn("not UTF-8", output.getvalue())
             self.assertNotIn("Traceback", output.getvalue())
             api_call.assert_not_called()
 
@@ -1201,7 +1228,7 @@ class InputContractTests(unittest.TestCase):
                     code = eval_run.main()
 
                 self.assertEqual(code, 2, output.getvalue())
-                self.assertIn("Could not load eval rubric", output.getvalue())
+                self.assertIn("Could not freeze evaluation inputs", output.getvalue())
                 self.assertNotIn("Traceback", output.getvalue())
                 api_call.assert_not_called()
 
@@ -1209,17 +1236,15 @@ class InputContractTests(unittest.TestCase):
             root = Path(tmp)
             case = {"id": "one", "prompt": "test", "assertions": ["works"]}
             self.write_case_repo(root, case)
-            original_resolve = eval_run._resolve_repo_file
-            replacement = root / "references" / "replacement-rubric.md"
+            original_resolve = eval_run._resolve_confined_file
+            replacement = root / "replacement-rubric.md"
             replacement.write_text(EXACT_RUBRIC, encoding="utf-8")
             rubric_resolutions = 0
 
-            def swap_rubric_identity(
-                candidate_root: Path, relative: str, field: str
-            ) -> Path:
+            def swap_rubric_identity(candidate_root: Path, relative: str) -> Path:
                 nonlocal rubric_resolutions
-                resolved = original_resolve(candidate_root, relative, field)
-                if field != "references/eval-rubric.md":
+                resolved = original_resolve(candidate_root, relative)
+                if relative != "references/eval-rubric.md":
                     return resolved
                 rubric_resolutions += 1
                 return resolved if rubric_resolutions == 1 else replacement
@@ -1232,7 +1257,7 @@ class InputContractTests(unittest.TestCase):
                     os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                 ),
                 mock.patch.object(
-                    eval_run, "_resolve_repo_file", swap_rubric_identity
+                    eval_run, "_resolve_confined_file", swap_rubric_identity
                 ),
                 mock.patch.object(eval_run, "call_api", api_call),
                 redirect_stdout(output),
@@ -1240,7 +1265,7 @@ class InputContractTests(unittest.TestCase):
                 code = eval_run.main()
 
             self.assertEqual(code, 2, output.getvalue())
-            self.assertIn("changed while it was being read", output.getvalue())
+            self.assertIn("changed while it was being frozen", output.getvalue())
             self.assertNotIn("Traceback", output.getvalue())
             api_call.assert_not_called()
 
@@ -1273,7 +1298,7 @@ class InputContractTests(unittest.TestCase):
                     code = eval_run.main()
 
                 self.assertEqual(code, 2, output.getvalue())
-                self.assertIn("Could not load eval rubric", output.getvalue())
+                self.assertIn("Could not freeze evaluation inputs", output.getvalue())
                 self.assertNotIn("Traceback", output.getvalue())
                 api_call.assert_not_called()
 
@@ -1284,17 +1309,18 @@ class InputContractTests(unittest.TestCase):
                 "id": "one",
                 "prompt": "test",
                 "assertions": ["works"],
-                "state_fixture": "fixtures/state.json",
+                "state_fixture": "evals/fixtures/state.json",
             }
             self.write_case_repo(root, case)
-            fixture = root / "fixtures" / "state.json"
-            fixture.parent.mkdir()
-            fixture.write_text("INSIDE-STATE-SENTINEL", encoding="utf-8")
-
-            label, errors = eval_run.case_contract_errors(root, case, 0)
-            self.assertEqual(label, "one")
-            self.assertEqual(errors, [])
-            self.assertIn("INSIDE-STATE-SENTINEL", eval_run.responder_context(root, case))
+            snapshot = eval_run.freeze_repository(
+                root, enforce_canonical_contract=False
+            )
+            loaded = eval_run.load_cases(snapshot)
+            eval_run.validate_case_contract(snapshot, loaded)
+            self.assertIn(
+                "INSIDE-STATE-SENTINEL",
+                eval_run.responder_user_input(snapshot, loaded[0]),
+            )
 
     def test_load_cases_rejects_ambiguous_json_and_invalid_shapes(self) -> None:
         invalid_documents = (
@@ -1321,10 +1347,17 @@ class InputContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "evals").mkdir()
+            (root / "references").mkdir()
+            (root / "SKILL.md").write_text("# test skill\n", encoding="utf-8")
+            (root / "references" / "eval-rubric.md").write_text(
+                EXACT_RUBRIC, encoding="utf-8"
+            )
             (root / "evals" / "evals.json").write_text(
                 '{"cases":[{"id":"one","id":"forged"}]}',
                 encoding="utf-8",
             )
+            write_source_manifest(root)
+            real_freeze = eval_run.freeze_repository
 
             for argv, expected_code, expected_message in (
                 (
@@ -1335,7 +1368,17 @@ class InputContractTests(unittest.TestCase):
                 (["eval_run.py", str(root)], 2, "Could not freeze evaluation inputs"),
             ):
                 output = io.StringIO()
-                with mock.patch.object(sys, "argv", argv), redirect_stdout(output):
+                with (
+                    mock.patch.object(sys, "argv", argv),
+                    mock.patch.object(
+                        eval_run,
+                        "freeze_repository",
+                        side_effect=lambda candidate, **_: real_freeze(
+                            candidate, enforce_canonical_contract=False
+                        ),
+                    ),
+                    redirect_stdout(output),
+                ):
                     code = eval_run.main()
                 self.assertEqual(code, expected_code)
                 self.assertIn(expected_message, output.getvalue())
@@ -1380,6 +1423,7 @@ class InputContractTests(unittest.TestCase):
                 EXACT_RUBRIC.replace("safety and rights", "renamed safety"),
                 encoding="utf-8",
             )
+            write_source_manifest(root)
             output = io.StringIO()
             call = mock.Mock()
             with (

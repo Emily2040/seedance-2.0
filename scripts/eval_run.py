@@ -3,15 +3,15 @@
 
 The deterministic CI validators (eval_schema_check.py, sequence_eval_check.py, ...)
 prove the eval suite is well-formed. They do not prove the skill actually produces
-good output. This harness closes that gap: it runs each case prompt through the
-real skill content (root SKILL.md plus the case's expected skills) to get a
-response, then asks a judge model to score that response against the case's own
-assertions using references/eval-rubric.md.
+good output. This harness closes that gap: a blind planner selects responder-role
+sources without seeing expected routes or judge labels, a responder uses only
+that frozen selection, and a judge scores the result against the case contract
+using references/eval-rubric.md.
 
 Two modes:
-  --self-test   Offline. Validates wiring only - cases load, the rubric parses,
-                every case's skills resolve, a responder context can be built,
-                and assertions are non-empty. No network. Safe for CI.
+  --self-test   Offline. Validates the pinned manifest, immutable source snapshot,
+                case contracts, rubric, discovery requests, and responder inputs.
+                No network. Safe for CI.
   (default)     Live. Uses the selected provider's API key. Runs responder +
                 judge for each case, prints per-case scores, aggregates against
                 the rubric thresholds, and (with --ledger) writes a markdown
@@ -816,84 +816,6 @@ def _exact_declared_path(root: Path, parts: tuple[str, ...], field: str) -> Path
             raise ValueError(f"{field} must use the exact checked-in path spelling")
         cursor = cursor / exact
     return cursor
-
-
-def _resolve_repo_file(root: Path, relative: str, field: str) -> Path:
-    """Resolve one declared input to an existing regular file inside ``root``."""
-
-    parts = _portable_repo_parts(relative, field)
-    try:
-        resolved_root = root.resolve(strict=True)
-        resolved = resolved_root.joinpath(*parts).resolve(strict=True)
-        resolved.relative_to(resolved_root)
-    except (OSError, RuntimeError, ValueError):
-        raise ValueError(
-            f"{field} must name an existing file inside the repository"
-        ) from None
-    exact = _exact_declared_path(resolved_root, parts, field)
-    try:
-        resolved = exact.resolve(strict=True)
-        resolved.relative_to(resolved_root)
-    except (OSError, RuntimeError, ValueError):
-        raise ValueError(
-            f"{field} must name an existing file inside the repository"
-        ) from None
-    if not resolved.is_file():
-        raise ValueError(f"{field} must name a regular file inside the repository")
-    return resolved
-
-
-def _read_repo_text(
-    root: Path,
-    relative: str,
-    field: str,
-    limit: int = 12000,
-    *,
-    truncate: bool = True,
-) -> str:
-    """Read one stable contained regular file or return a contract error."""
-
-    path = _resolve_repo_file(root, relative, field)
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            before = os.fstat(handle.fileno())
-            if not stat.S_ISREG(before.st_mode):
-                raise ValueError(f"{field} must name a regular file inside the repository")
-            text = handle.read(limit + 1)
-            after = os.fstat(handle.fileno())
-        def fingerprint(info: os.stat_result) -> tuple[int, int, int, int]:
-            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
-        if fingerprint(before) != fingerprint(after):
-            raise ValueError(f"{field} changed while it was being read")
-        current = _resolve_repo_file(root, relative, field)
-        current_stat = current.stat()
-        if (before.st_dev, before.st_ino) != (
-            current_stat.st_dev,
-            current_stat.st_ino,
-        ):
-            raise ValueError(f"{field} changed while it was being read")
-        if len(text) <= limit:
-            return text
-        if not truncate:
-            raise ValueError(f"{field} exceeds {limit} characters")
-        return text[:limit] + "\n...[truncated]"
-    except (OSError, UnicodeError) as exc:
-        raise ValueError(f"{field} cannot be read as UTF-8: {exc}") from None
-
-
-def _state_fixture_path(root: Path, case: dict) -> Path | None:
-    if "state_fixture" not in case or case["state_fixture"] is None:
-        return None
-    fixture = case["state_fixture"]
-    if not isinstance(fixture, str):
-        raise ValueError("state_fixture must be a non-empty UTF-8 repository-relative file")
-    return _resolve_repo_file(root, fixture, "state_fixture")
-
-
-def _skill_file(root: Path, name: str) -> Path:
-    name = _safe_skill_name(name)
-    relative = "SKILL.md" if name == "seedance-20" else f"skills/{name}/SKILL.md"
-    return _resolve_repo_file(root, relative, f"skill '{name}'")
 
 
 def expected_judge_checks(case: dict) -> list[str]:
@@ -2054,9 +1976,16 @@ def validate_sequence_dimension_contract(rubric: str) -> tuple[str, ...]:
     return dimensions
 
 
-def self_test(root: Path) -> int:
+def self_test(
+    root: Path,
+    *,
+    enforce_canonical_contract: bool = True,
+) -> int:
     try:
-        snapshot = freeze_repository(root)
+        snapshot = freeze_repository(
+            root,
+            enforce_canonical_contract=enforce_canonical_contract,
+        )
         cases = load_cases(snapshot)
         rubric = validate_evaluation_contract(snapshot, cases)
         catalog = source_catalog(snapshot)

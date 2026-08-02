@@ -726,6 +726,132 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             self.assertIn("Release verdict: **PASS**", text)
             self.assertNotIn("state_fixture", text)
 
+    def test_manifest_rejects_boolean_versions_unhashable_roles_and_empty_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            manifest_path = root / eval_run.SOURCE_MANIFEST_PATH
+            baseline = json.loads(manifest_path.read_text(encoding="utf-8"))
+            invalid_documents = (
+                {**baseline, "version": True},
+                {**baseline, "version": 1.0},
+                {**baseline, "sources": []},
+                {
+                    **baseline,
+                    "sources": [
+                        {**baseline["sources"][0], "role": []},
+                        *baseline["sources"][1:],
+                    ],
+                },
+            )
+            for document in invalid_documents:
+                with self.subTest(document=document):
+                    write(
+                        root,
+                        eval_run.SOURCE_MANIFEST_PATH,
+                        json.dumps(document),
+                    )
+                    with self.assertRaises(eval_run.HarnessError):
+                        self.snapshot(root)
+
+    def test_manifest_rejects_portable_aliases_and_noncanonical_components(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            manifest_path = root / eval_run.SOURCE_MANIFEST_PATH
+            baseline = json.loads(manifest_path.read_text(encoding="utf-8"))
+            root_entry = next(
+                entry for entry in baseline["sources"] if entry["path"] == "SKILL.md"
+            )
+            aliased = {
+                **baseline,
+                "sources": [
+                    *baseline["sources"],
+                    {**root_entry, "path": "skill.md"},
+                ],
+            }
+            write(
+                root,
+                eval_run.SOURCE_MANIFEST_PATH,
+                json.dumps(aliased),
+            )
+            with self.assertRaisesRegex(eval_run.HarnessError, "alias"):
+                self.snapshot(root)
+
+            for bad_path in (
+                r"references\actual-reference.md",
+                "references/NUL.md",
+                "references/cafe\u0301.md",
+                "references/hidden\u200d.md",
+            ):
+                with self.subTest(path=bad_path):
+                    mutated = json.loads(json.dumps(baseline))
+                    mutated["sources"][0]["path"] = bad_path
+                    write(
+                        root,
+                        eval_run.SOURCE_MANIFEST_PATH,
+                        json.dumps(mutated),
+                    )
+                    with self.assertRaises(eval_run.HarnessError):
+                        self.snapshot(root)
+
+    def test_freezing_and_prompt_assembly_are_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            write(root, "SKILL.md", "x" * (eval_run.MAX_FROZEN_SOURCE_BYTES + 1))
+            write_manifest(
+                root,
+                role_overrides={"references/private-rubric.md": "evaluator"},
+            )
+            with self.assertRaisesRegex(eval_run.HarnessError, "exceeds"):
+                self.snapshot(root)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            with mock.patch.object(eval_run, "MAX_FROZEN_REPOSITORY_BYTES", 100):
+                with self.assertRaisesRegex(eval_run.HarnessError, "repository exceeds"):
+                    self.snapshot(root)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            snapshot = self.snapshot(root)
+            with mock.patch.object(eval_run, "MAX_RESPONDER_CONTEXT_CHARACTERS", 100):
+                with self.assertRaisesRegex(eval_run.HarnessError, "context exceeds"):
+                    eval_run.planner_prompt(snapshot, base_case())
+                with self.assertRaisesRegex(eval_run.HarnessError, "context exceeds"):
+                    eval_run.responder_context(
+                        snapshot, ["references/actual-reference.md"]
+                    )
+
+    def test_final_snapshot_verification_never_uses_unbounded_read_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            snapshot = self.snapshot(root)
+            with mock.patch.object(
+                Path,
+                "read_bytes",
+                side_effect=AssertionError("unbounded read_bytes is forbidden"),
+            ):
+                eval_run.verify_snapshot_unchanged(snapshot)
+
+    def test_explicit_empty_fixture_and_oversized_case_text_fail_closed(self) -> None:
+        bad_cases = (
+            base_case(state_fixture=""),
+            base_case(expected_output="x" * (eval_run.MAX_PROMPT_CHARACTERS + 1)),
+            base_case(failure_mode="x" * (eval_run.MAX_PROMPT_CHARACTERS + 1)),
+        )
+        for case in bad_cases:
+            with self.subTest(case_id=case["id"]), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                make_root(root, case)
+                snapshot = self.snapshot(root)
+                with self.assertRaises(eval_run.HarnessError):
+                    eval_run.validate_case_contract(snapshot, [case])
+
 
 if __name__ == "__main__":
     unittest.main()
