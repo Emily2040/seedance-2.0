@@ -159,6 +159,7 @@ MAX_FROZEN_SOURCE_BYTES = 1_000_000
 MAX_FROZEN_REPOSITORY_BYTES = 20_000_000
 MAX_SOURCE_MANIFEST_ENTRIES = 10_000
 MAX_RESPONDER_CONTEXT_CHARACTERS = 2_000_000
+MAX_JUDGE_CONTEXT_CHARACTERS = 2_000_000
 
 
 @dataclass(frozen=True)
@@ -894,27 +895,61 @@ def _compact_json_string_payload_size(value: str) -> int:
     return len(serialized) - 2  # The surrounding JSON quotes are one byte each.
 
 
-def _canonical_judge_response_size(case: dict, notes: str) -> int:
-    """Measure the compact successful response for a case in exact UTF-8 bytes."""
+def _judge_response_size(
+    case: dict,
+    notes: str,
+    *,
+    criterion_met: bool,
+    dimension_score: int,
+    overall_score: int,
+    passed: bool,
+) -> int:
+    """Measure one compact valid response shape in exact UTF-8 bytes."""
     if not isinstance(notes, str) or not _is_utf8_encodable(notes):
         raise ValueError("judge notes must be a UTF-8 string")
     sequence = is_sequence_case(case)
     response = {
         "criterion_scores": {
-            criterion_id: True
+            criterion_id: criterion_met
             for criterion_id in expected_judge_checks(case)
         },
         "dimension_scores": {
-            dimension_id: 4
+            dimension_id: dimension_score
             for dimension_id in (
                 SEQUENCE_DIMENSION_IDS if sequence else ()
             )
         },
-        "overall_score": 4 if sequence else 3,
-        "pass": True,
+        "overall_score": overall_score,
+        "pass": passed,
         "notes": notes,
     }
     return len(_compact_json(response).encode("utf-8"))
+
+
+def _canonical_judge_response_size(case: dict, notes: str) -> int:
+    """Measure the compact all-passing response for compatibility and diagnostics."""
+    return _judge_response_size(
+        case,
+        notes,
+        criterion_met=True,
+        dimension_score=4,
+        overall_score=4 if is_sequence_case(case) else 3,
+        passed=True,
+    )
+
+
+def _maximum_judge_response_size(case: dict, notes: str) -> int:
+    """Bound both passing and failing verdicts; ``false`` is longer than ``true``."""
+    passing = _canonical_judge_response_size(case, notes)
+    failing = _judge_response_size(
+        case,
+        notes,
+        criterion_met=False,
+        dimension_score=0,
+        overall_score=0,
+        passed=False,
+    )
+    return max(passing, failing)
 
 
 def source_catalog(snapshot: FrozenRepository) -> dict[str, FrozenFile]:
@@ -1179,13 +1214,13 @@ def validate_case_contract(snapshot: FrozenRepository, cases: list[dict]) -> Non
                 raise HarnessError(
                     f"{case_id}: expected_sequence_relation must be one of {allowed}"
                 )
-        response_size = _canonical_judge_response_size(
+        response_size = _maximum_judge_response_size(
             case,
             "x" * JUDGE_NOTES_MAX_BYTES,
         )
         if response_size > JUDGE_RESPONSE_MAX_BYTES:
             raise HarnessError(
-                f"{case_id}: canonical judge response requires {response_size} "
+                f"{case_id}: maximum canonical judge response requires {response_size} "
                 f"UTF-8 bytes, exceeding the {JUDGE_RESPONSE_MAX_BYTES}-byte limit"
             )
         for route in _expected_route_paths(case):
@@ -1875,6 +1910,8 @@ def judge(
         f'overall_score is on the {scale} scale. The complete response must be at '
         f'or below {JUDGE_RESPONSE_MAX_BYTES} UTF-8 bytes.' + dimension_instruction
     )
+    if len(system) + len(user) > MAX_JUDGE_CONTEXT_CHARACTERS:
+        raise HarnessError("judge context exceeds the configured limit")
     raw = call_api(
         system,
         user,
