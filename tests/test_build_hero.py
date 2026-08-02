@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -26,10 +27,21 @@ import build_hero  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 RETIRED = ("viewfinder", "crosshair", "timecode", "sprocket", "REC", "21:9")
 MASTHEAD_INSTALL = "python scripts/build_masthead_outlines.py --install-build-deps"
-MUSLLINUX_UHARFBUZZ_HASHES = (
-    "032382a82e3b9e2a460116aee2934bb713e4757efb68d7f11f55dbbb1ae57184",
-    "e3a80b0d94baf19be47708903246e2ff4bd1069e1f6bf9ed530bf1c9e3e476b4",
-)
+UHARFBUZZ_PYPI_JSON = "https://pypi.org/pypi/uharfbuzz/0.55.0/json"
+UHARFBUZZ_WHEELS = {
+    "uharfbuzz-0.55.0-cp310-abi3-win_amd64.whl":
+        "72f653625e33f68dda56b258b4b9dcd2ff9c9e4f21fd53c7bbff9d9620c4fba0",
+    "uharfbuzz-0.55.0-cp310-abi3-musllinux_1_2_x86_64.whl":
+        "22415eaa87c670fac764053edfaebce1e05babd2cecb0e933170019ed3263109",
+    "uharfbuzz-0.55.0-cp310-abi3-musllinux_1_2_aarch64.whl":
+        "7daeb0ba227246ed8a5a59f64fa23ecec282bc0af13167752d51ae304d20852a",
+    "uharfbuzz-0.55.0-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl":
+        "d594f9e02a21745846477f02e13e900bfe9a697bad975fb3c26e241b7a8256c1",
+    "uharfbuzz-0.55.0-cp310-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl":
+        "13304721967d55e9718200453cae30f7952f95244af4b0fcb4561e8b456f5357",
+    "uharfbuzz-0.55.0-cp310-abi3-macosx_10_9_universal2.whl":
+        "40df0ff4d0c7af29c07a8adc614fb0dd421d9c4d8a139362a80a4ceb71e94a71",
+}
 
 
 class GeneratorTests(unittest.TestCase):
@@ -55,6 +67,20 @@ class GeneratorTests(unittest.TestCase):
         dark = set(re.findall(r"#[0-9A-Fa-f]{6}", build_hero.build("dark")))
         light = set(re.findall(r"#[0-9A-Fa-f]{6}", build_hero.build("light")))
         self.assertFalse(dark & light, "a colour is shared between themes")
+
+    def test_second_render_failure_writes_neither_theme(self) -> None:
+        """Both outputs must exist in memory before the first filesystem write."""
+        with (
+            mock.patch.object(
+                build_hero,
+                "render",
+                side_effect=["dark rendered", RuntimeError("light render failed")],
+            ),
+            mock.patch.object(Path, "write_text", autospec=True) as write,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "light render failed"):
+                build_hero.main([])
+        write.assert_not_called()
 
 
 class DesignRuleTests(unittest.TestCase):
@@ -140,15 +166,22 @@ class OutlinedTypeTests(unittest.TestCase):
 
         expected = {
             "fonttools": "4.63.0",
-            "uharfbuzz": "0.56.0",
-            "harfbuzz": "14.3.0",
+            "uharfbuzz": "0.55.0",
+            "harfbuzz": "14.2.1",
         }
         lock_path = ROOT / "requirements-masthead.lock"
         lock = lock_path.read_text(encoding="utf-8")
         self.assertIn("fonttools==4.63.0", lock)
-        self.assertIn("uharfbuzz==0.56.0", lock)
+        self.assertIn("uharfbuzz==0.55.0", lock)
         self.assertIn("Linux (glibc and musl", lock)
-        for digest in MUSLLINUX_UHARFBUZZ_HASHES:
+        self.assertIn(UHARFBUZZ_PYPI_JSON, lock)
+        uharfbuzz_block = lock.split("uharfbuzz==0.55.0", 1)[1]
+        locked_uharfbuzz_hashes = set(
+            re.findall(r"--hash=sha256:([0-9a-f]{64})", uharfbuzz_block)
+        )
+        self.assertEqual(locked_uharfbuzz_hashes, set(UHARFBUZZ_WHEELS.values()))
+        for filename, digest in UHARFBUZZ_WHEELS.items():
+            self.assertIn(filename, lock)
             self.assertIn(f"--hash=sha256:{digest}", lock)
         for package in ("fonttools", "uharfbuzz"):
             block = lock.split(f"{package}==", 1)[1]
@@ -166,10 +199,83 @@ class OutlinedTypeTests(unittest.TestCase):
         self.assertIn("--force-reinstall --require-hashes", build_lock["install_policy"])
         self.assertEqual(gen.build_lock_sha256(), build_lock["sha256"])
 
+    def test_hero_rejects_tampered_provenance_before_any_svg_write(self) -> None:
+        """Path, policy, digest, and shaper claims are exact release inputs."""
+        original = json.loads(
+            (ROOT / "assets/masthead-outlines.json").read_text(encoding="utf-8")
+        )
+        cases = {
+            "builder_versions": lambda data: data["provenance"].__setitem__(
+                "builder_versions",
+                {**data["provenance"]["builder_versions"], "uharfbuzz": "999.0"},
+            ),
+            "build_lock.path": lambda data: data["provenance"]["build_lock"].__setitem__(
+                "path", "./requirements-masthead.lock"
+            ),
+            "install_policy": lambda data: data["provenance"]["build_lock"].__setitem__(
+                "install_policy", data["provenance"]["build_lock"]["install_policy"] + "."
+            ),
+            "sha256": lambda data: data["provenance"]["build_lock"].__setitem__(
+                "sha256", "0" * 64
+            ),
+        }
+        for expected_error, mutate in cases.items():
+            with self.subTest(field=expected_error), tempfile.TemporaryDirectory() as temp:
+                tampered = json.loads(json.dumps(original))
+                mutate(tampered)
+                outlines = Path(temp) / "masthead-outlines.json"
+                outlines.write_text(
+                    json.dumps(tampered, ensure_ascii=False), encoding="utf-8"
+                )
+                with (
+                    mock.patch.object(build_hero, "OUTLINES", outlines),
+                    mock.patch.object(Path, "write_text", autospec=True) as write,
+                ):
+                    with self.assertRaisesRegex(SystemExit, re.escape(expected_error)):
+                        build_hero.main([])
+                write.assert_not_called()
+
+    def test_hero_rejects_tampered_lock_bytes_before_any_svg_write(self) -> None:
+        """A matching provenance record cannot bless a modified local lock."""
+        with tempfile.TemporaryDirectory() as temp:
+            lock = Path(temp) / "requirements-masthead.lock"
+            lock.write_bytes(build_hero.LOCK.read_bytes() + b"\n# tampered\n")
+            with (
+                mock.patch.object(build_hero, "LOCK", lock),
+                mock.patch.object(Path, "write_text", autospec=True) as write,
+            ):
+                with self.assertRaisesRegex(SystemExit, "sha256"):
+                    build_hero.main([])
+            write.assert_not_called()
+
+    def test_hero_rejects_a_rehashed_lock_with_drifted_package_pins(self) -> None:
+        """A forged matching digest must not override the declared shaper contract."""
+        original = json.loads(
+            (ROOT / "assets/masthead-outlines.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            temp_root = Path(temp)
+            lock = temp_root / "requirements-masthead.lock"
+            drifted = build_hero.LOCK.read_bytes().replace(
+                b"uharfbuzz==0.55.0", b"uharfbuzz==0.54.0"
+            )
+            lock.write_bytes(drifted)
+            original["provenance"]["build_lock"]["sha256"] = hashlib.sha256(
+                drifted
+            ).hexdigest()
+            outlines = temp_root / "masthead-outlines.json"
+            outlines.write_text(json.dumps(original), encoding="utf-8")
+            with (
+                mock.patch.object(build_hero, "OUTLINES", outlines),
+                mock.patch.object(build_hero, "LOCK", lock),
+                mock.patch.object(Path, "write_text", autospec=True) as write,
+            ):
+                with self.assertRaisesRegex(SystemExit, "package pins"):
+                    build_hero.main([])
+            write.assert_not_called()
+
     def test_masthead_builder_refuses_an_unpinned_toolchain(self) -> None:
         """A different shaper must fail before silently rewriting committed geometry."""
-        from unittest import mock
-
         import build_masthead_outlines as gen
 
         mismatched = gen.pinned_builder_versions()
@@ -180,8 +286,6 @@ class OutlinedTypeTests(unittest.TestCase):
 
     def test_masthead_builder_missing_dependency_error_uses_the_locked_install(self) -> None:
         """A clean checkout must fail closed with the reproducible recovery command."""
-        from unittest import mock
-
         import build_masthead_outlines as gen
 
         for missing in ("fontTools", "uharfbuzz"):
@@ -210,8 +314,6 @@ class OutlinedTypeTests(unittest.TestCase):
 
     def test_verified_installer_never_reuses_a_same_version_environment(self) -> None:
         """Even an apparently matching environment must go through a forced wheel-hash install."""
-        from unittest import mock
-
         import build_masthead_outlines as gen
 
         with tempfile.TemporaryDirectory() as cwd:
@@ -237,10 +339,27 @@ class OutlinedTypeTests(unittest.TestCase):
         self.assertIn("--require-hashes", argv)
         self.assertEqual(Path(argv[-1]), ROOT / "requirements-masthead.lock")
 
+    def test_verified_installer_rejects_lock_pin_drift_before_pip(self) -> None:
+        """Hash enforcement cannot compensate for a lock that names the wrong release."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            lock = Path(temp) / "requirements-masthead.lock"
+            lock.write_bytes(
+                gen.LOCK.read_bytes().replace(
+                    b"uharfbuzz==0.55.0", b"uharfbuzz==0.54.0"
+                )
+            )
+            with (
+                mock.patch.object(gen, "LOCK", lock),
+                mock.patch.object(gen.subprocess, "run") as run,
+            ):
+                with self.assertRaisesRegex(SystemExit, "version mismatch"):
+                    gen.install_pinned_builder_dependencies()
+            run.assert_not_called()
+
     def test_install_cli_routes_to_the_verified_installer(self) -> None:
         """The command copied from README, CI, or an error must execute the forced installer."""
-        from unittest import mock
-
         import build_masthead_outlines as gen
 
         with (
@@ -255,8 +374,6 @@ class OutlinedTypeTests(unittest.TestCase):
 
     def test_writing_the_asset_cannot_bypass_the_verified_installer(self) -> None:
         """Every CLI write must force-install before it reads a shaping dependency."""
-        from unittest import mock
-
         import build_masthead_outlines as gen
 
         events = []
@@ -314,8 +431,6 @@ class OutlinedTypeTests(unittest.TestCase):
 
     def test_masthead_provenance_paths_are_posix(self) -> None:
         """Generated JSON must be byte-identical on Windows and POSIX hosts."""
-        from unittest import mock
-
         import build_masthead_outlines as gen
 
         self.assertEqual(

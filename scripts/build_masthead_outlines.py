@@ -57,9 +57,16 @@ SPECS = {
 
 PINNED_BUILDER_VERSIONS = {
     "fonttools": "4.63.0",
-    "uharfbuzz": "0.56.0",
-    "harfbuzz": "14.3.0",
+    "uharfbuzz": "0.55.0",
+    "harfbuzz": "14.2.1",
 }
+
+BUILD_LOCK_PROVENANCE_PATH = "requirements-masthead.lock"
+BUILD_INSTALL_POLICY = (
+    "generator writes only after pip --force-reinstall --require-hashes; "
+    "preinstalled distributions are not reused"
+)
+LOCKED_PYTHON_BUILDERS = ("fonttools", "uharfbuzz")
 
 
 def pinned_install_argv(python: str | Path | None = None) -> list[str]:
@@ -88,6 +95,7 @@ def recovery_command() -> str:
 
 def install_pinned_builder_dependencies() -> None:
     """Force-install locked wheels; never accept an already-satisfied distribution."""
+    require_lock_matches_pinned_versions()
     subprocess.run(pinned_install_argv(), check=True, cwd=ROOT)
 
 
@@ -104,6 +112,42 @@ def repo_relative_posix(path: Path) -> str:
 def pinned_builder_versions() -> dict[str, str]:
     """Return the toolchain versions committed in requirements-masthead.lock."""
     return dict(PINNED_BUILDER_VERSIONS)
+
+
+def locked_python_builder_versions(lock_bytes: bytes | None = None) -> dict[str, str]:
+    """Extract the two top-level Python pins from the exact lock bytes."""
+    try:
+        text = (LOCK.read_bytes() if lock_bytes is None else lock_bytes).decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise SystemExit(f"cannot read masthead build lock {LOCK}: {exc}") from exc
+
+    versions: dict[str, str] = {}
+    for package in LOCKED_PYTHON_BUILDERS:
+        prefix = f"{package}=="
+        matches = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if line.startswith(prefix):
+                value = line[len(prefix):].split(maxsplit=1)[0].rstrip("\\")
+                if value:
+                    matches.append(value)
+        if len(matches) != 1:
+            raise SystemExit(
+                f"masthead build lock must declare {package} exactly once; found {len(matches)}"
+            )
+        versions[package] = matches[0]
+    return versions
+
+
+def require_lock_matches_pinned_versions(lock_bytes: bytes | None = None) -> dict[str, str]:
+    """Refuse a lock whose package pins disagree with the shaper contract."""
+    locked = locked_python_builder_versions(lock_bytes)
+    expected = {name: PINNED_BUILDER_VERSIONS[name] for name in LOCKED_PYTHON_BUILDERS}
+    if locked != expected:
+        raise SystemExit(
+            f"masthead build lock version mismatch (expected {expected!r}; found {locked!r})"
+        )
+    return locked
 
 
 def installed_builder_versions() -> dict[str, str]:
@@ -181,6 +225,7 @@ def outline(src: Path, text: str, size: float) -> tuple[str, float]:
 
 
 def document() -> dict:
+    require_lock_matches_pinned_versions()
     builder_versions = require_pinned_builder_versions()
     sources = {"roman": ROMAN, "italic": ITALIC}
     missing = [repo_relative_posix(p) for p in sources.values() if not p.exists()]
@@ -214,12 +259,9 @@ def document() -> dict:
             "shaping": "HarfBuzz with kern and liga features enabled",
             "builder_versions": builder_versions,
             "build_lock": {
-                "path": repo_relative_posix(LOCK),
+                "path": BUILD_LOCK_PROVENANCE_PATH,
                 "sha256": build_lock_sha256(),
-                "install_policy": (
-                    "generator writes only after pip --force-reinstall --require-hashes; "
-                    "preinstalled distributions are not reused"
-                ),
+                "install_policy": BUILD_INSTALL_POLICY,
             },
             "note": (
                 "Outlines are glyph geometry, not font software. The OFL permits both these "

@@ -25,10 +25,18 @@ fonttools==4.63.0 \
     --hash=sha256:22135da48a348785c5e2d5d2d9d6bec5ed44adacbaeb9db12d9493bf6c6bfa68 \
     --hash=sha256:ba04cb5891d4c0c21b6da95eda8d7b090021508a294fff33464fc7d241e0856b \
     --hash=sha256:445af2eab030a16b9171ea8bdda7ebf7d96bda2df88ee182a464252f6e05e20d
-uharfbuzz==0.56.0 \
-    --hash=sha256:86ceb18ce68cef062224ed9919f4925624f4d8e33869e27fe1d8edef1eba83e1 \
-    --hash=sha256:beec7ae03ec5d0d130ca317795ff2ba24f75226a031c26a921e1706f8c59f36c \
-    --hash=sha256:3b4bb4398270bbb8e1005a7a3d56acd5258c5b00484a06633cb30776da9cc3ab \
-    --hash=sha256:032382a82e3b9e2a460116aee2934bb713e4757efb68d7f11f55dbbb1ae57184 \
-    --hash=sha256:e3a80b0d94baf19be47708903246e2ff4bd1069e1f6bf9ed530bf1c9e3e476b4 \
-    --hash=sha256:0e7c628f327ce862a8606de93766f001704a5201e97d598686730ef2c1605c03
+# Official PyPI release metadata: https://pypi.org/pypi/uharfbuzz/0.55.0/json
+# The six hashes below correspond, in order, to these CPython 3.10+ abi3 wheels:
+# - uharfbuzz-0.55.0-cp310-abi3-win_amd64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-musllinux_1_2_x86_64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-musllinux_1_2_aarch64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-macosx_10_9_universal2.whl
+uharfbuzz==0.55.0 \
+    --hash=sha256:72f653625e33f68dda56b258b4b9dcd2ff9c9e4f21fd53c7bbff9d9620c4fba0 \
+    --hash=sha256:22415eaa87c670fac764053edfaebce1e05babd2cecb0e933170019ed3263109 \
+    --hash=sha256:7daeb0ba227246ed8a5a59f64fa23ecec282bc0af13167752d51ae304d20852a \
+    --hash=sha256:d594f9e02a21745846477f02e13e900bfe9a697bad975fb3c26e241b7a8256c1 \
+    --hash=sha256:13304721967d55e9718200453cae30f7952f95244af4b0fcb4561e8b456f5357 \
+    --hash=sha256:40df0ff4d0c7af29c07a8adc614fb0dd421d9c4d8a139362a80a4ceb71e94a71

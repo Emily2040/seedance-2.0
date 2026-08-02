@@ -469,7 +469,15 @@ and then `python scripts/build_hero.py`. A writing run always uses pip's
 it emits geometry; preinstalled packages cannot bypass that step. The generator
 then refuses unpinned shaping-library versions and records the exact lock digest
 plus the FontTools, uharfbuzz, and HarfBuzz versions in
-`assets/masthead-outlines.json`.
+`assets/masthead-outlines.json`. The current lock pins `uharfbuzz==0.55.0`, the
+latest stable release shown by [official PyPI metadata](https://pypi.org/project/uharfbuzz/0.55.0/)
+when the lock was reviewed on 2026-08-02; the newer 0.56 line was prerelease-only.
+Its six hashes are the published CPython abi3 wheels for Windows x86-64, Linux
+glibc/musl on x86-64 and ARM64, and macOS universal2. Before either SVG is
+written, `build_hero.py` independently requires the exact lock path, lock-byte
+digest, install policy, and builder-version map recorded in the outline asset,
+then renders both themes in memory so a second-theme failure cannot leave a
+half-updated pair.
 To prepare a later read-only check without regenerating, run
 `python scripts/build_masthead_outlines.py --install-build-deps` once and then
 use `python scripts/build_masthead_outlines.py --check` offline.

@@ -16,12 +16,12 @@
     "shaping": "HarfBuzz with kern and liga features enabled",
     "builder_versions": {
       "fonttools": "4.63.0",
-      "uharfbuzz": "0.56.0",
-      "harfbuzz": "14.3.0"
+      "uharfbuzz": "0.55.0",
+      "harfbuzz": "14.2.1"
     },
     "build_lock": {
       "path": "requirements-masthead.lock",
-      "sha256": "687c8e4d082100d6a51e2c3b2e3b907752df3858f75df50f1dbf5ea9093ee70f",
+      "sha256": "bd7187005d023d73fce7fb2df2d7d962df696d3044312618a79c6dceb982346f",
       "install_policy": "generator writes only after pip --force-reinstall --require-hashes; preinstalled distributions are not reused"
     },
     "note": "Outlines are glyph geometry, not font software. The OFL permits both these outlines and the bundled originals in assets/fonts/; attribution is retained here."
