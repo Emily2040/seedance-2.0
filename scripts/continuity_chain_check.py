@@ -312,6 +312,88 @@ def is_scope_fragment(text: object) -> bool:
     )
 
 
+def has_completed_field_predicate(text: str) -> bool:
+    """Return whether a comma-left field fragment already has a predicate.
+
+    A comma after a completed field clause is a clause boundary. A comma before
+    the one shared predicate in ``wardrobe, location, and product identity must
+    not change`` is a list coordinator. Looking for predicate vocabulary only
+    outside recognized field spans keeps field names from deciding this split.
+    """
+    tokens = normalize_phrase(text).split()
+    groups = field_groups(tokens)
+    if not groups:
+        return False
+    occupied = {
+        index
+        for group in groups
+        for start, end, _candidate in group
+        for index in range(start, end)
+    }
+    predicate_words = (
+        TRANSITION_CHANGE_WORDS
+        | NEGATION_WORDS
+        | PRESERVATION_WORDS
+        | NEGATING_CONTRACTION_STEMS
+    )
+    return any(
+        index not in occupied and token in predicate_words
+        for index, token in enumerate(tokens)
+    )
+
+
+def split_comma_clauses(text: str) -> list[str]:
+    """Split comma clauses while retaining comma-coordinated field lists.
+
+    ``normalize_phrase`` deliberately drops punctuation, so list commas are
+    converted to an explicit coordinator before semantic tokenization. This
+    preserves every item in both Oxford- and non-Oxford-comma lists without
+    merging independent clauses that already carry their own predicate.
+    """
+    parts = text.split(",")
+    if len(parts) == 1:
+        stripped = text.strip()
+        return [stripped] if normalize_phrase(stripped) else []
+
+    clauses: list[str] = []
+    current = parts[0].strip()
+    for part_index, raw_part in enumerate(parts[1:], start=1):
+        right = raw_part.strip()
+        if not normalize_phrase(right):
+            continue
+        remainder = ",".join(parts[part_index:])
+        right_starts_connector = bool(
+            re.match(r"^(?:and|or|as\s+well\s+as)\b", right, flags=re.IGNORECASE)
+        )
+        current_has_field = bool(field_groups(normalize_phrase(current).split()))
+        remainder_groups = field_groups(normalize_phrase(remainder).split())
+        remainder_field_count = sum(len(group) for group in remainder_groups)
+        remainder_has_connector = bool(
+            re.search(
+                r"\b(?:and|or|as\s+well\s+as)\b",
+                remainder,
+                flags=re.IGNORECASE,
+            )
+        )
+        shared_field_list = (
+            current_has_field
+            and not has_completed_field_predicate(current)
+            and remainder_field_count >= 2
+            and remainder_has_connector
+        )
+        if right_starts_connector:
+            current = f"{current} {right}".strip()
+        elif shared_field_list:
+            current = f"{current} and {right}".strip()
+        else:
+            if normalize_phrase(current):
+                clauses.append(current)
+            current = right
+    if normalize_phrase(current):
+        clauses.append(current)
+    return clauses
+
+
 def text_segments(text: object) -> list[str]:
     """Split independent clauses while preserving attached scope fragments.
 
@@ -321,15 +403,19 @@ def text_segments(text: object) -> list[str]:
     one. Unknown names remain attached when they carry explicit scope grammar,
     so bounded parsing can reject rather than discard them.
     """
+    # Normalize compatibility punctuation before splitting so fullwidth ASCII
+    # forms follow exactly the same grammar. U+3002 is not compatibility-mapped
+    # by NFKC, so it remains an explicit sentence boundary below.
+    normalized_text = unicodedata.normalize("NFKC", str(text))
+    hard_segments = re.split(
+        r"(?:[.;:!?\r\n\u3002\u2013\u2014]+|\bbut\b|\bhowever\b)",
+        normalized_text,
+        flags=re.IGNORECASE,
+    )
     raw_segments = [
-        segment.strip()
-        for segment in re.split(
-            r"(?:[.;:\r\n\u2013\u2014]+|"
-            r",(?![ \t]*(?:and|or|as[ \t]+well[ \t]+as)\b)|"
-            r"\bbut\b|\bhowever\b)",
-            str(text),
-            flags=re.IGNORECASE,
-        )
+        segment
+        for hard_segment in hard_segments
+        for segment in split_comma_clauses(hard_segment)
         if normalize_phrase(segment)
     ]
     segments: list[str] = []
@@ -796,13 +882,19 @@ def identity_span_attaches_to_group(
         return False
     between = tokens[field_end:start]
     for marker_index in range(field_end, start):
-        if tokens[marker_index] not in {
+        marker = tokens[marker_index]
+        if marker not in {
             "exclusively",
             "for",
             "of",
             "only",
             "specifically",
         }:
+            continue
+        if (
+            marker != "for"
+            and set(tokens[field_end:marker_index]) & TEMPORAL_CONTEXT_LEADERS
+        ):
             continue
         tail = [
             token
@@ -812,6 +904,11 @@ def identity_span_attaches_to_group(
             )
             if index not in identity_indexes
         ]
+        # An explicit ``for`` suffix binds the following identity even when a
+        # separate temporal phrase precedes it: ``after hero shot for guide``.
+        # The temporal identity is rejected above; its leader must not erase
+        # the later, grammatically explicit scope. Ambiguous ``of guide`` and
+        # bare ``guide only`` tails remain fail-closed in temporal prose.
         if set(tail) <= {
             "and",
             "as",
@@ -821,7 +918,7 @@ def identity_span_attaches_to_group(
             "specifically",
             "the",
             "well",
-        } and not (set(between) & TEMPORAL_CONTEXT_LEADERS):
+        }:
             return True
     return (
         end < len(tokens)

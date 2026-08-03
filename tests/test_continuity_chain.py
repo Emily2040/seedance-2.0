@@ -1784,6 +1784,93 @@ class ContinuityChainTests(unittest.TestCase):
                     errors,
                 )
 
+    def test_three_item_comma_lists_share_predicate_across_every_field(self) -> None:
+        before = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "location": "hall-a",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "product_identity": "watch-a",
+                },
+            }
+        }
+        after = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "blue coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "location": "hall-b",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "product_identity": "watch-b",
+                },
+            }
+        }
+        list_forms = (
+            "hero wardrobe, guide location, and extra product identity",
+            "hero wardrobe, guide location and extra product identity",
+            "hero wardrobe， guide location， and extra product identity",
+            "hero wardrobe， guide location and extra product identity",
+        )
+        global_waivers = (
+            "wardrobe may change",
+            "location may change",
+            "product identity may change",
+        )
+
+        for field_list in list_forms:
+            with self.subTest(field_list=field_list, polarity="denial"):
+                errors, _ = self.validate_states(
+                    before,
+                    after,
+                    allowed_changes=[
+                        *global_waivers,
+                        f"{field_list} must not change",
+                    ],
+                )
+                for path in (
+                    "characters.hero.wardrobe",
+                    "characters.guide.location",
+                    "characters.extra.product_identity",
+                ):
+                    self.assertTrue(any(path in error for error in errors), errors)
+
+            with self.subTest(field_list=field_list, polarity="positive"):
+                errors, warnings = self.validate_states(
+                    before,
+                    after,
+                    allowed_changes=[f"{field_list} may change"],
+                )
+                self.assertEqual(errors, [])
+                self.assertEqual(warnings, [])
+
+        errors, _ = self.validate_states(
+            before,
+            after,
+            allowed_changes=[
+                *global_waivers,
+                "hero wardrobe may change, guide location and "
+                "extra product identity must not change",
+            ],
+        )
+        self.assertFalse(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("characters.guide.location" in error for error in errors), errors)
+        self.assertTrue(
+            any("characters.extra.product_identity" in error for error in errors),
+            errors,
+        )
+
     def test_explicit_multi_identity_denial_applies_to_exact_named_set(self) -> None:
         for denial in (
             "hero and guide wardrobe must not change",
@@ -1940,6 +2027,75 @@ class ContinuityChainTests(unittest.TestCase):
 
                 self.assertEqual(errors, [])
                 self.assertEqual(warnings, [])
+
+    def test_explicit_suffix_scope_survives_an_earlier_temporal_identity(self) -> None:
+        before = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "wardrobe": "black coat",
+                },
+            }
+        }
+        after = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "blue coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "wardrobe": "white coat",
+                },
+            }
+        }
+        temporal_phrases = (
+            "after hero shot",
+            "before hero sequence",
+            "during hero scene",
+            "following hero transition",
+        )
+        for temporal_phrase in temporal_phrases:
+            with self.subTest(temporal_phrase=temporal_phrase):
+                errors, _ = self.validate_states(
+                    before,
+                    after,
+                    allowed_changes=[
+                        f"wardrobe may change {temporal_phrase} for guide"
+                    ],
+                )
+                self.assertTrue(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertFalse(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+        for unsafe_allowance in (
+            "wardrobe may change after hero shot for stranger",
+            "wardrobe may change after hero shot of guide",
+            "wardrobe may change after hero shot guide only",
+        ):
+            with self.subTest(unsafe_allowance=unsafe_allowance):
+                errors, _ = self.validate_states(
+                    before,
+                    after,
+                    allowed_changes=[unsafe_allowance],
+                )
+                self.assertTrue(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
 
     def test_attached_identity_beats_unattached_temporal_identity(self) -> None:
         errors, _ = self.validate_states(
@@ -2103,6 +2259,68 @@ class ContinuityChainTests(unittest.TestCase):
                         any("wardrobe" in error for error in unsafe_errors),
                         unsafe_errors,
                     )
+
+    def test_ascii_and_fullwidth_clause_boundaries_share_safe_scope_rules(self) -> None:
+        before = {
+            "characters": {
+                "hero": {"canonical_identity_id": "hero", "wardrobe": "red"},
+                "guide": {"canonical_identity_id": "guide", "wardrobe": "black"},
+            }
+        }
+        after = {
+            "characters": {
+                "hero": {"canonical_identity_id": "hero", "wardrobe": "blue"},
+                "guide": {"canonical_identity_id": "guide", "wardrobe": "white"},
+            }
+        }
+        boundaries = ("!", "?", "！", "？", "。", "；", "：", "，", "．")
+        for boundary in boundaries:
+            with self.subTest(boundary=boundary, case="known-scope"):
+                errors, _ = self.validate_states(
+                    before,
+                    after,
+                    allowed_changes=[f"wardrobe may change{boundary} Only for hero"],
+                )
+                self.assertFalse(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+            for unsafe_tail in ("stranger only", "must not change"):
+                with self.subTest(
+                    boundary=boundary,
+                    case="unsafe-tail",
+                    unsafe_tail=unsafe_tail,
+                ):
+                    errors, _ = self.validate_states(
+                        {"character": {"wardrobe": "red coat"}},
+                        {"character": {"wardrobe": "blue coat"}},
+                        allowed_changes=[
+                            f"wardrobe may change{boundary} {unsafe_tail}"
+                        ],
+                    )
+                    self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+            with self.subTest(boundary=boundary, case="independent-positive"):
+                errors, warnings = self.validate_states(
+                    {
+                        "character": {"wardrobe": "red coat"},
+                        "environment": {"location": "studio-a"},
+                    },
+                    {
+                        "character": {"wardrobe": "blue coat"},
+                        "environment": {"location": "studio-b"},
+                    },
+                    allowed_changes=[
+                        f"wardrobe may change{boundary} location may change"
+                    ],
+                )
+                self.assertEqual(errors, [])
+                self.assertEqual(warnings, [])
 
     def test_unknown_possessive_scope_never_becomes_global(self) -> None:
         for allowance in (
