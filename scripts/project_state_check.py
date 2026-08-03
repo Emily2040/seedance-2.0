@@ -5,11 +5,13 @@ import argparse
 from pathlib import Path
 
 from lineage_contract import (
+    ACCEPTED_PARENT_STATUSES,
     analyze_lineage,
     build_take_review_indexes,
     bound_validation_diagnostics,
     classify_parent_id,
     json_integer,
+    has_usable_observed_end_state,
     is_take_review_path,
     load_bounded_take_review,
     load_project_document,
@@ -260,6 +262,29 @@ def main() -> int:
                 errors.append(
                     f"{rel}: later clip sequence_index {obj.get('sequence_index')} "
                     "must declare a non-empty parent_clip_id"
+                )
+            if parent_kind == "parent" and sequence_index == 1:
+                errors.append(
+                    f"{rel}: first clip sequence_index {obj.get('sequence_index')} "
+                    "must not declare parent_clip_id"
+                )
+            status = obj.get("status")
+            clip_id = obj.get("clip_id")
+            if (
+                isinstance(status, str)
+                and status in ACCEPTED_PARENT_STATUSES
+                and not has_usable_observed_end_state(obj)
+            ):
+                errors.append(
+                    f"{rel}: accepted clip {clip_id} observed_end_state "
+                    "must be a non-empty object"
+                )
+            elif status == "rejected" and (
+                "observed_end_state" not in obj
+                or obj["observed_end_state"] is not None
+            ):
+                errors.append(
+                    f"{rel}: rejected clip {clip_id} observed_end_state must be null"
                 )
             felt = obj.get("felt_intent")
             if "felt_intent" in obj and (not isinstance(felt, str) or not felt.strip()):
