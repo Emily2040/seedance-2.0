@@ -911,6 +911,281 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
             self.assertEqual(reads, 4)
 
+    @unittest.skipIf(os.name == "nt", "POSIX directory durability")
+    def test_json_record_fsyncs_file_before_parent_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / "authority.json"
+            original_fsync = os.fsync
+            observed: list[str] = []
+
+            def observe_fsync(descriptor: int) -> None:
+                info = os.fstat(descriptor)
+                observed.append("directory" if stat.S_ISDIR(info.st_mode) else "file")
+                original_fsync(descriptor)
+
+            with mock.patch.object(installer.os, "fsync", observe_fsync):
+                installer._write_json_exclusive(record, {"authorized": True})
+
+            self.assertEqual(observed, ["file", "directory"])
+
+    def test_rename_fsyncs_the_post_rename_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            destination = root / "destination"
+            source.mkdir()
+            observed: list[Path] = []
+
+            with mock.patch.object(
+                installer,
+                "_fsync_directory",
+                side_effect=lambda path: observed.append(Path(path)),
+            ):
+                installer._rename_directory(source, destination)
+
+            self.assertTrue(destination.is_dir())
+            self.assertEqual(observed, [root])
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory durability")
+    def test_private_move_fsyncs_destination_source_and_unlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "owned.txt"
+            target.write_bytes(b"authorized installer bytes")
+            expected = installer._bound_regular_file_metadata(target)
+            workspace_path = root / "workspace"
+            workspace_identity = installer._create_private_delete_workspace(
+                workspace_path
+            )
+            events: list[str] = []
+            original_rename = os.rename
+            original_unlink = os.unlink
+            original_fsync_directory_descriptor = (
+                installer._fsync_directory_descriptor
+            )
+
+            def observe_rename(*args, **kwargs):
+                events.append("rename")
+                return original_rename(*args, **kwargs)
+
+            def observe_unlink(*args, **kwargs):
+                events.append("unlink")
+                return original_unlink(*args, **kwargs)
+
+            def observe_directory_fsync(descriptor: int) -> None:
+                identity = installer._object_identity(os.fstat(descriptor))
+                label = (
+                    "workspace"
+                    if identity == workspace_identity
+                    else "source-parent"
+                )
+                events.append(f"fsync-{label}")
+                original_fsync_directory_descriptor(descriptor)
+
+            with installer._opened_private_delete_workspace(
+                workspace_path, workspace_identity
+            ) as workspace:
+                with (
+                    mock.patch.object(installer.os, "rename", observe_rename),
+                    mock.patch.object(installer.os, "unlink", observe_unlink),
+                    mock.patch.object(
+                        installer,
+                        "_fsync_directory_descriptor",
+                        observe_directory_fsync,
+                    ),
+                ):
+                    installer._delete_regular_file_by_handle(
+                        target, expected, workspace=workspace
+                    )
+
+            self.assertEqual(
+                events,
+                [
+                    "rename",
+                    "fsync-workspace",
+                    "fsync-source-parent",
+                    "unlink",
+                    "fsync-workspace",
+                ],
+            )
+            installer._remove_private_delete_workspace(
+                workspace_path, workspace_identity
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory durability")
+    def test_terminal_record_unlink_fsyncs_its_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / "authority.json"
+            record.write_bytes(b'{"authorized":true}')
+            events: list[str] = []
+            original_unlink = os.unlink
+            original_fsync_directory_descriptor = (
+                installer._fsync_directory_descriptor
+            )
+
+            def observe_unlink(*args, **kwargs):
+                events.append("unlink")
+                return original_unlink(*args, **kwargs)
+
+            def observe_directory_fsync(descriptor: int) -> None:
+                events.append("fsync-parent")
+                original_fsync_directory_descriptor(descriptor)
+
+            with (
+                mock.patch.object(installer.os, "unlink", observe_unlink),
+                mock.patch.object(
+                    installer,
+                    "_fsync_directory_descriptor",
+                    observe_directory_fsync,
+                ),
+                installer._bound_json_record(record) as binding,
+            ):
+                installer._delete_bound_json_record(binding)
+
+            self.assertEqual(events, ["unlink", "fsync-parent"])
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory durability")
+    def test_journal_parent_fsync_failure_preserves_workspace_and_journal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            transaction_id = "7" * 32
+            payload = {
+                "SKILL.md": {
+                    "size": 1,
+                    "sha256": hashlib.sha256(b"x").hexdigest(),
+                }
+            }
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                payload,
+                None,
+            )
+            transaction_raw = installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            quarantine = skills_dir / str(transaction["quarantine_name"])
+            quarantine.mkdir()
+            owned = quarantine / "owned.txt"
+            owned.write_bytes(b"authorized installer bytes")
+            authorized = installer._capture_path_snapshot(quarantine)
+            installer._write_json_exclusive(
+                quarantine / installer.QUARANTINE_MARKER,
+                installer._quarantine_record(
+                    transaction, transaction_raw, "stage", authorized
+                ),
+            )
+            workspace, journal = installer._private_delete_paths(
+                skills_dir, transaction
+            )
+            original_fsync_directory = installer._fsync_directory
+
+            def fail_after_journal_creation(path: Path) -> None:
+                if Path(path) == skills_dir and journal.exists():
+                    raise OSError("injected parent fsync failure")
+                original_fsync_directory(path)
+
+            with mock.patch.object(
+                installer,
+                "_fsync_directory",
+                fail_after_journal_creation,
+            ):
+                with self.assertRaisesRegex(OSError, "injected parent fsync"):
+                    installer._start_private_delete_journal(
+                        skills_dir,
+                        transaction,
+                        transaction_raw,
+                        "stage",
+                        authorized,
+                    )
+
+            self.assertTrue(workspace.is_dir())
+            self.assertTrue(journal.is_file())
+            installer.recover_interrupted_transaction(
+                skills_dir, skills_dir / installer.SKILL_NAME
+            )
+            self.assertFalse(workspace.exists())
+            self.assertFalse(journal.exists())
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory mode contract")
+    def test_read_only_journaled_quarantine_resumes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            transaction_id = "8" * 32
+            payload = {
+                "SKILL.md": {
+                    "size": 1,
+                    "sha256": hashlib.sha256(b"x").hexdigest(),
+                }
+            }
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                payload,
+                None,
+            )
+            transaction_raw = installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            quarantine = skills_dir / str(transaction["quarantine_name"])
+            nested = quarantine / "nested"
+            nested.mkdir(parents=True)
+            (nested / "owned.txt").write_bytes(b"authorized installer bytes")
+            authorized = installer._capture_path_snapshot(quarantine)
+            installer._write_json_exclusive(
+                quarantine / installer.QUARANTINE_MARKER,
+                installer._quarantine_record(
+                    transaction, transaction_raw, "stage", authorized
+                ),
+            )
+            installer._start_private_delete_journal(
+                skills_dir,
+                transaction,
+                transaction_raw,
+                "stage",
+                authorized,
+            )
+            nested.chmod(0o555)
+            quarantine.chmod(0o555)
+            try:
+                installer.recover_interrupted_transaction(
+                    skills_dir, skills_dir / installer.SKILL_NAME
+                )
+                self.assertFalse(quarantine.exists())
+                self.assertFalse(
+                    (skills_dir / installer.TRANSACTION_NAME).exists()
+                )
+            finally:
+                for directory in [
+                    skills_dir,
+                    *(path for path in skills_dir.rglob("*") if path.is_dir()),
+                ]:
+                    directory.chmod(0o755)
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory durability")
+    def test_workspace_rmdir_fsyncs_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            identity = installer._create_private_delete_workspace(workspace)
+            observed: list[Path] = []
+            original_fsync_directory = installer._fsync_directory
+
+            def observe(path: Path) -> None:
+                observed.append(Path(path))
+                original_fsync_directory(path)
+
+            with mock.patch.object(installer, "_fsync_directory", observe):
+                installer._remove_private_delete_workspace(workspace, identity)
+
+            self.assertEqual(observed, [root])
+
     def test_retry_recovers_an_authorized_private_deletion_workspace_child(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
@@ -1373,7 +1648,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 metadata = original_metadata(path, **kwargs)
                 if path == target:
                     target_checks += 1
-                    if target_checks == 2:
+                    if target_checks == 3:
                         os.replace(target, stashed)
                         os.replace(victim, target)
                 return metadata
@@ -1386,7 +1661,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "changed immediately"):
                     installer._delete_bound_tree(quarantine, authorized)
 
-            self.assertEqual(target_checks, 2)
+            self.assertEqual(target_checks, 3)
             self.assertEqual(target.read_bytes(), b"outside user data")
             self.assertEqual(stashed.read_bytes(), b"authorized installer bytes")
 
@@ -1934,6 +2209,11 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             skills_dir.mkdir()
             first = b"first"
             second = b"second"
+            payload_manifest = (
+                b"SKILL.md\n"
+                b"references/second.md\n"
+                b"validation/install-payload.txt\n"
+            )
             manifest = {
                 "SKILL.md": {
                     "size": len(first),
@@ -1942,6 +2222,10 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 "references/second.md": {
                     "size": len(second),
                     "sha256": hashlib.sha256(second).hexdigest(),
+                },
+                installer.PAYLOAD_MANIFEST.as_posix(): {
+                    "size": len(payload_manifest),
+                    "sha256": hashlib.sha256(payload_manifest).hexdigest(),
                 },
             }
             transaction_id = "5" * 32

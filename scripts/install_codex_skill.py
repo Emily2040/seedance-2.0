@@ -51,6 +51,7 @@ COPY_TEMP_MAX_BASENAME_BYTES = (
 RUNTIME_DEPENDENCY_PREFIXES = ((b"[ref:", "ref"), (b"[skill:", "skill"))
 PRIVATE_DELETE_MARKER = "deletion-authority.json"
 PRIVATE_DELETE_FORMAT_VERSION = 1
+_UNCLASSIFIED_DESTINATION = object()
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -1220,6 +1221,176 @@ def _read_stable_path_bytes(path: Path) -> bytes:
         os.close(descriptor)
 
 
+def _fsync_directory_descriptor(descriptor: int) -> None:
+    """Persist a POSIX directory namespace update through its bound descriptor."""
+    if os.name == "nt":
+        return
+    info = os.fstat(descriptor)
+    if _is_reparse_stat(info) or not stat.S_ISDIR(info.st_mode):
+        raise RuntimeError("directory durability descriptor changed type")
+    os.fsync(descriptor)
+
+
+def _fsync_directory(path: Path) -> None:
+    """Bind and fsync one non-link directory; Windows has no equivalent here."""
+    if os.name == "nt":
+        return
+    before = path.lstat()
+    if _is_reparse_stat(before) or not stat.S_ISDIR(before.st_mode):
+        raise RuntimeError("directory durability target is not a plain directory")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        current = path.lstat()
+        if (
+            _is_reparse_stat(opened)
+            or not stat.S_ISDIR(opened.st_mode)
+            or _object_identity(opened) != _object_identity(before)
+            or _object_identity(current) != _object_identity(opened)
+        ):
+            raise RuntimeError("directory changed while it was bound for durability")
+        _fsync_directory_descriptor(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+_OWNER_DIRECTORY_ACCESS = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+
+
+def _open_bound_snapshot_directory(
+    root_descriptor: int,
+    relative: str,
+    snapshot: PathSnapshot,
+) -> int:
+    """Open one captured descendant without traversing a replaced ancestor."""
+
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory:
+        raise RuntimeError("safe managed-directory permission repair is unavailable")
+    flags = os.O_RDONLY | no_follow | directory | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.dup(root_descriptor)
+    walked: list[str] = []
+    try:
+        for component in PurePosixPath(relative).parts:
+            opened = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = opened
+            walked.append(component)
+            current = "/".join(walked)
+            expected = snapshot.entries.get(current)
+            info = os.fstat(descriptor)
+            if (
+                expected is None
+                or expected.get("type") != "dir"
+                or _is_reparse_stat(info)
+                or not stat.S_ISDIR(info.st_mode)
+                or _object_identity(info)
+                != (int(expected["device"]), int(expected["inode"]))
+            ):
+                raise RuntimeError(
+                    "managed directory changed before permission repair: "
+                    f"{_bounded_diagnostic(current, 180)}"
+                )
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _ensure_snapshot_directories_owner_writable(
+    root: Path,
+    snapshot: PathSnapshot,
+) -> None:
+    """Grant owner access through descriptors bound to ``snapshot`` identities."""
+
+    if os.name == "nt" or snapshot.root_type != "dir":
+        return
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory:
+        raise RuntimeError("safe managed-directory permission repair is unavailable")
+    flags = os.O_RDONLY | no_follow | directory | getattr(os, "O_CLOEXEC", 0)
+    before = root.lstat()
+    if (
+        _is_reparse_stat(before)
+        or not stat.S_ISDIR(before.st_mode)
+        or _object_identity(before) != snapshot.root_identity
+    ):
+        raise RuntimeError("managed root changed before permission repair")
+    root_descriptor = os.open(root, flags)
+    try:
+        opened_root = os.fstat(root_descriptor)
+        current_root = root.lstat()
+        if (
+            _is_reparse_stat(opened_root)
+            or not stat.S_ISDIR(opened_root.st_mode)
+            or _object_identity(opened_root) != snapshot.root_identity
+            or _object_identity(current_root) != snapshot.root_identity
+        ):
+            raise RuntimeError("managed root changed while it was opened")
+
+        root_mode = stat.S_IMODE(opened_root.st_mode) | _OWNER_DIRECTORY_ACCESS
+        if stat.S_IMODE(opened_root.st_mode) != root_mode:
+            os.fchmod(root_descriptor, root_mode)
+        repaired_root = os.fstat(root_descriptor)
+        if (
+            _object_identity(repaired_root) != snapshot.root_identity
+            or stat.S_IMODE(repaired_root.st_mode) & _OWNER_DIRECTORY_ACCESS
+            != _OWNER_DIRECTORY_ACCESS
+        ):
+            raise RuntimeError("managed root permission repair did not persist")
+        _fsync_directory_descriptor(root_descriptor)
+
+        directories = sorted(
+            (
+                relative
+                for relative, metadata in snapshot.entries.items()
+                if metadata.get("type") == "dir"
+            ),
+            key=lambda relative: (relative.count("/"), relative),
+        )
+        for relative in directories:
+            descriptor = _open_bound_snapshot_directory(
+                root_descriptor, relative, snapshot
+            )
+            try:
+                opened = os.fstat(descriptor)
+                expected = snapshot.entries[relative]
+                expected_identity = (
+                    int(expected["device"]),
+                    int(expected["inode"]),
+                )
+                desired_mode = (
+                    stat.S_IMODE(opened.st_mode) | _OWNER_DIRECTORY_ACCESS
+                )
+                if stat.S_IMODE(opened.st_mode) != desired_mode:
+                    os.fchmod(descriptor, desired_mode)
+                repaired = os.fstat(descriptor)
+                if (
+                    _object_identity(repaired) != expected_identity
+                    or stat.S_IMODE(repaired.st_mode) & _OWNER_DIRECTORY_ACCESS
+                    != _OWNER_DIRECTORY_ACCESS
+                ):
+                    raise RuntimeError(
+                        "managed directory permission repair did not persist: "
+                        f"{_bounded_diagnostic(relative, 180)}"
+                    )
+                _fsync_directory_descriptor(descriptor)
+            finally:
+                os.close(descriptor)
+    finally:
+        os.close(root_descriptor)
+    _assert_snapshot_equal(
+        _capture_path_snapshot(root), snapshot, "permission-repaired managed tree"
+    )
+
+
 def _write_json_exclusive(path: Path, record: Mapping[str, object]) -> bytes:
     raw = _json_record_bytes(record)
     if not raw or len(raw) > MAX_RECORD_BYTES:
@@ -1233,6 +1404,7 @@ def _write_json_exclusive(path: Path, record: Mapping[str, object]) -> bytes:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    _fsync_directory(path.parent)
     return raw
 
 
@@ -1565,6 +1737,7 @@ def _copy_payload_file_atomic(
         raise RuntimeError("synced copy temporary file differs from the transaction manifest")
 
     os.replace(temp_path, destination_path)
+    _fsync_directory(destination_path.parent)
     published = _regular_file_metadata(destination_path)
     if published["size"] != expected_size or published["sha256"] != expected_digest:
         raise RuntimeError("atomically published payload file differs from its manifest")
@@ -2569,7 +2742,12 @@ def _remove_path(path: Path) -> None:
 
 def _rename_directory(source: Path, destination: Path) -> None:
     """Rename within one skills directory, which is atomic for a missing target."""
+    source_parent = source.parent
+    destination_parent = destination.parent
     source.rename(destination)
+    _fsync_directory(destination_parent)
+    if source_parent != destination_parent:
+        _fsync_directory(source_parent)
 
 
 def _reserved_stages(skills_dir: Path) -> list[Path]:
@@ -2919,6 +3097,8 @@ def _create_private_delete_workspace(path: Path) -> tuple[int, int]:
         info = path.lstat()
         if stat.S_IMODE(info.st_mode) != 0o700:
             raise RuntimeError("private deletion workspace permissions are not private")
+        _fsync_directory(path)
+        _fsync_directory(path.parent)
     return _object_identity(info)
 
 
@@ -2975,6 +3155,19 @@ def _remove_private_delete_workspace(
         _delete_empty_directory_by_handle(path, expected_identity, workspace=None)
     else:
         path.rmdir()
+    _fsync_directory(path.parent)
+
+
+def _remove_terminal_private_delete_workspace(path: Path) -> None:
+    """Recover the exact empty workspace left after its journal was removed."""
+    info = path.lstat()
+    identity = _object_identity(info)
+    with _opened_private_delete_workspace(path, identity) as workspace:
+        if any(workspace.path.iterdir()):
+            raise RuntimeError(
+                "private deletion workspace has no trusted journal; preserving it"
+            )
+    _remove_private_delete_workspace(path, identity)
 
 
 def _remove_terminal_private_delete_workspace(path: Path) -> None:
@@ -3015,9 +3208,9 @@ def _delete_opened_posix_path(
     """Move an opened object into the transaction-bound workspace and unlink it.
 
     The journal and workspace survive the tree being deleted.  Moving the
-    already-opened object into that mode-0700 namespace closes path swaps and
-    new opens. POSIX cannot exclude a hostile pre-opened writable descriptor;
-    that platform boundary is documented rather than hidden behind recaptures.
+    already-opened object into that mode-0700 namespace excludes other OS
+    accounts and narrows path swaps. POSIX cannot exclude hostile same-account
+    existing or new opens; that boundary is documented rather than hidden.
     """
     parent_descriptor: int | None = None
     try:
@@ -3059,10 +3252,13 @@ def _delete_opened_posix_path(
         )
         if _stat_identity(moved_info) != _stat_identity(opened):
             raise RuntimeError("quarantined object changed during private deletion move")
+        _fsync_directory_descriptor(workspace.descriptor)
+        _fsync_directory_descriptor(parent_descriptor)
         if is_directory:
             os.rmdir(PRIVATE_DELETE_ENTRY, dir_fd=workspace.descriptor)
         else:
             os.unlink(PRIVATE_DELETE_ENTRY, dir_fd=workspace.descriptor)
+        _fsync_directory_descriptor(workspace.descriptor)
         if os.listdir(workspace.descriptor):
             raise RuntimeError("private deletion workspace gained unexpected entries")
     finally:
@@ -3351,6 +3547,9 @@ def _delete_bound_tree(
         return
     current = _capture_path_snapshot(root)
     _validate_bound_subset(current, authorized, extra_entries, require_exact=False)
+    _ensure_snapshot_directories_owner_writable(root, current)
+    current = _capture_path_snapshot(root)
+    _validate_bound_subset(current, authorized, extra_entries, require_exact=False)
     allowed = dict(authorized.entries)
     if extra_entries:
         allowed.update({key: dict(value) for key, value in extra_entries.items()})
@@ -3443,6 +3642,8 @@ def _quarantine_and_delete(
     if _path_exists(quarantine):
         raise RuntimeError("transaction quarantine already exists; preserving both artifacts")
     _assert_snapshot_equal(_capture_path_snapshot(path), snapshot, purpose)
+    _ensure_snapshot_directories_owner_writable(path, snapshot)
+    _assert_snapshot_equal(_capture_path_snapshot(path), snapshot, purpose)
     _rename_directory(path, quarantine)
     quarantined = _capture_path_snapshot(quarantine)
     _assert_snapshot_equal(quarantined, snapshot, purpose)
@@ -3500,10 +3701,11 @@ def _start_private_delete_journal(
             ),
         )
     except Exception:
-        # A live exception before journal publication has moved no data.  A
-        # hard process death in this tiny pre-authority window intentionally
-        # leaves the unmarked workspace fail closed.
-        _remove_private_delete_workspace(workspace_path, workspace_identity)
+        # Parent-directory fsync can fail after the journal entry exists. Keep
+        # workspace and journal together in that case so retry can validate
+        # them. Only a failure before file creation permits workspace removal.
+        if not _path_exists(journal_path):
+            _remove_private_delete_workspace(workspace_path, workspace_identity)
         raise
 
 
@@ -3608,6 +3810,7 @@ def _finish_private_workspace_child(
                 if actual != expected or _stat_identity(current) != _stat_identity(opened):
                     raise RuntimeError("private deletion workspace file changed")
                 os.unlink(PRIVATE_DELETE_ENTRY, dir_fd=workspace.descriptor)
+                _fsync_directory_descriptor(workspace.descriptor)
         finally:
             os.close(descriptor)
     else:
@@ -3622,6 +3825,7 @@ def _finish_private_workspace_child(
         ):
             raise RuntimeError("private deletion workspace directory changed")
         os.rmdir(PRIVATE_DELETE_ENTRY, dir_fd=workspace.descriptor)
+        _fsync_directory_descriptor(workspace.descriptor)
 
 
 def _delete_bound_json_record(
@@ -3673,6 +3877,7 @@ def _delete_bound_json_record(
                 raise RuntimeError("bound authority record changed before cleanup")
             os.unlink(binding.path.name, dir_fd=parent_descriptor)
             binding.permit_path_removal()
+            _fsync_directory_descriptor(parent_descriptor)
         finally:
             os.close(parent_descriptor)
         return
@@ -3680,7 +3885,11 @@ def _delete_bound_json_record(
         raise RuntimeError("POSIX authority cleanup workspace has no descriptor")
     if os.listdir(workspace.descriptor):
         raise RuntimeError("private deletion workspace is not empty before record cleanup")
-    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     parent_descriptor = os.open(binding.path.parent, flags)
     try:
         current = os.stat(
@@ -3703,6 +3912,9 @@ def _delete_bound_json_record(
         )
         if _stat_identity(moved_info) != _stat_identity(binding.opened):
             raise RuntimeError("bound authority record was swapped during private move")
+        binding.permit_path_removal()
+        _fsync_directory_descriptor(workspace.descriptor)
+        _fsync_directory_descriptor(parent_descriptor)
         descriptor = os.open(
             PRIVATE_DELETE_ENTRY,
             os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
@@ -3720,9 +3932,9 @@ def _delete_bound_json_record(
             ):
                 raise RuntimeError("bound authority record changed after private move")
             os.unlink(PRIVATE_DELETE_ENTRY, dir_fd=workspace.descriptor)
+            _fsync_directory_descriptor(workspace.descriptor)
         finally:
             os.close(descriptor)
-        binding.permit_path_removal()
     finally:
         os.close(parent_descriptor)
 
@@ -4179,6 +4391,14 @@ def _promote_staged_install_bound(
             except (OSError, RuntimeError, ValueError):
                 preserved_quarantine = True
             else:
+                _ensure_snapshot_directories_owner_writable(
+                    quarantine, failed_snapshot
+                )
+                _assert_snapshot_equal(
+                    _capture_path_snapshot(quarantine),
+                    failed_snapshot,
+                    "failed promoted stage",
+                )
                 marker_record = _quarantine_record(
                     transaction, transaction_raw, "stage", failed_snapshot
                 )
@@ -4240,7 +4460,7 @@ def stage_validated_install(
     repo_root: Path,
     skills_dir: Path,
     contract: PayloadContract,
-    expected_destination: PathSnapshot | None,
+    expected_destination: PathSnapshot | None | object = _UNCLASSIFIED_DESTINATION,
 ) -> Path:
     if not isinstance(contract, PayloadContract):
         raise TypeError("staging requires a frozen payload contract")
@@ -4263,7 +4483,10 @@ def stage_validated_install(
     old_snapshot = (
         _capture_path_snapshot(destination) if _path_exists(destination) else None
     )
-    if old_snapshot != expected_destination:
+    if (
+        expected_destination is not _UNCLASSIFIED_DESTINATION
+        and old_snapshot != expected_destination
+    ):
         raise RuntimeError(
             "destination changed after its replacement policy was decided; "
             "preserving the current path"
@@ -4280,6 +4503,8 @@ def stage_validated_install(
     )
     try:
         stage.mkdir(mode=0o700)
+        _fsync_directory(stage)
+        _fsync_directory(skills_dir)
         _write_json_exclusive(
             stage / PROVENANCE_MARKER,
             _provenance_record(transaction, transaction_raw),
@@ -4323,6 +4548,14 @@ def stage_validated_install(
         source_after_copy = _load_payload_contract_once(repo_root)
         if source_after_copy != contract:
             raise RuntimeError("source payload changed while it was being copied; retry the install")
+        _ensure_snapshot_directories_owner_writable(stage, staged)
+        _assert_snapshot_equal(
+            _inspect_owned_stage(
+                stage, transaction, transaction_raw, require_complete=False
+            ),
+            staged,
+            "owned stage after directory permission repair",
+        )
         write_completion_marker(stage, contract)
         _inspect_owned_stage(
             stage, transaction, transaction_raw, require_complete=True

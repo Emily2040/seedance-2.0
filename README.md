@@ -351,11 +351,11 @@ The command stages and validates the repository before promoting it to
 sharing that destination are serialized. Add `--force` only to replace a
 complete existing install. Automatic retry is limited to states for which every
 authority record required by the phase reached is present, has flushed file
-contents, and still validates. This installer does not claim POSIX containing-
-directory durability for those record publications. Each payload file is first
-written under a transaction-derived sibling name, bounded by the recorded size,
-synced, checked against the recorded digest, and only then atomically published
-at its final stage pathname. A crash therefore leaves that final pathname either
+contents and, on POSIX, a flushed containing-directory publication, and still
+validates. Each payload file is first written under a transaction-derived
+sibling name, bounded by the recorded size, synced, checked against the recorded
+digest, atomically published at its final stage pathname, and followed by a
+containing-directory sync on POSIX. A crash therefore leaves that final pathname
 absent or complete, never truncated. The copy-sibling basename is capped at 34
 ASCII bytes, shorter than the provenance marker already created before copying;
 on POSIX it shortens further if the stage reports a smaller component limit.
@@ -367,13 +367,12 @@ for unusually small component limits. Recoverable states include an
 exact empty stage before provenance publication; after complete provenance
 publication, source-identical final payload files plus the one exact transaction-
 bound in-progress sibling; an exact torn prefix of the installer's expected
-provenance or completion record; and a
-deletion workspace bound by its external transaction journal (plus the exact
-empty terminal workspace left if that journal was already removed). Malformed,
-swapped, or otherwise
-untrusted records and late or unexpected bytes are preserved for inspection. A
-truncated file at an expected final payload pathname and an unbound temp-like
-file are likewise never claimed for automatic cleanup.
+provenance or completion record; and a deletion workspace bound by its external
+transaction journal (plus the exact empty terminal workspace left if that
+journal was already removed). Malformed, swapped, or otherwise untrusted records
+and late or unexpected bytes are preserved for inspection. A truncated file at
+an expected final payload pathname and an unbound temp-like file are likewise
+never claimed for automatic cleanup.
 So are the deliberately fail-closed hard-death windows after a quarantine is
 renamed but before its authority marker is published, or after a private
 deletion workspace is created but before its external journal is published.
@@ -392,6 +391,13 @@ writable descriptors and mutate either the workspace or its containing skills
 directory; all of those capabilities are outside the portable guarantee. The
 installer preserves mismatches it observes, but makes no stronger exclusion
 claim against that same-account adversary.
+
+On POSIX, authority records are flushed before their containing directory, and
+transaction namespace renames and removals are followed by directory `fsync`.
+Each copied payload file is individually `fsync`ed before its atomic rename, and
+that file's containing stage directory is `fsync`ed after the rename. The
+transaction does not recursively flush the supplied skills-directory ancestry;
+that ancestry is assumed to have the durability expected by the caller.
 
 Installs skip the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator — an agent needs the skill text, not the artwork. The gallery links in an installed copy's README therefore resolve only in this repository.
 

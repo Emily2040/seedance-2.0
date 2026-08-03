@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -100,6 +101,137 @@ class InstallPayloadTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
         return source
+
+    def assert_owner_writable_directories(self, root: Path) -> None:
+        directories = [root, *(path for path in root.rglob("*") if path.is_dir())]
+        for directory in directories:
+            mode = stat.S_IMODE(directory.lstat().st_mode)
+            self.assertEqual(
+                mode & installer._OWNER_DIRECTORY_ACCESS,
+                installer._OWNER_DIRECTORY_ACCESS,
+                directory,
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory mode contract")
+    def test_read_only_source_directories_are_writable_in_stage_and_live(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            contract = installer.load_payload_contract(source)
+            source_directories = [
+                source,
+                *(path for path in source.rglob("*") if path.is_dir()),
+            ]
+            for directory in sorted(
+                source_directories, key=lambda path: len(path.parts), reverse=True
+            ):
+                directory.chmod(0o555)
+            try:
+                stage = installer.stage_validated_install(
+                    source, skills_dir, contract
+                )
+                self.assert_owner_writable_directories(stage)
+                destination = skills_dir / installer.SKILL_NAME
+                installer.promote_staged_install(
+                    stage, destination, skills_dir, contract
+                )
+                self.assert_owner_writable_directories(destination)
+            finally:
+                for directory in sorted(
+                    source_directories, key=lambda path: len(path.parts)
+                ):
+                    if directory.exists():
+                        directory.chmod(0o755)
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory mode contract")
+    def test_read_only_live_tree_can_be_force_replaced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            contract = installer.load_payload_contract(source)
+            initial = installer.stage_validated_install(source, skills_dir, contract)
+            destination = skills_dir / installer.SKILL_NAME
+            installer.promote_staged_install(
+                initial, destination, skills_dir, contract
+            )
+            live_directories = [
+                destination,
+                *(path for path in destination.rglob("*") if path.is_dir()),
+            ]
+            for directory in sorted(
+                live_directories, key=lambda path: len(path.parts), reverse=True
+            ):
+                directory.chmod(0o555)
+            try:
+                replacement = installer.stage_validated_install(
+                    source, skills_dir, contract
+                )
+                installer.promote_staged_install(
+                    replacement,
+                    destination,
+                    skills_dir,
+                    contract,
+                    replacement_state="complete",
+                    force=True,
+                )
+
+                self.assertTrue(installer.validate_completed_install(destination)[0])
+                self.assert_owner_writable_directories(destination)
+                self.assertFalse((skills_dir / installer.BACKUP_NAME).exists())
+                self.assertEqual(
+                    list(skills_dir.glob(f"{installer.QUARANTINE_PREFIX}*")), []
+                )
+                self.assertEqual(
+                    list(skills_dir.glob(f"{installer.PRIVATE_DELETE_PREFIX}*")), []
+                )
+            finally:
+                current_directories = [
+                    skills_dir,
+                    *(path for path in skills_dir.rglob("*") if path.is_dir()),
+                ]
+                for directory in sorted(
+                    current_directories, key=lambda path: len(path.parts)
+                ):
+                    directory.chmod(0o755)
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory mode contract")
+    def test_read_only_interrupted_stage_is_recovered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            contract = installer.load_payload_contract(source)
+            stage = installer.stage_validated_install(source, skills_dir, contract)
+            stage_directories = [
+                stage,
+                *(path for path in stage.rglob("*") if path.is_dir()),
+            ]
+            for directory in sorted(
+                stage_directories, key=lambda path: len(path.parts), reverse=True
+            ):
+                directory.chmod(0o555)
+            try:
+                installer.recover_interrupted_transaction(
+                    skills_dir, skills_dir / installer.SKILL_NAME
+                )
+                self.assertFalse(stage.exists())
+                self.assertFalse(
+                    (skills_dir / installer.TRANSACTION_NAME).exists()
+                )
+            finally:
+                current_directories = [
+                    skills_dir,
+                    *(path for path in skills_dir.rglob("*") if path.is_dir()),
+                ]
+                for directory in sorted(
+                    current_directories, key=lambda path: len(path.parts)
+                ):
+                    directory.chmod(0o755)
 
     def directory_link_or_skip(self, link: Path, target: Path) -> None:
         link.parent.mkdir(parents=True, exist_ok=True)

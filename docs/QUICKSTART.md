@@ -60,6 +60,10 @@ process from existing or new writable opens or namespace mutation. See the
 [README install notes](../README.md#install)
 for the full recovery boundary. The previous complete copy is retained for
 rollback until promotion succeeds.
+On POSIX, authority files and transaction namespace changes are directory-
+`fsync`ed. Each payload file is `fsync`ed before its atomic rename and its stage
+directory is `fsync`ed afterward. The supplied skills-directory ancestry is
+assumed durable rather than recursively flushed.
 A destination inside this repository is refused, since copying the tree into
 itself would recurse until the path length fails.
 
