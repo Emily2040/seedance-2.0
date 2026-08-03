@@ -11,16 +11,17 @@ import shutil
 import stat
 import sys
 import time
+import unicodedata
 import uuid
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable, Iterator, Mapping
 
 
 SKILL_NAME = "seedance-20"
 COMPLETION_MARKER = ".seedance-install-complete.json"
-COMPLETION_FORMAT_VERSION = 1
+COMPLETION_FORMAT_VERSION = 2
 LOCK_NAME = f".{SKILL_NAME}.install.lock"
 BACKUP_NAME = f".{SKILL_NAME}.install-backup"
 STAGE_PREFIX = f".{SKILL_NAME}.install-stage-"
@@ -35,6 +36,8 @@ MAX_RECORD_BYTES = 8 * 1024 * 1024
 MAX_MANIFEST_ENTRIES = 50_000
 MAX_RESERVED_ARTIFACTS = 128
 MAX_DIAGNOSTIC_CHARS = 480
+PAYLOAD_MANIFEST = PurePosixPath("validation/install-payload.txt")
+MAX_PAYLOAD_MANIFEST_BYTES = 1024 * 1024
 PRIVATE_DELETE_ENTRY = "authorized-object"
 PRIVATE_DELETE_PREFIX = ".seedance-delete-"
 PRIVATE_DELETE_MARKER = "deletion-authority.json"
@@ -45,6 +48,7 @@ COPY_TEMP_MAX_TOKEN_CHARS = 32
 COPY_TEMP_MAX_BASENAME_BYTES = (
     len(COPY_TEMP_COMPACT_PREFIX) + COPY_TEMP_MAX_TOKEN_CHARS
 )
+RUNTIME_DEPENDENCY_PREFIXES = ((b"[ref:", "ref"), (b"[skill:", "skill"))
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -262,7 +266,10 @@ def _assert_no_unmanaged_forks(path: Path) -> None:
 
 
 def _regular_file_metadata(
-    path: Path, *, reject_unmanaged_forks: bool = False
+    path: Path,
+    *,
+    chunk_consumer: Callable[[bytes], None] | None = None,
+    reject_unmanaged_forks: bool = False,
 ) -> dict[str, object]:
     """Hash one stable, non-link regular file and detect a concurrent swap."""
     before = path.lstat()
@@ -270,48 +277,76 @@ def _regular_file_metadata(
         raise RuntimeError(f"refusing link or reparse point: {_bounded_diagnostic(path)}")
     if not stat.S_ISREG(before.st_mode):
         raise RuntimeError(f"refusing non-regular file: {_bounded_diagnostic(path)}")
+    if before.st_nlink != 1:
+        raise RuntimeError(
+            "refusing linked, reparse, or non-regular file (hard-linked): "
+            f"{_bounded_diagnostic(path)}"
+        )
 
     descriptor = _open_regular_read_descriptor(path)
-    digest = hashlib.sha256()
     try:
-        opened = os.fstat(descriptor)
-        if _is_reparse_stat(opened) or not stat.S_ISREG(opened.st_mode):
-            raise RuntimeError(f"file changed type while opening: {_bounded_diagnostic(path)}")
-        if _stat_identity(opened) != _stat_identity(before):
-            raise RuntimeError(f"file changed while opening: {_bounded_diagnostic(path)}")
-        # The open Windows handle denies concurrent write/delete handles, so
-        # stream enumeration is bound to the same stable file object hashed
-        # below. Deleting an unrecorded ADS would otherwise be silent data loss.
-        if reject_unmanaged_forks:
-            _assert_no_unmanaged_forks(path)
-        while True:
-            chunk = os.read(descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-        first_digest = digest.digest()
-        # Do not make authority depend on timestamp granularity.  An attacker
-        # can rewrite a same-length file and restore a coarse mtime; reading
-        # the same opened descriptor twice makes that mutation observable
-        # without following a replacement pathname.
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        repeated = hashlib.sha256()
-        while True:
-            chunk = os.read(descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            repeated.update(chunk)
-        if repeated.digest() != first_digest:
-            raise RuntimeError(f"file content changed while hashing: {_bounded_diagnostic(path)}")
-        after_open = os.fstat(descriptor)
+        with _locked_record_descriptor(
+            descriptor,
+            max(before.st_size, 1) + 1,
+            exclusive=False,
+        ):
+            opened = os.fstat(descriptor)
+            if (
+                _is_reparse_stat(opened)
+                or not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+            ):
+                raise RuntimeError(
+                    f"file changed type while opening: {_bounded_diagnostic(path)}"
+                )
+            if _stat_identity(opened) != _stat_identity(before):
+                raise RuntimeError(f"file changed while opening: {_bounded_diagnostic(path)}")
+            # The open Windows handle denies concurrent write/delete handles,
+            # and the record lock coordinates POSIX writers. Stream/xattr
+            # metadata must be rejected before these bytes can authorize a
+            # destructive replacement.
+            if reject_unmanaged_forks:
+                _assert_no_unmanaged_forks(path)
+
+            def capture(*, consume: bool) -> tuple[bytes, int]:
+                digest = hashlib.sha256()
+                total = 0
+                while True:
+                    chunk = os.read(descriptor, 1024 * 1024)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    if consume and chunk_consumer is not None:
+                        chunk_consumer(chunk)
+                    total += len(chunk)
+                return digest.digest(), total
+
+            first_digest, total = capture(consume=True)
+            # File identity and timestamps alone do not detect a same-length
+            # in-place rewrite with a restored coarse mtime.  Repeat the
+            # content capture on this exact shared-locked descriptor.
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            repeated_digest, repeated_total = capture(consume=False)
+            if repeated_digest != first_digest or repeated_total != total:
+                raise RuntimeError(f"file content changed while hashing: {_bounded_diagnostic(path)}")
+            after_open = os.fstat(descriptor)
+            after_path = path.lstat()
+            if (
+                _stat_identity(after_open) != _stat_identity(opened)
+                or _stat_identity(after_path) != _stat_identity(opened)
+                or _is_reparse_stat(after_path)
+                or after_path.st_nlink != 1
+                or total != opened.st_size
+            ):
+                raise RuntimeError(f"file changed while hashing: {_bounded_diagnostic(path)}")
     finally:
         os.close(descriptor)
 
-    after_path = path.lstat()
+    final_path = path.lstat()
     if (
-        _stat_identity(after_open) != _stat_identity(opened)
-        or _stat_identity(after_path) != _stat_identity(opened)
-        or _is_reparse_stat(after_path)
+        _stat_identity(final_path) != _stat_identity(opened)
+        or _is_reparse_stat(final_path)
+        or final_path.st_nlink != 1
     ):
         raise RuntimeError(f"file changed while hashing: {_bounded_diagnostic(path)}")
     return {"type": "file", "size": opened.st_size, "sha256": first_digest.hex()}
@@ -405,6 +440,429 @@ def _snapshot_sha256(
             "entries": entries,
         }
     )
+@dataclass(frozen=True)
+class FileSnapshot:
+    relative: str
+    identity: tuple[int, int, int, int, int, int]
+    size: int
+    sha256: str
+
+
+@dataclass(frozen=True)
+class PayloadContract:
+    manifest_bytes: bytes
+    declared: tuple[str, ...]
+    source_files: tuple[FileSnapshot, ...]
+    payload_manifest_sha256: str
+    contract_sha256: str
+
+    def file_manifest(self) -> dict[str, dict[str, object]]:
+        return {
+            item.relative: {"size": item.size, "sha256": item.sha256}
+            for item in self.source_files
+        }
+
+
+def _absolute_lexical(path: Path) -> Path:
+    return Path(os.path.abspath(path))
+
+
+def _assert_existing_components_no_links(path: Path, label: str) -> None:
+    absolute = _absolute_lexical(path)
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if not _path_exists(current):
+            break
+        info = current.lstat()
+        if _is_reparse_stat(info) or stat.S_ISLNK(info.st_mode):
+            raise ValueError(
+                f"{label} contains a linked or reparse component: "
+                f"{_bounded_diagnostic(current, 220)}"
+            )
+
+
+def _assert_regular_relative_path(root: Path, relative: str, label: str) -> Path:
+    if not _safe_relative_path(relative):
+        raise ValueError(
+            f"{label} has an unsafe path: {_bounded_diagnostic(repr(relative), 180)}"
+        )
+    absolute_root = _absolute_lexical(root)
+    _assert_existing_components_no_links(absolute_root, f"{label} root")
+    root_info = absolute_root.lstat()
+    if not stat.S_ISDIR(root_info.st_mode):
+        raise ValueError(f"{label} root is not a directory")
+
+    current = absolute_root
+    parts = relative.split("/")
+    for index, part in enumerate(parts):
+        current /= part
+        try:
+            info = current.lstat()
+        except (FileNotFoundError, NotADirectoryError) as exc:
+            raise FileNotFoundError(f"{label} file is missing: {relative}") from exc
+        if _is_reparse_stat(info) or stat.S_ISLNK(info.st_mode):
+            raise ValueError(
+                f"{label} contains a linked or reparse component: "
+                f"{_bounded_diagnostic(relative, 180)}"
+            )
+        if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"{label} component is not a directory: {relative}")
+        if index == len(parts) - 1 and not stat.S_ISREG(info.st_mode):
+            raise ValueError(f"{label} is not a regular file: {relative}")
+    return current
+
+
+def _read_stable_regular_bytes(
+    root: Path,
+    relative: str,
+    *,
+    label: str,
+    max_bytes: int,
+) -> tuple[FileSnapshot, bytes]:
+    """Read one bounded file from one descriptor and reject any path swap."""
+    path = _assert_regular_relative_path(root, relative, label)
+    before = path.lstat()
+    if before.st_nlink != 1:
+        raise ValueError(f"{label} is hard-linked: {relative}")
+    if before.st_size < 0 or before.st_size > max_bytes:
+        raise ValueError(f"{label} exceeds {max_bytes} bytes: {relative}")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        with _locked_record_descriptor(
+            descriptor,
+            max_bytes + 1,
+            exclusive=False,
+        ):
+            opened = os.fstat(descriptor)
+            if (
+                _is_reparse_stat(opened)
+                or not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+                or _stat_identity(opened) != _stat_identity(before)
+            ):
+                raise RuntimeError(
+                    f"{label} changed while it was being opened: {relative}"
+                )
+            def capture() -> bytes:
+                chunks: list[bytes] = []
+                total = 0
+                while True:
+                    chunk = os.read(
+                        descriptor,
+                        min(1024 * 1024, max_bytes + 1 - total),
+                    )
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise ValueError(f"{label} exceeds {max_bytes} bytes: {relative}")
+                return b"".join(chunks)
+
+            raw = capture()
+            first_digest = hashlib.sha256(raw).digest()
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            repeated_raw = capture()
+            if (
+                hashlib.sha256(repeated_raw).digest() != first_digest
+                or repeated_raw != raw
+            ):
+                raise RuntimeError(f"{label} content changed while it was being read: {relative}")
+            after_open = os.fstat(descriptor)
+            after_path = path.lstat()
+            if (
+                _stat_identity(after_open) != _stat_identity(opened)
+                or _stat_identity(after_path) != _stat_identity(opened)
+                or _is_reparse_stat(after_path)
+                or after_path.st_nlink != 1
+            ):
+                raise RuntimeError(f"{label} changed while it was being read: {relative}")
+    finally:
+        os.close(descriptor)
+    final_path = path.lstat()
+    if (
+        _stat_identity(final_path) != _stat_identity(opened)
+        or _is_reparse_stat(final_path)
+        or final_path.st_nlink != 1
+    ):
+        raise RuntimeError(f"{label} changed while it was being read: {relative}")
+    if len(raw) != opened.st_size:
+        raise RuntimeError(f"{label} changed size while it was being read: {relative}")
+    digest = hashlib.sha256(raw).hexdigest()
+    return (
+        FileSnapshot(relative, _stat_identity(opened), len(raw), digest),
+        raw,
+    )
+
+
+def _source_file_snapshot(
+    root: Path,
+    relative: str,
+    *,
+    chunk_consumer: Callable[[bytes], None] | None = None,
+) -> FileSnapshot:
+    path = _assert_regular_relative_path(root, relative, "declared payload path")
+    before = path.lstat()
+    metadata = _regular_file_metadata(path, chunk_consumer=chunk_consumer)
+    after = path.lstat()
+    if _stat_identity(before) != _stat_identity(after):
+        raise RuntimeError(f"declared payload path changed while captured: {relative}")
+    return FileSnapshot(
+        relative,
+        _stat_identity(after),
+        int(metadata["size"]),
+        str(metadata["sha256"]),
+    )
+
+
+class _RuntimeDependencyClosureScanner:
+    """Validate tags while a declared payload file is hashed from one handle."""
+
+    def __init__(self, source_relative: str, declared: frozenset[str]) -> None:
+        self.source_relative = source_relative
+        self.declared = declared
+        self.line_number = 1
+        self.tag_line_number = 1
+        self.previous_was_cr = False
+        self.candidate = bytearray()
+        self.kind: str | None = None
+        self.name = bytearray()
+        self.error: ValueError | None = None
+
+    def _fail(self, message: str) -> None:
+        if self.error is None:
+            self.error = ValueError(message)
+
+    def _advance_line(self, value: int) -> None:
+        if value == ord("\r"):
+            self.line_number += 1
+            self.previous_was_cr = True
+        elif value == ord("\n"):
+            if not self.previous_was_cr:
+                self.line_number += 1
+            self.previous_was_cr = False
+        else:
+            self.previous_was_cr = False
+
+    def _validate_completed_tag(self) -> None:
+        try:
+            name = bytes(self.name).decode("utf-8")
+        except UnicodeDecodeError:
+            self._fail(
+                f"{self.source_relative}:{self.tag_line_number}: runtime dependency "
+                "tag is not valid UTF-8"
+            )
+            return
+
+        target = (
+            f"references/{name}.md"
+            if self.kind == "ref"
+            else f"skills/{name}/SKILL.md"
+        )
+        tag = f"[{self.kind}:{name}]"
+        if not _normalized_payload_path(target):
+            self._fail(
+                f"{self.source_relative}:{self.tag_line_number}: runtime dependency "
+                f"{tag} does not resolve to a normalized payload path"
+            )
+            return
+        if target not in self.declared:
+            manifest = PAYLOAD_MANIFEST.as_posix()
+            self._fail(
+                f"{self.source_relative}:{self.tag_line_number}: runtime dependency "
+                f"{tag} resolves to {target}, which is absent from {manifest}; "
+                f"add it to {manifest}"
+            )
+
+    def feed(self, data: bytes) -> None:
+        if self.error is not None:
+            return
+        for value in data:
+            if self.kind is not None:
+                if value == ord("]"):
+                    self._validate_completed_tag()
+                    self.kind = None
+                    self.name.clear()
+                elif value in (ord("\r"), ord("\n")):
+                    self.kind = None
+                    self.name.clear()
+                else:
+                    self.name.append(value)
+                    if len(self.name) > MAX_PAYLOAD_MANIFEST_BYTES:
+                        manifest = PAYLOAD_MANIFEST.as_posix()
+                        self._fail(
+                            f"{self.source_relative}:{self.tag_line_number}: runtime "
+                            f"dependency tag cannot fit in {manifest}"
+                        )
+            elif not self.candidate:
+                if value == ord("["):
+                    self.candidate.append(value)
+                    self.tag_line_number = self.line_number
+            else:
+                self.candidate.append(value)
+                candidate = bytes(self.candidate)
+                matched = next(
+                    (
+                        kind
+                        for prefix, kind in RUNTIME_DEPENDENCY_PREFIXES
+                        if candidate == prefix
+                    ),
+                    None,
+                )
+                if matched is not None:
+                    self.kind = matched
+                    self.name.clear()
+                    self.candidate.clear()
+                elif not any(
+                    prefix.startswith(candidate)
+                    for prefix, _ in RUNTIME_DEPENDENCY_PREFIXES
+                ):
+                    self.candidate.clear()
+                    if value == ord("["):
+                        self.candidate.append(value)
+                        self.tag_line_number = self.line_number
+            if self.error is not None:
+                return
+            self._advance_line(value)
+
+    def raise_for_error(self) -> None:
+        if self.error is not None:
+            raise self.error
+
+
+def _validate_runtime_dependency_closure(
+    source_relative: str,
+    data: bytes,
+    declared: frozenset[str],
+) -> None:
+    scanner = _RuntimeDependencyClosureScanner(source_relative, declared)
+    scanner.feed(data)
+    scanner.raise_for_error()
+
+
+PAYLOAD_DEFAULT_IGNORABLE_RANGES = (
+    (0x034F, 0x034F),
+    (0x115F, 0x1160),
+    (0x17B4, 0x17B5),
+    (0x180B, 0x180F),
+    (0x3164, 0x3164),
+    (0xFE00, 0xFE0F),
+    (0xFFA0, 0xFFA0),
+    (0xFFF0, 0xFFF8),
+    (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0FFF),
+)
+
+
+def _safe_payload_character(character: str) -> bool:
+    if unicodedata.category(character).startswith("C"):
+        return False
+    codepoint = ord(character)
+    return not any(
+        start <= codepoint <= end
+        for start, end in PAYLOAD_DEFAULT_IGNORABLE_RANGES
+    )
+
+
+def _normalized_payload_path(entry: str) -> bool:
+    return (
+        _safe_relative_path(entry)
+        and PurePosixPath(entry).as_posix() == entry
+        and unicodedata.normalize("NFC", entry) == entry
+        and all(_safe_payload_character(character) for character in entry)
+    )
+
+
+def _parse_payload_manifest_bytes(manifest_path: Path, data: bytes) -> tuple[str, ...]:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"install payload manifest is not valid UTF-8: {exc}") from None
+
+    declared: set[str] = set()
+    casefolded: set[str] = set()
+    internal = {COMPLETION_MARKER, PROVENANCE_MARKER, QUARANTINE_MARKER}
+    for line_number, raw_line in enumerate(text.splitlines(), 1):
+        entry = raw_line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        if raw_line != entry or not _normalized_payload_path(entry):
+            raise ValueError(
+                f"{manifest_path}:{line_number}: payload path must be a normalized "
+                f"POSIX relative path: {_bounded_diagnostic(repr(entry), 180)}"
+            )
+        if entry in internal:
+            raise ValueError(
+                f"{manifest_path}:{line_number}: installer metadata is not payload"
+            )
+        if entry in declared or entry.casefold() in casefolded:
+            raise ValueError(
+                f"{manifest_path}:{line_number}: duplicate payload path: "
+                f"{_bounded_diagnostic(entry, 180)}"
+            )
+        declared.add(entry)
+        casefolded.add(entry.casefold())
+        if len(declared) > MAX_MANIFEST_ENTRIES:
+            raise ValueError(f"{manifest_path}: payload manifest has too many entries")
+
+    required = {
+        "SKILL.md",
+        "scripts/install_codex_skill.py",
+        PAYLOAD_MANIFEST.as_posix(),
+    }
+    missing = sorted(required - declared)
+    if missing:
+        raise ValueError(
+            f"{manifest_path}: missing required payload entries: "
+            f"{', '.join(missing)}"
+        )
+    return tuple(sorted(declared))
+
+
+def _contract_sha256(
+    payload_manifest_sha256: str,
+    declared: tuple[str, ...],
+    files: Mapping[str, Mapping[str, object]],
+) -> str:
+    return _canonical_sha256(
+        {
+            "payload_manifest_sha256": payload_manifest_sha256,
+            "declared_paths": list(declared),
+            "files": files,
+        }
+    )
+
+
+def _implied_payload_directories(declared: tuple[str, ...]) -> set[str]:
+    directories: set[str] = set()
+    for relative in declared:
+        parts = relative.split("/")[:-1]
+        for index in range(1, len(parts) + 1):
+            directories.add("/".join(parts[:index]))
+    return directories
+
+
+def payload_allowlist_filter(repo_root: Path, declared: tuple[str, ...]):
+    """Admit only explicitly declared files and the directories that contain them."""
+    root = _absolute_lexical(repo_root)
+    allowed_files = set(declared)
+    allowed_directories = _implied_payload_directories(declared)
+
+    def ignore_undeclared(source_directory: str, names: list[str]) -> set[str]:
+        source = _absolute_lexical(Path(source_directory))
+        relative_directory = source.relative_to(root)
+        parent_parts = () if relative_directory == Path(".") else relative_directory.parts
+        ignored: set[str] = set()
+        for name in names:
+            candidate = PurePosixPath(*parent_parts, name).as_posix()
+            if candidate not in allowed_files and candidate not in allowed_directories:
+                ignored.add(name)
+        return ignored
+
+    return ignore_undeclared
 
 
 def _capture_path_snapshot(path: Path) -> PathSnapshot:
@@ -518,8 +976,15 @@ def _reject_nonfinite(value: str) -> object:
 
 
 @contextmanager
-def _locked_record_descriptor(descriptor: int) -> Iterator[None]:
-    """Coordinate authority reads; POSIX locks remain advisory by design."""
+def _locked_record_descriptor(
+    descriptor: int,
+    range_length: int = MAX_RECORD_BYTES + 1,
+    *,
+    exclusive: bool = True,
+) -> Iterator[None]:
+    """Hold a shared or exclusive lock while authoritative bytes are read."""
+    if range_length <= 0 or range_length >= 1 << 64:
+        raise ValueError("installer file lock range is invalid")
     if os.name == "nt":
         import ctypes
         import msvcrt
@@ -556,16 +1021,30 @@ def _locked_record_descriptor(descriptor: int) -> Iterator[None]:
         unlock_file.restype = wintypes.BOOL
         handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
         overlapped = Overlapped()
-        range_length = MAX_RECORD_BYTES + 1
-        flags = 0x00000001 | 0x00000002  # FAIL_IMMEDIATELY | EXCLUSIVE_LOCK
-        if not lock_file(handle, flags, 0, range_length, 0, ctypes.byref(overlapped)):
+        range_low = range_length & 0xFFFFFFFF
+        range_high = range_length >> 32
+        flags = 0x00000001  # LOCKFILE_FAIL_IMMEDIATELY
+        if exclusive:
+            flags |= 0x00000002  # LOCKFILE_EXCLUSIVE_LOCK
+        if not lock_file(
+            handle,
+            flags,
+            0,
+            range_low,
+            range_high,
+            ctypes.byref(overlapped),
+        ):
             error = ctypes.get_last_error()
             raise OSError(error, "record is being modified by another process")
         try:
             yield
         finally:
             if not unlock_file(
-                handle, 0, range_length, 0, ctypes.byref(overlapped)
+                handle,
+                0,
+                range_low,
+                range_high,
+                ctypes.byref(overlapped),
             ):
                 error = ctypes.get_last_error()
                 raise OSError(error, "could not release installer record lock")
@@ -573,7 +1052,8 @@ def _locked_record_descriptor(descriptor: int) -> Iterator[None]:
 
     import fcntl
 
-    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    mode = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+    fcntl.flock(descriptor, mode | fcntl.LOCK_NB)
     try:
         yield
     finally:
@@ -817,10 +1297,17 @@ def _validate_payload_manifest(value: object) -> dict[str, dict[str, object]]:
     if list(value) != sorted(value):
         raise ValueError("file manifest paths must be sorted")
     validated: dict[str, dict[str, object]] = {}
+    casefolded: set[str] = set()
     for relative, metadata in value.items():
-        if not _safe_relative_path(relative):
+        if not _normalized_payload_path(relative):
             raise ValueError(
                 f"file manifest contains an unsafe path: "
+                f"{_bounded_diagnostic(repr(relative), 180)}"
+            )
+        folded = relative.casefold()
+        if folded in casefolded:
+            raise ValueError(
+                f"file manifest contains a case-ambiguous path: "
                 f"{_bounded_diagnostic(repr(relative), 180)}"
             )
         if not isinstance(metadata, dict) or set(metadata) != {"sha256", "size"}:
@@ -836,6 +1323,7 @@ def _validate_payload_manifest(value: object) -> dict[str, dict[str, object]]:
                 f"{_bounded_diagnostic(relative, 180)}"
             )
         validated[relative] = {"size": size, "sha256": digest}
+        casefolded.add(folded)
     return validated
 
 
@@ -1082,13 +1570,83 @@ def _copy_payload_file_atomic(
     return str(destination_path)
 
 
+def _load_payload_contract_once(repo_root: Path) -> PayloadContract:
+    root = _absolute_lexical(repo_root)
+    manifest_relative = PAYLOAD_MANIFEST.as_posix()
+    manifest_snapshot, manifest_bytes = _read_stable_regular_bytes(
+        root,
+        manifest_relative,
+        label="install payload manifest",
+        max_bytes=MAX_PAYLOAD_MANIFEST_BYTES,
+    )
+    declared = _parse_payload_manifest_bytes(root / PAYLOAD_MANIFEST, manifest_bytes)
+    declared_set = frozenset(declared)
+    snapshots: list[FileSnapshot] = []
+    for relative in declared:
+        if relative == manifest_relative:
+            _validate_runtime_dependency_closure(
+                relative,
+                manifest_bytes,
+                declared_set,
+            )
+            snapshot = manifest_snapshot
+        else:
+            scanner = _RuntimeDependencyClosureScanner(relative, declared_set)
+            snapshot = _source_file_snapshot(
+                root,
+                relative,
+                chunk_consumer=scanner.feed,
+            )
+            scanner.raise_for_error()
+        snapshots.append(snapshot)
+    source_files = tuple(snapshots)
+    files = {
+        item.relative: {"size": item.size, "sha256": item.sha256}
+        for item in source_files
+    }
+    payload_manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    return PayloadContract(
+        manifest_bytes,
+        declared,
+        source_files,
+        payload_manifest_sha256,
+        _contract_sha256(payload_manifest_sha256, declared, files),
+    )
+
+
+def load_payload_contract(repo_root: Path) -> PayloadContract:
+    """Freeze one stable manifest, allowlist, and source-file identity."""
+    first = _load_payload_contract_once(repo_root)
+    second = _load_payload_contract_once(repo_root)
+    if first != second:
+        raise RuntimeError("source payload changed while its install contract was captured")
+    return first
+
+
+def load_payload_manifest(repo_root: Path) -> frozenset[str]:
+    return frozenset(load_payload_contract(repo_root).declared)
+
+
+def declared_payload_manifest(
+    root: Path, declared: frozenset[str]
+) -> dict[str, dict[str, object]]:
+    snapshots = tuple(_source_file_snapshot(root, relative) for relative in sorted(declared))
+    return {
+        item.relative: {"size": item.size, "sha256": item.sha256}
+        for item in snapshots
+    }
+
+
 def _completion_record(destination: Path) -> tuple[dict[str, object], bytes]:
     record, raw = _read_json_record(destination / COMPLETION_MARKER)
     expected_keys = {
+        "contract_sha256",
+        "declared_paths",
         "file_count",
         "files",
         "format_version",
-        "manifest_sha256",
+        "payload_manifest_path",
+        "payload_manifest_sha256",
         "skill_name",
     }
     if set(record) != expected_keys:
@@ -1097,34 +1655,72 @@ def _completion_record(destination: Path) -> tuple[dict[str, object], bytes]:
         raise ValueError("completion marker format is unsupported")
     if record.get("skill_name") != SKILL_NAME:
         raise ValueError("completion marker names a different skill")
+    if record.get("payload_manifest_path") != PAYLOAD_MANIFEST.as_posix():
+        raise ValueError("completion marker names a different payload manifest")
+
+    declared_value = record.get("declared_paths")
+    if not isinstance(declared_value, list) or not declared_value:
+        raise ValueError("completion marker has no declared path list")
+    if any(
+        not isinstance(relative, str) or not _normalized_payload_path(relative)
+        for relative in declared_value
+    ):
+        raise ValueError("completion marker contains an unsafe declared path")
+    declared = tuple(declared_value)
+    if declared != tuple(sorted(set(declared))):
+        raise ValueError("completion marker declared paths are duplicate or unordered")
+    required = {"SKILL.md", "scripts/install_codex_skill.py", PAYLOAD_MANIFEST.as_posix()}
+    if not required.issubset(declared):
+        raise ValueError("completion marker omits required payload paths")
+
     files = _validate_payload_manifest(record.get("files"))
+    if tuple(files) != declared:
+        raise ValueError("completion marker files do not match declared paths")
     if type(record.get("file_count")) is not int or record["file_count"] != len(files):
         raise ValueError("completion marker file count does not match its manifest")
-    digest = record.get("manifest_sha256")
-    if not _is_sha256(digest) or digest != _manifest_sha256(files):
-        raise ValueError("completion marker manifest digest does not match")
+    manifest_digest = record.get("payload_manifest_sha256")
+    contract_digest = record.get("contract_sha256")
+    if not _is_sha256(manifest_digest) or not _is_sha256(contract_digest):
+        raise ValueError("completion marker contract digest is invalid")
+    if contract_digest != _contract_sha256(manifest_digest, declared, files):
+        raise ValueError("completion marker contract digest does not match")
+
+    manifest_snapshot, manifest_bytes = _read_stable_regular_bytes(
+        destination,
+        PAYLOAD_MANIFEST.as_posix(),
+        label="installed payload manifest",
+        max_bytes=MAX_PAYLOAD_MANIFEST_BYTES,
+    )
+    if hashlib.sha256(manifest_bytes).hexdigest() != manifest_digest:
+        raise ValueError("installed payload manifest digest does not match marker")
+    if _parse_payload_manifest_bytes(destination / PAYLOAD_MANIFEST, manifest_bytes) != declared:
+        raise ValueError("installed payload manifest allowlist does not match marker")
+    expected_manifest_metadata = files[PAYLOAD_MANIFEST.as_posix()]
+    if (
+        manifest_snapshot.size != expected_manifest_metadata["size"]
+        or manifest_snapshot.sha256 != expected_manifest_metadata["sha256"]
+    ):
+        raise ValueError("installed payload manifest metadata does not match marker")
     record["files"] = files
     return record, raw
 
 
 def write_completion_marker(
-    destination: Path, manifest: dict[str, dict[str, object]]
+    destination: Path, contract: PayloadContract
 ) -> None:
-    manifest = _validate_payload_manifest(dict(sorted(manifest.items())))
-    marker = destination / COMPLETION_MARKER
-    _write_json_exclusive(marker, _completion_marker_record(manifest))
-
-
-def _completion_marker_record(
-    manifest: dict[str, dict[str, object]],
-) -> dict[str, object]:
-    return {
+    manifest = _validate_payload_manifest(dict(sorted(contract.file_manifest().items())))
+    record = {
+        "contract_sha256": contract.contract_sha256,
+        "declared_paths": list(contract.declared),
         "format_version": COMPLETION_FORMAT_VERSION,
         "skill_name": SKILL_NAME,
         "file_count": len(manifest),
-        "manifest_sha256": _manifest_sha256(manifest),
+        "payload_manifest_path": PAYLOAD_MANIFEST.as_posix(),
+        "payload_manifest_sha256": contract.payload_manifest_sha256,
         "files": manifest,
     }
+    marker = destination / COMPLETION_MARKER
+    _write_json_exclusive(marker, record)
 
 
 def validate_completed_install(destination: Path) -> tuple[bool, str]:
@@ -1208,13 +1804,19 @@ def _classify_payload_subset(
 
 
 def _classify_existing_install_bound(
-    destination: Path, expected_manifest: dict[str, dict[str, object]]
+    destination: Path,
+    expected_payload: PayloadContract | dict[str, dict[str, object]],
 ) -> ExistingInstallClassification:
     """Classify and retain the exact destination object that was inspected."""
     if not _path_exists(destination):
         return ExistingInstallClassification(
             "missing", "destination does not exist", None
         )
+    expected_manifest = (
+        expected_payload.file_manifest()
+        if isinstance(expected_payload, PayloadContract)
+        else expected_payload
+    )
     expected_manifest = _validate_payload_manifest(dict(sorted(expected_manifest.items())))
     try:
         snapshot = _capture_path_snapshot(destination)
@@ -1229,7 +1831,7 @@ def _classify_existing_install_bound(
         valid, reason = validate_completed_install(destination)
         if valid:
             try:
-                record, _ = _completion_record(destination)
+                installed_record, _ = _completion_record(destination)
             except (OSError, RuntimeError, ValueError) as exc:
                 return ExistingInstallClassification(
                     "unknown",
@@ -1237,12 +1839,22 @@ def _classify_existing_install_bound(
                     f"{_bounded_diagnostic(exc, 280)}",
                     snapshot,
                 )
-            if record["files"] != expected_manifest:
+            if installed_record["files"] != expected_manifest:
                 return ExistingInstallClassification(
                     "unknown",
                     "completion marker belongs to a different source payload",
                     snapshot,
                 )
+            if isinstance(expected_payload, PayloadContract):
+                if (
+                    installed_record["contract_sha256"]
+                    != expected_payload.contract_sha256
+                ):
+                    return ExistingInstallClassification(
+                        "unknown",
+                        "completed install belongs to a different source payload contract",
+                        snapshot,
+                    )
             return ExistingInstallClassification("complete", reason, snapshot)
         try:
             record, _ = _completion_record(destination)
@@ -1264,9 +1876,30 @@ def _classify_existing_install_bound(
                 expected_manifest,
                 allowed_internal_files=allowed_internal,
             )
-            if state == "incomplete":
+            expected_directories = set(_expected_directories(expected_manifest))
+            unowned = [
+                relative
+                for relative, metadata in snapshot.entries.items()
+                if (
+                    metadata.get("type") == "dir"
+                    and relative not in expected_directories
+                )
+                or (
+                    metadata.get("type") != "dir"
+                    and relative not in expected_manifest
+                    and relative not in allowed_internal
+                )
+            ]
+            if unowned:
                 return ExistingInstallClassification(
-                    state,
+                    "unknown",
+                    "managed install is damaged and has unowned entries: "
+                    f"{_bounded_diagnostic(unowned[0], 180)}",
+                    snapshot,
+                )
+            if state != "complete":
+                return ExistingInstallClassification(
+                    "incomplete",
                     f"trusted managed install is incomplete: {subset_reason}",
                     snapshot,
                 )
@@ -1283,11 +1916,12 @@ def _classify_existing_install_bound(
 
 
 def classify_existing_install(
-    destination: Path, expected_manifest: dict[str, dict[str, object]]
+    destination: Path,
+    expected_payload: PayloadContract | dict[str, dict[str, object]],
 ) -> tuple[str, str]:
     """Classify an existing path without overwriting an ambiguous legacy copy."""
     classification = _classify_existing_install_bound(
-        destination, expected_manifest
+        destination, expected_payload
     )
     return classification.state, classification.reason
 
@@ -1413,14 +2047,24 @@ def _validate_tree_entries(
     if list(value) != sorted(value):
         raise ValueError("tree manifest paths must be sorted")
     validated: dict[str, dict[str, object]] = {}
+    casefolded: set[str] = set()
     for relative, metadata in value.items():
-        if not _safe_relative_path(relative, allow_root=root_type == "file"):
+        normalized = (
+            relative == "" and root_type == "file"
+        ) or _normalized_payload_path(relative)
+        if not normalized:
             raise ValueError(
                 f"tree manifest contains an unsafe path: "
                 f"{_bounded_diagnostic(repr(relative), 180)}"
             )
         if root_type == "file" and relative != "":
             raise ValueError("file-root tree manifest contains a child path")
+        folded = relative.casefold()
+        if folded in casefolded:
+            raise ValueError(
+                f"tree manifest contains a case-ambiguous path: "
+                f"{_bounded_diagnostic(repr(relative), 180)}"
+            )
         if not isinstance(metadata, dict):
             raise ValueError("tree manifest entry must be an object")
         entry_type = metadata.get("type")
@@ -1457,6 +2101,7 @@ def _validate_tree_entries(
             }
         else:
             raise ValueError("tree manifest contains an unsupported entry type")
+        casefolded.add(folded)
     if root_type == "file" and set(validated) != {""}:
         raise ValueError("file-root tree manifest is incomplete")
     return validated
@@ -3415,13 +4060,35 @@ def _recover_interrupted_transaction_bound(
     raise RuntimeError("fresh transaction has an unexpected live path; preserving artifacts")
 
 
-def promote_staged_install(stage: Path, destination: Path, skills_dir: Path) -> None:
+def promote_staged_install(
+    stage: Path,
+    destination: Path,
+    skills_dir: Path,
+    expected_contract: PayloadContract | None = None,
+    *,
+    replacement_state: str | None = None,
+    force: bool = False,
+) -> None:
     """Promote a validated stage and restore the old install on any failure."""
     with _bound_transaction(skills_dir) as (
         transaction,
         transaction_raw,
         transaction_binding,
     ):
+        if expected_contract is not None:
+            if not isinstance(expected_contract, PayloadContract):
+                raise TypeError("promotion contract has an unsupported type")
+            if transaction["payload_manifest"] != expected_contract.file_manifest():
+                raise RuntimeError("stage transaction names a different payload contract")
+        if replacement_state is not None and replacement_state not in {
+            "missing",
+            "complete",
+            "incomplete",
+            "unknown",
+        }:
+            raise ValueError("replacement state is invalid")
+        if type(force) is not bool:
+            raise TypeError("force flag must be boolean")
         _promote_staged_install_bound(
             stage,
             destination,
@@ -3547,9 +4214,12 @@ def _promote_staged_install_bound(
 def stage_validated_install(
     repo_root: Path,
     skills_dir: Path,
-    expected_manifest: dict[str, dict[str, object]],
+    contract: PayloadContract,
     expected_destination: PathSnapshot | None,
 ) -> Path:
+    if not isinstance(contract, PayloadContract):
+        raise TypeError("staging requires a frozen payload contract")
+    expected_manifest = contract.file_manifest()
     expected_manifest = _validate_payload_manifest(dict(sorted(expected_manifest.items())))
     destination = skills_dir / SKILL_NAME
     if _path_exists(_transaction_path(skills_dir)) or _path_exists(skills_dir / BACKUP_NAME):
@@ -3611,17 +4281,24 @@ def stage_validated_install(
         shutil.copytree(
             repo_root,
             stage,
-            ignore=ignore_runtime_noise,
+            ignore=payload_allowlist_filter(repo_root, contract.declared),
             copy_function=atomic_copy,
             dirs_exist_ok=True,
         )
-        copied_manifest = payload_manifest(stage)
-        source_after_copy = payload_manifest(repo_root)
-        if source_after_copy != expected_manifest:
+        staged = _inspect_owned_stage(
+            stage, transaction, transaction_raw, require_complete=False
+        )
+        staged_payload_paths = {
+            relative
+            for relative, metadata in staged.entries.items()
+            if metadata.get("type") == "file" and relative != PROVENANCE_MARKER
+        }
+        if staged_payload_paths != set(expected_manifest):
+            raise RuntimeError("staged payload paths do not match the declared allowlist")
+        source_after_copy = _load_payload_contract_once(repo_root)
+        if source_after_copy != contract:
             raise RuntimeError("source payload changed while it was being copied; retry the install")
-        if copied_manifest != expected_manifest:
-            raise RuntimeError("staged payload does not match the source payload")
-        write_completion_marker(stage, copied_manifest)
+        write_completion_marker(stage, contract)
         _inspect_owned_stage(
             stage, transaction, transaction_raw, require_complete=True
         )
@@ -3638,12 +4315,16 @@ def stage_validated_install(
 
 
 def assert_safe_destination(destination: Path, skills_dir: Path) -> None:
-    resolved_destination = destination.resolve()
-    resolved_skills_dir = skills_dir.resolve()
-    if resolved_destination.name != SKILL_NAME:
-        raise ValueError(f"destination must end with {SKILL_NAME}: {resolved_destination}")
-    if resolved_skills_dir not in resolved_destination.parents:
-        raise ValueError(f"destination must stay inside the skills directory: {resolved_skills_dir}")
+    absolute_destination = _absolute_lexical(destination)
+    absolute_skills_dir = _absolute_lexical(skills_dir)
+    if absolute_destination.name != SKILL_NAME:
+        raise ValueError(f"destination must end with {SKILL_NAME}: {absolute_destination}")
+    if absolute_destination.parent != absolute_skills_dir:
+        raise ValueError(f"destination must stay inside the skills directory: {absolute_skills_dir}")
+    _assert_existing_components_no_links(absolute_skills_dir, "skills directory")
+    if _path_exists(absolute_destination):
+        _assert_existing_components_no_links(absolute_destination, "destination")
+        _capture_path_snapshot(absolute_destination)
 
 
 def assert_safe_preflight(destination: Path, skills_dir: Path, repo_root: Path) -> None:
@@ -3660,15 +4341,15 @@ def assert_safe_preflight(destination: Path, skills_dir: Path, repo_root: Path) 
         raise ValueError(f"destination must end with {SKILL_NAME}: {absolute_destination}")
     if absolute_destination.parent != absolute_skills_dir:
         raise ValueError(f"destination must stay inside the skills directory: {absolute_skills_dir}")
-    resolved_skills_dir = skills_dir.resolve()
-    resolved_repo_root = repo_root.resolve()
-    if resolved_skills_dir == resolved_repo_root or resolved_repo_root in resolved_skills_dir.parents:
+    _assert_existing_components_no_links(absolute_skills_dir, "skills directory")
+    absolute_repo_root = _absolute_lexical(repo_root)
+    if absolute_skills_dir == absolute_repo_root or absolute_repo_root in absolute_skills_dir.parents:
         raise ValueError(
-            f"destination is inside the source repository ({resolved_repo_root}).\n"
+            f"destination is inside the source repository ({absolute_repo_root}).\n"
             f"Copying it into itself would recurse until the path length fails.\n"
             f"To install into another project, run this script from that project "
             f"by absolute path:\n"
-            f"    python {resolved_repo_root / 'scripts' / 'install_codex_skill.py'} "
+            f"    python {absolute_repo_root / 'scripts' / 'install_codex_skill.py'} "
             f"--dest .claude/skills"
         )
 
@@ -3683,9 +4364,9 @@ def assert_destination_outside_source(destination: Path, repo_root: Path) -> Non
     from this repository's own root is the way into it, and installing the
     repository into itself is never what someone meant.
     """
-    resolved = destination.resolve()
-    root = repo_root.resolve()
-    if resolved == root or root in resolved.parents:
+    absolute_destination = _absolute_lexical(destination)
+    root = _absolute_lexical(repo_root)
+    if absolute_destination == root or root in absolute_destination.parents:
         raise ValueError(
             f"destination is inside the source repository ({root}).\n"
             f"Copying it into itself would recurse until the path length fails.\n"
@@ -3707,18 +4388,15 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
-    source_skill = repo_root / "SKILL.md"
-    if not source_skill.exists():
-        raise FileNotFoundError(f"SKILL.md not found at {source_skill}")
-
     skills_dir = args.dest.expanduser()
     destination = skills_dir / SKILL_NAME
     destination_existed_at_start = _path_exists(destination)
     # Reported as a message rather than a traceback: this is the first command a
     # new user runs, and a stack trace reads as "the tool is broken".
     try:
+        _load_payload_contract_once(repo_root)
         assert_safe_preflight(destination, skills_dir, repo_root)
-    except ValueError as exc:
+    except (OSError, RuntimeError, UnicodeError, ValueError) as exc:
         print(f"Refusing to install: {_bounded_diagnostic(exc)}")
         return 1
 
@@ -3731,9 +4409,11 @@ def main() -> int:
             assert_destination_outside_source(destination, repo_root)
             recover_interrupted_transaction(skills_dir, destination)
 
-            expected_manifest = payload_manifest(repo_root)
+            # Exact manifest bytes, parsed allowlist, source snapshots, stage,
+            # transaction, and completion marker all bind to this one contract.
+            contract = load_payload_contract(repo_root)
             classification = _classify_existing_install_bound(
-                destination, expected_manifest
+                destination, contract
             )
             state, reason = classification.state, classification.reason
             if state == "complete" and not args.force:
@@ -3766,10 +4446,17 @@ def main() -> int:
             stage = stage_validated_install(
                 repo_root,
                 skills_dir,
-                expected_manifest,
+                contract,
                 classification.snapshot,
             )
-            promote_staged_install(stage, destination, skills_dir)
+            promote_staged_install(
+                stage,
+                destination,
+                skills_dir,
+                contract,
+                replacement_state=state,
+                force=args.force,
+            )
     except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
         print(f"Installation failed: {_bounded_diagnostic(exc)}", file=sys.stderr)
         return 1

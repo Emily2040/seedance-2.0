@@ -1251,6 +1251,46 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "unsafe path"):
                     installer._validate_payload_manifest({relative: metadata})
 
+    def test_manifest_rejects_control_unicode_and_case_aliases(self) -> None:
+        metadata = {"size": 0, "sha256": "0" * 64}
+        hostile_manifests = [
+            {"bad\x01name.txt": metadata},
+            {"bad\x85name.txt": metadata},
+            {"bad\u202ename.txt": metadata},
+            {"bad\ufe0fname.txt": metadata},
+            {"A.txt": metadata, "a.txt": metadata},
+            {"cafe\u0301.txt": metadata},
+        ]
+
+        for manifest in hostile_manifests:
+            with self.subTest(paths=list(manifest)):
+                with self.assertRaisesRegex(ValueError, "unsafe|ambiguous"):
+                    installer._validate_payload_manifest(dict(sorted(manifest.items())))
+
+    def test_tree_manifest_rejects_control_unicode_and_case_aliases(self) -> None:
+        file_metadata = {
+            "type": "file",
+            "size": 0,
+            "sha256": "0" * 64,
+            "device": 1,
+            "inode": 1,
+        }
+        hostile_manifests = [
+            {"bad\x01name.txt": file_metadata},
+            {"bad\x85name.txt": file_metadata},
+            {"bad\u202ename.txt": file_metadata},
+            {"bad\ufe0fname.txt": file_metadata},
+            {"A.txt": file_metadata, "a.txt": file_metadata},
+            {"cafe\u0301.txt": file_metadata},
+        ]
+
+        for manifest in hostile_manifests:
+            with self.subTest(paths=list(manifest)):
+                with self.assertRaisesRegex(ValueError, "unsafe|ambiguous"):
+                    installer._validate_tree_entries(
+                        dict(sorted(manifest.items())), "dir"
+                    )
+
     def test_late_stage_extra_is_quarantined_and_never_becomes_live(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
