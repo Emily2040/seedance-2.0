@@ -31,6 +31,7 @@ final output.
 from __future__ import annotations
 
 import argparse
+import errno
 import os
 import secrets
 import shutil
@@ -94,6 +95,11 @@ class OutputStage:
     path: Path
     identity: tuple[int, int]
     descriptor: int
+    directory_path: Path | None = None
+    directory_identity: tuple[int, int] | None = None
+    directory_descriptor: int | None = None
+    target_directory_identity: tuple[int, int] | None = None
+    target_directory_descriptor: int | None = None
     published: bool = False
 
 
@@ -355,16 +361,148 @@ def _create_output_stage(out: Path) -> OutputStage:
             return OutputStage(path, _identity(info), descriptor)
         raise OutputPolicyError("could not allocate a unique output staging name")
 
+    target_directory_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    private_directory_flags = (
+        target_directory_flags
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    target_descriptor = -1
+    directory_descriptor = -1
+    descriptor = -1
+    directory_path: Path | None = None
+    directory_identity: tuple[int, int] | None = None
     try:
-        descriptor, raw_path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=out.parent)
-    except OSError as exc:
-        raise OutputPolicyError(f"cannot create output staging file beside {out}: {exc}") from exc
-    info = os.fstat(descriptor)
-    return OutputStage(Path(raw_path), _identity(info), descriptor)
+        # Keep the mutable staging name inside a private directory. Directory
+        # descriptors then anchor every lookup even if the parent pathname is
+        # renamed concurrently. The output inode itself is created with 0666,
+        # so the caller's umask produces the same permissions as an ordinary
+        # newly-created image rather than mkstemp's hard-coded 0600.
+        target_descriptor = os.open(out.parent, target_directory_flags)
+        target_info = os.fstat(target_descriptor)
+        for _attempt in range(64):
+            directory_name = f"{prefix}{secrets.token_hex(16)}"
+            try:
+                os.mkdir(directory_name, 0o700, dir_fd=target_descriptor)
+            except FileExistsError:
+                continue
+            directory_path = out.parent / directory_name
+            break
+        else:
+            raise OutputPolicyError(
+                "could not allocate a unique private output staging directory"
+            )
+        created_directory = os.stat(
+            directory_path.name,
+            dir_fd=target_descriptor,
+            follow_symlinks=False,
+        )
+        directory_identity = _identity(created_directory)
+        if (
+            not stat.S_ISDIR(created_directory.st_mode)
+            or (
+                hasattr(os, "geteuid")
+                and created_directory.st_uid != os.geteuid()
+            )
+        ):
+            raise OutputPolicyError(
+                "created output staging directory is not privately owned"
+            )
+        directory_descriptor = os.open(
+            directory_path.name,
+            private_directory_flags,
+            dir_fd=target_descriptor,
+        )
+        opened_directory = os.fstat(directory_descriptor)
+        if (
+            not stat.S_ISDIR(opened_directory.st_mode)
+            or _identity(opened_directory) != directory_identity
+        ):
+            raise OutputPolicyError(
+                "output staging directory changed while opening; refusing publication"
+            )
+        os.fchmod(directory_descriptor, 0o700)
+        directory_info = os.fstat(directory_descriptor)
+        named_directory = os.stat(
+            directory_path.name,
+            dir_fd=target_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISDIR(directory_info.st_mode)
+            or not stat.S_ISDIR(named_directory.st_mode)
+            or stat.S_IMODE(directory_info.st_mode) != 0o700
+            or _identity(named_directory) != directory_identity
+            or _identity(directory_info) != directory_identity
+            or _identity(os.stat(out.parent)) != _identity(target_info)
+        ):
+            raise OutputPolicyError(
+                "output staging directory identity changed; refusing publication"
+            )
+
+        stage_name = f"frame{suffix}"
+        descriptor = os.open(
+            stage_name,
+            os.O_RDWR
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_CLOEXEC", 0),
+            0o666,
+            dir_fd=directory_descriptor,
+        )
+        info = os.fstat(descriptor)
+        return OutputStage(
+            directory_path / stage_name,
+            _identity(info),
+            descriptor,
+            directory_path=directory_path,
+            directory_identity=directory_identity,
+            directory_descriptor=directory_descriptor,
+            target_directory_identity=_identity(target_info),
+            target_directory_descriptor=target_descriptor,
+        )
+    except (OSError, OutputPolicyError) as exc:
+        if descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if directory_descriptor >= 0:
+            try:
+                os.close(directory_descriptor)
+            except OSError:
+                pass
+        if directory_path is not None and target_descriptor >= 0:
+            try:
+                named_directory = os.stat(
+                    directory_path.name,
+                    dir_fd=target_descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    directory_identity is not None
+                    and _identity(named_directory) == directory_identity
+                ):
+                    os.rmdir(directory_path.name, dir_fd=target_descriptor)
+            except OSError:
+                pass
+        if target_descriptor >= 0:
+            try:
+                os.close(target_descriptor)
+            except OSError:
+                pass
+        if isinstance(exc, OutputPolicyError):
+            raise
+        raise OutputPolicyError(
+            f"cannot create protected output staging file beside {out}: {exc}"
+        ) from exc
 
 
 def _verify_output_stage(stage: OutputStage, *, require_content: bool) -> None:
-    """Verify the open object; a pathname lookup is never the authority on Windows."""
+    """Verify the open object; a pathname lookup is never the authority."""
     try:
         opened = os.fstat(stage.descriptor)
     except OSError as exc:
@@ -380,8 +518,14 @@ def _verify_output_stage(stage: OutputStage, *, require_content: bool) -> None:
     os.fsync(stage.descriptor)
 
     if os.name != "nt":
+        if stage.directory_descriptor is None:
+            raise OutputPolicyError("output staging directory handle is unavailable")
         try:
-            named = os.lstat(stage.path)
+            named = os.stat(
+                stage.path.name,
+                dir_fd=stage.directory_descriptor,
+                follow_symlinks=False,
+            )
         except OSError as exc:
             raise OutputPolicyError("output staging name disappeared while verifying") from exc
         if (
@@ -391,6 +535,114 @@ def _verify_output_stage(stage: OutputStage, *, require_content: bool) -> None:
             or named.st_nlink != 1
         ):
             raise OutputPolicyError("output staging name changed; refusing publication")
+
+
+def _verify_posix_target_directory(stage: OutputStage, out: Path) -> None:
+    if (
+        stage.target_directory_descriptor is None
+        or stage.target_directory_identity is None
+    ):
+        raise OutputPolicyError("output directory handle is unavailable")
+    try:
+        opened = os.fstat(stage.target_directory_descriptor)
+        named = os.stat(out.parent)
+    except OSError as exc:
+        raise OutputPolicyError(f"cannot verify output directory identity: {exc}") from exc
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or _identity(opened) != stage.target_directory_identity
+        or _identity(named) != stage.target_directory_identity
+    ):
+        raise OutputPolicyError("output directory identity changed; refusing publication")
+
+
+def _posix_link_open_stage(
+    stage: OutputStage,
+    destination_name: str,
+    destination_directory_descriptor: int,
+) -> None:
+    """Link the open inode, not the staging pathname, whenever POSIX exposes it."""
+
+    if stage.directory_descriptor is None:
+        raise OutputPolicyError("output staging directory handle is unavailable")
+
+    # Linux documents /proc/self/fd + linkat(AT_SYMLINK_FOLLOW) as the
+    # unprivileged descriptor-bound alternative to linkat(AT_EMPTY_PATH).
+    # The magic link continues to name this open file description after an
+    # attacker renames or replaces stage.path.
+    if sys.platform.startswith("linux"):
+        descriptor_path = f"/proc/self/fd/{stage.descriptor}"
+        try:
+            os.link(
+                descriptor_path,
+                destination_name,
+                dst_dir_fd=destination_directory_descriptor,
+                follow_symlinks=True,
+            )
+            return
+        except OSError as exc:
+            # Minimal/container POSIX environments may omit procfs. The
+            # fallback name lives inside the verified 0700 private directory,
+            # not in the attacker-writable output directory. That blocks
+            # cross-account writers; a hostile process running under this same
+            # Unix account shares the permission boundary and is explicitly
+            # outside this fallback's guarantee.
+            if exc.errno not in {
+                errno.ENOENT,
+                errno.EINVAL,
+                getattr(errno, "ENOTSUP", errno.EOPNOTSUPP),
+                errno.EPERM,
+            }:
+                raise
+
+    _verify_output_stage(stage, require_content=True)
+    os.link(
+        stage.path.name,
+        destination_name,
+        src_dir_fd=stage.directory_descriptor,
+        dst_dir_fd=destination_directory_descriptor,
+        follow_symlinks=False,
+    )
+    linked = os.stat(
+        destination_name,
+        dir_fd=destination_directory_descriptor,
+        follow_symlinks=False,
+    )
+    if _identity(linked) != stage.identity:
+        raise OutputPolicyError(
+            "published output does not match the verified staging inode"
+        )
+
+
+def _preserve_posix_replacement_permissions(stage: OutputStage, out: Path) -> None:
+    """Carry POSIX owner, group, and mode across an intentional replacement."""
+
+    if stage.target_directory_descriptor is None:
+        raise OutputPolicyError("output directory handle is unavailable")
+    try:
+        existing = os.stat(
+            out.name,
+            dir_fd=stage.target_directory_descriptor,
+            follow_symlinks=False,
+        )
+        staged = os.fstat(stage.descriptor)
+        if not stat.S_ISREG(existing.st_mode):
+            raise OutputPolicyError(
+                f"--force only replaces a regular output file: {out}"
+            )
+        if (
+            hasattr(os, "fchown")
+            and (staged.st_uid != existing.st_uid or staged.st_gid != existing.st_gid)
+        ):
+            os.fchown(stage.descriptor, existing.st_uid, existing.st_gid)
+        os.fchmod(stage.descriptor, stat.S_IMODE(existing.st_mode))
+        os.fsync(stage.descriptor)
+    except OutputPolicyError:
+        raise
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot preserve existing output permissions for {out}: {exc}"
+        ) from exc
 
 
 def _write_output_stage(stage: OutputStage, content: bytes) -> None:
@@ -420,7 +672,13 @@ def _cleanup_output_stage(stage: OutputStage) -> bool:
                 success = _win32_mark_stage_for_deletion(stage)
         else:
             try:
-                info = os.lstat(stage.path)
+                if stage.directory_descriptor is None:
+                    raise OSError("staging directory handle is unavailable")
+                info = os.stat(
+                    stage.path.name,
+                    dir_fd=stage.directory_descriptor,
+                    follow_symlinks=False,
+                )
             except FileNotFoundError:
                 info = None
             except OSError as exc:
@@ -440,7 +698,7 @@ def _cleanup_output_stage(stage: OutputStage) -> bool:
                     success = False
                 else:
                     try:
-                        stage.path.unlink()
+                        os.unlink(stage.path.name, dir_fd=stage.directory_descriptor)
                     except OSError as exc:
                         sys.stderr.write(
                             f"warning: could not remove staging file {stage.path}: {exc}\n"
@@ -453,6 +711,50 @@ def _cleanup_output_stage(stage: OutputStage) -> bool:
             sys.stderr.write(f"warning: could not close staging handle: {exc}\n")
             success = False
         stage.descriptor = -1
+        if os.name != "nt":
+            if stage.directory_descriptor is not None:
+                try:
+                    os.close(stage.directory_descriptor)
+                except OSError as exc:
+                    sys.stderr.write(
+                        f"warning: could not close staging directory handle: {exc}\n"
+                    )
+                    success = False
+                stage.directory_descriptor = None
+            if (
+                stage.directory_path is not None
+                and stage.directory_identity is not None
+                and stage.target_directory_descriptor is not None
+            ):
+                try:
+                    named_directory = os.stat(
+                        stage.directory_path.name,
+                        dir_fd=stage.target_directory_descriptor,
+                        follow_symlinks=False,
+                    )
+                    if _identity(named_directory) != stage.directory_identity:
+                        raise OSError("staging directory identity changed")
+                    os.rmdir(
+                        stage.directory_path.name,
+                        dir_fd=stage.target_directory_descriptor,
+                    )
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:
+                    sys.stderr.write(
+                        "warning: could not remove protected staging directory "
+                        f"{stage.directory_path}: {exc}\n"
+                    )
+                    success = False
+            if stage.target_directory_descriptor is not None:
+                try:
+                    os.close(stage.target_directory_descriptor)
+                except OSError as exc:
+                    sys.stderr.write(
+                        f"warning: could not close output directory handle: {exc}\n"
+                    )
+                    success = False
+                stage.target_directory_descriptor = None
     return success
 
 
@@ -489,18 +791,51 @@ def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> N
             raise
         return
 
+    _verify_posix_target_directory(stage, out)
+
     if force:
+        _preserve_posix_replacement_permissions(stage, out)
+        if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
+            raise OutputPolicyError("POSIX publication handles are unavailable")
+        publish_name = f"publish-{secrets.token_hex(16)}{out.suffix or '.img'}"
         try:
-            os.replace(stage.path, out)
-        except OSError as exc:
+            # Create the rename source from the verified descriptor inside the
+            # private staging directory, then atomically replace the target by
+            # directory descriptor. A swapped stage.path is never consulted.
+            _posix_link_open_stage(
+                stage,
+                publish_name,
+                stage.directory_descriptor,
+            )
+            os.replace(
+                publish_name,
+                out.name,
+                src_dir_fd=stage.directory_descriptor,
+                dst_dir_fd=stage.target_directory_descriptor,
+            )
+        except (OSError, OutputPolicyError) as exc:
+            try:
+                linked = os.stat(
+                    publish_name,
+                    dir_fd=stage.directory_descriptor,
+                    follow_symlinks=False,
+                )
+                if _identity(linked) == stage.identity:
+                    os.unlink(publish_name, dir_fd=stage.directory_descriptor)
+            except OSError:
+                pass
+            if isinstance(exc, OutputPolicyError):
+                raise
             raise OutputPolicyError(f"could not atomically replace output {out}: {exc}") from exc
         stage.published = True
         return
 
+    if stage.target_directory_descriptor is None:
+        raise OutputPolicyError("output directory handle is unavailable")
     try:
-        # A same-directory hard link is an atomic no-replace publication:
+        # The descriptor-bound hard link is an atomic no-replace publication:
         # creation fails if any object claimed the destination name meanwhile.
-        os.link(stage.path, out)
+        _posix_link_open_stage(stage, out.name, stage.target_directory_descriptor)
     except FileExistsError as exc:
         raise OutputPolicyError(f"output appeared during extraction and was preserved: {out}") from exc
     except OSError as exc:
@@ -515,7 +850,7 @@ _OUTPUT_CODECS = {
     ".png": "png",
     ".jpg": "mjpeg",
     ".jpeg": "mjpeg",
-    ".webp": "webp",
+    ".webp": "libwebp",
     ".bmp": "bmp",
     ".tif": "tiff",
     ".tiff": "tiff",

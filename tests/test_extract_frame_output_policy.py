@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import concurrent.futures
 import contextlib
+import errno
 import io
 import os
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -597,6 +599,315 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
             self.assertEqual(self.stage_paths(root), [])
 
 
+@unittest.skipUnless(os.name == "posix", "POSIX publication semantics are platform-specific")
+class PosixPublicationTests(OutputPolicyTestCase):
+    @unittest.skipUnless(
+        sys.platform.startswith("linux"),
+        "descriptor-bound /proc/self/fd publication is Linux-specific",
+    )
+    def test_verify_to_link_stage_rename_swap_cannot_publish_attacker_inode(self) -> None:
+        for force in (False, True):
+            with self.subTest(force=force), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                clip = root / "accepted-take.mp4"
+                output = root / "frame.png"
+                clip.write_bytes(b"clip")
+                if force:
+                    output.write_bytes(b"old frame")
+
+                original_link = extractor._posix_link_open_stage
+                attacked = False
+
+                def attack(
+                    stage: extractor.OutputStage,
+                    destination_name: str,
+                    destination_directory_descriptor: int,
+                ) -> None:
+                    nonlocal attacked
+                    attacked = True
+                    displaced = stage.path.with_name(stage.path.name + ".displaced")
+                    stage.path.replace(displaced)
+                    stage.path.write_bytes(b"ATTACKER_INODE")
+                    try:
+                        original_link(
+                            stage,
+                            destination_name,
+                            destination_directory_descriptor,
+                        )
+                    finally:
+                        stage.path.unlink()
+                        displaced.replace(stage.path)
+
+                with (
+                    mock.patch.object(
+                        extractor,
+                        "render_frame_png",
+                        return_value=b"VERIFIED_GENERATED_FRAME",
+                    ),
+                    mock.patch.object(
+                        extractor,
+                        "_posix_link_open_stage",
+                        side_effect=attack,
+                    ),
+                ):
+                    result = extractor.extract_frame(
+                        "fake-ffmpeg", clip, output, False, force
+                    )
+
+                self.assertTrue(attacked)
+                self.assertEqual(result, 0)
+                self.assertEqual(output.read_bytes(), b"VERIFIED_GENERATED_FRAME")
+                self.assertEqual(self.stage_paths(root), [])
+
+    def test_private_directory_swap_between_lstat_and_open_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output = root / "frame.png"
+            original_open = extractor.os.open
+            swaps: list[tuple[Path, Path]] = []
+
+            def attack(
+                path: str | os.PathLike[str],
+                flags: int,
+                mode: int = 0o777,
+                *,
+                dir_fd: int | None = None,
+            ) -> int:
+                candidate = Path(path)
+                if (
+                    dir_fd is not None
+                    and candidate.name.startswith(f".{output.stem}.atomic-")
+                    and not swaps
+                ):
+                    displaced = candidate.with_name(candidate.name + ".displaced")
+                    os.rename(
+                        candidate.name,
+                        displaced.name,
+                        src_dir_fd=dir_fd,
+                        dst_dir_fd=dir_fd,
+                    )
+                    os.mkdir(candidate.name, 0o700, dir_fd=dir_fd)
+                    swaps.append((candidate, displaced))
+                return original_open(path, flags, mode, dir_fd=dir_fd)
+
+            with (
+                mock.patch.object(extractor.os, "open", side_effect=attack),
+                self.assertRaisesRegex(
+                    extractor.OutputPolicyError,
+                    "staging directory changed while opening",
+                ),
+            ):
+                extractor._create_output_stage(output)
+
+            self.assertEqual(len(swaps), 1)
+
+    def test_private_directory_creation_stays_bound_to_open_target_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            parent = Path(temp_dir)
+            root = parent / "target"
+            displaced = parent / "displaced"
+            root.mkdir()
+            output = root / "frame.png"
+            original_mkdir = extractor.os.mkdir
+            attacked = False
+
+            def attack(
+                path: str | os.PathLike[str],
+                mode: int = 0o777,
+                *,
+                dir_fd: int | None = None,
+            ) -> None:
+                nonlocal attacked
+                if (
+                    not attacked
+                    and dir_fd is not None
+                    and os.fspath(path).startswith(".frame.atomic-")
+                ):
+                    attacked = True
+                    root.rename(displaced)
+                    original_mkdir(root)
+                original_mkdir(path, mode, dir_fd=dir_fd)
+
+            with (
+                mock.patch.object(extractor.os, "mkdir", side_effect=attack),
+                self.assertRaisesRegex(
+                    extractor.OutputPolicyError,
+                    "staging directory identity changed",
+                ),
+            ):
+                extractor._create_output_stage(output)
+
+            self.assertTrue(attacked)
+            self.assertEqual(self.stage_paths(root), [])
+            self.assertEqual(self.stage_paths(displaced), [])
+
+    def test_private_staging_directory_is_verified_owner_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "frame.png"
+            stage = extractor._create_output_stage(output)
+            try:
+                self.assertIsNotNone(stage.directory_descriptor)
+                assert stage.directory_descriptor is not None
+                directory = os.fstat(stage.directory_descriptor)
+                self.assertEqual(stat.S_IMODE(directory.st_mode), 0o700)
+                self.assertEqual(directory.st_uid, os.geteuid())
+            finally:
+                extractor._cleanup_output_stage(stage)
+
+    def test_new_output_mode_honors_process_umask(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            previous_umask = os.umask(0o027)
+            try:
+                with mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+                ):
+                    result = extractor.extract_frame(
+                        "fake-ffmpeg", clip, output, False, False
+                    )
+            finally:
+                os.umask(previous_umask)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o640)
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_preserves_existing_owner_group_and_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            output.chmod(0o664)
+            before = output.stat()
+            previous_umask = os.umask(0o077)
+            try:
+                with mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+                ):
+                    result = extractor.extract_frame(
+                        "fake-ffmpeg", clip, output, False, True
+                    )
+            finally:
+                os.umask(previous_umask)
+
+            after = output.stat()
+            self.assertEqual(result, 0)
+            self.assertEqual(after.st_uid, before.st_uid)
+            self.assertEqual(after.st_gid, before.st_gid)
+            self.assertEqual(stat.S_IMODE(after.st_mode), 0o664)
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_policy_error_after_anchor_link_cleans_owned_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            original_link = extractor._posix_link_open_stage
+
+            def fail_after_link(
+                stage: extractor.OutputStage,
+                destination_name: str,
+                destination_directory_descriptor: int,
+            ) -> None:
+                original_link(
+                    stage,
+                    destination_name,
+                    destination_directory_descriptor,
+                )
+                raise extractor.OutputPolicyError("post-link policy failure")
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_posix_link_open_stage",
+                    side_effect=fail_after_link,
+                ),
+                self.assertRaisesRegex(
+                    extractor.OutputPolicyError, "post-link policy failure"
+                ),
+            ):
+                extractor.extract_frame("fake-ffmpeg", clip, output, False, True)
+
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+
+class OutputEncodingTests(unittest.TestCase):
+    def test_webp_uses_ffmpegs_libwebp_encoder_name(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b"RIFFxxxxWEBP", stderr=b""
+        )
+        with mock.patch.object(
+            extractor.subprocess, "run", return_value=completed
+        ) as run:
+            encoded = extractor._encode_frame_for_output(
+                "ffmpeg", b"PNG_FRAME", Path("frame.webp")
+            )
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("-vcodec") + 1], "libwebp")
+        self.assertEqual(encoded, completed.stdout)
+
+
+class PublicationPrimitiveTests(unittest.TestCase):
+    def test_linux_link_source_is_the_open_staging_descriptor(self) -> None:
+        stage = extractor.OutputStage(
+            Path("mutable-stage-name.png"),
+            (1, 2),
+            41,
+            directory_descriptor=42,
+        )
+        with (
+            mock.patch.object(extractor.sys, "platform", "linux"),
+            mock.patch.object(extractor.os, "link") as link,
+        ):
+            extractor._posix_link_open_stage(stage, "frame.png", 43)
+
+        link.assert_called_once_with(
+            "/proc/self/fd/41",
+            "frame.png",
+            dst_dir_fd=43,
+            follow_symlinks=True,
+        )
+
+    def test_linux_without_procfs_uses_private_directory_fallback(self) -> None:
+        stage = extractor.OutputStage(
+            Path("frame.png"),
+            (1, 2),
+            41,
+            directory_descriptor=42,
+        )
+        linked = mock.Mock(st_dev=1, st_ino=2)
+        with (
+            mock.patch.object(extractor.sys, "platform", "linux"),
+            mock.patch.object(extractor, "_verify_output_stage") as verify,
+            mock.patch.object(
+                extractor.os,
+                "link",
+                side_effect=[OSError(errno.ENOENT, "procfs unavailable"), None],
+            ) as link,
+            mock.patch.object(extractor.os, "stat", return_value=linked),
+        ):
+            extractor._posix_link_open_stage(stage, "target.png", 43)
+
+        self.assertEqual(link.call_count, 2)
+        self.assertEqual(link.call_args_list[0].args[:2], ("/proc/self/fd/41", "target.png"))
+        self.assertEqual(link.call_args_list[1].args[:2], ("frame.png", "target.png"))
+        self.assertEqual(link.call_args_list[1].kwargs["src_dir_fd"], 42)
+        self.assertFalse(link.call_args_list[1].kwargs["follow_symlinks"])
+        verify.assert_called_once_with(stage, require_content=True)
+
+
 class PngStreamTests(unittest.TestCase):
     def chunk(self, kind: bytes, payload: bytes) -> bytes:
         checksum = zlib.crc32(payload, zlib.crc32(kind)) & 0xFFFFFFFF
@@ -639,6 +950,7 @@ class RealProtectedPipelineTests(unittest.TestCase):
             clip = root / "blue-to-red.mp4"
             actual = root / "actual.png"
             jpeg = root / "actual.jpg"
+            webp = root / "actual.webp"
             expected = root / "expected.png"
             self.run_ffmpeg(
                 "-y",
@@ -668,6 +980,11 @@ class RealProtectedPipelineTests(unittest.TestCase):
             self.assertEqual(extractor.extract_frame(str(FFMPEG), clip, jpeg, False, False), 0)
             self.assertTrue(jpeg.read_bytes().startswith(b"\xff\xd8"))
             self.assertEqual(len(self.raw_rgb(jpeg)), len(self.raw_rgb(expected)))
+            self.assertEqual(extractor.extract_frame(str(FFMPEG), clip, webp, False, False), 0)
+            webp_bytes = webp.read_bytes()
+            self.assertTrue(webp_bytes.startswith(b"RIFF"))
+            self.assertEqual(webp_bytes[8:12], b"WEBP")
+            self.assertEqual(len(self.raw_rgb(webp)), len(self.raw_rgb(expected)))
             self.assertEqual(list(root.glob(".*.atomic-*")), [])
 
 
@@ -681,6 +998,8 @@ class OutputPolicyDocumentationTests(unittest.TestCase):
         self.assertIn("`--force`", handoff)
         self.assertIn("atomically publishes the complete frame", handoff)
         self.assertIn("late destination collisions are preserved", changelog)
+        security = (root / "SECURITY.md").read_text(encoding="utf-8")
+        self.assertIn("same Unix account", security)
 
 
 if __name__ == "__main__":

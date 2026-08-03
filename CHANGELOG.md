@@ -8,7 +8,7 @@ Current active release: **6.7.0**. Older entries below are preserved as release 
 
 ### Fixed
 
-- Protected final-frame extraction outputs from accidental or partial replacement. Existing destinations are refused by default, `--force` is required for an intentional regular-file replacement, and FFmpeg now streams decoded frames back to the helper instead of reopening a mutable staging pathname. The complete retained frame is written through an owned handle before atomic publication; late destination collisions are preserved, failed extraction leaves the prior output untouched, and Windows cleanup deletes the owned handle rather than a re-looked-up path.
+- Protected final-frame extraction outputs from accidental or partial replacement. Existing destinations are refused by default, `--force` is required for an intentional regular-file replacement, and FFmpeg now streams decoded frames back to the helper instead of reopening a mutable staging pathname. The complete retained frame is written through an owned handle before atomic publication; POSIX publication links the verified open inode rather than a swappable staging name, new files honor the caller's umask, intentional replacements preserve owner/group/mode, WebP uses FFmpeg's `libwebp` encoder, late destination collisions are preserved, failed extraction leaves the prior output untouched, and Windows cleanup deletes the owned handle rather than a re-looked-up path.
 
 ## [6.7.0] — 2026-08-01
 
