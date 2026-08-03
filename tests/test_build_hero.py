@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import venv
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from unittest import mock
 
@@ -26,7 +27,11 @@ import build_hero  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RETIRED = ("viewfinder", "crosshair", "timecode", "sprocket", "REC", "21:9")
-MASTHEAD_INSTALL = "python scripts/build_masthead_outlines.py --install-build-deps"
+MASTHEAD_INSTALL = "python -I -S -B scripts/build_masthead_outlines.py --install-build-deps"
+CI_MASTHEAD_INSTALL = MASTHEAD_INSTALL
+HERO_COMMAND = "python -I -S -B scripts/build_hero.py"
+CI_WHEELHOUSE = "$RUNNER_TEMP/seedance-wheelhouse"
+CI_BUILD_ENV = "/tmp/seedance-masthead-venv-${{ github.run_id }}-${{ github.run_attempt }}"
 UHARFBUZZ_PYPI_JSON = "https://pypi.org/pypi/uharfbuzz/0.55.0/json"
 UHARFBUZZ_WHEELS = {
     "uharfbuzz-0.55.0-cp310-abi3-win_amd64.whl":
@@ -52,7 +57,7 @@ class GeneratorTests(unittest.TestCase):
                 self.assertEqual(
                     path.read_text(encoding="utf-8"),
                     content,
-                    f"{path.name} is stale; re-run scripts/build_hero.py",
+                    f"{path.name} is stale; re-run {HERO_COMMAND}",
                 )
 
     def test_themes_share_geometry_and_differ_only_in_colour(self) -> None:
@@ -161,7 +166,7 @@ class OutlinedTypeTests(unittest.TestCase):
         self.assertIn("Open Font License", prov["license"])
 
     def test_masthead_builder_versions_are_pinned_and_recorded(self) -> None:
-        """Committed geometry must name the exact shaper toolchain that produced it."""
+        """Committed geometry names its shapers without importing them on the host."""
         import build_masthead_outlines as gen
 
         expected = {
@@ -189,7 +194,6 @@ class OutlinedTypeTests(unittest.TestCase):
                 block = block.split("uharfbuzz==", 1)[0]
             self.assertRegex(block, r"--hash=sha256:[0-9a-f]{64}")
         self.assertEqual(gen.pinned_builder_versions(), expected)
-        self.assertEqual(gen.installed_builder_versions(), expected)
 
         data = json.loads((ROOT / "assets/masthead-outlines.json").read_text(encoding="utf-8"))
         self.assertEqual(data["provenance"]["builder_versions"], expected)
@@ -299,8 +303,18 @@ class OutlinedTypeTests(unittest.TestCase):
         script = ROOT / "scripts/build_masthead_outlines.py"
         lock = ROOT / "requirements-masthead.lock"
         with tempfile.TemporaryDirectory() as cwd:
+            build_env = Path(cwd) / "unprepared-builder"
             result = subprocess.run(
-                [sys.executable, "-S", str(script), "--check"],
+                [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    "-B",
+                    str(script),
+                    "--check",
+                    "--build-env",
+                    str(build_env),
+                ],
                 cwd=cwd,
                 capture_output=True,
                 text=True,
@@ -310,34 +324,722 @@ class OutlinedTypeTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(str(script), message)
         self.assertIn(str(lock), message)
+        self.assertIn(str(build_env), message)
         self.assertNotIn("--requirement requirements-masthead.lock", message)
 
     def test_verified_installer_never_reuses_a_same_version_environment(self) -> None:
-        """Even an apparently matching environment must go through a forced wheel-hash install."""
+        """Even matching versions must go through a fresh venv and forced hash install."""
         import build_masthead_outlines as gen
 
-        with tempfile.TemporaryDirectory() as cwd:
-            previous = Path.cwd()
-            try:
-                os.chdir(cwd)
+        with tempfile.TemporaryDirectory() as temp:
+            build_env = Path(temp) / "builder"
+            wheelhouse = Path(temp) / "wheelhouse"
+            wheelhouse.mkdir()
+            events: list[str] = []
+            with (
+                mock.patch.object(
+                    gen,
+                    "prepare_build_environment",
+                    side_effect=lambda *args: events.append("prepare") or build_env,
+                ) as prepare,
+                mock.patch.object(
+                    gen,
+                    "bootstrap_build_environment_pip",
+                    side_effect=lambda *args: events.append("bootstrap"),
+                ) as bootstrap,
+                mock.patch.object(
+                    gen,
+                    "run_initialized_build_env_command",
+                    side_effect=lambda *args, **kwargs: events.append("install"),
+                ) as run,
+                mock.patch.object(
+                    gen,
+                    "seal_isolated_builder",
+                    side_effect=lambda *args: events.append("seal"),
+                ) as seal,
+                mock.patch.object(
+                    gen,
+                    "verify_isolated_builder",
+                    side_effect=lambda *args: events.append("verify"),
+                ) as verify,
+            ):
+                result = gen.install_pinned_builder_dependencies(
+                    wheelhouse=wheelhouse, build_env=build_env
+                )
+
+        self.assertEqual(result, build_env)
+        prepare.assert_called_once_with(build_env, wheelhouse.resolve())
+        bootstrap.assert_called_once_with(build_env)
+        seal.assert_called_once_with(build_env)
+        verify.assert_called_once_with(build_env)
+        run.assert_called_once()
+        self.assertEqual(events, ["prepare", "bootstrap", "install", "seal", "verify"])
+        self.assertEqual(
+            run.call_args.args[1],
+            gen.pinned_install_argv(
+                gen.build_env_python(build_env), wheelhouse.resolve(), build_env
+            ),
+        )
+        self.assertEqual(run.call_args.args[0], build_env)
+        pip_env = run.call_args.kwargs["environment"]
+        self.assertEqual(pip_env["PIP_CONFIG_FILE"], os.devnull)
+        self.assertEqual(
+            [key for key in pip_env if key.upper().startswith("PIP_")],
+            ["PIP_CONFIG_FILE"],
+        )
+        argv = run.call_args.args[1]
+        self.assertEqual(argv[1], "-I")
+        self.assertIn("--force-reinstall", argv)
+        self.assertIn("--no-compile", argv)
+        self.assertIn("--no-deps", argv)
+        self.assertIn("--no-index", argv)
+        self.assertIn("--require-hashes", argv)
+        self.assertIn("--report", argv)
+        self.assertEqual(Path(argv[-1]), ROOT / "requirements-masthead.lock")
+
+    def test_build_environment_clear_is_marker_guarded_and_isolated(self) -> None:
+        """The venv refresh must not clear arbitrary paths or inherit Python hooks."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            unmarked = Path(temp) / "not-ours"
+            unmarked.mkdir()
+            (unmarked / "keep.txt").write_text("keep", encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "unmarked"):
+                gen.resolve_build_env(unmarked)
+
+            destination = Path(temp) / "builder"
+            events: list[str] = []
+            with (
+                mock.patch.object(
+                    gen.subprocess,
+                    "run",
+                    side_effect=lambda *args, **kwargs: events.append("venv"),
+                ) as run,
+                mock.patch.object(
+                    gen,
+                    "write_build_env_marker",
+                    side_effect=lambda *args, **kwargs: events.append("marker"),
+                ) as marker,
+                mock.patch.object(
+                    gen,
+                    "clear_build_env_trust",
+                    side_effect=lambda *args, **kwargs: events.append("clear-trust"),
+                ) as clear_trust,
+                mock.patch.object(
+                    gen,
+                    "write_build_env_trust",
+                    side_effect=lambda *args, **kwargs: events.append("write-trust"),
+                ) as write_trust,
+                mock.patch.object(
+                    gen,
+                    "require_build_env_trust",
+                    side_effect=lambda *args, **kwargs: events.append("verify-trust") or {},
+                ) as require_trust,
+                mock.patch.dict(
+                    os.environ,
+                    {"PYTHONPATH": "attacker", "PIP_INDEX_URL": "https://bad.invalid"},
+                ),
+            ):
+                self.assertEqual(gen.prepare_build_environment(destination), destination.resolve())
+            marker.assert_called_once_with(destination.resolve(), wheelhouse=None)
+            clear_trust.assert_called_once_with(destination.resolve())
+            write_trust.assert_called_once_with(destination.resolve(), state="initialized")
+            require_trust.assert_called_once_with(destination.resolve(), state="initialized")
+            self.assertEqual(
+                events,
+                ["clear-trust", "venv", "marker", "write-trust", "verify-trust"],
+            )
+            argv = run.call_args.args[0]
+            self.assertEqual(
+                argv[:6],
+                [str(gen.trusted_base_python()), "-I", "-S", "-B", "-m", "venv"],
+            )
+            self.assertIn("--clear", argv)
+            self.assertIn("--without-pip", argv)
+            child_env = run.call_args.kwargs["env"]
+            self.assertNotIn("PYTHONPATH", child_env)
+            self.assertNotIn("PIP_INDEX_URL", child_env)
+
+    def test_build_environment_rejects_protected_ancestors_and_descendants(self) -> None:
+        """A marker must never authorize clearing a directory containing protected data."""
+        import build_masthead_outlines as gen
+
+        protected_ancestors = {
+            gen.ROOT.parent.resolve(),
+            Path.home().resolve().parent,
+            Path(sys.prefix).resolve().parent,
+            Path(tempfile.gettempdir()).resolve().parent,
+        }
+        for candidate in protected_ancestors:
+            with self.subTest(candidate=candidate), self.assertRaisesRegex(
+                SystemExit, "unsafe masthead build environment"
+            ):
+                gen.resolve_build_env(candidate)
+
+        protected_descendants = {
+            gen.ROOT / ".unsafe-builder",
+            Path.home() / ".pr124-unsafe-builder",
+            Path(sys.prefix) / "pr124-descendant-probe",
+            Path(sys.base_prefix) / "pr124-descendant-probe",
+            Path(sys.exec_prefix) / "pr124-descendant-probe",
+            Path(sys.base_exec_prefix) / "pr124-descendant-probe",
+            Path(sys.executable).parent / "pr124-descendant-probe",
+        }
+        for candidate in protected_descendants:
+            with self.subTest(candidate=candidate), self.assertRaisesRegex(
+                SystemExit, "unsafe masthead build environment"
+            ):
+                gen.resolve_build_env(candidate)
+
+        with tempfile.TemporaryDirectory() as temp:
+            temp_root = Path(temp)
+            trust_root = temp_root / "external-trust"
+            with mock.patch.object(gen, "BUILD_TRUST_ROOT", trust_root):
+                for candidate in (trust_root / "builder", temp_root):
+                    with self.subTest(candidate=candidate), self.assertRaisesRegex(
+                        SystemExit, "unsafe masthead build environment"
+                    ):
+                        gen.resolve_build_env(candidate)
+
+                safe = temp_root / "dedicated-builder"
+                self.assertEqual(gen.resolve_build_env(safe), safe.resolve())
+
+    def test_same_version_modules_without_a_wheel_seal_are_rejected(self) -> None:
+        """Version strings and in-venv paths do not substitute for a wheel seal."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            temp_root = Path(temp)
+            build_env = temp_root / "builder"
+            venv.EnvBuilder(with_pip=False).create(build_env)
+            gen.write_build_env_marker(build_env)
+            venv_python = gen.build_env_python(build_env)
+            purelib = Path(
+                subprocess.run(
+                    [
+                        str(venv_python),
+                        "-I",
+                        "-c",
+                        "import sysconfig; print(sysconfig.get_paths()['purelib'])",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+            )
+
+            trusted_fonttools = purelib / "fontTools"
+            trusted_fonttools.mkdir(parents=True)
+            (trusted_fonttools / "__init__.py").write_text(
+                "__version__ = '4.63.0'\nORIGIN = 'trusted-venv'\n", encoding="utf-8"
+            )
+            trusted_hb = purelib / "uharfbuzz"
+            trusted_hb.mkdir()
+            (trusted_hb / "__init__.py").write_text(
+                "__version__ = '0.55.0'\n"
+                "ORIGIN = 'trusted-venv'\n"
+                "def version_string(): return '14.2.1'\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(SystemExit, "external trust"):
+                gen.verify_isolated_builder(build_env)
+
+    def test_in_venv_sitecustomize_cannot_short_circuit_a_check(self) -> None:
+        """`-S` must stop a prepared venv hook from exiting zero before validation."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            build_env = root / "builder"
+            venv.EnvBuilder(with_pip=False).create(build_env)
+            gen.write_build_env_marker(
+                build_env,
+                integrity={"integrity_sha256": "0" * 64},
+            )
+            venv_python = gen.build_env_python(build_env)
+            purelib = Path(
+                subprocess.run(
+                    [
+                        str(venv_python),
+                        "-I",
+                        "-c",
+                        "import sysconfig; print(sysconfig.get_paths()['purelib'])",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+            )
+            sentinel = root / "sitecustomize-ran.txt"
+            (purelib / "sitecustomize.py").write_text(
+                "from pathlib import Path\n"
+                f"Path({str(sentinel)!r}).write_text('ran', encoding='utf-8')\n"
+                "import os\nos._exit(0)\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(gen, "BUILD_TRUST_ROOT", root / "external-trust"):
+                gen.write_build_env_trust(build_env, state="sealed")
+                self.assertNotEqual(gen.run_isolated_builder("check", build_env), 0)
+            self.assertFalse(sentinel.exists(), "in-venv sitecustomize executed despite -S")
+            argv = gen.isolated_builder_argv("check", build_env)
+            self.assertEqual(argv[1:4], ["-I", "-S", "-B"])
+
+    def test_forged_runner_and_self_authored_marker_lack_external_trust(self) -> None:
+        """A fake python executable must be rejected before its forged success runs."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            build_env = root / "forged-builder"
+            runner = gen.build_env_python(build_env)
+            runner.parent.mkdir(parents=True)
+            runner.write_bytes(b"MZ-forged-runner")
+            base_executable = Path(
+                getattr(sys, "_base_executable", sys.executable)
+            ).resolve()
+            version = ".".join(str(part) for part in sys.version_info[:3])
+            (build_env / "pyvenv.cfg").write_text(
+                f"home = {base_executable.parent}\n"
+                "include-system-site-packages = false\n"
+                f"version = {version}\n",
+                encoding="utf-8",
+            )
+            gen.write_build_env_marker(
+                build_env,
+                integrity={"integrity_sha256": "0" * 64},
+            )
+            forged = subprocess.CompletedProcess(
+                [],
+                0,
+                stdout=(
+                    gen.ISOLATED_RESULT_PREFIX
+                    + json.dumps(
+                        {
+                            "action": "check",
+                            "status": "ok",
+                            "integrity_sha256": "0" * 64,
+                        }
+                    )
+                    + "\n"
+                ),
+                stderr="",
+            )
+            external_trust = root / "external-trust"
+            isolated_argv = gen.isolated_builder_argv("check", build_env)
+            self.assertEqual(Path(isolated_argv[0]).resolve(), base_executable)
+            self.assertNotEqual(Path(isolated_argv[0]).resolve(), runner.resolve())
+            with (
+                mock.patch.object(gen, "BUILD_TRUST_ROOT", external_trust),
+                mock.patch.object(gen.subprocess, "run", return_value=forged) as run,
+                self.assertRaisesRegex(SystemExit, "no external trust record"),
+            ):
+                gen.run_isolated_builder("check", build_env)
+
+            run.assert_not_called()
+            with mock.patch.object(gen, "BUILD_TRUST_ROOT", external_trust):
+                trust_path = gen.build_env_trust_path(build_env)
+                self.assertFalse(trust_path.is_relative_to(build_env))
+                trust_path.parent.mkdir(parents=True)
+                trust_path.write_text('{"state":"sealed"}\n', encoding="utf-8")
+                with self.assertRaisesRegex(SystemExit, "not the trusted stdlib venv launcher"):
+                    gen.require_build_env_trust(build_env, state="sealed")
+
+    def test_external_trust_rejects_runner_config_marker_and_script_tampering(self) -> None:
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            trust_root = root / "external-trust"
+
+            def prepared(name: str) -> Path:
+                build_env = root / name
+                runner = gen.build_env_python(build_env)
+                runner.parent.mkdir(parents=True)
+                runner.write_bytes(gen.trusted_venv_runner_source().read_bytes())
+                base_executable = gen.trusted_base_python()
+                version = ".".join(str(part) for part in sys.version_info[:3])
+                (build_env / "pyvenv.cfg").write_text(
+                    f"home = {base_executable.parent}\n"
+                    "include-system-site-packages = false\n"
+                    f"version = {version}\n",
+                    encoding="utf-8",
+                )
+                gen.write_build_env_marker(
+                    build_env,
+                    integrity={"integrity_sha256": "1" * 64},
+                )
+                gen.write_build_env_trust(build_env, state="sealed")
+                gen.require_build_env_trust(build_env, state="sealed")
+                return build_env
+
+            with mock.patch.object(gen, "BUILD_TRUST_ROOT", trust_root):
+                trusted_base = root / "trusted-base-python"
+                trusted_base.write_bytes(b"trusted-base")
+                stable_runner_source = root / "trusted-runner-source"
+                stable_runner_source.write_bytes(
+                    gen.trusted_venv_runner_source().read_bytes()
+                )
+                with (
+                    mock.patch.object(
+                        gen, "trusted_base_python", return_value=trusted_base
+                    ),
+                    mock.patch.object(
+                        gen,
+                        "trusted_venv_runner_source",
+                        return_value=stable_runner_source,
+                    ),
+                ):
+                    base_env = prepared("base")
+                    trusted_base.write_bytes(b"replaced-base")
+                    with self.assertRaisesRegex(SystemExit, "trust mismatch"):
+                        gen.require_build_env_trust(base_env, state="sealed")
+
+                runner_env = prepared("runner")
+                gen.build_env_python(runner_env).write_bytes(b"forged-runner")
+                with self.assertRaisesRegex(SystemExit, "not the trusted stdlib venv launcher"):
+                    gen.require_build_env_trust(runner_env, state="sealed")
+
+                config_env = prepared("config")
+                (config_env / "pyvenv.cfg").write_text(
+                    "include-system-site-packages = true\n", encoding="utf-8"
+                )
+                with self.assertRaisesRegex(SystemExit, "does not match trusted base Python"):
+                    gen.require_build_env_trust(config_env, state="sealed")
+
+                marker_env = prepared("marker")
+                marker = marker_env / gen.BUILD_ENV_MARKER
+                marker.write_text(marker.read_text(encoding="utf-8") + " ", encoding="utf-8")
+                with self.assertRaisesRegex(SystemExit, "trust mismatch"):
+                    gen.require_build_env_trust(marker_env, state="sealed")
+
+                trusted_script = root / "trusted-builder.py"
+                trusted_script.write_text("# trusted\n", encoding="utf-8")
+                with mock.patch.object(gen, "SCRIPT", trusted_script):
+                    script_env = prepared("script")
+                    trusted_script.write_text("# replaced\n", encoding="utf-8")
+                    with self.assertRaisesRegex(SystemExit, "trust mismatch"):
+                        gen.require_build_env_trust(script_env, state="sealed")
+
+    def test_pip_bootstrap_verifies_initialized_runner_and_config_before_execution(self) -> None:
+        """Neither ensurepip nor pip may run through a forged new-environment launcher."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            trust_root = root / "external-trust"
+
+            def initialized(name: str) -> Path:
+                build_env = root / name
+                runner = gen.build_env_python(build_env)
+                runner.parent.mkdir(parents=True)
+                runner.write_bytes(gen.trusted_venv_runner_source().read_bytes())
+                version = ".".join(str(part) for part in sys.version_info[:3])
+                (build_env / "pyvenv.cfg").write_text(
+                    f"home = {gen.trusted_base_python().parent}\n"
+                    "include-system-site-packages = false\n"
+                    f"version = {version}\n",
+                    encoding="utf-8",
+                )
+                gen.write_build_env_marker(build_env)
+                gen.write_build_env_trust(build_env, state="initialized")
+                return build_env
+
+            with mock.patch.object(gen, "BUILD_TRUST_ROOT", trust_root):
+                valid_env = initialized("valid")
+                events: list[str] = []
+                real_require = gen.require_build_env_trust
+
+                def require_then_record(*args: object, **kwargs: object) -> dict[str, object]:
+                    result = real_require(*args, **kwargs)
+                    events.append("trust")
+                    return result
+
                 with (
                     mock.patch.object(
                         gen,
-                        "installed_builder_versions",
-                        return_value=gen.pinned_builder_versions(),
-                    ) as installed,
-                    mock.patch.object(gen.subprocess, "run") as run,
+                        "require_build_env_trust",
+                        side_effect=require_then_record,
+                    ),
+                    mock.patch.object(
+                        gen.subprocess,
+                        "run",
+                        side_effect=lambda *args, **kwargs: events.append("run"),
+                    ) as run,
                 ):
-                    gen.install_pinned_builder_dependencies()
-            finally:
-                os.chdir(previous)
+                    gen.bootstrap_build_environment_pip(valid_env)
+                self.assertEqual(events, ["trust", "run"])
+                self.assertEqual(
+                    run.call_args.args[0],
+                    gen.ensurepip_argv(gen.build_env_python(valid_env)),
+                )
+                bootstrap_argv = run.call_args.args[0]
+                self.assertEqual(bootstrap_argv[1:3], ["-I", "-B"])
+                self.assertNotIn(
+                    "-S",
+                    bootstrap_argv,
+                    "Python 3.11 would otherwise target the base prefix",
+                )
+                with (
+                    mock.patch.object(gen.subprocess, "run") as run,
+                    self.assertRaisesRegex(SystemExit, "untrusted.*command"),
+                ):
+                    gen.run_initialized_build_env_command(
+                        valid_env,
+                        gen.ensurepip_argv(gen.trusted_base_python()),
+                        environment=gen.python_clean_environment(),
+                    )
+                run.assert_not_called()
 
-        installed.assert_not_called()
-        run.assert_called_once_with(gen.pinned_install_argv(), check=True, cwd=ROOT)
-        argv = run.call_args.args[0]
-        self.assertIn("--force-reinstall", argv)
+                runner_env = initialized("runner")
+                gen.build_env_python(runner_env).write_bytes(b"forged-runner")
+                with (
+                    mock.patch.object(gen.subprocess, "run") as run,
+                    self.assertRaisesRegex(
+                        SystemExit, "not the trusted stdlib venv launcher"
+                    ),
+                ):
+                    gen.bootstrap_build_environment_pip(runner_env)
+                run.assert_not_called()
+
+                config_env = initialized("config")
+                (config_env / "pyvenv.cfg").write_text(
+                    "include-system-site-packages = true\n", encoding="utf-8"
+                )
+                with (
+                    mock.patch.object(gen.subprocess, "run") as run,
+                    self.assertRaisesRegex(
+                        SystemExit, "does not match trusted base Python"
+                    ),
+                ):
+                    gen.bootstrap_build_environment_pip(config_env)
+                run.assert_not_called()
+
+    def test_documented_isolated_startup_ignores_hostile_parent_sitecustomize(self) -> None:
+        """The public command must reach its own failure instead of hostile exit zero."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            attacker = root / "attacker"
+            attacker.mkdir()
+            sentinel = root / "hostile-startup-ran.txt"
+            (attacker / "sitecustomize.py").write_text(
+                "from pathlib import Path\n"
+                f"Path({str(sentinel)!r}).write_text('ran', encoding='utf-8')\n"
+                "import os\nos._exit(0)\n",
+                encoding="utf-8",
+            )
+            environment = dict(os.environ)
+            environment["PYTHONPATH"] = str(attacker)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    "-B",
+                    str(gen.SCRIPT),
+                    "--check",
+                    "--build-env",
+                    str(root / "missing-builder"),
+                ],
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(sentinel.exists())
+        self.assertIn("not prepared", result.stdout + result.stderr)
+        self.assertIn("-I -S -B", gen.recovery_command())
+
+    def test_build_hero_public_command_is_isolated_and_ignores_hostile_startup(self) -> None:
+        """The sibling-importing check must survive a hostile parent PYTHONPATH."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            attacker = root / "attacker"
+            attacker.mkdir()
+            sentinel = root / "build-hero-sitecustomize-ran.txt"
+            (attacker / "sitecustomize.py").write_text(
+                "from pathlib import Path\n"
+                f"Path({str(sentinel)!r}).write_text('ran', encoding='utf-8')\n"
+                "import os\nos._exit(0)\n",
+                encoding="utf-8",
+            )
+            environment = dict(os.environ)
+            environment["PYTHONPATH"] = str(attacker)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    "-B",
+                    str(ROOT / "scripts/build_hero.py"),
+                    "--check",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(sentinel.exists())
+        self.assertIn("Masthead check passed", result.stdout)
+        self.assertEqual(build_hero.PUBLIC_COMMAND, HERO_COMMAND)
+
+    def test_site_packages_seal_changes_when_same_version_module_bytes_change(self) -> None:
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            build_env = Path(temp) / "builder"
+            site_packages = gen.build_env_site_packages(build_env)
+            package = site_packages / "fontTools"
+            package.mkdir(parents=True)
+            module = package / "__init__.py"
+            module.write_text("__version__ = '4.63.0'\nTRUSTED = True\n", encoding="utf-8")
+            trusted = gen.site_packages_tree_integrity(build_env)
+            module.write_text("__version__ = '4.63.0'\nTRUSTED = False\n", encoding="utf-8")
+            replaced = gen.site_packages_tree_integrity(build_env)
+
+        self.assertEqual(trusted["file_count"], replaced["file_count"])
+        self.assertNotEqual(trusted["files_sha256"], replaced["files_sha256"])
+
+    def test_installed_modules_must_match_the_locked_wheel_bytes(self) -> None:
+        """A forged installed RECORD cannot bless same-version replacement code."""
+        import zipfile
+
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            wheel = root / "fonttools-4.63.0-py3-none-any.whl"
+            trusted_bytes = b"__version__ = '4.63.0'\nTRUSTED = True\n"
+            with zipfile.ZipFile(wheel, "w") as archive:
+                archive.writestr("fontTools/__init__.py", trusted_bytes)
+
+            site_packages = root / "site-packages"
+            package = site_packages / "fontTools"
+            package.mkdir(parents=True)
+            module = package / "__init__.py"
+            module.write_bytes(trusted_bytes)
+            sealed = gen.locked_wheel_import_integrity(wheel, site_packages, "fontTools")
+
+            module.write_bytes(b"__version__ = '4.63.0'\nTRUSTED = False\n")
+            with self.assertRaisesRegex(SystemExit, "differs from retained locked wheel"):
+                gen.locked_wheel_import_integrity(wheel, site_packages, "fontTools")
+
+        self.assertEqual(sealed["file_count"], 1)
+
+    def test_verified_installer_can_refuse_every_package_index(self) -> None:
+        """CI's repository-script phase must consume only its prepared wheelhouse."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            wheelhouse = Path(temp) / "wheelhouse"
+            build_env = Path(temp) / "builder"
+            argv = gen.pinned_install_argv("python", wheelhouse, build_env)
+        self.assertIn("--no-index", argv)
+        self.assertIn("--find-links", argv)
+        self.assertEqual(argv[1], "-I")
+        self.assertIn("--disable-pip-version-check", argv)
+        self.assertEqual(Path(argv[argv.index("--find-links") + 1]), wheelhouse.resolve())
         self.assertIn("--require-hashes", argv)
-        self.assertEqual(Path(argv[-1]), ROOT / "requirements-masthead.lock")
+        self.assertEqual(
+            Path(argv[argv.index("--report") + 1]),
+            build_env.resolve() / gen.BUILD_INSTALL_REPORT,
+        )
+
+    def test_pip_environment_drops_inherited_network_and_config_overrides(self) -> None:
+        import build_masthead_outlines as gen
+
+        clean = gen.pip_clean_environment(
+            {
+                "PATH": "bin",
+                "PIP_INDEX_URL": "https://example.invalid/simple",
+                "pip_find_links": "https://example.invalid/wheels",
+                "PIP_CONFIG_FILE": "attacker.ini",
+                "PYTHONPATH": "attacker",
+                "pythonhome": "attacker-home",
+                "VIRTUAL_ENV": "attacker-venv",
+                "LD_PRELOAD": "/tmp/attacker.so",
+                "LD_LIBRARY_PATH": "/tmp/attacker-libs",
+                "DYLD_INSERT_LIBRARIES": "/tmp/attacker.dylib",
+                "DYLD_LIBRARY_PATH": "/tmp/attacker-libs",
+            }
+        )
+        self.assertEqual(clean, {"PATH": "bin", "PIP_CONFIG_FILE": os.devnull})
+
+    def test_offline_installer_rejects_requirement_url_escape_hatches(self) -> None:
+        """--no-index must not be undermined by a direct URL added to the lock."""
+        import build_masthead_outlines as gen
+
+        escapes = (
+            b"evil @ https://example.invalid/evil.whl",
+            b"--requirement https://example.invalid/extra.txt",
+            b"--constraint https://example.invalid/constraints.txt",
+            b"--find-links https://example.invalid/wheels",
+            b"--extra-index-url https://example.invalid/simple",
+        )
+        for escape in escapes:
+            with self.subTest(escape=escape), self.assertRaisesRegex(
+                SystemExit, "not safe for offline"
+            ):
+                gen.require_offline_wheel_lock(
+                    gen.LOCK,
+                    gen.LOCK.read_bytes() + b"\n" + escape + b"\n",
+                )
+
+    def test_wheel_lock_requires_exactly_one_binary_only_directive(self) -> None:
+        import build_masthead_outlines as gen
+
+        locked = gen.LOCK.read_bytes()
+        directive = b"--only-binary=:all:"
+        without = b"\n".join(
+            line for line in locked.splitlines() if line.strip() != directive
+        )
+        with self.assertRaisesRegex(SystemExit, "exactly once before pins"):
+            gen.require_offline_wheel_lock(gen.LOCK, without)
+        with self.assertRaisesRegex(SystemExit, "exactly once before pins"):
+            gen.require_offline_wheel_lock(gen.LOCK, directive + b"\n" + locked)
+
+    def test_every_wheel_download_explicitly_refuses_sdists(self) -> None:
+        import build_masthead_outlines as gen
+
+        argv = gen.pinned_download_argv("python", CI_WHEELHOUSE)
+        self.assertIn("--only-binary=:all:", argv)
+        workflow = (ROOT / ".github/workflows/validate-skills.yml").read_text(
+            encoding="utf-8"
+        )
+        download_lines = [
+            line
+            for line in workflow.splitlines()
+            if " pip " in line and " download " in line
+        ]
+        self.assertEqual(len(download_lines), 2)
+        self.assertTrue(
+            all("--only-binary=:all:" in line for line in download_lines),
+            download_lines,
+        )
+
+    def test_both_ci_locks_use_the_offline_allowlist(self) -> None:
+        import build_masthead_outlines as gen
+
+        gen.require_offline_wheel_lock(ROOT / "requirements-validation.lock")
+        gen.require_offline_wheel_lock(ROOT / "requirements-masthead.lock")
+        with mock.patch("builtins.print"):
+            self.assertEqual(
+                gen.main(
+                    [
+                        "--validate-wheel-lock",
+                        str(ROOT / "requirements-validation.lock"),
+                        "--validate-wheel-lock",
+                        str(ROOT / "requirements-masthead.lock"),
+                    ]
+                ),
+                0,
+            )
 
     def test_verified_installer_rejects_lock_pin_drift_before_pip(self) -> None:
         """Hash enforcement cannot compensate for a lock that names the wrong release."""
@@ -363,41 +1065,46 @@ class OutlinedTypeTests(unittest.TestCase):
         import build_masthead_outlines as gen
 
         with (
-            mock.patch.object(gen, "install_pinned_builder_dependencies") as install,
+            mock.patch.object(
+                gen,
+                "install_pinned_builder_dependencies",
+                return_value=Path(tempfile.gettempdir()) / "builder",
+            ) as install,
             mock.patch.object(gen, "document") as document,
             mock.patch("builtins.print"),
         ):
             self.assertEqual(gen.main(["--install-build-deps"]), 0)
 
-        install.assert_called_once_with()
+        install.assert_called_once_with(None, None)
         document.assert_not_called()
 
     def test_writing_the_asset_cannot_bypass_the_verified_installer(self) -> None:
-        """Every CLI write must force-install before it reads a shaping dependency."""
+        """Every CLI write must install, then render only in its isolated child."""
         import build_masthead_outlines as gen
 
         events = []
-        with tempfile.TemporaryDirectory() as cwd:
-            target = Path(cwd) / "masthead-outlines.json"
-            with (
-                mock.patch.object(
-                    gen,
-                    "install_pinned_builder_dependencies",
-                    side_effect=lambda: events.append("install"),
-                ) as install,
-                mock.patch.object(
-                    gen,
-                    "document",
-                    side_effect=lambda: events.append("document") or {"ok": True},
+        build_env = Path(tempfile.gettempdir()) / "builder"
+        with (
+            mock.patch.object(
+                gen,
+                "install_pinned_builder_dependencies",
+                side_effect=lambda wheelhouse=None, requested_env=None: (
+                    events.append("install") or build_env
                 ),
-                mock.patch.object(gen, "TARGET", target),
-                mock.patch.object(gen, "repo_relative_posix", return_value="asset.json"),
-                mock.patch("builtins.print"),
-            ):
-                self.assertEqual(gen.main([]), 0)
+            ) as install,
+            mock.patch.object(
+                gen,
+                "run_isolated_builder",
+                side_effect=lambda action, environment: events.append(action) or 0,
+            ) as isolated,
+            mock.patch.object(gen, "document") as document,
+        ):
+            self.assertEqual(gen.main([]), 0)
 
-        install.assert_called_once_with()
-        self.assertEqual(events, ["install", "document"])
+        install.assert_called_once_with(None, None)
+        isolated.assert_called_once_with("write", build_env)
+        document.assert_not_called()
+        self.assertEqual(events, ["install", "write"])
 
     def test_masthead_install_is_hash_enforced_everywhere_it_is_documented(self) -> None:
         """Release, CI, and script help must not regress to unconstrained installs."""
@@ -406,15 +1113,66 @@ class OutlinedTypeTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         release_setup = readme.split("## Validation", 1)[1].split("## Design Standard", 1)[0]
         workflow = (ROOT / ".github/workflows/validate-skills.yml").read_text(encoding="utf-8")
+        security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+        self.assertTrue(CI_BUILD_ENV.startswith("/tmp/seedance-masthead-venv-"))
+        self.assertIn("${{ github.run_id }}", CI_BUILD_ENV)
+        self.assertIn("${{ github.run_attempt }}", CI_BUILD_ENV)
+        self.assertNotIn("$RUNNER_TEMP", CI_BUILD_ENV)
         self.assertIn(MASTHEAD_INSTALL, release_setup)
         self.assertGreaterEqual(readme.count(MASTHEAD_INSTALL), 2)
-        self.assertIn("python scripts/build_masthead_outlines.py --check", release_setup)
-        self.assertIn(MASTHEAD_INSTALL, workflow)
-        self.assertIn("python scripts/build_masthead_outlines.py --check", workflow)
+        self.assertGreaterEqual(readme.count(HERO_COMMAND), 3)
+        self.assertIn(HERO_COMMAND + " --check", workflow)
+        self.assertIn(HERO_COMMAND + " --check", security)
+        for public_document in (readme, workflow, security):
+            self.assertNotIn("python scripts/build_hero.py", public_document)
+        self.assertIn(
+            "python -I -S -B scripts/build_masthead_outlines.py --check",
+            release_setup,
+        )
+        self.assertIn(
+            CI_MASTHEAD_INSTALL
+            + ' --wheelhouse "'
+            + CI_WHEELHOUSE
+            + '" --build-env "'
+            + CI_BUILD_ENV
+            + '"',
+            workflow,
+        )
+        self.assertIn(
+            'env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null '
+            "python -I -m pip --disable-pip-version-check download "
+            "--only-binary=:all: --index-url https://pypi.org/simple --require-hashes",
+            workflow,
+        )
+        self.assertIn(
+            'env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null '
+            "python -I -m pip --disable-pip-version-check install --force-reinstall "
+            "--no-index --find-links",
+            workflow,
+        )
+        self.assertIn("--validate-wheel-lock requirements-validation.lock", workflow)
+        self.assertIn(
+            "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+            workflow,
+        )
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertIn(
+            'python -I -S -B scripts/build_masthead_outlines.py --check --build-env "'
+            + CI_BUILD_ENV
+            + '"',
+            workflow,
+        )
+        self.assertEqual(workflow.count('--build-env "' + CI_BUILD_ENV + '"'), 2)
+        self.assertNotIn('--build-env "$RUNNER_TEMP/', workflow)
+        self.assertGreaterEqual(workflow.count('env -i PATH="$PATH" HOME="$HOME"'), 6)
         self.assertIn(MASTHEAD_INSTALL, gen.__doc__)
         self.assertNotIn("pip install " + "fonttools uharfbuzz", gen.__doc__)
-        argv = gen.pinned_install_argv("python")
+        argv = gen.pinned_install_argv("python", CI_WHEELHOUSE, CI_BUILD_ENV)
+        self.assertEqual(argv[1], "-I")
         self.assertIn("--force-reinstall", argv)
+        self.assertIn("--no-compile", argv)
+        self.assertIn("--no-deps", argv)
+        self.assertIn("--no-index", argv)
         self.assertIn("--require-hashes", argv)
         self.assertEqual(Path(argv[-1]), ROOT / "requirements-masthead.lock")
 

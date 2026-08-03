@@ -22,6 +22,12 @@ import json
 import sys
 from pathlib import Path
 
+# Isolated mode intentionally omits the script directory from ``sys.path``.
+# Add only this resolved sibling directory, never an inherited search path.
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
 from build_masthead_outlines import (
     BUILD_INSTALL_POLICY,
     BUILD_LOCK_PROVENANCE_PATH,
@@ -31,6 +37,7 @@ from build_masthead_outlines import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+PUBLIC_COMMAND = "python -I -S -B scripts/build_hero.py"
 
 # The display type is vector outlines, not live text. The previous stack
 # (Didot, Bodoni MT, Hoefler Text, Baskerville, Palatino Linotype, Georgia)
@@ -81,7 +88,7 @@ def provenance_failure(detail: str) -> SystemExit:
     """Return one stable fail-closed error for all untrusted outline metadata."""
     return SystemExit(
         f"masthead outline provenance validation failed: {detail}; "
-        "regenerate with scripts/build_masthead_outlines.py"
+        "regenerate with python -I -S -B scripts/build_masthead_outlines.py"
     )
 
 
@@ -249,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check:
         if drift:
-            print("Masthead is out of date; re-run scripts/build_hero.py:")
+            print(f"Masthead is out of date; re-run {PUBLIC_COMMAND}:")
             for name in drift:
                 print(f"- {name}")
             return 1

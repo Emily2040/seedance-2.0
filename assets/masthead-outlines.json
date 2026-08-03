@@ -1,5 +1,5 @@
 {
-  "_comment": "Display type for the masthead, stored as vector outlines rather than live text. Regenerate with scripts/build_masthead_outlines.py only when the wordmark or tagline copy changes, then re-run scripts/build_hero.py.",
+  "_comment": "Display type for the masthead, stored as vector outlines rather than live text. Regenerate with python -I -S -B scripts/build_masthead_outlines.py only when the wordmark or tagline copy changes, then run python -I -S -B scripts/build_hero.py.",
   "provenance": {
     "font_family": "Bodoni Moda",
     "font_version": "Version 2.005",

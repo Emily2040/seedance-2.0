@@ -28,7 +28,9 @@ jobs:
     steps:
       # Actions are pinned to commit SHAs: a tag is mutable, so `@v4` silently
       # changes what executes here. The trailing comment tracks the release.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
@@ -36,14 +38,20 @@ jobs:
           cache-dependency-path: |
             requirements-validation.lock
             requirements-masthead.lock
-      # Third-party validation and masthead build inputs are separately locked
-      # and hash-checked for this runner and Python version. The masthead
-      # installer force-reinstalls so a preloaded same-version distribution
-      # cannot short-circuit wheel-hash verification.
-      - name: Install validation dependencies
-        run: python -m pip install --require-hashes --requirement requirements-validation.lock
-      - name: Force-install masthead build dependencies from locked wheels
-        run: python scripts/build_masthead_outlines.py --install-build-deps
+      # GitHub actions and this explicit wheel download can use the network.
+      # Before repository validation, both locks are constrained to pinned
+      # package/hash syntax. Pip receives an empty environment plus /dev/null as
+      # its config file, so global/site config cannot add find-links or indexes.
+      - name: Validate offline wheel-lock grammar
+        run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -S -B scripts/build_masthead_outlines.py --validate-wheel-lock requirements-validation.lock --validate-wheel-lock requirements-masthead.lock
+      - name: Download hash-locked validation and masthead wheels
+        run: |
+          env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -m pip --disable-pip-version-check download --only-binary=:all: --index-url https://pypi.org/simple --require-hashes --dest "$RUNNER_TEMP/seedance-wheelhouse" --requirement requirements-validation.lock
+          env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -m pip --disable-pip-version-check download --only-binary=:all: --index-url https://pypi.org/simple --require-hashes --dest "$RUNNER_TEMP/seedance-wheelhouse" --requirement requirements-masthead.lock
+      - name: Install validation dependencies without package-index access
+        run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -m pip --disable-pip-version-check install --force-reinstall --no-index --find-links "$RUNNER_TEMP/seedance-wheelhouse" --require-hashes --requirement requirements-validation.lock
+      - name: Force-install masthead build dependencies without package-index access
+        run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -S -B scripts/build_masthead_outlines.py --install-build-deps --wheelhouse "$RUNNER_TEMP/seedance-wheelhouse" --build-env "/tmp/seedance-masthead-venv-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Validate skill metadata and required files
         run: python scripts/validate_skills.py --strict
       - name: Audit stale and risky active wording
@@ -55,9 +63,9 @@ jobs:
       - name: Audit frontend README and SVG assets
         run: python scripts/design_audit.py --strict
       - name: Check masthead outline provenance
-        run: python scripts/build_masthead_outlines.py --check
+        run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -S -B scripts/build_masthead_outlines.py --check --build-env "/tmp/seedance-masthead-venv-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Check the masthead matches its generator
-        run: python scripts/build_hero.py --check
+        run: python -I -S -B scripts/build_hero.py --check
       - name: Validate source freshness and claim labels
         run: python scripts/source_registry_check.py --strict
       - name: Validate multilingual vocabulary schema
