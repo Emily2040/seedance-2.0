@@ -269,18 +269,48 @@ SOURCE_PRESERVATION_CONTRACT = re.compile(
 # most entries from the actual matched contract spans instead of maintaining a
 # fixture-specific noun list.
 TARGET_CONTROL_TERMS = {
-    "another", "brief", "fix", "good", "known", "one", "otherwise", "short",
-    "sequence", "state", "without",
+    "another", "brief", "either", "fix", "good", "known", "one", "otherwise",
+    "short", "sequence", "state", "without",
 }
-EXPLICIT_TARGET_INTRO = re.compile(
-    r"\b(?:of|featuring|depicting|showing|starring|about)\s+"
-    r"(?P<target>[^,.;!?]{1,80})",
+PRODUCTION_TARGET_INTRO = re.compile(
+    r"\b(?P<production>animation|take|depiction|portrait|video|clip|shot|"
+    r"sequence|storyboard|render|image|frame)\s+(?:of|about)\s+",
+    re.I,
+)
+DEPICTION_TARGET_INTRO = re.compile(
+    r"\b(?P<depiction>featuring|depicting|showing|starring)\s+",
+    re.I,
+)
+TARGET_STRONG_BOUNDARY = re.compile(r"[.;!?。！？；\r\n]+")
+TARGET_INLINE_BOUNDARY = re.compile(r"[,.;!?。！？，；\r\n]")
+TARGET_ASSET_MARKER = re.compile(
+    r"@(?:image|video|audio)\s*\d+|"
+    r"\b(?:asset|input|provided|reference|source|uploaded)\b",
+    re.I,
+)
+TARGET_OUTPUT_REQUEST = re.compile(
+    r"\b(?:animate|build|compose|create|deliver|depict|draft|generate|make|"
+    r"produce|render|require(?:d|s)?|request(?:ed|s)?)\b",
+    re.I,
+)
+TARGET_OUTPUT_COORDINATION = re.compile(
+    r"(?:\b(?:and|plus)|,)\s+(?:a|an|another|the)?\s*$|"
+    r"\b(?:animate|build|compose|create|deliver|depict|draft|generate|make|"
+    r"produce|render)\b(?:\s+(?:a|an|another|the|[\w-]+)){0,5}\s*$",
     re.I,
 )
 TARGET_PHRASE_BREAKS = {
-    "after", "as", "at", "before", "during", "in", "inside", "near", "on",
-    "outside", "that", "under", "when", "where", "which", "while", "who",
+    "after", "as", "at", "before", "during", "for", "in", "inside",
+    "instead", "near", "on", "outside", "rather", "that", "than",
+    "under", "versus", "vs", "when", "where", "which", "while", "who",
     "with",
+}
+TARGET_ALTERNATIVE = "or"
+MAX_EXPLICIT_TARGET_REQUIREMENTS = 8
+TARGET_IDENTITY_MARKERS = {"call", "nam"}
+TARGET_PURPOSE_VERBS = {
+    "advertise", "demonstrate", "encourage", "explain", "promote", "showcase",
+    "support", "teach",
 }
 TARGET_ACTION_BREAKS = {
     "arrive", "carry", "close", "cross", "depart", "drag", "drive", "enter",
@@ -291,20 +321,28 @@ TARGET_ACTION_BREAKS = {
 }
 
 DIRECT_SEQUENCE_BRIDGE = re.compile(
-    r"^\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*(?:and\s+)?"
-    r"(?:(?:then|next|finally|followed by)|(?:before|after))\s+"
+    r"^\s*(?:[.!?。！？，,;:；：]|[-\u2013\u2014]{1,2})?\s*(?:and\s+)?"
+    r"(?:"
+    r"(?:(?:then|next|finally|followed by)|(?:before|after))"
+    r"(?:\s*[.!?。！？，,;:；：]\s*|\s*[-\u2013\u2014]{1,2}\s*|\s+)"
+    r"|(?:in|on)\s+the\s+(?:next|following)\s+"
+    r"(?:beat|shot|moment|phase)"
+    r"(?:\s*[.!?。！？，,;:；：]\s*|\s*[-\u2013\u2014]{1,2}\s*|\s+)"
+    r"|(?:next\s+shot|shot\s+\d+|cut\s+to)"
+    r"(?:\s*[.!?。！？，,;:；：]\s*|\s*[-\u2013\u2014]{1,2}\s*|\s+)"
+    r")"
     r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
     re.I,
 )
 EVENT_SEQUENCE_BRIDGE = re.compile(
-    r"^(?:\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*"
+    r"^(?:\s*(?:[,;:，；：]|[-\u2013\u2014]{1,2})?\s*"
     r"(?:until|once|while|as)\b.{1,240}"
-    r"\b(?:then|next|finally)\b\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*"
-    r"|\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*"
-    r"(?:until|once)\b[^.!?;]{1,120}"
+    r"\b(?:then|next|finally)\b\s*(?:[,;:，；：]|[-\u2013\u2014]{1,2})?\s*"
+    r"|\s*(?:[,;:，；：]|[-\u2013\u2014]{1,2})?\s*"
+    r"(?:until|once)\b[^.!?。！？;；]{1,120}"
     r"(?:"
-    r"[.!?]\s*(?:then\s+)?)"
-    r"|\s*[.!?]\s*(?:after|once)\b[^.!?;]{1,120}[,;:]\s*)"
+    r"[.!?。！？]\s*(?:then\s+)?)"
+    r"|\s*[.!?。！？]\s*(?:after|once)\b[^.!?。！？;；]{1,120}[,;:，；：]\s*)"
     r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
     re.I,
 )
@@ -322,7 +360,12 @@ TRAILING_SIMULTANEOUS_CUE = re.compile(
     re.I,
 )
 NEGATED_PREFIX = re.compile(
-    r"\b(no|not|never|without|do not|does not|must not|nothing from)\b[^.;,]{0,18}$",
+    r"\b(?:no|not|never|without|do not|does not|must not|nothing from|"
+    r"cannot|can['\u2019]t|could not|couldn['\u2019]t|will not|won['\u2019]t|"
+    r"would not|wouldn['\u2019]t|fail(?:s|ed)? to|refus(?:e|es|ed) to|"
+    r"(?:is|are|was|were) (?:completely )?unable to|"
+    r"(?:isn['\u2019]t|aren['\u2019]t|wasn['\u2019]t|weren['\u2019]t) able to)"
+    r"\b[^.;,]{0,24}$",
     re.I,
 )
 SCOPED_EXCLUSION = re.compile(
@@ -330,16 +373,21 @@ SCOPED_EXCLUSION = re.compile(
     re.I,
 )
 NEGATION_RESET = re.compile(
-    r"\b(but|however|instead|except)\b|"
+    r"\b(?:not\s+only|but|however|instead|except)\b|"
     r"(?:[,:]\s*|\band\s+|\bthen\s+)(?:then\s+)?"
     r"(?:use\b(?!\s+of\b)|keep\b|preserve\b|retain\b|include\b|add\b|"
-    r"make\b|light\b(?!\s+of\b)|illuminate\b)",
+    r"animate\b|create\b|depict\b|feature\b|generate\b|make\b|portray\b|"
+    r"render\b|show\b|star\b|light\b(?!\s+of\b)|illuminate\b)",
     re.I,
 )
 DOUBLE_NEGATED_EXCLUSION = re.compile(
     r"\b(?:do not|does not|must not|will not|should not|can(?:not| not)|never|"
     r"don['\u2019]t|doesn['\u2019]t|mustn['\u2019]t|won['\u2019]t|"
     r"shouldn['\u2019]t|can['\u2019]t)\s+(?:ignore|exclude)\b",
+    re.I,
+)
+TARGET_NEGATED_ALTERNATIVE = re.compile(
+    r"\b(?:rather\s+than|instead\s+of)\b[^,.;!?。！？；]{0,80}$",
     re.I,
 )
 
@@ -354,6 +402,7 @@ OPPOSITE_ACTIONS = {
         ("approach", "retreat"),
     )
 }
+OPPOSITE_ACTION_TERMS = frozenset().union(*OPPOSITE_ACTIONS)
 ACTION_MODIFIERS = {
     "abruptly", "carefully", "deliberately", "gently", "immediately",
     "now", "quietly", "quickly", "slowly", "suddenly",
@@ -509,28 +558,189 @@ def structural_contract_terms(text: str) -> frozenset[str]:
 
 
 @lru_cache(maxsize=4096)
-def target_trace_terms(text: str) -> frozenset[str]:
-    """Return non-structural brief material that the prompt must carry."""
-    return frozenset(
-        trace_terms(text) - structural_contract_terms(text) - TARGET_CONTROL_TERMS
-    )
+def affirmative_trace_terms(text: str) -> frozenset[str]:
+    """Return unquoted lexical evidence asserted positively by the text."""
+    terms: set[str] = set()
+    for match in TOKEN.finditer(text):
+        if position_is_quoted(text, match.start()) or match_is_negated(
+            text, match.start()
+        ):
+            continue
+        local_start = max(
+            text.rfind(mark, 0, match.start())
+            for mark in ",.;!?。！？；\n"
+        ) + 1
+        if TARGET_NEGATED_ALTERNATIVE.search(text[local_start:match.start()]):
+            continue
+        terms.update(
+            token
+            for token in lexical_tokens(match.group(0))
+            if len(token) > 2
+            and token not in FUNCTION_WORDS
+            and token not in PRODUCTION_GENERIC
+            and token not in TRACE_GENERIC
+        )
+    return frozenset(terms)
 
 
 @lru_cache(maxsize=4096)
-def explicit_target_requirements(text: str) -> frozenset[str]:
-    """Extract a bounded target phrase from common production-brief grammar.
+def target_trace_terms(text: str) -> frozenset[str]:
+    """Return affirmative, non-structural material the prompt must carry."""
+    return frozenset(
+        affirmative_trace_terms(text)
+        - structural_contract_terms(text)
+        - TARGET_CONTROL_TERMS
+    )
 
-    This is intentionally lexical rather than pretending to be a full parser.
-    It gives an explicit ``animation of X`` / ``take of X`` target independent
-    authority over format contracts and stops at the first action or scene
-    modifier. Hyphenated modifiers remain requirements alongside the head noun.
+
+def _bounded_target_group(
+    tokens: list[str],
+    protected_heads: tuple[str, ...] = (),
+) -> frozenset[str]:
+    """Bound dense targets without dropping a grammatical identity head.
+
+    The final token is not necessarily the subject head: ``surgeon named Mara``
+    ends in the name. Preserve the noun immediately before an identity marker as
+    well as the final identity token, then spend the remaining budget on the
+    opening attributes.
     """
-    match = EXPLICIT_TARGET_INTRO.search(text)
-    if not match:
-        return frozenset()
+    if len(tokens) <= MAX_EXPLICIT_TARGET_REQUIREMENTS:
+        return frozenset(tokens)
+    essentials = list(dict.fromkeys((*protected_heads, tokens[-1])))
+    opening_budget = max(0, MAX_EXPLICIT_TARGET_REQUIREMENTS - len(essentials))
+    bounded = list(tokens[:opening_budget])
+    for token in essentials:
+        if token not in bounded:
+            bounded.append(token)
+    return frozenset(bounded[:MAX_EXPLICIT_TARGET_REQUIREMENTS])
+
+
+def _target_clause_ranges(text: str) -> tuple[tuple[int, int], ...]:
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    for boundary in TARGET_STRONG_BOUNDARY.finditer(text):
+        if start < boundary.start():
+            ranges.append((start, boundary.start()))
+        start = boundary.end()
+    if start < len(text):
+        ranges.append((start, len(text)))
+    return tuple(ranges)
+
+
+def _candidate_is_reference_description(
+    text: str,
+    match: re.Match[str],
+    clause_start: int,
+) -> bool:
+    """Reject source/asset descriptions unless an output request owns them."""
+    prefix = text[clause_start:match.start()]
+    markers = list(TARGET_ASSET_MARKER.finditer(prefix))
+    if not markers:
+        return False
+    requests = list(TARGET_OUTPUT_REQUEST.finditer(prefix))
+    latest_marker = markers[-1]
+    if requests and requests[-1].start() > latest_marker.start():
+        return False
+    if requests:
+        between = prefix[requests[-1].end():latest_marker.start()]
+        if re.fullmatch(r"\s+(?:a|an|another|the)?\s*", between, re.I):
+            # ``create a reference image`` requests that output; ``generate
+            # from the reference image`` describes an input.
+            return False
+    return True
+
+
+def _candidate_is_coordinated(
+    text: str,
+    previous: re.Match[str],
+    current: re.Match[str],
+) -> bool:
+    tail = text[previous.end():current.start()]
+    return TARGET_OUTPUT_COORDINATION.search(tail) is not None
+
+
+def _eligible_target_intros(
+    text: str,
+    clause_start: int,
+    clause_end: int,
+) -> tuple[re.Match[str], ...]:
+    production = [
+        match
+        for match in PRODUCTION_TARGET_INTRO.finditer(
+            text, clause_start, clause_end
+        )
+        if not _candidate_is_reference_description(text, match, clause_start)
+    ]
+    eligible: list[re.Match[str]] = []
+    for match in production:
+        if not eligible or _candidate_is_coordinated(text, eligible[-1], match):
+            eligible.append(match)
+    if eligible:
+        return tuple(eligible)
+
+    depiction = [
+        match
+        for match in DEPICTION_TARGET_INTRO.finditer(
+            text, clause_start, clause_end
+        )
+        if not _candidate_is_reference_description(text, match, clause_start)
+    ]
+    for match in depiction:
+        if not eligible or _candidate_is_coordinated(text, eligible[-1], match):
+            eligible.append(match)
+    return tuple(eligible)
+
+
+def _mandatory_target_texts(text: str) -> tuple[str, ...]:
+    """Collect every mandatory output target, excluding described assets."""
+    targets: list[str] = []
+    for clause_start, clause_end in _target_clause_ranges(text):
+        intros = _eligible_target_intros(text, clause_start, clause_end)
+        for index, match in enumerate(intros):
+            target_end = clause_end
+            boundary = TARGET_INLINE_BOUNDARY.search(text, match.end(), clause_end)
+            if boundary:
+                target_end = boundary.start()
+            if index + 1 < len(intros):
+                target_end = min(target_end, intros[index + 1].start())
+            target = text[match.end():target_end]
+            target = re.sub(
+                r"\b(?:and|plus)\s+(?:a|an|another|the)?\s*$",
+                "",
+                target,
+                flags=re.I,
+            ).strip()
+            if target:
+                targets.append(target)
+    return tuple(targets)
+
+
+def _target_groups_from_text(
+    target: str,
+    structural: frozenset[str],
+) -> tuple[frozenset[str], ...]:
+    groups: list[frozenset[str]] = []
     requirements: list[str] = []
-    structural = structural_contract_terms(text)
-    for token in lexical_tokens(match.group("target")):
+    protected_heads: list[str] = []
+    target_tokens = lexical_tokens(target)
+    for index, token in enumerate(target_tokens):
+        if token == TARGET_ALTERNATIVE and requirements:
+            groups.append(
+                _bounded_target_group(requirements, tuple(protected_heads))
+            )
+            requirements = []
+            protected_heads = []
+            continue
+        if token in TARGET_IDENTITY_MARKERS:
+            if requirements:
+                protected_heads.append(requirements[-1])
+            continue
+        if (
+            token == "to"
+            and index + 1 < len(target_tokens)
+            and target_tokens[index + 1] in TARGET_PURPOSE_VERBS
+        ):
+            break
         if requirements and (
             token in TARGET_PHRASE_BREAKS or token in TARGET_ACTION_BREAKS
         ):
@@ -545,9 +755,420 @@ def explicit_target_requirements(text: str) -> frozenset[str]:
         ):
             continue
         requirements.append(token)
-        if len(requirements) == 3:
+    if requirements:
+        groups.append(_bounded_target_group(requirements, tuple(protected_heads)))
+    return tuple(group for group in groups if group)
+
+
+@lru_cache(maxsize=4096)
+def explicit_target_requirement_clauses(
+    text: str,
+) -> tuple[tuple[frozenset[str], ...], ...]:
+    """Return mandatory clauses, each containing its acceptable alternatives."""
+    structural = structural_contract_terms(text)
+    return tuple(
+        groups
+        for target in _mandatory_target_texts(text)
+        if (groups := _target_groups_from_text(target, structural))
+    )
+
+
+@lru_cache(maxsize=4096)
+def explicit_target_requirement_groups(text: str) -> tuple[frozenset[str], ...]:
+    """Flatten mandatory target clauses for diagnostics and compatibility.
+
+    This is intentionally lexical rather than pretending to be a full parser.
+    ``explicit_target_requirement_clauses`` preserves the distinction between
+    mandatory outputs and alternatives within one output; this helper exposes
+    the historical flat shape used by tests and diagnostics.
+    """
+    return tuple(
+        group
+        for clause in explicit_target_requirement_clauses(text)
+        for group in clause
+    )
+
+
+@lru_cache(maxsize=4096)
+def explicit_target_requirements(text: str) -> frozenset[str]:
+    """Return the union of explicit target terms for diagnostics and callers."""
+    groups = explicit_target_requirement_groups(text)
+    return frozenset().union(*groups) if groups else frozenset()
+
+
+ACTION_SURFACE_ALIASES = {
+    "latch": "close",
+    "latched": "close",
+    "latches": "close",
+    "latching": "close",
+    "seal": "close",
+    "sealed": "close",
+    "sealing": "close",
+    "seals": "close",
+    "unlatch": "open",
+    "unlatched": "open",
+    "unlatches": "open",
+    "unlatching": "open",
+    "unseal": "open",
+    "unsealed": "open",
+    "unsealing": "open",
+    "unseals": "open",
+}
+OBJECT_PRONOUNS = {"it", "them", "this", "that", "these", "those"}
+OBJECT_DETERMINERS = {
+    "a", "an", "her", "his", "its", "my", "our", "the", "their",
+    "this", "these", "those", "your",
+}
+OBJECT_BREAKS = {
+    "above", "across", "against", "and", "around", "as", "below", "behind",
+    "beside", "between", "but", "by", "during", "for", "in", "inside",
+    "instead", "near", "on", "or", "outside", "then", "under", "when",
+    "while", "with",
+}
+LEADING_OBJECT_PREPOSITIONS = {
+    "at", "from", "into", "through", "to", "toward", "towards",
+}
+MOVEMENT_ACTIONS = {
+    "approach", "arrive", "depart", "enter", "exit", "retreat",
+}
+ANTECEDENT_ACTIONS = TARGET_ACTION_BREAKS | OPPOSITE_ACTION_TERMS | {
+    "bring", "carry", "deliver", "drag", "grip", "lock", "pick", "place",
+    "set", "take", "transport", "unlock",
+}
+NON_OBJECT_FOLLOWERS = {
+    "are", "be", "become", "break", "fail", "fall", "hang", "is", "lie",
+    "look", "remain", "rest", "sit", "stand", "swim", "was", "were",
+}
+ACTION_AUXILIARIES = {
+    "be", "been", "being", "can", "could", "did", "do", "does", "get", "got",
+    "had", "has", "have", "is", "may", "might", "must", "should", "was",
+    "were", "will", "would",
+}
+ACTION_OBJECT_PUNCTUATION = re.compile(r"[,.;!?。！？，；\n]")
+ACTION_CLAUSE_PUNCTUATION = re.compile(r"[.;!?。！？；\n]")
+
+
+def _canonical_action_token(surface: str) -> str:
+    lowered = surface.lower().replace("’", "'").strip("'")
+    if lowered in ACTION_SURFACE_ALIASES:
+        return ACTION_SURFACE_ALIASES[lowered]
+    canonical = lexical_tokens(surface)
+    return canonical[0] if len(canonical) == 1 else ""
+
+
+def _action_content_term(token: str) -> bool:
+    return (
+        len(token) > 2
+        and token not in FUNCTION_WORDS
+        and token not in PRODUCTION_GENERIC
+        and token not in TRACE_GENERIC
+        and token not in TARGET_CONTROL_TERMS
+        and token not in ACTION_MODIFIERS
+        and token not in ANTECEDENT_ACTIONS
+        and not token.endswith("ly")
+    )
+
+
+def _compact_object_identity(tokens: list[str]) -> tuple[str, ...]:
+    """Keep discriminative opening modifiers plus the grammatical head noun."""
+    if len(tokens) <= 8:
+        return tuple(tokens)
+    return tuple(tokens[:7] + [tokens[-1]])
+
+
+def _direct_object_identity(
+    text: str,
+    token_matches: list[re.Match[str]],
+    action_index: int,
+    canonical_action: str,
+) -> tuple[tuple[str, ...], bool]:
+    direct_terms: list[str] = []
+    pronoun_object = False
+    cursor = token_matches[action_index].end()
+    inspected = 0
+    for following in token_matches[action_index + 1:]:
+        if (
+            inspected >= 10
+            or ACTION_OBJECT_PUNCTUATION.search(text[cursor:following.start()])
+        ):
             break
-    return frozenset(requirements)
+        inspected += 1
+        following_tokens = lexical_tokens(following.group(0))
+        if len(following_tokens) != 1:
+            break
+        token = following_tokens[0]
+        if _canonical_action_token(following.group(0)) in OPPOSITE_ACTION_TERMS:
+            break
+        if token in OBJECT_PRONOUNS and not direct_terms:
+            pronoun_object = True
+            cursor = following.end()
+            continue
+        if token in LEADING_OBJECT_PREPOSITIONS and not direct_terms:
+            if canonical_action in MOVEMENT_ACTIONS:
+                cursor = following.end()
+                continue
+            break
+        if token in OBJECT_BREAKS:
+            break
+        if _action_content_term(token):
+            direct_terms.append(token)
+        cursor = following.end()
+    return _compact_object_identity(direct_terms), pronoun_object
+
+
+def _local_antecedent_start(text: str, action_start: int) -> int:
+    boundaries = list(ACTION_CLAUSE_PUNCTUATION.finditer(text, 0, action_start))
+    if not boundaries:
+        return 0
+    local_start = boundaries[-1].end()
+    prefix = text[local_start:action_start]
+    # A cue-led new sentence may refer to the explicit object in the immediately
+    # preceding event, but never search the whole prompt for a convenient noun.
+    if re.match(r"\s*(?:then|next|finally)\b", prefix, re.I):
+        return boundaries[-2].end() if len(boundaries) >= 2 else 0
+    return local_start
+
+
+def _resolve_pronoun_object(
+    text: str,
+    token_matches: list[re.Match[str]],
+    action_index: int,
+) -> tuple[str, ...]:
+    local_start = _local_antecedent_start(
+        text, token_matches[action_index].start()
+    )
+    for previous_index in range(action_index - 1, -1, -1):
+        previous = token_matches[previous_index]
+        if previous.start() < local_start:
+            break
+        previous_action = _canonical_action_token(previous.group(0))
+        if previous_action not in ANTECEDENT_ACTIONS:
+            continue
+        identity, was_pronoun = _direct_object_identity(
+            text, token_matches, previous_index, previous_action
+        )
+        if identity and not was_pronoun:
+            return identity
+    return ()
+
+
+def _subject_object_identity(
+    text: str,
+    token_matches: list[re.Match[str]],
+    action_index: int,
+) -> tuple[str, ...]:
+    action_start = token_matches[action_index].start()
+    clause_start = _local_antecedent_start(text, action_start)
+    terms = [
+        token
+        for prior in token_matches[:action_index]
+        if prior.start() >= clause_start
+        for token in lexical_tokens(prior.group(0))
+        if _action_content_term(token)
+    ]
+    return _compact_object_identity(terms)
+
+
+def _ambiguous_alias_is_verbal(
+    text: str,
+    token_matches: list[re.Match[str]],
+    index: int,
+) -> bool:
+    surface = token_matches[index].group(0).lower()
+    if surface not in ACTION_SURFACE_ALIASES:
+        return True
+    previous_surface = token_matches[index - 1].group(0) if index else ""
+    previous = lexical_tokens(previous_surface)
+    previous_token = previous[0] if len(previous) == 1 else ""
+    following_surface = (
+        token_matches[index + 1].group(0)
+        if index + 1 < len(token_matches)
+        else ""
+    )
+    following = lexical_tokens(following_surface)
+    following_token = following[0] if len(following) == 1 else ""
+    following_action = _canonical_action_token(following_surface)
+    if previous_token in {"a", "an", "the"}:
+        return False
+    if following_action in ANTECEDENT_ACTIONS:
+        # ``harbor seal rests`` and ``door latch opens`` are noun phrases.
+        return False
+    if following_token in NON_OBJECT_FOLLOWERS:
+        return False
+    if surface in {"seal", "latch", "unseal", "unlatch"}:
+        clause_prefix = text[
+            _local_antecedent_start(text, token_matches[index].start()):
+            token_matches[index].start()
+        ]
+        return (
+            not clause_prefix.strip()
+            or previous_token
+            in {"and", "can", "could", "must", "next", "please", "should", "then", "to"}
+        )
+    if surface.endswith("ed") and previous_surface.lower().endswith("ly"):
+        return False
+    if (
+        not following_token
+        or following_token in OBJECT_BREAKS
+        or following_token in LEADING_OBJECT_PREPOSITIONS
+    ):
+        return previous_token in {"that", "which", "who"} | ACTION_AUXILIARIES
+    return True
+
+
+def action_mentions(
+    text: str,
+) -> tuple[tuple[str, int, int, bool, tuple[str, ...]], ...]:
+    """Extract bounded, polarity-aware action/object mentions.
+
+    The object binding prevents a required case action from being satisfied or
+    reversed by an unrelated door action. Negated actions remain available as
+    antecedents for a later ``it``, while quoted dialogue never becomes action
+    evidence.
+    """
+    token_matches = list(TOKEN.finditer(text))
+    mentions: list[dict[str, object]] = []
+
+    for index, match in enumerate(token_matches):
+        canonical_action = _canonical_action_token(match.group(0))
+        if canonical_action not in OPPOSITE_ACTION_TERMS:
+            continue
+        if position_is_quoted(text, match.start()):
+            continue
+        if not _ambiguous_alias_is_verbal(text, token_matches, index):
+            continue
+        previous = token_matches[index - 1] if index else None
+        previous_token = (
+            lexical_tokens(previous.group(0))[0]
+            if previous is not None and lexical_tokens(previous.group(0))
+            else ""
+        )
+        following_match = (
+            token_matches[index + 1] if index + 1 < len(token_matches) else None
+        )
+        following_token = (
+            lexical_tokens(following_match.group(0))[0]
+            if following_match is not None
+            and lexical_tokens(following_match.group(0))
+            else ""
+        )
+        surface_action = match.group(0).lower()
+        finite_third_person = (
+            surface_action.endswith("s") and not surface_action.endswith("ss")
+        )
+        that_relative_clause = (
+            previous_token == "that"
+            and (
+                finite_third_person
+                or following_match is None
+                or following_token
+                in (
+                    OBJECT_BREAKS
+                    | LEADING_OBJECT_PREPOSITIONS
+                    | ACTION_MODIFIERS
+                    | OBJECT_DETERMINERS
+                )
+            )
+        )
+        relative_subject = (
+            previous_token in {"which", "who"} or that_relative_clause
+        )
+        demonstrative_subject = (
+            previous_token in {"this", "that", "these", "those"}
+            and (
+                finite_third_person
+                or following_token
+                in (OBJECT_DETERMINERS | {"that"})
+            )
+        )
+        if (
+            previous_token in {"a", "an", "the", "this", "that", "these", "those"}
+            and not relative_subject
+            and not demonstrative_subject
+        ):
+            # ``the open case`` is a state adjective, not an instruction to open.
+            # ``the case that closes`` is a finite relative clause and remains
+            # real action evidence. Demonstratives can instead be pronoun
+            # subjects: ``This opens ...`` and ``Those close the doors``.
+            continue
+
+        object_terms, pronoun_object = _direct_object_identity(
+            text, token_matches, index, canonical_action
+        )
+        if not object_terms:
+            if pronoun_object:
+                object_terms = _resolve_pronoun_object(text, token_matches, index)
+            else:
+                object_terms = _subject_object_identity(
+                    text, token_matches, index
+                )
+
+        mentions.append({
+            "action": canonical_action,
+            "start": match.start(),
+            "end": match.end(),
+            "positive": not match_is_negated(text, match.start()),
+            "objects": object_terms,
+            "pronoun": pronoun_object,
+        })
+
+    return tuple(
+        (
+            str(mention["action"]),
+            int(mention["start"]),
+            int(mention["end"]),
+            bool(mention["positive"]),
+            tuple(mention["objects"]),
+        )
+        for mention in mentions
+    )
+
+
+def reversed_action_requirements(brief: str, prompt: str) -> tuple[str, ...]:
+    """Return brief actions replaced solely by their explicit opposites.
+
+    Shared subjects, props, colours, and locations cannot compensate for an
+    inverted requested endpoint. A prompt that still contains the requested
+    action is not rejected here: it may be describing a legitimate sequence.
+    """
+    brief_mentions = [mention for mention in action_mentions(brief) if mention[3]]
+    prompt_mentions = [mention for mention in action_mentions(prompt) if mention[3]]
+    reversals: set[str] = set()
+
+    def same_object(
+        left: tuple[str, int, int, bool, tuple[str, ...]],
+        right: tuple[str, int, int, bool, tuple[str, ...]],
+    ) -> bool:
+        left_objects, right_objects = left[4], right[4]
+        if not left_objects and not right_objects:
+            return True
+        if not left_objects or not right_objects:
+            return False
+        # The final token is the local head noun. Required modifiers are also
+        # identity-bearing: opening a blue case cannot satisfy a requested red
+        # case merely because the prompt closes the red one elsewhere.
+        return (
+            left_objects[-1] == right_objects[-1]
+            and set(left_objects[:-1]).issubset(right_objects[:-1])
+        )
+
+    for pair in OPPOSITE_ACTIONS:
+        for brief_mention in (
+            mention for mention in brief_mentions if mention[0] in pair
+        ):
+            required_action = brief_mention[0]
+            opposite_action = next(iter(pair - {required_action}))
+            required_survives = any(
+                mention[0] == required_action and same_object(brief_mention, mention)
+                for mention in prompt_mentions
+            )
+            opposite_survives = any(
+                mention[0] == opposite_action and same_object(brief_mention, mention)
+                for mention in prompt_mentions
+            )
+            if not required_survives and opposite_survives:
+                reversals.add(f"{required_action}->{opposite_action}")
+    return tuple(sorted(reversals))
 
 
 def shot_count_contract(text: str) -> int | None:
@@ -592,15 +1213,29 @@ def semantic_trace_anchors(brief: str, prompt: str) -> tuple[str, ...]:
 def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
     """Require target evidence independently from structural contracts."""
     brief_terms = target_trace_terms(brief)
-    prompt_terms = trace_terms(prompt)
+    prompt_terms = affirmative_trace_terms(prompt)
     matched = sorted(brief_terms & prompt_terms)
     semantic = semantic_trace_anchors(brief, prompt)
-    explicit_targets = explicit_target_requirements(brief)
-    missing_targets = sorted(explicit_targets - prompt_terms)
-    if missing_targets:
+    explicit_target_clauses = explicit_target_requirement_clauses(brief)
+    missing_clauses = [
+        clause
+        for clause in explicit_target_clauses
+        if not any(group.issubset(prompt_terms) for group in clause)
+    ]
+    if missing_clauses:
+        closest_group = min(
+            (group for clause in missing_clauses for group in clause),
+            key=lambda group: (len(group - prompt_terms), sorted(group)),
+        )
+        missing_targets = sorted(closest_group - prompt_terms)
         return 0.0, (
             "requested target changed or disappeared; missing: "
             + ", ".join(missing_targets)
+        )
+    action_reversals = reversed_action_requirements(brief, prompt)
+    if action_reversals:
+        return 0.0, (
+            "requested action reversed: " + ", ".join(action_reversals)
         )
     evidence_count = len(matched) + len(semantic)
     if not brief_terms and not semantic:
@@ -799,7 +1434,7 @@ def directive_pair_is_sequenced(
     # A simultaneity qualifier can follow the final directive, outside its
     # regex match. Inspect only the remainder of its local clause so an
     # unrelated cue in a later sentence cannot poison a valid transition.
-    local_end_match = re.search(r"[.;!?\n]", text[right_end:])
+    local_end_match = re.search(r"[.;!?。！？；\n]", text[right_end:])
     local_end = (
         right_end + local_end_match.start()
         if local_end_match
