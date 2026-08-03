@@ -4936,8 +4936,16 @@ def _promote_staged_install_bound(
     quarantine = skills_dir / str(transaction["quarantine_name"])
     if _path_exists(quarantine):
         raise RuntimeError("installer quarantine was not recovered")
+    # A completed stage remains private until the last promotion recheck.  The
+    # runtime tree is made traversable only after the transaction has committed
+    # to this exact stage, so staging never widens the source tree or exposes a
+    # half-built payload.
     expected_stage = _inspect_owned_stage(
-        stage, transaction, transaction_raw, require_complete=True
+        stage,
+        transaction,
+        transaction_raw,
+        require_complete=True,
+        directory_mode=PORTABLE_DIRECTORY_MODE,
     )
     old_snapshot = _snapshot_from_transaction(transaction)
     if old_snapshot is None:
@@ -4952,9 +4960,23 @@ def _promote_staged_install_bound(
         )
     try:
         _assert_snapshot_equal(
-            _inspect_owned_stage(stage, transaction, transaction_raw, require_complete=True),
+            _inspect_owned_stage(
+                stage,
+                transaction,
+                transaction_raw,
+                require_complete=True,
+                directory_mode=PORTABLE_DIRECTORY_MODE,
+            ),
             expected_stage,
             "owned stage",
+        )
+        _normalize_installed_directory_modes(stage, expected_stage)
+        _assert_snapshot_equal(
+            _inspect_owned_stage(
+                stage, transaction, transaction_raw, require_complete=True
+            ),
+            expected_stage,
+            "runtime-normalized stage",
         )
         _rename_directory(stage, destination)
         _inspect_owned_stage(
@@ -5013,7 +5035,11 @@ def _promote_staged_install_bound(
             )
         if _path_exists(stage):
             remaining_stage = _inspect_owned_stage(
-                stage, transaction, transaction_raw, require_complete=False
+                stage,
+                transaction,
+                transaction_raw,
+                require_complete=True,
+                require_portable_modes=False,
             )
             _quarantine_and_delete(
                 stage, remaining_stage, transaction, transaction_raw, "stage"
@@ -5202,9 +5228,10 @@ def stage_validated_install(
             require_complete=True,
             directory_mode=PORTABLE_DIRECTORY_MODE,
         )
-        _normalize_installed_directory_modes(stage, complete_stage)
-        _inspect_owned_stage(
-            stage, transaction, transaction_raw, require_complete=True
+        _assert_snapshot_equal(
+            _capture_path_snapshot(stage),
+            complete_stage,
+            "private completed stage",
         )
         return stage
     except Exception as stage_error:

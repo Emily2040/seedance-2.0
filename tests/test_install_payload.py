@@ -189,6 +189,10 @@ class InstallPayloadTests(unittest.TestCase):
                 directory.chmod(0o777)
             for file_path in (path for path in source.rglob("*") if path.is_file()):
                 file_path.chmod(0o777)
+            source_modes = {
+                path.relative_to(source).as_posix(): stat.S_IMODE(path.lstat().st_mode)
+                for path in [source, *source.rglob("*")]
+            }
 
             stage = installer.stage_validated_install(source, skills_dir, contract)
             self.assertEqual(
@@ -199,19 +203,47 @@ class InstallPayloadTests(unittest.TestCase):
                 expected = (
                     installer.PORTABLE_DIRECTORY_MODE
                     if candidate.is_dir()
-                    else installer.PORTABLE_FILE_MODE
+                    else (
+                        installer.PORTABLE_FILE_MODE
+                        if candidate.name
+                        in {installer.PROVENANCE_MARKER, installer.COMPLETION_MARKER}
+                        else installer.INSTALLED_PAYLOAD_FILE_MODE
+                    )
                 )
                 self.assertEqual(stat.S_IMODE(candidate.lstat().st_mode), expected)
+            self.assertEqual(
+                {
+                    path.relative_to(source).as_posix(): stat.S_IMODE(
+                        path.lstat().st_mode
+                    )
+                    for path in [source, *source.rglob("*")]
+                },
+                source_modes,
+            )
 
             destination = skills_dir / installer.SKILL_NAME
             installer.promote_staged_install(stage, destination, skills_dir, contract)
             for candidate in [destination, *destination.rglob("*")]:
                 expected = (
-                    installer.PORTABLE_DIRECTORY_MODE
+                    installer.INSTALLED_PAYLOAD_DIRECTORY_MODE
                     if candidate.is_dir()
-                    else installer.PORTABLE_FILE_MODE
+                    else (
+                        installer.PORTABLE_FILE_MODE
+                        if candidate.name
+                        in {installer.PROVENANCE_MARKER, installer.COMPLETION_MARKER}
+                        else installer.INSTALLED_PAYLOAD_FILE_MODE
+                    )
                 )
                 self.assertEqual(stat.S_IMODE(candidate.lstat().st_mode), expected)
+            self.assertEqual(
+                {
+                    path.relative_to(source).as_posix(): stat.S_IMODE(
+                        path.lstat().st_mode
+                    )
+                    for path in [source, *source.rglob("*")]
+                },
+                source_modes,
+            )
 
     @unittest.skipUnless(
         os.name != "nt" and hasattr(os, "setxattr"),
