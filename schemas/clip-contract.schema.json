@@ -46,7 +46,7 @@
     "observed_start_state": {"type": ["object", "null"]},
     "observed_end_state": {"type": ["object", "null"]},
     "continuity_locks": {"type": "array"},
-    "allowed_changes": {"type": "array"},
+    "allowed_changes": {"type": "array", "items": {"type": "string"}},
     "status": {"enum": ["planned", "ready", "generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]}
   },
   "allOf": [

@@ -6,6 +6,7 @@ import json
 import os
 import re
 import unicodedata
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from pathlib import Path
 
@@ -269,6 +270,10 @@ WAIVER_PREDICATE_WORDS = (
 TEMPORAL_CONTEXT_LEADERS = {"after", "before", "during", "following"}
 TEMPORAL_CONTEXT_NOUNS = {"cut", "jump", "scene", "sequence", "shot", "transition"}
 ENTITY_LIST_CONNECTORS = {"and", "or"}
+MAX_WAIVER_TOKENS = 1024
+MAX_IDENTITY_MATCH_CANDIDATES = 65_536
+MAX_JSON_COMPARE_NODES = 100_000
+IDENTITY_MATCH_OVERFLOW: IdentityToken = ("internal", "identity-match-overflow")
 
 # A coordinated field list has no predicate before its coordinator (for
 # example, ``wardrobe and product identity may change``). Conversely, a word
@@ -281,6 +286,56 @@ CLAUSE_PREDICATE_WORDS = (
     | PRESERVATION_WORDS
     | NEGATING_CONTRACTION_STEMS
 )
+ALL_CLAUSE_PREDICATE_WORDS = (
+    TRANSITION_CHANGE_WORDS
+    | NEGATION_WORDS
+    | PRESERVATION_WORDS
+    | NEGATING_CONTRACTION_STEMS
+)
+MODAL_OR_NONIMPERATIVE_PREFIX_WORDS = {
+    "allowed",
+    "allows",
+    "are",
+    "be",
+    "being",
+    "can",
+    "changed",
+    "changes",
+    "changing",
+    "deviation",
+    "different",
+    "drift",
+    "drifted",
+    "drifts",
+    "is",
+    "may",
+    "must",
+    "mismatch",
+    "mismatched",
+    "new",
+    "permitted",
+    "replacement",
+    "variation",
+    "will",
+}
+SERIAL_REDUNDANT_CONTEXT_WORDS = {
+    "explicit",
+    "explicitly",
+    "global",
+    "globally",
+    "intentional",
+    "intentionally",
+}
+SERIAL_AMBIGUOUS_DETERMINERS = {"all", "the", "this"}
+LINKING_PREPOSITION_HEADS = {
+    "change",
+    "changes",
+    "changing",
+    "shift",
+    "switch",
+    "transition",
+    "variation",
+}
 
 
 def load(path: Path) -> dict:
@@ -290,6 +345,29 @@ def load(path: Path) -> dict:
 def normalize_phrase(value: object) -> str:
     normalized = unicodedata.normalize("NFKC", str(value)).casefold()
     return " ".join(re.findall(r"[^\W_]+", normalized, flags=re.UNICODE))
+
+
+def clause_connector_spans(tokens: list[str]) -> list[tuple[int, int]]:
+    """Return single- and multi-token field-clause coordinators."""
+    spans: list[tuple[int, int]] = []
+    index = 0
+    while index < len(tokens):
+        if tokens[index : index + 3] == ["as", "well", "as"]:
+            spans.append((index, index + 3))
+            index += 3
+            continue
+        if tokens[index] in ENTITY_LIST_CONNECTORS:
+            spans.append((index, index + 1))
+        index += 1
+    return spans
+
+
+def has_clause_connector(tokens: list[str], start: int, end: int) -> bool:
+    """Return whether a complete connector occurs inside ``[start, end)``."""
+    return any(
+        start <= connector_start and connector_end <= end
+        for connector_start, connector_end in clause_connector_spans(tokens)
+    )
 
 
 def field_phrases(key: str) -> set[str]:
@@ -303,46 +381,168 @@ def mentions_field(text: str, key: str) -> bool:
     return any(f" {phrase} " in padded for phrase in field_phrases(key))
 
 
-def is_scope_fragment(text: object) -> bool:
-    """Return whether a fieldless fragment has explicit scoping grammar."""
+def is_scope_fragment(
+    text: object,
+    identity_aliases: IdentityAliases | None = None,
+    alias_widths: tuple[int, ...] | None = None,
+) -> bool:
+    """Return whether a fieldless fragment is only explicit scope grammar.
+
+    A scoped denial such as ``for guide must remain unchanged`` is a complete
+    anaphoric clause, not a qualifier to glue onto the previous sentence.
+    Known grammar-word identities are excluded before testing predicate words,
+    so a pure suffix such as ``only for May`` remains a scope fragment.
+    """
     tokens = normalize_phrase(text).split()
+    raw_spans, _ambiguous = identity_token_spans(
+        tokens,
+        identity_aliases or {},
+        alias_widths,
+    )
+    spans = [
+        span
+        for span in raw_spans
+        if fieldless_identity_span_is_explicit(tokens, span)
+    ]
+    identity_indexes = {
+        index
+        for start, end, _identities in spans
+        for index in range(start, end)
+    }
+    has_clause_predicate = any(
+        index not in identity_indexes
+        and token in (ALL_CLAUSE_PREDICATE_WORDS | NEGATING_CONTRACTION_STEMS)
+        for index, token in enumerate(tokens)
+    )
     return bool(tokens) and not field_groups(tokens) and bool(
         set(tokens) & QUALIFIER_MODIFIERS
         or tokens[0] in {"for", "of"}
+    ) and not has_clause_predicate
+
+
+def identity_indexes_for_tokens(
+    tokens: list[str],
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> set[int]:
+    """Return aliases that occupy a grammatical identity or temporal slot.
+
+    A spelling match alone is insufficient. If a character is named ``May``,
+    the modal in ``wardrobe may change`` is still grammar, while the first token
+    in ``May wardrobe may change`` is identity data. Polarity parsing therefore
+    excludes only aliases attached to a local field or a bounded temporal
+    phrase. Ambiguous denial/preservation words retain their conservative
+    polarity separately in :func:`clause_field_polarities`.
+    """
+    groups = field_groups(tokens)
+    raw_spans, _ambiguous = identity_token_spans(
+        tokens,
+        identity_aliases,
+        alias_widths,
     )
+    spans = [
+        span
+        for span in raw_spans
+        if not identity_span_is_field_grammar(span, groups, tokens)
+    ]
+    group_starts = tuple(group[0][0] for group in groups)
+    group_ends = tuple(group[-1][1] for group in groups)
+    lexical_identity_indexes = {
+        index
+        for start, end, _identities in spans
+        for index in range(start, end)
+    }
+    return {
+        index
+        for span in spans
+        if is_temporal_identity_span(tokens, span[0], span[1])
+        or any(
+            identity_span_attaches_to_group(
+                tokens,
+                span,
+                groups[group_index],
+                groups,
+                group_index,
+                lexical_identity_indexes,
+            )
+            for group_index in neighboring_field_group_indexes(
+                span,
+                groups,
+                group_starts,
+                group_ends,
+            )
+        )
+        for index in range(span[0], span[1])
+    }
 
 
-def has_completed_field_predicate(text: str) -> bool:
-    """Return whether a comma-left field fragment already has a predicate.
+def has_completed_field_predicate(
+    text: str,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> bool:
+    """Return whether a comma-left field fragment ends in a predicate.
 
     A comma after a completed field clause is a clause boundary. A comma before
     the one shared predicate in ``wardrobe, location, and product identity must
-    not change`` is a list coordinator. Looking for predicate vocabulary only
-    outside recognized field spans keeps field names from deciding this split.
+    not change`` is a list coordinator. Looking only after the final recognized
+    field keeps prefix predicates shared across a following serial list. Every
+    identity span is excluded so ``May`` or ``Change`` cannot create a boundary.
     """
     tokens = normalize_phrase(text).split()
-    groups = field_groups(tokens)
-    if not groups:
+    if len(tokens) > MAX_WAIVER_TOKENS:
         return False
+    _has_predicate, completed_after_field = field_predicate_summary(
+        tokens,
+        field_groups(tokens),
+        identity_aliases,
+        alias_widths,
+    )
+    return completed_after_field
+
+
+def field_predicate_summary(
+    tokens: list[str],
+    groups: list[list[FieldSpan]],
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> tuple[bool, bool]:
+    """Return predicate presence and whether one follows the final field."""
+    if not tokens:
+        return False, False
     occupied = {
         index
         for group in groups
         for start, end, _candidate in group
         for index in range(start, end)
     }
+    occupied.update(
+        identity_indexes_for_tokens(tokens, identity_aliases, alias_widths)
+    )
     predicate_words = (
         TRANSITION_CHANGE_WORDS
         | NEGATION_WORDS
         | PRESERVATION_WORDS
         | NEGATING_CONTRACTION_STEMS
     )
-    return any(
-        index not in occupied and token in predicate_words
+    predicate_indexes = {
+        index
         for index, token in enumerate(tokens)
+        if index not in occupied and token in predicate_words
+    }
+    if not groups:
+        return bool(predicate_indexes), False
+    final_field_end = max(group[-1][1] for group in groups)
+    return bool(predicate_indexes), any(
+        index >= final_field_end for index in predicate_indexes
     )
 
 
-def split_comma_clauses(text: str) -> list[str]:
+def split_comma_clauses(
+    text: str,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> list[str]:
     """Split comma clauses while retaining comma-coordinated field lists.
 
     ``normalize_phrase`` deliberately drops punctuation, so list commas are
@@ -350,51 +550,115 @@ def split_comma_clauses(text: str) -> list[str]:
     preserves every item in both Oxford- and non-Oxford-comma lists without
     merging independent clauses that already carry their own predicate.
     """
-    parts = text.split(",")
-    if len(parts) == 1:
+    raw_parts = text.split(",")
+    if len(raw_parts) == 1:
         stripped = text.strip()
         return [stripped] if normalize_phrase(stripped) else []
 
+    parts = [part.strip() for part in raw_parts]
+    part_tokens = [normalize_phrase(part).split() for part in parts]
+    part_groups = [field_groups(tokens) for tokens in part_tokens]
+    part_field_counts = [
+        sum(len(group) for group in groups) for groups in part_groups
+    ]
+    predicate_summaries = [
+        field_predicate_summary(
+            tokens,
+            groups,
+            identity_aliases,
+            alias_widths,
+        )
+        for tokens, groups in zip(part_tokens, part_groups)
+    ]
+    part_has_connectors = [
+        bool(clause_connector_spans(tokens)) for tokens in part_tokens
+    ]
+    part_starts_connector = [
+        bool(tokens)
+        and (
+            tokens[0] in ENTITY_LIST_CONNECTORS
+            or tokens[:3] == ["as", "well", "as"]
+        )
+        for tokens in part_tokens
+    ]
+    suffix_field_counts = [0] * (len(parts) + 1)
+    suffix_has_connector = [False] * (len(parts) + 1)
+    for index in range(len(parts) - 1, -1, -1):
+        suffix_field_counts[index] = (
+            part_field_counts[index] + suffix_field_counts[index + 1]
+        )
+        suffix_has_connector[index] = (
+            part_has_connectors[index] or suffix_has_connector[index + 1]
+        )
+
     clauses: list[str] = []
-    current = parts[0].strip()
-    for part_index, raw_part in enumerate(parts[1:], start=1):
-        right = raw_part.strip()
-        if not normalize_phrase(right):
+    current_parts: list[str] = []
+    current_has_field = False
+    current_completed = False
+    for part_index, right in enumerate(parts):
+        if not part_tokens[part_index]:
             continue
-        remainder = ",".join(parts[part_index:])
-        right_starts_connector = bool(
-            re.match(r"^(?:and|or|as\s+well\s+as)\b", right, flags=re.IGNORECASE)
-        )
-        current_has_field = bool(field_groups(normalize_phrase(current).split()))
-        remainder_groups = field_groups(normalize_phrase(remainder).split())
-        remainder_field_count = sum(len(group) for group in remainder_groups)
-        remainder_has_connector = bool(
-            re.search(
-                r"\b(?:and|or|as\s+well\s+as)\b",
-                remainder,
-                flags=re.IGNORECASE,
-            )
-        )
+        right_has_field = part_field_counts[part_index] > 0
+        right_has_predicate, right_completed = predicate_summaries[part_index]
+        if not current_parts:
+            current_parts.append(right)
+            current_has_field = right_has_field
+            current_completed = right_completed
+            continue
         shared_field_list = (
             current_has_field
-            and not has_completed_field_predicate(current)
-            and remainder_field_count >= 2
-            and remainder_has_connector
+            and not current_completed
+            and suffix_field_counts[part_index] >= 1
+            and suffix_has_connector[part_index]
         )
-        if right_starts_connector:
-            current = f"{current} {right}".strip()
+        if part_starts_connector[part_index]:
+            current_parts.append(right)
         elif shared_field_list:
-            current = f"{current} and {right}".strip()
+            current_parts.extend(("and", right))
         else:
-            if normalize_phrase(current):
-                clauses.append(current)
-            current = right
-    if normalize_phrase(current):
-        clauses.append(current)
+            clauses.append(" ".join(current_parts))
+            current_parts = [right]
+            current_has_field = right_has_field
+            current_completed = right_completed
+            continue
+
+        if right_has_field:
+            # The final field is now in this part, so only a predicate after
+            # that field completes the growing clause.
+            current_completed = right_completed
+        elif current_has_field and right_has_predicate:
+            current_completed = True
+        current_has_field = current_has_field or right_has_field
+
+    if current_parts:
+        clauses.append(" ".join(current_parts))
     return clauses
 
 
-def text_segments(text: object) -> list[str]:
+def normalize_clause_punctuation(text: object) -> str:
+    """Fold compatibility punctuation and every Unicode punctuation comma.
+
+    The previous fixed table silently dropped valid comma characters from
+    Armenian, NKo, Ethiopic, Mongolian, Vai, Bamum, Newa, and related scripts.
+    Unicode gives those punctuation characters stable names ending in
+    ``COMMA``; restricting the rule to punctuation categories avoids folding
+    modifier letters or combining marks whose names merely mention a comma.
+    """
+    normalized = unicodedata.normalize("NFKC", str(text))
+    return "".join(
+        ","
+        if unicodedata.category(character).startswith("P")
+        and unicodedata.name(character, "").endswith("COMMA")
+        else character
+        for character in normalized
+    )
+
+
+def text_segments(
+    text: object,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> list[str]:
     """Split independent clauses while preserving attached scope fragments.
 
     Splitting first, then attaching a qualifier avoids regex backtracking at a
@@ -403,38 +667,63 @@ def text_segments(text: object) -> list[str]:
     one. Unknown names remain attached when they carry explicit scope grammar,
     so bounded parsing can reject rather than discard them.
     """
-    # Normalize compatibility punctuation before splitting so fullwidth ASCII
-    # forms follow exactly the same grammar. U+3002 is not compatibility-mapped
-    # by NFKC, so it remains an explicit sentence boundary below.
-    normalized_text = unicodedata.normalize("NFKC", str(text))
+    # U+3002 is not compatibility-mapped by NFKC, so it remains an explicit
+    # sentence boundary below.
+    normalized_text = normalize_clause_punctuation(text)
     hard_segments = re.split(
         r"(?:[.;:!?\r\n\u3002\u2013\u2014]+|\bbut\b|\bhowever\b)",
         normalized_text,
         flags=re.IGNORECASE,
     )
-    raw_segments = [
-        segment
-        for hard_segment in hard_segments
-        for segment in split_comma_clauses(hard_segment)
-        if normalize_phrase(segment)
-    ]
     segments: list[str] = []
-    leading_scope: list[str] = []
-    for segment in raw_segments:
-        if is_scope_fragment(segment):
-            if segments:
-                segments[-1] = f"{segments[-1]} {segment}"
-            else:
-                leading_scope.append(segment)
+    for hard_segment in hard_segments:
+        raw_segments = [
+            segment
+            for segment in split_comma_clauses(
+                hard_segment,
+                identity_aliases,
+                alias_widths,
+            )
+            if normalize_phrase(segment)
+        ]
+        if not raw_segments:
             continue
+
+        local_segments: list[str] = []
+        leading_scope: list[str] = []
+        for index, segment in enumerate(raw_segments):
+            if is_scope_fragment(segment, identity_aliases, alias_widths):
+                # A qualifier at the start of this hard sentence belongs to a
+                # following field in the same sentence. A later qualifier is
+                # postpositive and belongs to the preceding local field. If the
+                # complete hard sentence is only a qualifier (``. Only hero``),
+                # preserve the established cross-boundary trailing shorthand.
+                has_later_field_clause = any(
+                    not is_scope_fragment(
+                        candidate,
+                        identity_aliases,
+                        alias_widths,
+                    )
+                    for candidate in raw_segments[index + 1 :]
+                )
+                if local_segments:
+                    local_segments[-1] = f"{local_segments[-1]} {segment}"
+                elif has_later_field_clause:
+                    leading_scope.append(segment)
+                elif segments:
+                    segments[-1] = f"{segments[-1]} {segment}"
+                else:
+                    leading_scope.append(segment)
+                continue
+            if leading_scope:
+                segment = " ".join((*leading_scope, segment))
+                leading_scope.clear()
+            local_segments.append(segment)
+        segments.extend(local_segments)
         if leading_scope:
-            segment = " ".join((*leading_scope, segment))
-            leading_scope.clear()
-        segments.append(segment)
-    if leading_scope:
-        # A qualifier with no field clause cannot grant a waiver. Keeping it as
-        # its own segment lets whole-entry validation fail closed.
-        segments.append(" ".join(leading_scope))
+            # A qualifier with no field anywhere cannot grant a waiver. Keeping
+            # it as its own segment lets whole-entry validation fail closed.
+            segments.append(" ".join(leading_scope))
     return segments
 
 
@@ -461,7 +750,13 @@ def field_groups(tokens: list[str]) -> list[list[FieldSpan]]:
             continue
         if groups:
             between = tokens[groups[-1][-1][1] : start]
-            if between and set(between) <= FIELD_COORDINATORS:
+            non_articles = [
+                token for token in between if token not in {"a", "an", "the"}
+            ]
+            if between and (
+                set(between) <= FIELD_COORDINATORS
+                or non_articles == ["as", "well", "as"]
+            ):
                 groups[-1].append(mention)
                 occupied_until = end
                 continue
@@ -470,7 +765,75 @@ def field_groups(tokens: list[str]) -> list[list[FieldSpan]]:
     return groups
 
 
-def semantic_token_clauses(text: object) -> list[list[str]]:
+def identity_span_is_field_grammar(
+    span: tuple[int, int, set[IdentityToken]],
+    groups: list[list[FieldSpan]],
+    tokens: list[str] | None = None,
+) -> bool:
+    """Return whether an alias occurrence is wholly inside a known field.
+
+    ``Identity``, ``Phase``, and ``State`` can be legitimate entity aliases,
+    but inside ``product identity``, ``camera phase``, or ``focus state`` they
+    are field grammar. Treating those occurrences as entity data would poison
+    an otherwise global waiver.
+    """
+    start, end, _identities = span
+    inside_field = any(
+        field_start <= start and end <= field_end
+        for group in groups
+        for field_start, field_end, _candidate in group
+    )
+    if not inside_field:
+        return False
+    if tokens is None:
+        return True
+
+    # A complete entity alias may itself spell a field phrase. In
+    # ``Product Identity product identity may change`` the first occurrence is
+    # the entity prefix and the second is field grammar. Preserve only that
+    # prefix occurrence; a lone ``product identity may change`` remains a
+    # global field waiver. Possessive normalization contributes the bounded
+    # ``s`` gap.
+    for group in groups:
+        for field_start, _field_end, _candidate in group:
+            if field_start < end:
+                continue
+            gap = tokens[end:field_start]
+            if gap in ([], ["s"], ["s", "the"]):
+                return False
+    return True
+
+
+def neighboring_field_group_indexes(
+    span: tuple[int, int, set[IdentityToken]],
+    groups: list[list[FieldSpan]],
+    group_starts: tuple[int, ...],
+    group_ends: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Return the only groups a non-overlapping identity span can modify.
+
+    Prefix identities attach to the immediately following field group; suffix
+    identities attach to the immediately preceding one. Binary search avoids
+    testing every identity against every field in a long serial clause.
+    """
+    if not groups:
+        return ()
+    start, end, _identities = span
+    candidates: set[int] = set()
+    preceding = bisect_right(group_ends, start) - 1
+    if preceding >= 0:
+        candidates.add(preceding)
+    following = bisect_left(group_starts, end)
+    if following < len(groups):
+        candidates.add(following)
+    return tuple(sorted(candidates))
+
+
+def semantic_token_clauses(
+    text: object,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> list[list[str]]:
     """Split prose where distinct field predicates cannot share polarity.
 
     Punctuation and contrast conjunctions are hard boundaries. ``while`` and
@@ -480,47 +843,118 @@ def semantic_token_clauses(text: object) -> list[list[str]]:
     change``.
     """
     clauses: list[list[str]] = []
-    for segment in text_segments(text):
+    for segment in text_segments(text, identity_aliases, alias_widths):
         tokens = normalize_phrase(segment).split()
         if not tokens:
             continue
         groups = field_groups(tokens)
         mentions = [mention for group in groups for mention in group]
+        identity_indexes = identity_indexes_for_tokens(
+            tokens,
+            identity_aliases,
+            alias_widths,
+        )
+        connector_spans = [
+            (start, end)
+            for start, end in clause_connector_spans(tokens)
+            if not set(range(start, end)) <= identity_indexes
+        ]
         boundaries = {
-            index
+            index: index + 1
             for index, token in enumerate(tokens)
             if token in HARD_CLAUSE_CONNECTORS
         }
-        for index, token in enumerate(tokens):
-            if token not in {"and", "or"}:
-                continue
+        for connector_start, connector_end in connector_spans:
             clause_start = max(
-                (boundary + 1 for boundary in boundaries if boundary < index),
+                (
+                    boundary_end
+                    for boundary_start, boundary_end in boundaries.items()
+                    if boundary_start < connector_start
+                ),
                 default=0,
             )
             clause_end = min(
-                (boundary for boundary in boundaries if boundary > index),
+                (
+                    boundary_start
+                    for boundary_start in boundaries
+                    if boundary_start > connector_start
+                ),
                 default=len(tokens),
             )
             fields_before = [
-                mention for mention in mentions if clause_start <= mention[0] and mention[1] <= index
+                mention
+                for mention in mentions
+                if clause_start <= mention[0] and mention[1] <= connector_start
             ]
             fields_after = [
-                mention for mention in mentions if index < mention[0] < clause_end
+                mention
+                for mention in mentions
+                if connector_end <= mention[0] < clause_end
             ]
-            if not fields_before or not fields_after:
+            if not fields_before:
                 continue
-            next_field_start = min(mention[0] for mention in fields_after)
-            if not set(tokens[index + 1 : next_field_start]) <= FIELD_COORDINATORS:
+            next_connector = min(
+                (
+                    candidate_start
+                    for candidate_start, _candidate_end in connector_spans
+                    if connector_end <= candidate_start < clause_end
+                ),
+                default=clause_end,
+            )
+
+            def is_event(event_index: int) -> bool:
+                event = tokens[event_index]
+                if event not in ALL_CLAUSE_PREDICATE_WORDS:
+                    return False
+                # An attached identity spelling can never create permission.
+                # If it is also denial/preservation vocabulary, retaining that
+                # polarity is the conservative interpretation.
+                return event_index not in identity_indexes or event in (
+                    NEGATION_WORDS | PRESERVATION_WORDS
+                )
+
+            left_events = [
+                event_index
+                for event_index in range(clause_start, connector_start)
+                if is_event(event_index)
+            ]
+            if not left_events:
                 continue
-            if set(tokens[clause_start:index]) & CLAUSE_PREDICATE_WORDS:
-                boundaries.add(index)
+            first_left_field = min(mention[0] for mention in fields_before)
+            final_left_field = max(mention[1] for mention in fields_before)
+            completed_left_predicate = any(
+                event_index >= final_left_field for event_index in left_events
+            )
+            prefix_left_predicate = any(
+                event_index < first_left_field for event_index in left_events
+            )
+            right_has_local_predicate = any(
+                is_event(event_index)
+                for event_index in range(connector_end, next_connector)
+            )
+            fieldless_denial_tail = (
+                not fields_after
+                and completed_left_predicate
+                and anaphorically_denies_change(
+                    tokens[connector_end:clause_end],
+                    identity_aliases,
+                    alias_widths,
+                )
+            )
+            # A suffix predicate completes the left clause. A prefix predicate
+            # remains shared across a pure serial list, but not when the right
+            # field declares its own prefix or suffix predicate.
+            if completed_left_predicate or (
+                prefix_left_predicate and right_has_local_predicate
+            ):
+                if fields_after or fieldless_denial_tail:
+                    boundaries[connector_start] = connector_end
 
         start = 0
-        for boundary in sorted(boundaries):
-            if tokens[start:boundary]:
-                clauses.append(tokens[start:boundary])
-            start = boundary + 1
+        for boundary_start, boundary_end in sorted(boundaries.items()):
+            if tokens[start:boundary_start]:
+                clauses.append(tokens[start:boundary_start])
+            start = boundary_end
         if tokens[start:]:
             clauses.append(tokens[start:])
     return clauses
@@ -569,23 +1003,11 @@ def groups_share_predicate(
     left: list[FieldSpan],
     right: list[FieldSpan],
     tokens: list[str],
-    identity_aliases: IdentityAliases,
-    alias_widths: tuple[int, ...] | None,
+    identity_indexes: set[int],
 ) -> bool:
     """Recognize a coordinated entity/field list before its shared predicate."""
     start = left[-1][1]
     end = right[0][0]
-    identity_spans, _ambiguous = identity_token_spans(
-        tokens,
-        identity_aliases,
-        alias_widths,
-    )
-    identity_indexes = {
-        index
-        for span_start, span_end, _identities in identity_spans
-        for index in range(span_start, span_end)
-        if start <= index < end
-    }
     between = [
         token
         for index, token in enumerate(tokens[start:end], start=start)
@@ -608,8 +1030,7 @@ def coordinated_field_cluster(
     group: list[FieldSpan],
     groups: list[list[FieldSpan]],
     tokens: list[str],
-    identity_aliases: IdentityAliases,
-    alias_widths: tuple[int, ...] | None,
+    identity_indexes: set[int],
 ) -> list[list[FieldSpan]]:
     """Expand one bound group across an explicit coordinated field list."""
     index = groups.index(group)
@@ -619,16 +1040,14 @@ def coordinated_field_cluster(
         groups[first - 1],
         groups[first],
         tokens,
-        identity_aliases,
-        alias_widths,
+        identity_indexes,
     ):
         first -= 1
     while last + 1 < len(groups) and groups_share_predicate(
         groups[last],
         groups[last + 1],
         tokens,
-        identity_aliases,
-        alias_widths,
+        identity_indexes,
     ):
         last += 1
     return groups[first : last + 1]
@@ -645,10 +1064,16 @@ def clause_field_polarities(
 ]:
     """Bind affirmative and preservation events to their local field groups."""
     groups = field_groups(tokens)
+    identity_indexes = identity_indexes_for_tokens(
+        tokens,
+        identity_aliases,
+        alias_widths,
+    )
     positive_groups: set[tuple[FieldSpan, ...]] = set()
     denied_groups: set[tuple[FieldSpan, ...]] = set()
     for index, token in enumerate(tokens):
-        if token in TRANSITION_CHANGE_WORDS:
+        is_identity_token = index in identity_indexes
+        if token in TRANSITION_CHANGE_WORDS and not is_identity_token:
             group = bound_field_group(index, groups)
             if group is not None:
                 positive_groups.update(
@@ -657,8 +1082,7 @@ def clause_field_polarities(
                         group,
                         groups,
                         tokens,
-                        identity_aliases,
-                        alias_widths,
+                        identity_indexes,
                     )
                 )
         if token in NEGATION_WORDS:
@@ -674,8 +1098,7 @@ def clause_field_polarities(
                         group,
                         groups,
                         tokens,
-                        identity_aliases,
-                        alias_widths,
+                        identity_indexes,
                     )
                 )
         if token in PRESERVATION_WORDS:
@@ -687,13 +1110,15 @@ def clause_field_polarities(
                         group,
                         groups,
                         tokens,
-                        identity_aliases,
-                        alias_widths,
+                        identity_indexes,
                     )
                 )
 
     for index, (left, right) in enumerate(zip(tokens, tokens[1:])):
-        if left not in NEGATING_CONTRACTION_STEMS or right != "t":
+        if (
+            left not in NEGATING_CONTRACTION_STEMS
+            or right != "t"
+        ):
             continue
         group = bound_field_group(index, groups)
         if group is not None:
@@ -703,24 +1128,105 @@ def clause_field_polarities(
                     group,
                     groups,
                     tokens,
-                    identity_aliases,
-                    alias_widths,
+                    identity_indexes,
                 )
             )
     return groups, positive_groups, denied_groups
 
 
-def anaphorically_denies_change(tokens: list[str]) -> bool:
+def anaphorically_denies_change(
+    tokens: list[str],
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> bool:
     """Recognize a fieldless preservation tail without treating prose as NLP."""
-    token_set = set(tokens)
+    identity_indexes = identity_indexes_for_tokens(
+        tokens,
+        identity_aliases,
+        alias_widths,
+    )
+    token_set = {
+        token for index, token in enumerate(tokens) if index not in identity_indexes
+    }
     if token_set & PRESERVATION_WORDS:
         return True
     if any(
         left in NEGATING_CONTRACTION_STEMS and right == "t"
-        for left, right in zip(tokens, tokens[1:])
+        for index, (left, right) in enumerate(zip(tokens, tokens[1:]))
+        if index not in identity_indexes and index + 1 not in identity_indexes
     ):
         return True
     return bool(token_set & NEGATION_WORDS and token_set & TRANSITION_CHANGE_WORDS)
+
+
+def inherited_denial_context(
+    tokens: list[str],
+    key: str,
+    previous_context: str,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> str:
+    """Inherit an omitted field without discarding an explicit tail scope."""
+    raw_spans, _ambiguous = identity_token_spans(
+        tokens,
+        identity_aliases,
+        alias_widths,
+    )
+    spans = [
+        span
+        for span in raw_spans
+        if fieldless_identity_span_is_explicit(tokens, span)
+    ]
+    span_indexes = {
+        index
+        for start, end, _identities in spans
+        for index in range(start, end)
+    }
+    residual_indexes = [
+        index
+        for index, token in enumerate(tokens)
+        if index not in span_indexes and token not in WAIVER_PREDICATE_WORDS
+    ]
+    has_explicit_scope = bool(
+        spans
+        or residual_indexes
+        or set(tokens) & (QUALIFIER_MODIFIERS | {"for", "of"})
+    )
+    if not has_explicit_scope:
+        return previous_context
+
+    field_tokens = normalize_phrase(key).split()
+    if spans and spans[0][0] == 0:
+        insertion = spans[0][1]
+        return " ".join((*tokens[:insertion], *field_tokens, *tokens[insertion:]))
+    return " ".join((*field_tokens, *tokens))
+
+
+def fieldless_identity_span_is_explicit(
+    tokens: list[str],
+    span: tuple[int, int, set[IdentityToken]],
+) -> bool:
+    """Reject predicate-only alias matches as fieldless entity scope.
+
+    Literal names remain explicit. An alias made only of grammar vocabulary
+    needs an entity marker (for/of/only/specifically/exclusively); otherwise
+    ``change is not allowed`` could target a character named ``Change`` rather
+    than inherit the preceding field and entity.
+    """
+    start, end, _identities = span
+    if any(token not in WAIVER_PREDICATE_WORDS for token in tokens[start:end]):
+        return True
+    before = tokens[max(0, start - 2) : start]
+    explicit_before = bool(before) and (
+        before[-1] in (QUALIFIER_MODIFIERS | {"for", "of"})
+        or (
+            len(before) == 2
+            and before[0] in (QUALIFIER_MODIFIERS | {"for", "of"})
+            and before[1] == "the"
+        )
+    )
+    explicit_after = end < len(tokens) and tokens[end] in QUALIFIER_MODIFIERS
+    return explicit_before or explicit_after
 
 
 def analyze_field_entry(
@@ -744,8 +1250,23 @@ def analyze_field_entry(
     unsafe = False
     previous_fields: set[str] = set()
     previous_context = ""
+    if len(normalize_phrase(text).split()) > MAX_WAIVER_TOKENS:
+        return [], [], True
     entry_mentions_key = mentions_field(str(text), key)
-    for tokens in semantic_token_clauses(text):
+    # Validate the unsplit entry first. Otherwise an event-looking unknown
+    # identity inside a serial list can be isolated into one rejected clause
+    # while its syntactically valid siblings still grant a waiver.
+    if entry_mentions_key and has_unresolved_serial_identity_role(
+        text,
+        identity_aliases,
+        alias_widths,
+    ):
+        return [], [], True
+    for tokens in semantic_token_clauses(
+        text,
+        identity_aliases,
+        alias_widths,
+    ):
         groups, positive_groups, denied_groups = clause_field_polarities(
             tokens,
             identity_aliases,
@@ -753,12 +1274,25 @@ def analyze_field_entry(
         )
         if not groups:
             inherited_denial = (
-                key in previous_fields and anaphorically_denies_change(tokens)
+                key in previous_fields
+                and anaphorically_denies_change(
+                    tokens,
+                    identity_aliases,
+                    alias_widths,
+                )
             )
             if inherited_denial:
-                # The omitted field and entity both inherit from the preceding
-                # clause: ``hero wardrobe may change; must remain unchanged``.
-                denials.append(previous_context)
+                # The omitted field inherits. The entity inherits only if the
+                # tail has no explicit or unresolved scope of its own.
+                denials.append(
+                    inherited_denial_context(
+                        tokens,
+                        key,
+                        previous_context,
+                        identity_aliases,
+                        alias_widths,
+                    )
+                )
             if entry_mentions_key and not inherited_denial:
                 unsafe = True
             continue
@@ -777,13 +1311,15 @@ def analyze_field_entry(
             if key not in group_keys:
                 continue
             if group_token in denied_groups:
-                denials.append(current_context)
+                if current_context not in denials:
+                    denials.append(current_context)
             bare_group = allow_bare and current_context in field_phrases(key)
             if (
                 group_token not in denied_groups
                 and (group_token in positive_groups or bare_group)
             ):
-                positive.append(current_context)
+                if current_context not in positive:
+                    positive.append(current_context)
     return positive, denials, unsafe
 
 
@@ -792,35 +1328,92 @@ def identity_token_spans(
     identity_aliases: IdentityAliases,
     alias_widths: tuple[int, ...] | None = None,
 ) -> tuple[list[tuple[int, int, set[IdentityToken]]], bool]:
-    candidates: list[tuple[int, int, str, set[IdentityToken]]] = []
-    widths = alias_widths
-    if widths is None:
-        widths = tuple(
-            sorted(
-                {len(phrase.split()) for phrase in identity_aliases if phrase},
-                reverse=True,
-            )
-        )
-    for width in widths:
-        if not width or width > len(tokens):
+    """Match aliases with a token trie and bounded overlap resolution.
+
+    The former width-by-window matcher repeatedly joined the same token slices
+    and became cubic for inventories containing aliases of every width. A trie
+    visits only viable token prefixes. Candidate overflow returns one internal
+    full-span ambiguity marker so every public waiver path fails closed.
+    """
+    if not tokens or not identity_aliases:
+        return [], False
+
+    allowed_widths = None
+    if alias_widths is not None:
+        allowed_widths = {
+            width for width in alias_widths if 0 < width <= len(tokens)
+        }
+
+    terminal = object()
+    trie: dict[object, object] = {}
+    for phrase, identities in identity_aliases.items():
+        if not phrase or not identities:
             continue
-        for index in range(len(tokens) - width + 1):
-            phrase = " ".join(tokens[index : index + width])
-            identities = identity_aliases.get(phrase)
-            if identities:
-                candidates.append((index, index + width, phrase, identities))
+        phrase_tokens = phrase.split()
+        width = len(phrase_tokens)
+        if width > len(tokens) or (
+            allowed_widths is not None and width not in allowed_widths
+        ):
+            continue
+        node = trie
+        for token in phrase_tokens:
+            child = node.get(token)
+            if not isinstance(child, dict):
+                child = {}
+                node[token] = child
+            node = child
+        node[terminal] = identities
+
+    if not trie:
+        return [], False
+
+    candidates: list[tuple[int, int, set[IdentityToken]]] = []
+    for start in range(len(tokens)):
+        node = trie
+        for end in range(start, len(tokens)):
+            child = node.get(tokens[end])
+            if not isinstance(child, dict):
+                break
+            node = child
+            identities = node.get(terminal)
+            if not isinstance(identities, set) or not identities:
+                continue
+            if len(candidates) >= MAX_IDENTITY_MATCH_CANDIDATES:
+                return [
+                    (0, len(tokens), {IDENTITY_MATCH_OVERFLOW})
+                ], True
+            candidates.append((start, end + 1, identities))
 
     # Resolve overlapping aliases by longest span first. This keeps an ID such
     # as "hero" from also matching inside the distinct ID "super hero".
-    candidates.sort(key=lambda item: (-(item[1] - item[0]), item[0], item[2]))
-    occupied: set[int] = set()
+    candidates.sort(key=lambda item: (-(item[1] - item[0]), item[0]))
+    occupancy_tree = [0] * (len(tokens) + 1)
+
+    def occupied_prefix(end: int) -> int:
+        total = 0
+        while end > 0:
+            total += occupancy_tree[end]
+            end -= end & -end
+        return total
+
+    def range_is_occupied(start: int, end: int) -> bool:
+        return occupied_prefix(end) != occupied_prefix(start)
+
+    def occupy_range(start: int, end: int) -> None:
+        # Selected spans never overlap, so at most len(tokens) point updates are
+        # performed across the complete resolution pass.
+        for point in range(start, end):
+            tree_index = point + 1
+            while tree_index < len(occupancy_tree):
+                occupancy_tree[tree_index] += 1
+                tree_index += tree_index & -tree_index
+
     selected: list[tuple[int, int, set[IdentityToken]]] = []
     ambiguous = False
-    for start, end, _phrase, identities in candidates:
-        span = set(range(start, end))
-        if occupied & span:
+    for start, end, identities in candidates:
+        if range_is_occupied(start, end):
             continue
-        occupied.update(span)
+        occupy_range(start, end)
         if len(identities) > 1:
             ambiguous = True
         selected.append((start, end, identities))
@@ -850,35 +1443,81 @@ def identity_span_attaches_to_group(
     tokens: list[str],
     span: tuple[int, int, set[IdentityToken]],
     group: list[FieldSpan],
+    groups: list[list[FieldSpan]],
+    group_index: int,
     identity_indexes: set[int],
 ) -> bool:
     start, end, _identities = span
     field_start = group[0][0]
     field_end = group[-1][1]
+    previous_field_end = (
+        groups[group_index - 1][-1][1] if group_index > 0 else 0
+    )
+    next_field_start = (
+        groups[group_index + 1][0][0]
+        if group_index + 1 < len(groups)
+        else len(tokens)
+    )
     if is_temporal_identity_span(tokens, start, end):
         return False
 
+    # If an entity's full alias is also a recognized field phrase, its prefix
+    # occurrence appears as the preceding field group. Bind that occurrence to
+    # the following real field instead of discarding both spelling matches.
+    # The actual field occurrence is not a prefix of any later group and stays
+    # suppressed as grammar.
+    collides_with_previous_field = any(
+        field_start <= start and end <= field_end
+        for previous_group in groups[:group_index]
+        for field_start, field_end, _candidate in previous_group
+    )
+    if (
+        collides_with_previous_field
+        and end <= field_start
+        and tokens[end:field_start] in ([], ["s"], ["s", "the"])
+    ):
+        return True
+
+    connector_ends = [
+        index + 1
+        for index in range(previous_field_end, field_start)
+        if tokens[index] in {"and", "or"}
+    ]
+    connector_ends.extend(
+        index + 3
+        for index in range(previous_field_end, max(previous_field_end, field_start - 2))
+        if tokens[index : index + 3] == ["as", "well", "as"]
+    )
+    prefix_floor = (
+        0 if group_index == 0 else max(connector_ends, default=previous_field_end)
+    )
     prefix_tokens = [
         token
         for index, token in enumerate(tokens[start:field_start], start=start)
         if index not in identity_indexes
     ]
-    if end <= field_start and set(prefix_tokens) <= {
-        "and",
-        "as",
-        "exclusively",
-        "for",
-        "of",
-        "only",
-        "or",
-        "s",
-        "specifically",
-        "the",
-        "well",
-    }:
+    prefix_has_local_connector = group_index == 0 or bool(connector_ends)
+    if (
+        prefix_has_local_connector
+        and start >= prefix_floor
+        and end <= field_start
+        and set(prefix_tokens) <= {
+            "and",
+            "as",
+            "exclusively",
+            "for",
+            "of",
+            "only",
+            "or",
+            "s",
+            "specifically",
+            "the",
+            "well",
+        }
+    ):
         return True
 
-    if start < field_end:
+    if start < field_end or start >= next_field_start:
         return False
     between = tokens[field_end:start]
     for marker_index in range(field_end, start):
@@ -895,6 +1534,28 @@ def identity_span_attaches_to_group(
             marker != "for"
             and set(tokens[field_end:marker_index]) & TEMPORAL_CONTEXT_LEADERS
         ):
+            continue
+        if has_clause_connector(tokens, field_end, marker_index + 1):
+            continue
+        intervening_identity = any(
+            index in identity_indexes
+            for index in range(marker_index + 1, start)
+        )
+        latest_identity_index = max(
+            (
+                index
+                for index in range(marker_index + 1, start)
+                if index in identity_indexes
+            ),
+            default=marker_index,
+        )
+        identity_list_connector = any(
+            latest_identity_index + 1 <= connector_start
+            and connector_end <= start
+            and not set(range(connector_start, connector_end)) <= identity_indexes
+            for connector_start, connector_end in clause_connector_spans(tokens)
+        )
+        if intervening_identity and not identity_list_connector:
             continue
         tail = [
             token
@@ -924,6 +1585,7 @@ def identity_span_attaches_to_group(
         end < len(tokens)
         and tokens[end] in QUALIFIER_MODIFIERS
         and not (set(between) & TEMPORAL_CONTEXT_LEADERS)
+        and not has_clause_connector(tokens, field_end, start)
     )
 
 
@@ -941,31 +1603,48 @@ def grammatical_identity_scope(
     and the subset licensed by either attachment or temporal grammar.
     """
     tokens = normalize_phrase(text).split()
-    spans, _broad_ambiguity = identity_token_spans(
+    groups = field_groups(tokens)
+    raw_spans, _broad_ambiguity = identity_token_spans(
         tokens,
         identity_aliases,
         alias_widths,
     )
-    all_identity_indexes = {
+    spans = [
+        span
+        for span in raw_spans
+        if not identity_span_is_field_grammar(span, groups, tokens)
+    ]
+    lexical_identity_indexes = {
         index
         for start, end, _identities in spans
         for index in range(start, end)
     }
-    groups = field_groups(tokens)
+    group_starts = tuple(group[0][0] for group in groups)
+    group_ends = tuple(group[-1][1] for group in groups)
     target_identities: set[IdentityToken] = set()
-    ambiguous_scope = False
+    ambiguous_scope = any(
+        IDENTITY_MATCH_OVERFLOW in identities
+        for _start, _end, identities in spans
+    )
     licensed_indexes: set[int] = set()
     for span in spans:
         start, end, identities = span
         temporal = is_temporal_identity_span(tokens, start, end)
         attached_groups = [
-            group
-            for group in groups
+            groups[group_index]
+            for group_index in neighboring_field_group_indexes(
+                span,
+                groups,
+                group_starts,
+                group_ends,
+            )
             if identity_span_attaches_to_group(
                 tokens,
                 span,
-                group,
-                all_identity_indexes,
+                groups[group_index],
+                groups,
+                group_index,
+                lexical_identity_indexes,
             )
         ]
         if temporal or attached_groups:
@@ -976,12 +1655,188 @@ def grammatical_identity_scope(
         ):
             target_identities.update(identities)
             ambiguous_scope = ambiguous_scope or len(identities) > 1
+    # A nonattached alias made entirely of predicate/context vocabulary is a
+    # grammar occurrence, not automatically identity data (for example the
+    # modal ``May`` in ``wardrobe may change``). Literal aliases outside that
+    # vocabulary remain unlicensed so bounded validation rejects them.
+    identity_indexes = set(licensed_indexes)
+    for start, end, _identities in spans:
+        if set(range(start, end)) & licensed_indexes:
+            continue
+        if any(token not in WAIVER_PREDICATE_WORDS for token in tokens[start:end]):
+            identity_indexes.update(range(start, end))
     return (
         target_identities,
         ambiguous_scope,
-        all_identity_indexes,
+        identity_indexes,
         licensed_indexes,
     )
+
+
+def has_suspicious_event_identity_role(
+    tokens: list[str],
+    groups: list[list[FieldSpan]],
+    licensed_identity_indexes: set[int],
+) -> bool:
+    """Reject predicate-looking tokens occupying unresolved identity slots.
+
+    The bounded grammar still supports imperative prefixes such as ``change
+    wardrobe``. It rejects modals in that prefix slot, event words inserted
+    inside a serial entity list, redundant event tails, and unrecognized names
+    in temporal identity slots. These positional checks close the hole where an
+    unknown character named ``May`` or ``Change`` was accepted merely because
+    its spelling appeared in the global predicate allowlist.
+    """
+    positive_indexes = [
+        index
+        for index, token in enumerate(tokens)
+        if token in TRANSITION_CHANGE_WORDS
+        and index not in licensed_identity_indexes
+    ]
+    if len(positive_indexes) > 2:
+        return True
+
+    for group_index, group in enumerate(groups):
+        field_start = group[0][0]
+        if field_start == 0:
+            continue
+        candidate_index = field_start - 1
+        if candidate_index in licensed_identity_indexes:
+            continue
+        candidate = tokens[candidate_index]
+        if candidate in MODAL_OR_NONIMPERATIVE_PREFIX_WORDS:
+            return True
+        if candidate in {"of", "to"} and (
+            candidate_index == 0
+            or tokens[candidate_index - 1] not in LINKING_PREPOSITION_HEADS
+        ):
+            return True
+        if candidate == "or" and (
+            candidate_index == 0
+            or tokens[candidate_index - 1] not in ALL_CLAUSE_PREDICATE_WORDS
+        ):
+            return True
+        if group_index > 0 and candidate in TRANSITION_CHANGE_WORDS:
+            return True
+
+    for leader_index, leader in enumerate(tokens):
+        if leader not in TEMPORAL_CONTEXT_LEADERS:
+            continue
+        for noun_index in range(leader_index + 1, min(len(tokens), leader_index + 6)):
+            if tokens[noun_index] not in TEMPORAL_CONTEXT_NOUNS:
+                continue
+            candidate_indexes = [
+                index
+                for index in range(leader_index + 1, noun_index)
+                if tokens[index] not in {"s", "the", "time"}
+            ]
+            if candidate_indexes and not all(
+                index in licensed_identity_indexes for index in candidate_indexes
+            ) and any(
+                tokens[index] in TRANSITION_CHANGE_WORDS
+                for index in candidate_indexes
+            ):
+                return True
+            break
+    return False
+
+
+def has_unresolved_serial_identity_role(
+    text: object,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> bool:
+    """Reject a redundant event word occupying an unknown serial entity slot.
+
+    This check intentionally runs before semantic clause splitting. Consider
+    ``allow changes to hero wardrobe, Change location, and extra product
+    identity``: after splitting, ``Change location`` is a valid imperative in
+    isolation and the other two clauses can survive. In the original serial
+    construction, however, ``Change`` is redundant with the shared prefix and
+    occupies exactly the position where a recognized identity would appear.
+
+    A lone imperative remains supported. So does a genuinely independent pair
+    such as ``change wardrobe and change location``. The fail-closed signal is
+    the combination of an unresolved field-adjacent event word and another
+    predicate outside the field list (a shared prefix or suffix).
+    """
+    for segment in text_segments(text, identity_aliases, alias_widths):
+        tokens = normalize_phrase(segment).split()
+        groups = field_groups(tokens)
+        if len(groups) < 2:
+            continue
+        licensed_identity_indexes = identity_indexes_for_tokens(
+            tokens,
+            identity_aliases,
+            alias_widths,
+        )
+        first_field_start = groups[0][0][0]
+        final_field_end = groups[-1][-1][1]
+        predicate_indexes = {
+            index
+            for index, token in enumerate(tokens)
+            if token in ALL_CLAUSE_PREDICATE_WORDS
+            and index not in licensed_identity_indexes
+        }
+        outside_predicate_indexes = {
+            index
+            for index in predicate_indexes
+            if index < first_field_start or index >= final_field_end
+        }
+
+        unresolved_candidates: list[tuple[int, str]] = []
+        for group in groups:
+            field_start = group[0][0]
+            if field_start == 0:
+                continue
+            candidate_index = field_start - 1
+            if candidate_index in licensed_identity_indexes:
+                continue
+            candidate = tokens[candidate_index]
+            if candidate in {"of", "to"} and (
+                candidate_index == 0
+                or tokens[candidate_index - 1] not in LINKING_PREPOSITION_HEADS
+            ):
+                return True
+            if candidate == "or" and (
+                candidate_index == 0
+                or tokens[candidate_index - 1] not in ALL_CLAUSE_PREDICATE_WORDS
+            ):
+                return True
+            if candidate in SERIAL_REDUNDANT_CONTEXT_WORDS and any(
+                predicate_index < candidate_index
+                for predicate_index in outside_predicate_indexes
+            ):
+                return True
+            if (
+                candidate in SERIAL_AMBIGUOUS_DETERMINERS
+                and licensed_identity_indexes
+                and any(
+                    predicate_index < candidate_index
+                    for predicate_index in outside_predicate_indexes
+                )
+            ):
+                return True
+            if candidate not in TRANSITION_CHANGE_WORDS:
+                continue
+            if candidate in MODAL_OR_NONIMPERATIVE_PREFIX_WORDS:
+                return True
+            unresolved_candidates.append((candidate_index, candidate))
+
+        # Every field having its own imperative is an ordinary coordinated
+        # command (``change wardrobe and change location``), not a serial
+        # entity list. A trailing shared predicate would make those same words
+        # redundant and therefore ambiguous again.
+        suffix_predicate_indexes = {
+            index for index in predicate_indexes if index >= final_field_end
+        }
+        if len(unresolved_candidates) == len(groups) and not suffix_predicate_indexes:
+            continue
+
+        for candidate_index, _candidate in unresolved_candidates:
+            if outside_predicate_indexes - {candidate_index}:
+                return True
+    return False
 
 
 def has_bounded_waiver_grammar(
@@ -998,6 +1853,8 @@ def has_bounded_waiver_grammar(
     predicate, but an unknown ``stranger only`` tail cannot become global.
     """
     tokens = normalize_phrase(text).split()
+    if len(tokens) > MAX_WAIVER_TOKENS:
+        return False
     groups = field_groups(tokens)
     if not any(
         key in {candidate for _start, _end, candidate in group}
@@ -1016,6 +1873,12 @@ def has_bounded_waiver_grammar(
     if ambiguous or len(mentioned) > 1:
         return False
     if identity_indexes - licensed_identity_indexes:
+        return False
+    if has_suspicious_event_identity_role(
+        tokens,
+        groups,
+        licensed_identity_indexes,
+    ):
         return False
 
     occupied: set[int] = set()
@@ -1166,9 +2029,11 @@ def has_allowance(
     for field in ("allowed_changes", "accepted_deviations", "continuity_breaks"):
         entries = clip.get(field, [])
         if not isinstance(entries, list):
+            unsafe = True
             continue
         for text in entries:
             if not isinstance(text, str):
+                unsafe = True
                 continue
             bare_entry = normalize_phrase(text) in field_phrases(key)
             positive, entry_denials, entry_unsafe = analyze_field_entry(
@@ -1212,6 +2077,8 @@ def has_allowance(
                 unsafe = True
                 continue
             candidates.append(clause)
+    elif "transition_in" in clip:
+        unsafe = True
 
     # Denials and preservation claims are authoritative across the complete
     # entry set for their entity scope. Returning on the first positive would
@@ -1625,6 +2492,44 @@ def state_values(
     return matches
 
 
+def fallback_list_field_locator(
+    structural_locator: tuple[object, ...],
+) -> tuple[tuple[object, ...], IdentityToken] | None:
+    """Return a container-independent locator for one fallback-identified field.
+
+    Fallback list IDs are meaningful across harmless collection-key renames, but
+    only when the same identity/field pair occurs exactly once on each side.
+    ``comparable_values`` enforces that uniqueness before using this locator.
+    """
+    if len(structural_locator) < 3:
+        return None
+    field_segment = structural_locator[-1]
+    if (
+        not isinstance(field_segment, tuple)
+        or len(field_segment) != 2
+        or field_segment[0] != "key"
+    ):
+        return None
+    for segment in reversed(structural_locator[1:-1]):
+        if (
+            isinstance(segment, tuple)
+            and len(segment) == 4
+            and segment[0] == "list-identity"
+            and segment[1] != "canonical_identity_id"
+        ):
+            identity: IdentityToken = (segment[2], segment[3])
+            return (
+                (
+                    "fallback-list-field",
+                    segment[1],
+                    *identity,
+                    field_segment,
+                ),
+                identity,
+            )
+    return None
+
+
 def comparable_values(
     end_state: dict,
     start_state: dict,
@@ -1682,6 +2587,63 @@ def comparable_values(
         for _, structural_locator, display_path, value, identity in start_values
         if structural_locator not in matched_start_structural
     }
+
+    end_fallback: dict[
+        tuple[object, ...],
+        list[tuple[tuple[object, ...], IdentityToken]],
+    ] = {}
+    start_fallback: dict[
+        tuple[object, ...],
+        list[tuple[tuple[object, ...], IdentityToken]],
+    ] = {}
+    for structural_locator in end_by_structural:
+        fallback = fallback_list_field_locator(structural_locator)
+        if fallback is not None:
+            semantic_locator, identity = fallback
+            end_fallback.setdefault(semantic_locator, []).append(
+                (structural_locator, identity)
+            )
+    for structural_locator in start_by_structural:
+        fallback = fallback_list_field_locator(structural_locator)
+        if fallback is not None:
+            semantic_locator, identity = fallback
+            start_fallback.setdefault(semantic_locator, []).append(
+                (structural_locator, identity)
+            )
+
+    matched_end_fallback: set[tuple[object, ...]] = set()
+    matched_start_fallback: set[tuple[object, ...]] = set()
+    for semantic_locator in sorted(
+        end_fallback.keys() & start_fallback.keys(),
+        key=repr,
+    ):
+        end_candidates = end_fallback[semantic_locator]
+        start_candidates = start_fallback[semantic_locator]
+        if len(end_candidates) != 1 or len(start_candidates) != 1:
+            continue
+        end_locator, end_identity = end_candidates[0]
+        start_locator, start_identity = start_candidates[0]
+        comparisons.append(
+            (
+                end_by_structural[end_locator][0],
+                end_by_structural[end_locator][1],
+                start_by_structural[start_locator][1],
+                end_identity if end_identity == start_identity else None,
+            )
+        )
+        matched_end_fallback.add(end_locator)
+        matched_start_fallback.add(start_locator)
+
+    end_by_structural = {
+        locator: value
+        for locator, value in end_by_structural.items()
+        if locator not in matched_end_fallback
+    }
+    start_by_structural = {
+        locator: value
+        for locator, value in start_by_structural.items()
+        if locator not in matched_start_fallback
+    }
     comparisons.extend(
         (
             end_by_structural[locator][0],
@@ -1731,6 +2693,52 @@ def comparable_values(
             )
         )
     return comparisons
+
+
+def json_values_equal(left: object, right: object) -> bool:
+    """Iteratively compare parsed JSON with a finite node budget."""
+    pending: list[tuple[object, object]] = [(left, right)]
+    compared = 0
+    while pending:
+        compared += 1
+        if compared > MAX_JSON_COMPARE_NODES:
+            return False
+        left_value, right_value = pending.pop()
+        if isinstance(left_value, bool) or isinstance(right_value, bool):
+            if not (
+                type(left_value) is bool
+                and type(right_value) is bool
+                and left_value == right_value
+            ):
+                return False
+            continue
+        if isinstance(left_value, (int, float)) and isinstance(
+            right_value, (int, float)
+        ):
+            if left_value != right_value:
+                return False
+            continue
+        if type(left_value) is not type(right_value):
+            return False
+        if isinstance(left_value, list):
+            if len(left_value) != len(right_value):
+                return False
+            if len(left_value) > MAX_JSON_COMPARE_NODES - compared - len(pending):
+                return False
+            pending.extend(zip(left_value, right_value))
+            continue
+        if isinstance(left_value, dict):
+            if left_value.keys() != right_value.keys():
+                return False
+            if len(left_value) > MAX_JSON_COMPARE_NODES - compared - len(pending):
+                return False
+            pending.extend(
+                (left_value[key], right_value[key]) for key in left_value
+            )
+            continue
+        if left_value != right_value:
+            return False
+    return True
 
 
 def validate(
@@ -1860,7 +2868,10 @@ def validate(
                     errors.append(
                         f"{rel}: immutable {field_path} {direction} without allowance"
                     )
-                elif a is not None and b is not None and a != b and not field_has_allowance(
+                elif a is not None and b is not None and not json_values_equal(
+                    a,
+                    b,
+                ) and not field_has_allowance(
                     key,
                     scope_identity,
                 ):
@@ -1881,7 +2892,10 @@ def validate(
                     warnings.append(
                         f"{rel}: transient {field_path} {direction} without allowance"
                     )
-                elif a is not None and b is not None and a != b and not field_has_allowance(
+                elif a is not None and b is not None and not json_values_equal(
+                    a,
+                    b,
+                ) and not field_has_allowance(
                     key,
                     scope_identity,
                 ):

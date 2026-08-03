@@ -5,7 +5,9 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from scripts import continuity_chain_check
@@ -1871,6 +1873,244 @@ class ContinuityChainTests(unittest.TestCase):
             errors,
         )
 
+    def test_prefix_and_suffix_serial_predicates_cover_every_known_field(self) -> None:
+        before = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "location": "hall-a",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "product_identity": "watch-a",
+                },
+            }
+        }
+        after = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "blue coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "location": "hall-b",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "product_identity": "watch-b",
+                },
+            }
+        }
+        paths = (
+            "characters.hero.wardrobe",
+            "characters.guide.location",
+            "characters.extra.product_identity",
+        )
+        global_waivers = (
+            "wardrobe may change",
+            "location may change",
+            "product identity may change",
+        )
+        field_list = (
+            "hero wardrobe, guide location, and extra product identity"
+        )
+
+        denials = (
+            f"preserve {field_list}",
+            f"keep {field_list}",
+            f"do not change {field_list}",
+            f"never alter {field_list}",
+            f"forbid changes to {field_list}",
+            f"{field_list} must not change",
+            f"{field_list} must remain unchanged",
+        )
+        for denial in denials:
+            with self.subTest(denial=denial):
+                errors, _ = self.validate_states(
+                    before,
+                    after,
+                    allowed_changes=[*global_waivers, denial],
+                )
+                for path in paths:
+                    self.assertTrue(any(path in error for error in errors), errors)
+
+        positives = (
+            f"allow changes to {field_list}",
+            f"permit changes to {field_list}",
+            f"change {field_list}",
+            f"{field_list} may change",
+        )
+        for positive in positives:
+            with self.subTest(positive=positive):
+                errors, warnings = self.validate_states(
+                    before,
+                    after,
+                    allowed_changes=[positive],
+                )
+                self.assertEqual(errors, [])
+                self.assertEqual(warnings, [])
+
+    def test_serial_lists_fail_closed_with_unknown_items_and_unicode_commas(self) -> None:
+        before = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "location": "hall-a",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "product_identity": "watch-a",
+                },
+            }
+        }
+        after = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "blue coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "location": "hall-b",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "product_identity": "watch-b",
+                },
+            }
+        }
+        paths = (
+            "characters.hero.wardrobe",
+            "characters.guide.location",
+            "characters.extra.product_identity",
+        )
+        global_waivers = (
+            "wardrobe may change",
+            "location may change",
+            "product identity may change",
+        )
+        unknown_lists = (
+            "stranger hairstyle, hero wardrobe, guide location, and extra product identity",
+            "hero wardrobe, stranger hairstyle, guide location, and extra product identity",
+            "hero wardrobe, guide location, stranger hairstyle, and extra product identity",
+            "hero wardrobe, guide location, extra product identity, and stranger hairstyle",
+        )
+        for field_list in unknown_lists:
+            for denial in (
+                f"preserve {field_list}",
+                f"{field_list} must not change",
+            ):
+                with self.subTest(field_list=field_list, denial=denial):
+                    errors, _ = self.validate_states(
+                        before,
+                        after,
+                        allowed_changes=[*global_waivers, denial],
+                    )
+                    for path in paths:
+                        self.assertTrue(any(path in error for error in errors), errors)
+
+        for comma in (",", "\u060c", "\u3001", "\ufe10", "\ufe50", "\uff0c", "\uff64"):
+            field_list = (
+                f"hero wardrobe{comma} guide location{comma} "
+                "and extra product identity"
+            )
+            for denial in (
+                f"preserve {field_list}",
+                f"{field_list} must not change",
+            ):
+                with self.subTest(comma=comma, denial=denial):
+                    errors, _ = self.validate_states(
+                        before,
+                        after,
+                        allowed_changes=[*global_waivers, denial],
+                    )
+                    for path in paths:
+                        self.assertTrue(any(path in error for error in errors), errors)
+
+            for positive in (
+                f"allow changes to {field_list}",
+                f"{field_list} may change",
+            ):
+                with self.subTest(comma=comma, positive=positive):
+                    errors, warnings = self.validate_states(
+                        before,
+                        after,
+                        allowed_changes=[positive],
+                    )
+                    self.assertEqual(errors, [])
+                    self.assertEqual(warnings, [])
+
+    def test_identity_tokens_never_double_as_waiver_events(self) -> None:
+        identity_predicate_words = (
+            "May",
+            "Can",
+            "Allow",
+            "Change",
+            "Alter",
+            "New",
+            "Shift",
+            "Swap",
+        )
+        for identity in identity_predicate_words:
+            before = {
+                "characters": {
+                    "subject": {
+                        "canonical_identity_id": identity,
+                        "wardrobe": "red coat",
+                    }
+                }
+            }
+            after = {
+                "characters": {
+                    "subject": {
+                        "canonical_identity_id": identity,
+                        "wardrobe": "blue coat",
+                    }
+                }
+            }
+            unsafe_allowances = (
+                f"{identity} wardrobe",
+                f"{identity}'s wardrobe",
+                f"wardrobe after {identity} shot",
+                f"wardrobe before {identity} sequence",
+                f"wardrobe during {identity} scene",
+                f"wardrobe following {identity} transition",
+            )
+            for allowance in unsafe_allowances:
+                with self.subTest(identity=identity, allowance=allowance):
+                    errors, _ = self.validate_states(
+                        before,
+                        after,
+                        allowed_changes=[allowance],
+                    )
+                    self.assertTrue(
+                        any("characters.subject.wardrobe" in error for error in errors),
+                        errors,
+                    )
+
+            for allowance in (
+                f"replace {identity} wardrobe",
+                f"replace {identity}'s wardrobe",
+                f"wardrobe replacement after {identity} shot",
+            ):
+                with self.subTest(identity=identity, explicit=allowance):
+                    errors, warnings = self.validate_states(
+                        before,
+                        after,
+                        allowed_changes=[allowance],
+                    )
+                    self.assertEqual(errors, [])
+                    self.assertEqual(warnings, [])
+
     def test_explicit_multi_identity_denial_applies_to_exact_named_set(self) -> None:
         for denial in (
             "hero and guide wardrobe must not change",
@@ -2736,6 +2976,1379 @@ class ContinuityChainTests(unittest.TestCase):
         )
 
         self.assertTrue(any("canonical_identity_id inventory" in error for error in errors), errors)
+
+    def test_renamed_collection_keeps_unique_fallback_identity(self) -> None:
+        errors, _ = self.validate_states(
+            {"characters": [{"id": "hero", "wardrobe": "red coat"}]},
+            {"cast": [{"id": "hero", "wardrobe": "blue coat"}]},
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_denial_word_identity_cannot_reverse_a_denial(self) -> None:
+        for identity in (
+            "Ban",
+            "Deny",
+            "Forbid",
+            "Prevent",
+            "Block",
+            "Refuse",
+            "No",
+            "Without",
+        ):
+            with self.subTest(identity=identity):
+                errors, _ = self.validate_states(
+                    {
+                        "character": {
+                            "canonical_identity_id": identity,
+                            "wardrobe": "red coat",
+                        }
+                    },
+                    {
+                        "character": {
+                            "canonical_identity_id": identity,
+                            "wardrobe": "blue coat",
+                        }
+                    },
+                    allowed_changes=[f"{identity} wardrobe change"],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_grammar_word_identities_remain_valid_when_grammatically_attached(self) -> None:
+        identities = ("May", "Can", "Allow", "Change", "Alter", "New", "Shift", "Swap")
+        for identity in identities:
+            with self.subTest(identity=identity, scope="global"):
+                errors, warnings = self.validate_states(
+                    {
+                        "characters": {
+                            "target": {
+                                "canonical_identity_id": identity,
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "target": {
+                                "canonical_identity_id": identity,
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=["wardrobe may change"],
+                )
+                self.assertEqual(errors, [])
+                self.assertEqual(warnings, [])
+
+            with self.subTest(identity=identity, scope="attached"):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "target": {
+                                "canonical_identity_id": identity,
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "target": {
+                                "canonical_identity_id": identity,
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[f"{identity} wardrobe may change"],
+                )
+                self.assertFalse(
+                    any("characters.target.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+    def test_unknown_grammar_word_serial_identities_fail_closed_before_splitting(self) -> None:
+        aliases = {
+            "hero": {("str", "hero")},
+            "guide": {("str", "guide")},
+            "extra": {("str", "extra")},
+        }
+        slots = (
+            ("hero", "wardrobe", "wardrobe"),
+            ("guide", "location", "location"),
+            ("extra", "product identity", "product_identity"),
+        )
+        templates = (
+            "allow changes to {}",
+            "{} may change",
+            "preserve {}",
+            "{} must not change",
+        )
+        for unknown in ("May", "Can", "Allow", "Change", "Alter", "New", "Shift", "Swap"):
+            for unknown_position in range(len(slots)):
+                items = [
+                    f"{unknown if index == unknown_position else identity} {field}"
+                    for index, (identity, field, _key) in enumerate(slots)
+                ]
+                serial = ", ".join(items[:-1]) + ", and " + items[-1]
+                for template in templates:
+                    allowance = template.format(serial)
+                    clip = {"allowed_changes": [allowance]}
+                    for identity, _field, key in slots:
+                        with self.subTest(
+                            unknown=unknown,
+                            position=unknown_position,
+                            template=template,
+                            key=key,
+                        ):
+                            self.assertFalse(
+                                continuity_chain_check.has_allowance(
+                                    clip,
+                                    key,
+                                    scope_identity=("str", identity),
+                                    identity_aliases=aliases,
+                                    alias_widths=(1,),
+                                )
+                            )
+
+        for allowance in (
+            "change wardrobe and change location",
+            "alter wardrobe and swap location",
+            "allow changes to wardrobe and location",
+            "wardrobe and location may change",
+        ):
+            for key in ("wardrobe", "location"):
+                with self.subTest(inverse=allowance, key=key):
+                    self.assertTrue(
+                        continuity_chain_check.has_allowance(
+                            {"allowed_changes": [allowance]},
+                            key,
+                        )
+                    )
+
+    def test_leading_scope_after_hard_boundary_attaches_forward_only(self) -> None:
+        observed = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                    "location": "stage-a",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "wardrobe": "black coat",
+                    "location": "hall-a",
+                },
+            }
+        }
+        planned = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "blue coat",
+                    "location": "stage-b",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "wardrobe": "white coat",
+                    "location": "hall-b",
+                },
+            }
+        }
+        for boundary in (". ", "; ", "\n"):
+            with self.subTest(boundary=repr(boundary), scope="known"):
+                errors, _ = self.validate_states(
+                    observed,
+                    planned,
+                    allowed_changes=[
+                        f"location may change{boundary}Only for hero, wardrobe may change"
+                    ],
+                )
+                self.assertFalse(any(".location" in error for error in errors), errors)
+                self.assertFalse(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+            with self.subTest(boundary=repr(boundary), scope="unknown"):
+                errors, _ = self.validate_states(
+                    observed,
+                    planned,
+                    allowed_changes=[
+                        f"location may change{boundary}Only for stranger, wardrobe may change"
+                    ],
+                )
+                self.assertFalse(any(".location" in error for error in errors), errors)
+                self.assertTrue(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+    def test_anaphoric_denial_inherits_field_but_keeps_explicit_tail_scope(self) -> None:
+        observed = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "wardrobe": "black coat",
+                },
+            }
+        }
+        planned = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "blue coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "wardrobe": "white coat",
+                },
+            }
+        }
+        errors, _ = self.validate_states(
+            observed,
+            planned,
+            allowed_changes=[
+                "wardrobe may change",
+                "hero wardrobe may change; must remain unchanged for guide",
+            ],
+        )
+        self.assertFalse(
+            any("characters.hero.wardrobe" in error for error in errors),
+            errors,
+        )
+        self.assertTrue(
+            any("characters.guide.wardrobe" in error for error in errors),
+            errors,
+        )
+
+        errors, _ = self.validate_states(
+            observed,
+            planned,
+            allowed_changes=[
+                "wardrobe may change",
+                "hero wardrobe may change; must remain unchanged for stranger",
+            ],
+        )
+        self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("characters.guide.wardrobe" in error for error in errors), errors)
+
+        errors, _ = self.validate_states(
+            observed,
+            planned,
+            allowed_changes=["wardrobe may change; must remain unchanged"],
+        )
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_json_boolean_and_number_values_are_not_conflated(self) -> None:
+        unequal_pairs = (
+            (1, True),
+            (0, False),
+            ({"nested": 1}, {"nested": True}),
+            ([1, {"nested": False}], [True, {"nested": 0}]),
+        )
+        for observed_value, planned_value in unequal_pairs:
+            with self.subTest(observed=observed_value, planned=planned_value):
+                errors, _ = self.validate_states(
+                    {"character": {"wardrobe": observed_value}},
+                    {"character": {"wardrobe": planned_value}},
+                )
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+        for observed_value, planned_value in (
+            (1, 1.0),
+            ({"nested": [1, False]}, {"nested": [1.0, False]}),
+        ):
+            with self.subTest(equal_observed=observed_value, equal_planned=planned_value):
+                errors, warnings = self.validate_states(
+                    {"character": {"wardrobe": observed_value}},
+                    {"character": {"wardrobe": planned_value}},
+                )
+                self.assertEqual(errors, [])
+                self.assertEqual(warnings, [])
+
+    def test_unicode_comma_inventory_preserves_serial_clause_polarity(self) -> None:
+        unicode_commas = (
+            "\u055d",
+            "\u07f8",
+            "\u1363",
+            "\u1802",
+            "\u1808",
+            "\u2e32",
+            "\u2e34",
+            "\u2e41",
+            "\ua4fe",
+            "\ua60d",
+            "\ua6f5",
+            "\U0001144d",
+        )
+        observed = {
+            "character": {
+                "wardrobe": "red coat",
+                "location": "stage-a",
+                "product_identity": "watch-a",
+            }
+        }
+        planned = {
+            "character": {
+                "wardrobe": "blue coat",
+                "location": "stage-b",
+                "product_identity": "watch-b",
+            }
+        }
+        for comma in unicode_commas:
+            with self.subTest(comma=f"U+{ord(comma):04X}", polarity="positive"):
+                errors, warnings = self.validate_states(
+                    observed,
+                    planned,
+                    allowed_changes=[
+                        f"wardrobe may change{comma} location may change{comma} "
+                        "and product identity may change"
+                    ],
+                )
+                self.assertEqual(errors, [])
+                self.assertEqual(warnings, [])
+
+            with self.subTest(comma=f"U+{ord(comma):04X}", polarity="denial"):
+                errors, _ = self.validate_states(
+                    observed,
+                    planned,
+                    allowed_changes=[
+                        "wardrobe may change",
+                        "location may change",
+                        "product identity may change",
+                        f"wardrobe must not change{comma} location must not change{comma} "
+                        "and product identity must not change",
+                    ],
+                )
+                for key in ("wardrobe", "location", "product_identity"):
+                    self.assertTrue(any(key in error for error in errors), errors)
+
+    def test_mixed_serial_predicates_and_suffix_scopes_stay_local(self) -> None:
+        observed = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "location": "hall-a",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "product_identity": "watch-a",
+                },
+            }
+        }
+        planned = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "blue coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "location": "hall-b",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "product_identity": "watch-b",
+                },
+            }
+        }
+        errors, _ = self.validate_states(
+            observed,
+            planned,
+            allowed_changes=[
+                "hero wardrobe may change, guide location must not change, "
+                "extra product identity may change"
+            ],
+        )
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("characters.guide.location", errors[0])
+
+        for allowance in (
+            "allow changes to hero wardrobe, guide location, and extra product identity",
+            "hero wardrobe, guide location, and extra product identity may change",
+        ):
+            with self.subTest(inverse=allowance):
+                errors, warnings = self.validate_states(
+                    observed,
+                    planned,
+                    allowed_changes=[allowance],
+                )
+                self.assertEqual(errors, [])
+                self.assertEqual(warnings, [])
+
+        observed_scopes = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "red coat",
+                    "location": "stage-a",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "wardrobe": "black coat",
+                    "location": "hall-a",
+                },
+            }
+        }
+        planned_scopes = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "wardrobe": "blue coat",
+                    "location": "stage-b",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "wardrobe": "white coat",
+                    "location": "hall-b",
+                },
+            }
+        }
+        errors, _ = self.validate_states(
+            observed_scopes,
+            planned_scopes,
+            allowed_changes=["wardrobe for hero and location for guide may change"],
+        )
+        self.assertFalse(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertFalse(any("characters.guide.location" in error for error in errors), errors)
+        self.assertTrue(any("characters.guide.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("characters.hero.location" in error for error in errors), errors)
+
+        errors, _ = self.validate_states(
+            observed_scopes,
+            planned_scopes,
+            allowed_changes=[
+                "wardrobe may change",
+                "location may change",
+                "wardrobe for hero and location for guide must not change",
+            ],
+        )
+        self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("characters.guide.location" in error for error in errors), errors)
+        self.assertFalse(any("characters.guide.wardrobe" in error for error in errors), errors)
+        self.assertFalse(any("characters.hero.location" in error for error in errors), errors)
+
+    def test_unlicensed_modal_role_words_cannot_impersonate_serial_identities(self) -> None:
+        aliases = {
+            "hero": {("str", "hero")},
+            "guide": {("str", "guide")},
+            "extra": {("str", "extra")},
+        }
+        scopes = (
+            ("wardrobe", "hero"),
+            ("location", "guide"),
+            ("product_identity", "extra"),
+        )
+        role_words = (
+            "Must",
+            "Will",
+            "Is",
+            "Are",
+            "Be",
+            "Being",
+            "Of",
+            "To",
+            "Explicit",
+            "Global",
+            "Intentional",
+            "Intentionally",
+            "Or",
+            "The",
+            "All",
+            "This",
+        )
+        for unknown in role_words:
+            clip = {
+                "allowed_changes": [
+                    f"allow changes to {unknown} wardrobe, guide location, "
+                    "and extra product identity"
+                ]
+            }
+            for key, identity in scopes:
+                with self.subTest(unknown=unknown, key=key):
+                    self.assertFalse(
+                        continuity_chain_check.has_allowance(
+                            clip,
+                            key,
+                            scope_identity=("str", identity),
+                            identity_aliases=aliases,
+                            alias_widths=(1,),
+                        )
+                    )
+
+        for identity in role_words:
+            identity_aliases = {
+                identity.casefold(): {("str", identity)},
+                "guide": {("str", "guide")},
+            }
+            with self.subTest(licensed_identity=identity):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        {"allowed_changes": [f"{identity} wardrobe may change"]},
+                        "wardrobe",
+                        scope_identity=("str", identity),
+                        identity_aliases=identity_aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        {"allowed_changes": [f"{identity} wardrobe may change"]},
+                        "wardrobe",
+                        scope_identity=("str", "guide"),
+                        identity_aliases=identity_aliases,
+                        alias_widths=(1,),
+                    )
+                )
+
+        for natural_preposition in (
+            "allow changes to wardrobe and location",
+            "change of wardrobe is allowed",
+        ):
+            with self.subTest(natural_preposition=natural_preposition):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        {"allowed_changes": [natural_preposition]},
+                        "wardrobe",
+                    )
+                )
+        for valid_global in (
+            "wardrobe must change",
+            "change wardrobe",
+            "change wardrobe and change location",
+            "allow changes to wardrobe and location",
+        ):
+            for key in ("wardrobe", "location"):
+                if key not in valid_global:
+                    continue
+                with self.subTest(valid_global=valid_global, key=key):
+                    self.assertTrue(
+                        continuity_chain_check.has_allowance(
+                            {"allowed_changes": [valid_global]},
+                            key,
+                        )
+                    )
+
+    def test_later_field_qualifier_cannot_leak_backward_across_connector(self) -> None:
+        aliases = {
+            "hero": {("str", "hero")},
+            "guide": {("str", "guide")},
+        }
+        qualifier_forms = (
+            "only hero",
+            "hero only",
+            "specifically hero",
+            "for hero",
+            "of hero",
+        )
+        for connector in ("and", "or", "as well as"):
+            for qualifier in qualifier_forms:
+                denial = f"wardrobe {connector} {qualifier} location must not change"
+                clip = {
+                    "allowed_changes": [
+                        "wardrobe may change",
+                        "location may change",
+                        denial,
+                    ]
+                }
+                with self.subTest(connector=connector, qualifier=qualifier):
+                    for identity in ("hero", "guide"):
+                        self.assertFalse(
+                            continuity_chain_check.has_allowance(
+                                clip,
+                                "wardrobe",
+                                scope_identity=("str", identity),
+                                identity_aliases=aliases,
+                                alias_widths=(1,),
+                            )
+                        )
+                    self.assertFalse(
+                        continuity_chain_check.has_allowance(
+                            clip,
+                            "location",
+                            scope_identity=("str", "hero"),
+                            identity_aliases=aliases,
+                            alias_widths=(1,),
+                        )
+                    )
+                    self.assertTrue(
+                        continuity_chain_check.has_allowance(
+                            clip,
+                            "location",
+                            scope_identity=("str", "guide"),
+                            identity_aliases=aliases,
+                            alias_widths=(1,),
+                        )
+                    )
+
+    def test_denial_and_preservation_word_identities_keep_denials_local(self) -> None:
+        identities = (
+            "Ban",
+            "Deny",
+            "Forbid",
+            "Prevent",
+            "Block",
+            "Refuse",
+            "No",
+            "Without",
+            "Fixed",
+            "Preserve",
+            "Keep",
+        )
+        for identity in identities:
+            aliases = {
+                identity.casefold(): {("str", identity)},
+                "guide": {("str", "guide")},
+            }
+            clip = {
+                "allowed_changes": [
+                    "wardrobe may change",
+                    f"{identity} wardrobe must not change",
+                ]
+            }
+            with self.subTest(identity=identity):
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                        scope_identity=("str", identity),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                        scope_identity=("str", "guide"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+
+    def test_explicit_anaphoric_denials_inherit_only_the_intended_scope(self) -> None:
+        aliases = {
+            "hero": {("str", "hero")},
+            "guide": {("str", "guide")},
+        }
+        for tail in (
+            "change is not allowed",
+            "changes are not allowed",
+            "change is prohibited",
+            "change cannot be permitted",
+        ):
+            clip = {
+                "allowed_changes": [
+                    "wardrobe may change",
+                    f"hero wardrobe may change; {tail}",
+                ]
+            }
+            with self.subTest(tail=tail):
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                        scope_identity=("str", "hero"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                        scope_identity=("str", "guide"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+
+        for connector in ("and", "or", "as well as"):
+            clip = {
+                "allowed_changes": [
+                    "wardrobe may change",
+                    f"hero wardrobe may change {connector} "
+                    "must remain unchanged for guide",
+                ]
+            }
+            with self.subTest(connector=connector):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                        scope_identity=("str", "hero"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                        scope_identity=("str", "guide"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+
+    def test_as_well_as_splits_completed_predicates_but_preserves_shared_lists(self) -> None:
+        completed = (
+            "wardrobe may change as well as location may change as well as "
+            "product identity may change"
+        )
+        shared = "wardrobe as well as location as well as product identity may change"
+        for allowance in (completed, shared):
+            for key in ("wardrobe", "location", "product_identity"):
+                with self.subTest(allowance=allowance, key=key):
+                    self.assertTrue(
+                        continuity_chain_check.has_allowance(
+                            {"allowed_changes": [allowance]},
+                            key,
+                        )
+                    )
+
+        aliases = {
+            "hero": {("str", "hero")},
+            "guide": {("str", "guide")},
+        }
+        scoped = {
+            "allowed_changes": [
+                "hero wardrobe may change as well as guide location may change"
+            ]
+        }
+        for key, intended, unintended in (
+            ("wardrobe", "hero", "guide"),
+            ("location", "guide", "hero"),
+        ):
+            with self.subTest(scoped_key=key):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        scoped,
+                        key,
+                        scope_identity=("str", intended),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        scoped,
+                        key,
+                        scope_identity=("str", unintended),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+
+    def test_completed_or_after_comma_is_not_an_identity_role(self) -> None:
+        allowance = (
+            "wardrobe may change, location may change or "
+            "product identity may change"
+        )
+        for key in ("wardrobe", "location", "product_identity"):
+            with self.subTest(key=key):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        {"allowed_changes": [allowance]},
+                        key,
+                    )
+                )
+
+    def test_non_string_waiver_items_fail_closed_at_runtime(self) -> None:
+        malformed_values = ({"wardrobe": "must not change"}, True, 1, None)
+        for field in ("allowed_changes", "accepted_deviations", "continuity_breaks"):
+            for malformed in malformed_values:
+                with self.subTest(field=field, malformed=malformed):
+                    clip = {"allowed_changes": ["wardrobe may change"]}
+                    clip[field] = [malformed, "wardrobe may change"]
+                    self.assertFalse(
+                        continuity_chain_check.has_allowance(
+                            clip,
+                            "wardrobe",
+                        )
+                    )
+            with self.subTest(field=field, malformed_container=True):
+                clip = {"allowed_changes": ["wardrobe may change"]}
+                clip[field] = "wardrobe may change"
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                    )
+                )
+
+        self.assertFalse(
+            continuity_chain_check.has_allowance(
+                {
+                    "allowed_changes": ["wardrobe may change"],
+                    "transition_in": {"not": "text"},
+                },
+                "wardrobe",
+            )
+        )
+
+    def test_repeated_grammar_word_alias_does_not_consume_predicate(self) -> None:
+        aliases = {
+            "may change": {("str", "May Change")},
+            "guide": {("str", "guide")},
+        }
+        clip = {"allowed_changes": ["wardrobe for May Change may change"]}
+
+        self.assertTrue(
+            continuity_chain_check.has_allowance(
+                clip,
+                "wardrobe",
+                scope_identity=("str", "May Change"),
+                identity_aliases=aliases,
+                alias_widths=(2, 1),
+            )
+        )
+        self.assertFalse(
+            continuity_chain_check.has_allowance(
+                clip,
+                "wardrobe",
+                scope_identity=("str", "guide"),
+                identity_aliases=aliases,
+                alias_widths=(2, 1),
+            )
+        )
+
+    def test_fieldless_leading_scope_denial_stays_independent(self) -> None:
+        aliases = {
+            "hero": {("str", "hero")},
+            "guide": {("str", "guide")},
+        }
+        for denial in (
+            "for guide must remain unchanged",
+            "guide must remain unchanged",
+            "must remain unchanged for guide",
+        ):
+            clip = {
+                "allowed_changes": [f"hero wardrobe may change; {denial}"]
+            }
+            with self.subTest(denial=denial):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                        scope_identity=("str", "hero"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        clip,
+                        "wardrobe",
+                        scope_identity=("str", "guide"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+
+        grammar_aliases = {
+            "may": {("str", "May")},
+            "guide": {("str", "guide")},
+        }
+        pure_suffix = {"allowed_changes": ["wardrobe may change; only for May"]}
+        self.assertTrue(
+            continuity_chain_check.has_allowance(
+                pure_suffix,
+                "wardrobe",
+                scope_identity=("str", "May"),
+                identity_aliases=grammar_aliases,
+                alias_widths=(1,),
+            )
+        )
+        self.assertFalse(
+            continuity_chain_check.has_allowance(
+                pure_suffix,
+                "wardrobe",
+                scope_identity=("str", "guide"),
+                identity_aliases=grammar_aliases,
+                alias_widths=(1,),
+            )
+        )
+
+    def test_shared_prefix_as_well_as_matches_and(self) -> None:
+        for connector in ("and", "as well as"):
+            allowance = f"may change wardrobe {connector} location"
+            for key in ("wardrobe", "location"):
+                with self.subTest(connector=connector, key=key):
+                    self.assertTrue(
+                        continuity_chain_check.has_allowance(
+                            {"allowed_changes": [allowance]},
+                            key,
+                        )
+                    )
+
+        mixed = {
+            "allowed_changes": [
+                "may change wardrobe as well as location must remain unchanged"
+            ]
+        }
+        self.assertTrue(
+            continuity_chain_check.has_allowance(mixed, "wardrobe")
+        )
+        self.assertFalse(
+            continuity_chain_check.has_allowance(mixed, "location")
+        )
+
+    def test_anaphoric_grammar_alias_requires_explicit_scope(self) -> None:
+        for identity in ("Change", "Must", "No", "Cannot"):
+            aliases = {
+                "hero": {("str", "hero")},
+                identity.casefold(): {("str", identity)},
+            }
+            anaphoric = {
+                "allowed_changes": [
+                    "wardrobe may change",
+                    f"hero wardrobe may change; {identity} is not allowed",
+                ]
+            }
+            explicit = {
+                "allowed_changes": [
+                    "wardrobe may change",
+                    f"hero wardrobe may change; for {identity} must remain unchanged",
+                ]
+            }
+            with self.subTest(identity=identity, grammar_tail=True):
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        anaphoric,
+                        "wardrobe",
+                        scope_identity=("str", "hero"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        anaphoric,
+                        "wardrobe",
+                        scope_identity=("str", identity),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+            with self.subTest(identity=identity, explicit_scope=True):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        explicit,
+                        "wardrobe",
+                        scope_identity=("str", "hero"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        explicit,
+                        "wardrobe",
+                        scope_identity=("str", identity),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+
+    def test_field_tokens_override_colliding_identity_aliases(self) -> None:
+        aliases = {
+            "identity": {("str", "Identity")},
+            "phase": {("str", "Phase")},
+            "state": {("str", "State")},
+            "guide": {("str", "guide")},
+        }
+        collision_fields = {
+            "product_identity": "Identity",
+            "canonical_identity_id": "Identity",
+            "vehicle_identity": "Identity",
+            "camera_phase": "Phase",
+            "lighting_phase": "Phase",
+            "audio_phase": "Phase",
+            "focus_state": "State",
+            "emotional_state": "State",
+        }
+        for field, colliding_identity in collision_fields.items():
+            phrase = field.replace("_", " ")
+            global_clip = {"allowed_changes": [f"{phrase} may change"]}
+            scoped_clip = {"allowed_changes": [f"guide {phrase} may change"]}
+            with self.subTest(field=field, scope="global"):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        global_clip,
+                        field,
+                        scope_identity=("str", "guide"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+            with self.subTest(field=field, scope="guide"):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        scoped_clip,
+                        field,
+                        scope_identity=("str", "guide"),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+                self.assertFalse(
+                    continuity_chain_check.has_allowance(
+                        scoped_clip,
+                        field,
+                        scope_identity=("str", colliding_identity),
+                        identity_aliases=aliases,
+                        alias_widths=(1,),
+                    )
+                )
+
+        literal_identity = {"allowed_changes": ["Identity wardrobe may change"]}
+        self.assertTrue(
+            continuity_chain_check.has_allowance(
+                literal_identity,
+                "wardrobe",
+                scope_identity=("str", "Identity"),
+                identity_aliases=aliases,
+                alias_widths=(1,),
+            )
+        )
+        self.assertFalse(
+            continuity_chain_check.has_allowance(
+                literal_identity,
+                "wardrobe",
+                scope_identity=("str", "guide"),
+                identity_aliases=aliases,
+                alias_widths=(1,),
+            )
+        )
+
+    def test_full_field_phrase_alias_is_preserved_only_as_entity_prefix(self) -> None:
+        cases = (
+            ("product_identity", "Product Identity"),
+            ("camera_phase", "Camera Phase"),
+            ("focus_state", "Focus State"),
+        )
+        guide = ("str", "guide")
+        for field, display_alias in cases:
+            aliases = {
+                display_alias.casefold(): {("str", display_alias)},
+                "guide": {guide},
+            }
+            field_phrase = field.replace("_", " ")
+            global_clip = {"allowed_changes": [f"{field_phrase} may change"]}
+            scoped_clip = {
+                "allowed_changes": [
+                    f"{display_alias} {field_phrase} may change"
+                ]
+            }
+            possessive_clip = {
+                "allowed_changes": [
+                    f"{display_alias}'s {field_phrase} may change"
+                ]
+            }
+            with self.subTest(field=field, form="global"):
+                self.assertTrue(
+                    continuity_chain_check.has_allowance(
+                        global_clip,
+                        field,
+                        scope_identity=guide,
+                        identity_aliases=aliases,
+                        alias_widths=(2, 1),
+                    )
+                )
+            for form, clip in (("prefix", scoped_clip), ("possessive", possessive_clip)):
+                with self.subTest(field=field, form=form):
+                    self.assertTrue(
+                        continuity_chain_check.has_allowance(
+                            clip,
+                            field,
+                            scope_identity=("str", display_alias),
+                            identity_aliases=aliases,
+                            alias_widths=(2, 1),
+                        )
+                    )
+                    self.assertFalse(
+                        continuity_chain_check.has_allowance(
+                            clip,
+                            field,
+                            scope_identity=guide,
+                            identity_aliases=aliases,
+                            alias_widths=(2, 1),
+                        )
+                    )
+
+    def test_large_integer_json_returns_diagnostics_in_validate_and_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "examples" / "huge-project-state.json"
+            path.parent.mkdir()
+            path.write_text(
+                '{"clips": [], "huge": ' + "9" * 5000 + "}",
+                encoding="utf-8",
+            )
+
+            errors, warnings = continuity_chain_check.validate(path, root)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/continuity_chain_check.py",
+                    str(root),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        self.assertTrue(
+            any("cannot load project state" in error for error in errors),
+            errors,
+        )
+        self.assertEqual(warnings, [])
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("cannot load project state", result.stdout)
+        self.assertNotIn("Traceback", result.stdout + result.stderr)
+
+    def test_varied_alias_widths_and_candidate_overflow_are_bounded(self) -> None:
+        width_count = continuity_chain_check.MAX_WAIVER_TOKENS
+        aliases = {
+            " ".join(["a"] * width): {("str", f"identity-{width}")}
+            for width in range(1, width_count + 1)
+        }
+        tokens = ["a"] * width_count
+        started = time.perf_counter()
+        spans, ambiguous = continuity_chain_check.identity_token_spans(
+            tokens,
+            aliases,
+            tuple(range(width_count, 0, -1)),
+        )
+        matcher_elapsed = time.perf_counter() - started
+
+        self.assertTrue(ambiguous)
+        self.assertEqual(
+            spans,
+            [
+                (
+                    0,
+                    width_count,
+                    {continuity_chain_check.IDENTITY_MATCH_OVERFLOW},
+                )
+            ],
+        )
+        self.assertLess(
+            matcher_elapsed,
+            2.0,
+            f"varied-width matcher took {matcher_elapsed:.3f}s",
+        )
+
+        public_width_count = 400
+        public_aliases = {
+            " ".join(["a"] * width): {("str", f"identity-{width}")}
+            for width in range(1, public_width_count + 1)
+        }
+        allowance = " ".join(
+            ["a"] * public_width_count + ["wardrobe", "may", "change"]
+        )
+        started = time.perf_counter()
+        public_result = continuity_chain_check.has_allowance(
+            {"allowed_changes": [allowance]},
+            "wardrobe",
+            scope_identity=("str", f"identity-{public_width_count}"),
+            identity_aliases=public_aliases,
+            alias_widths=tuple(range(public_width_count, 0, -1)),
+        )
+        public_elapsed = time.perf_counter() - started
+
+        self.assertFalse(public_result)
+        self.assertLess(
+            public_elapsed,
+            2.0,
+            f"public varied-width parse took {public_elapsed:.3f}s",
+        )
+
+    def test_comma_heavy_under_cap_list_is_linear_and_preserved(self) -> None:
+        allowance = ", ".join(
+            ["wardrobe"] * 499 + ["and wardrobe may change"]
+        )
+        self.assertLessEqual(
+            len(continuity_chain_check.normalize_phrase(allowance).split()),
+            continuity_chain_check.MAX_WAIVER_TOKENS,
+        )
+        started = time.perf_counter()
+        result = continuity_chain_check.has_allowance(
+            {"allowed_changes": [allowance]},
+            "wardrobe",
+        )
+        elapsed = time.perf_counter() - started
+
+        self.assertTrue(result)
+        self.assertLess(elapsed, 2.0, f"500-item comma list took {elapsed:.3f}s")
+
+        independent = {
+            "allowed_changes": [
+                "wardrobe may change, location must remain unchanged"
+            ]
+        }
+        self.assertTrue(
+            continuity_chain_check.has_allowance(independent, "wardrobe")
+        )
+        self.assertFalse(
+            continuity_chain_check.has_allowance(independent, "location")
+        )
+
+    def test_deep_json_equality_is_iterative_and_budgeted(self) -> None:
+        observed_value: object = "same"
+        planned_value: object = "same"
+        for _ in range(400):
+            observed_value = [observed_value]
+            planned_value = [planned_value]
+
+        errors, warnings = self.validate_states(
+            {"character": {"wardrobe": observed_value}},
+            {"character": {"wardrobe": planned_value}},
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+        self.assertFalse(
+            continuity_chain_check.json_values_equal(
+                [0] * (continuity_chain_check.MAX_JSON_COMPARE_NODES + 1),
+                [0] * (continuity_chain_check.MAX_JSON_COMPARE_NODES + 1),
+            )
+        )
+
+    def test_json_load_recursion_error_returns_a_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "project-state.json"
+            path.write_text('{"clips": []}', encoding="utf-8")
+            with mock.patch.object(
+                continuity_chain_check,
+                "load",
+                side_effect=RecursionError("maximum recursion depth exceeded"),
+            ):
+                errors, warnings = continuity_chain_check.validate(path, root)
+
+        self.assertTrue(any("cannot load project state" in error for error in errors), errors)
+        self.assertEqual(warnings, [])
+
+    def test_large_identity_alias_inventory_stays_within_a_bounded_runtime(self) -> None:
+        aliases = {
+            f"actor {index}": {("str", f"actor {index}")}
+            for index in range(300)
+        }
+        clip = {
+            "allowed_changes": [
+                "allow changes to actor 1 wardrobe, actor 2 location, "
+                "and actor 3 product identity"
+            ]
+        }
+        started = time.perf_counter()
+        results = [
+            continuity_chain_check.has_allowance(
+                clip,
+                key,
+                scope_identity=("str", f"actor {identity_index}"),
+                identity_aliases=aliases,
+                alias_widths=(2,),
+            )
+            for _ in range(60)
+            for key, identity_index in (
+                ("wardrobe", 1),
+                ("location", 2),
+                ("product_identity", 3),
+            )
+        ]
+        long_serial_tokens = continuity_chain_check.normalize_phrase(
+            " and ".join(
+                f"actor {index} wardrobe" for index in range(120)
+            )
+            + " may change"
+        ).split()
+        identity_indexes = continuity_chain_check.identity_indexes_for_tokens(
+            long_serial_tokens,
+            aliases,
+            (2,),
+        )
+        long_serial_clip = {
+            "allowed_changes": [
+                " and ".join(
+                    f"actor {index} wardrobe" for index in range(150)
+                )
+                + " may change"
+            ]
+        }
+        long_serial_started = time.perf_counter()
+        long_serial_result = continuity_chain_check.has_allowance(
+            long_serial_clip,
+            "wardrobe",
+            scope_identity=("str", "actor 0"),
+            identity_aliases=aliases,
+            alias_widths=(2,),
+        )
+        long_serial_elapsed = time.perf_counter() - long_serial_started
+        elapsed = time.perf_counter() - started
+
+        self.assertTrue(all(results))
+        self.assertEqual(len(identity_indexes), 240)
+        self.assertFalse(long_serial_result)
+        self.assertLess(
+            long_serial_elapsed,
+            3.0,
+            f"150-item serial parser took {long_serial_elapsed:.3f}s",
+        )
+        self.assertLess(elapsed, 8.0, f"bounded parser took {elapsed:.3f}s")
+
+    def test_oversized_waiver_fails_closed_before_semantic_parsing(self) -> None:
+        oversized = " ".join(
+            ["wardrobe"]
+            + ["and wardrobe"] * continuity_chain_check.MAX_WAIVER_TOKENS
+            + ["may change"]
+        )
+        started = time.perf_counter()
+        result = continuity_chain_check.has_allowance(
+            {"allowed_changes": [oversized]},
+            "wardrobe",
+        )
+        elapsed = time.perf_counter() - started
+
+        self.assertFalse(result)
+        self.assertLess(elapsed, 1.0, f"oversized waiver took {elapsed:.3f}s")
 
 
 if __name__ == "__main__":
