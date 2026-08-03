@@ -1566,6 +1566,155 @@ class ContinuityChainTests(unittest.TestCase):
 
                 self.assertTrue(any("wardrobe" in error for error in errors), errors)
 
+    def test_other_entity_denial_does_not_cancel_one_entry_waiver(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            allowed_changes=[
+                "hero wardrobe may change while guide wardrobe must not change"
+            ],
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_other_entity_denial_does_not_cancel_separate_entry_waiver(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            allowed_changes=[
+                "hero wardrobe may change",
+                "guide wardrobe must not change",
+            ],
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_same_entity_or_global_denial_cancels_entity_waiver(self) -> None:
+        for allowance in (
+            "hero wardrobe may change while hero wardrobe must not change",
+            "hero wardrobe may change while wardrobe must not change",
+        ):
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+    def test_entity_denial_filters_global_waiver_only_for_that_entity(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "white coat",
+                    },
+                }
+            },
+            allowed_changes=[
+                "wardrobe may change",
+                "guide wardrobe must not change",
+            ],
+        )
+
+        self.assertFalse(
+            any("characters.hero.wardrobe" in error for error in errors),
+            errors,
+        )
+        self.assertTrue(
+            any("characters.guide.wardrobe" in error for error in errors),
+            errors,
+        )
+
     def test_unknown_bare_scope_residual_never_promotes_a_global_waiver(self) -> None:
         allowances = (
             "wardrobe may change, stranger only",

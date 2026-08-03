@@ -526,8 +526,8 @@ def analyze_field_entry(
     key: str,
     *,
     allow_bare: bool,
-) -> tuple[list[str], bool, bool]:
-    """Return positive clauses, any denial, and unsafe residual structure.
+) -> tuple[list[str], list[str], bool]:
+    """Return positive clauses, scoped denial contexts, and unsafe structure.
 
     Polarity is aggregated across the whole entry. A fieldless denial inherits
     the immediately preceding field group, so punctuation cannot turn
@@ -536,36 +536,44 @@ def analyze_field_entry(
     a scoped or qualified statement to a global allowance.
     """
     positive: list[str] = []
-    denied = False
+    denials: list[str] = []
     unsafe = False
     previous_fields: set[str] = set()
+    previous_context = ""
     entry_mentions_key = mentions_field(str(text), key)
     for tokens in semantic_token_clauses(text):
         groups, positive_groups, denied_groups = clause_field_polarities(tokens)
         if not groups:
-            if key in previous_fields and anaphorically_denies_change(tokens):
-                denied = True
-            if entry_mentions_key:
+            inherited_denial = (
+                key in previous_fields and anaphorically_denies_change(tokens)
+            )
+            if inherited_denial:
+                # The omitted field and entity both inherit from the preceding
+                # clause: ``hero wardrobe may change; must remain unchanged``.
+                denials.append(previous_context)
+            if entry_mentions_key and not inherited_denial:
                 unsafe = True
             continue
 
+        current_context = " ".join(tokens)
         current_fields = {
             candidate
             for group in groups
             for _start, _end, candidate in group
         }
         previous_fields = current_fields
+        previous_context = current_context
         for group in groups:
             group_token = tuple(group)
             group_keys = {candidate for _start, _end, candidate in group}
             if key not in group_keys:
                 continue
             if group_token in denied_groups:
-                denied = True
-            bare_group = allow_bare and " ".join(tokens) in field_phrases(key)
+                denials.append(current_context)
+            bare_group = allow_bare and current_context in field_phrases(key)
             if group_token in positive_groups or bare_group:
-                positive.append(" ".join(tokens))
-    return positive, denied, unsafe
+                positive.append(current_context)
+    return positive, denials, unsafe
 
 
 def identity_token_spans(
@@ -747,6 +755,24 @@ def allowance_matches_scope(
     return scope_identity is not None and scope_identity == next(iter(mentioned))
 
 
+def denial_conflicts_scope(
+    text: str,
+    scope_identity: IdentityToken | None,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None = None,
+) -> bool:
+    """Apply a denial globally or only to its one unambiguous entity scope."""
+    mentioned, ambiguous = mentioned_identity_tokens(
+        text,
+        identity_aliases,
+        alias_widths,
+    )
+    # An unscoped, unknown, or ambiguous denial fails closed for every entity.
+    if ambiguous or len(mentioned) != 1:
+        return True
+    return scope_identity == next(iter(mentioned))
+
+
 def has_allowance(
     clip: dict,
     key: str,
@@ -757,7 +783,8 @@ def has_allowance(
 ) -> bool:
     aliases = identity_aliases or {}
     candidates: list[str] = []
-    conflicts = False
+    denials: list[str] = []
+    unsafe = False
     for field in ("allowed_changes", "accepted_deviations", "continuity_breaks"):
         entries = clip.get(field, [])
         if not isinstance(entries, list):
@@ -766,12 +793,13 @@ def has_allowance(
             if not isinstance(text, str):
                 continue
             bare_entry = normalize_phrase(text) in field_phrases(key)
-            positive, denied, unsafe = analyze_field_entry(
+            positive, entry_denials, entry_unsafe = analyze_field_entry(
                 text,
                 key,
                 allow_bare=bare_entry,
             )
-            conflicts = conflicts or denied or unsafe
+            denials.extend(entry_denials)
+            unsafe = unsafe or entry_unsafe
             for clause in positive:
                 if not has_bounded_waiver_grammar(
                     clause,
@@ -779,18 +807,19 @@ def has_allowance(
                     aliases,
                     alias_widths,
                 ):
-                    conflicts = True
+                    unsafe = True
                     continue
                 candidates.append(clause)
 
     transition_value = clip.get("transition_in", "")
     if isinstance(transition_value, str):
-        positive, denied, unsafe = analyze_field_entry(
+        positive, entry_denials, entry_unsafe = analyze_field_entry(
             transition_value,
             key,
             allow_bare=False,
         )
-        conflicts = conflicts or denied or unsafe
+        denials.extend(entry_denials)
+        unsafe = unsafe or entry_unsafe
         for clause in positive:
             if not has_bounded_waiver_grammar(
                 clause,
@@ -798,14 +827,14 @@ def has_allowance(
                 aliases,
                 alias_widths,
             ):
-                conflicts = True
+                unsafe = True
                 continue
             candidates.append(clause)
 
     # Denials and preservation claims are authoritative across the complete
-    # entry set. Returning on the first positive would let a later conflicting
-    # entry disappear solely because of list order.
-    if conflicts:
+    # entry set for their entity scope. Returning on the first positive would
+    # let a later same-entity or global conflict disappear because of list order.
+    if unsafe:
         return False
     return any(
         allowance_matches_scope(
@@ -815,6 +844,15 @@ def has_allowance(
             aliases,
             alias_widths,
             identity_context=clause,
+        )
+        and not any(
+            denial_conflicts_scope(
+                denial,
+                scope_identity,
+                aliases,
+                alias_widths,
+            )
+            for denial in denials
         )
         for clause in candidates
     )
