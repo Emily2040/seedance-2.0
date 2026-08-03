@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import unicodedata
 from collections import Counter
 from pathlib import Path, PurePosixPath
+
+if __package__:
+    from .strict_json import diagnostic_text, load_json
+else:
+    from strict_json import diagnostic_text, load_json
 
 
 REQUIRED_SNIPPETS = {
@@ -405,11 +409,11 @@ def validate_directors_read_cases(root: Path, errors: list[str]) -> None:
         errors.append(f"missing {cases_rel}")
         return
     try:
-        cases = json.loads(cases_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        errors.append(f"{cases_rel}: invalid JSON: {exc}")
+        cases = load_json(cases_path, expected_type=list, root=root)
+    except (OSError, UnicodeError, ValueError, TypeError) as exc:
+        errors.append(diagnostic_text(f"{cases_rel}: invalid JSON: {exc}"))
         return
-    if not isinstance(cases, list) or not all(isinstance(case, dict) for case in cases):
+    if not all(isinstance(case, dict) for case in cases):
         errors.append(f"{cases_rel}: expected a list of case objects")
         return
 

@@ -617,51 +617,53 @@ class MigratedReaderBoundaryTests(unittest.TestCase):
                         "--strict",
                     ),
                 ),
-                ("eval_schema_check.py", lambda repo: (str(repo), "--strict")),
+                ("eval_schema_check.py", lambda repo: (str(repo),)),
                 (
                     "eval_run.py",
-                    lambda repo: (str(repo), "--self-test", "--strict"),
+                    lambda repo: (str(repo), "--self-test"),
                 ),
-                ("generation_run_check.py", lambda repo: (str(repo), "--strict")),
-                ("sequence_eval_check.py", lambda repo: (str(repo), "--strict")),
-                ("validate_skills.py", lambda repo: (str(repo), "--strict")),
+                ("generation_run_check.py", lambda repo: (str(repo),)),
+                ("sequence_eval_check.py", lambda repo: (str(repo),)),
+                ("validate_skills.py", lambda repo: (str(repo),)),
             ),
             "data": (
-                ("source_registry_check.py", lambda repo: (str(repo), "--strict")),
-                ("generation_run_check.py", lambda repo: (str(repo), "--strict")),
-                ("validate_skills.py", lambda repo: (str(repo), "--strict")),
+                ("source_registry_check.py", lambda repo: (str(repo),)),
+                ("generation_run_check.py", lambda repo: (str(repo),)),
+                ("validate_skills.py", lambda repo: (str(repo),)),
             ),
             "examples": (
                 ("project_state_check.py", lambda repo: (str(repo), "--strict")),
                 ("continuity_chain_check.py", lambda repo: (str(repo), "--strict")),
-                ("validate_skills.py", lambda repo: (str(repo), "--strict")),
+                ("validate_skills.py", lambda repo: (str(repo),)),
             ),
             "schemas": (
                 ("project_state_check.py", lambda repo: (str(repo), "--strict")),
-                ("validate_skills.py", lambda repo: (str(repo), "--strict")),
+                ("validate_skills.py", lambda repo: (str(repo),)),
             ),
-            "validation": (),
+            "validation": (
+                ("behavior_contract_check.py", lambda repo: (str(repo),)),
+            ),
             "assets": (
                 ("build_hero.py", lambda _repo: ("--check",)),
-                ("validate_skills.py", lambda repo: (str(repo), "--strict")),
+                ("validate_skills.py", lambda repo: (str(repo),)),
             ),
             "skills": (
                 (
                     "eval_run.py",
-                    lambda repo: (str(repo), "--self-test", "--strict"),
+                    lambda repo: (str(repo), "--self-test"),
                 ),
-                ("validate_skills.py", lambda repo: (str(repo), "--strict")),
+                ("validate_skills.py", lambda repo: (str(repo),)),
             ),
             "references": (
                 (
                     "source_registry_check.py",
-                    lambda repo: (str(repo), "--strict"),
+                    lambda repo: (str(repo),),
                 ),
                 (
                     "eval_run.py",
-                    lambda repo: (str(repo), "--self-test", "--strict"),
+                    lambda repo: (str(repo), "--self-test"),
                 ),
-                ("validate_skills.py", lambda repo: (str(repo), "--strict")),
+                ("validate_skills.py", lambda repo: (str(repo),)),
             ),
         }
         marker = "symbolic link, junction, or reparse point"
@@ -853,6 +855,7 @@ class ValidatorMutationTests(unittest.TestCase):
         "evals/evals.json",
         "examples/sequence-airport-arrival/project-state.json",
         "examples/standalone-clip/project-state.json",
+        "validation/fixtures/directors-read-cases.json",
     )
 
     @classmethod
@@ -930,10 +933,24 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_source_registry_rejects_duplicate_keys(self) -> None:
         target = self.repo / "data" / "sources.seedance-2026-05-30.json"
         target.write_text('{"sources": [], "sources": []}', encoding="utf-8")
-        result = self.run_script("source_registry_check.py", str(self.repo), "--strict")
+        result = self.run_script("source_registry_check.py", str(self.repo))
         self.assert_rejected(
             result,
             "source data JSON parse error",
+            "duplicate object key",
+            "line 1",
+        )
+
+    def test_behavior_contract_cases_reject_duplicate_keys(self) -> None:
+        target = self.repo / "validation" / "fixtures" / "directors-read-cases.json"
+        target.write_text(
+            '[{"id":"duplicate","id":"duplicate","expected_lane":"direct"}]',
+            encoding="utf-8",
+        )
+        result = self.run_script("behavior_contract_check.py", str(self.repo))
+        self.assert_rejected(
+            result,
+            "directors-read-cases.json: invalid JSON",
             "duplicate object key",
             "line 1",
         )
@@ -945,7 +962,7 @@ class ValidatorMutationTests(unittest.TestCase):
             first + '\n{"run_id": "one", "run_id": "two"}\n',
             encoding="utf-8",
         )
-        result = self.run_script("generation_run_check.py", str(self.repo), "--strict")
+        result = self.run_script("generation_run_check.py", str(self.repo))
         self.assert_rejected(
             result,
             "generation-runs.example.jsonl:2",
@@ -958,7 +975,7 @@ class ValidatorMutationTests(unittest.TestCase):
             '{"benchmark_version":"x","updated":"x","cases":[NaN,{},{}]}',
             encoding="utf-8",
         )
-        result = self.run_script("generation_run_check.py", str(self.repo), "--strict")
+        result = self.run_script("generation_run_check.py", str(self.repo))
         self.assert_rejected(
             result,
             "evals/generation-benchmark.json invalid JSON",
@@ -991,7 +1008,7 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_evals_reject_wrong_top_level_shape(self) -> None:
         target = self.repo / "evals" / "evals.json"
         target.write_text("[]", encoding="utf-8")
-        result = self.run_script("eval_schema_check.py", str(self.repo), "--strict")
+        result = self.run_script("eval_schema_check.py", str(self.repo))
         self.assert_rejected(
             result,
             "Invalid JSON",
@@ -1002,7 +1019,7 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_validate_skills_parses_required_community_patterns(self) -> None:
         target = self.repo / "data" / "community-patterns.seedance-2026-05-30.json"
         target.write_text('{"patterns": [}', encoding="utf-8")
-        result = self.run_script("validate_skills.py", str(self.repo), "--strict")
+        result = self.run_script("validate_skills.py", str(self.repo))
         self.assert_rejected(
             result,
             "data/community-patterns.seedance-2026-05-30.json parse error",
@@ -1032,7 +1049,6 @@ class ValidatorMutationTests(unittest.TestCase):
         schema_result = self.run_script_cp1252(
             "eval_schema_check.py",
             str(self.repo),
-            "--strict",
         )
         self.assertNotEqual(schema_result.returncode, 0)
         self.assert_cp1252_safe(schema_result, escaped)
@@ -1041,7 +1057,6 @@ class ValidatorMutationTests(unittest.TestCase):
             "eval_run.py",
             str(self.repo),
             "--self-test",
-            "--strict",
         )
         self.assertNotEqual(harness_result.returncode, 0)
         self.assert_cp1252_safe(harness_result, escaped)
@@ -1098,7 +1113,6 @@ class ValidatorMutationTests(unittest.TestCase):
         source_result = self.run_script_cp1252(
             "source_registry_check.py",
             str(self.repo),
-            "--strict",
         )
         self.assert_cp1252_safe(source_result, escaped)
 
@@ -1139,7 +1153,7 @@ class ValidatorMutationTests(unittest.TestCase):
             (
                 "eval_run.py",
                 "evals/evals.json",
-                (str(self.repo), "--self-test", "--strict"),
+                (str(self.repo), "--self-test"),
                 '{"cases":[],"cases":[]}',
             ),
         )
