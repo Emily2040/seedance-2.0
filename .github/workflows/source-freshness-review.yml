@@ -1,7 +1,8 @@
 name: source-freshness-review
 
-# Staleness of references/source-registry.md is a real signal, but it is a
-# property of the calendar rather than of any commit. Enforcing it inside
+# The age of references/source-registry.md's checked-in verification metadata is
+# a useful review signal, but it is a property of the calendar rather than of
+# any commit. This workflow does not fetch or re-read upstream sources. Enforcing it inside
 # validate-skills.yml made unrelated pull requests fail on a date boundary, so
 # the question is asked here instead: on a schedule, against the default
 # branch, where the answer means "a human should re-verify the sources" rather
@@ -48,7 +49,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Review source freshness
+      - name: Review checked-in source metadata age
         id: review
         shell: bash
         run: |
@@ -84,11 +85,12 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           {
-            echo "# Source freshness review"
+            echo "# Offline source metadata-age review"
             echo
             case "$state" in
               clean)
-                echo "References are within the freshness window. No action needed."
+                echo "The checked-in verification stamp is within the metadata-age window."
+                echo "This job did not fetch or re-read upstream sources; it does not prove any claim is still true."
                 ;;
               drifting)
                 echo "**references/source-registry.md is drifting.**"
@@ -150,7 +152,7 @@ jobs:
           if [[ "$STATE" == clean ]]; then
             if [[ -n "$number" ]]; then
               gh issue close "$number" --repo "$REPO" \
-                --comment "The source registry is inside the freshness window again. Closing automatically; no evidence was changed by this job."
+                --comment "The checked-in registry stamp is inside the metadata-age window again. Closing automatically; this job did not fetch sources or change evidence."
             fi
             exit 0
           fi
