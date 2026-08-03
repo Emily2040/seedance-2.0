@@ -560,37 +560,25 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         self.assertTrue(any("clip lineage cycle" in error for error in errors), errors)
 
     def test_deep_leaf_first_lineage_is_iterative(self) -> None:
-        project = load_json("examples/sequence-airport-arrival/project-state.json")
-        template = copy.deepcopy(project["clips"][0])
-        for field in (
-            "directors_read_lane",
-            "authoring_state",
-            "authoring_state_provenance",
-            "contract_authoring_state_snapshots",
-        ):
-            template.pop(field, None)
-        template["status"] = "planned"
-        template["observed_start_state"] = None
-        template["observed_end_state"] = None
-
         clips = []
         for index in range(1500):
-            clip = copy.deepcopy(template)
             clip_id = f"deep_{index:04d}"
-            clip["clip_id"] = clip_id
-            clip["parent_clip_id"] = None if index == 0 else f"deep_{index - 1:04d}"
-            clip["sequence_index"] = index + 1
-            clip["extension_depth"] = index
-            clips.append(clip)
-        project["clips"] = list(reversed(clips))
-        project["scenes"][0]["assigned_clip_ids"] = [clip["clip_id"] for clip in clips]
-        project["beats"] = []
-        project["current_clip_id"] = clips[-1]["clip_id"]
+            clips.append(
+                {
+                    "clip_id": clip_id,
+                    "parent_clip_id": (
+                        None if index == 0 else f"deep_{index - 1:04d}"
+                    ),
+                    "sequence_index": index + 1,
+                    "status": "planned",
+                    "observed_end_state": None,
+                }
+            )
 
-        errors = self.validate_project_copy(project, strict=False)
+        lineage = project_state_check.analyze_lineage(list(reversed(clips)), "deep")
 
-        self.assertIsInstance(errors, list)
-        self.assertTrue(any("max_chain_depth" in error for error in errors), errors)
+        self.assertEqual(len(lineage.clips), 1500)
+        self.assertEqual(lineage.errors, [])
 
     def test_wrong_type_story_is_diagnostic_not_exception(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")

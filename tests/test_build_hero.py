@@ -224,7 +224,9 @@ class OutlinedTypeTests(unittest.TestCase):
             ),
         }
         for expected_error, mutate in cases.items():
-            with self.subTest(field=expected_error), tempfile.TemporaryDirectory() as temp:
+            with self.subTest(field=expected_error), tempfile.TemporaryDirectory(
+                dir=ROOT
+            ) as temp:
                 tampered = json.loads(json.dumps(original))
                 mutate(tampered)
                 outlines = Path(temp) / "masthead-outlines.json"
@@ -241,7 +243,7 @@ class OutlinedTypeTests(unittest.TestCase):
 
     def test_hero_rejects_tampered_lock_bytes_before_any_svg_write(self) -> None:
         """A matching provenance record cannot bless a modified local lock."""
-        with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory(dir=ROOT) as temp:
             lock = Path(temp) / "requirements-masthead.lock"
             lock.write_bytes(build_hero.LOCK.read_bytes() + b"\n# tampered\n")
             with (
@@ -257,7 +259,7 @@ class OutlinedTypeTests(unittest.TestCase):
         original = json.loads(
             (ROOT / "assets/masthead-outlines.json").read_text(encoding="utf-8")
         )
-        with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory(dir=ROOT) as temp:
             temp_root = Path(temp)
             lock = temp_root / "requirements-masthead.lock"
             drifted = build_hero.LOCK.read_bytes().replace(

@@ -73,7 +73,7 @@ else:
 # ``__file__`` bytes would miss a stale or substituted bytecode import.
 _EXECUTED_EVALUATOR_CODE = sys._getframe().f_code
 _EXECUTED_EVALUATOR_PATH = Path(__file__).resolve(strict=True)
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "e06780cd96e440702ad86e14e06bc7fd4d5052a11cf3ae23c2d9602f5964bb08"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "363e2eb47b7ac5deb67b6726fb5064f7c0f03bfcb12e370fd7346d6cfa42e487"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -2175,8 +2175,6 @@ def judge(
         "case_prompt": case["prompt"],
         "criteria": criteria,
         "dimensions": dimensions,
-        "expected_skills": case.get("skills_expected_to_activate", []),
-        "sources_selected_without_expected_labels": sources or [],
         "candidate_response": response,
     }
     user = (
