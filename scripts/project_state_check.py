@@ -6,9 +6,12 @@ from pathlib import Path
 
 from lineage_contract import (
     analyze_lineage,
+    build_take_review_indexes,
     bound_validation_diagnostics,
     classify_parent_id,
     load_project_document,
+    TakeReviewIndex,
+    validate_take_reconciliation,
 )
 from strict_json import bound_diagnostics
 from strict_json import load as load_strict_json
@@ -54,8 +57,6 @@ REQUIRED_TAKE_REVIEW_FIELDS = {
     "unexpected_completed_beats", "continuity_breaks", "accepted_deviations",
     "observation_confidence", "uncertainties", "requires_user_confirmation",
 }
-
-
 def load_json(path: Path) -> object:
     return load_strict_json(path)
 
@@ -74,7 +75,11 @@ def sequence_paths(root: Path) -> list[Path]:
     return sorted(paths)
 
 
-def validate_project(path: Path, root: Path) -> list[str]:
+def validate_project(
+    path: Path,
+    root: Path,
+    review_index: TakeReviewIndex | None = None,
+) -> list[str]:
     data, rel, errors = load_project_document(path, root)
     if data is None:
         return bound_validation_diagnostics(errors, rel)
@@ -89,6 +94,9 @@ def validate_project(path: Path, root: Path) -> list[str]:
     clips = lineage.clips
     clips_by_id = lineage.clips_by_id
     clip_ids = set(clips_by_id)
+    if review_index is None:
+        review_index = build_take_review_indexes([path])[path.resolve().parent]
+    errors.extend(validate_take_reconciliation(data, clips_by_id, rel, review_index))
 
     if data["project_mode"] not in {"standalone_clip", "sequence_project"}:
         errors.append(f"{rel}: invalid project_mode {data['project_mode']}")
@@ -219,8 +227,11 @@ def main() -> int:
     paths = sequence_paths(root)
     if not paths:
         errors.append("missing project-state examples")
+    review_indexes = build_take_review_indexes(paths)
     for path in paths:
-        errors.extend(validate_project(path, root))
+        errors.extend(
+            validate_project(path, root, review_indexes[path.resolve().parent])
+        )
 
     for path in sorted((root / "examples").rglob("*.json")) if (root / "examples").exists() else []:
         rel = path.relative_to(root).as_posix()

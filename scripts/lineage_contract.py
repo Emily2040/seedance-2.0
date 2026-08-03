@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import Iterable, Literal
 
 from strict_json import (
     MAX_DIAGNOSTIC_CHARS,
@@ -37,6 +37,44 @@ MAX_ERROR_CHARS = MAX_DIAGNOSTIC_CHARS
 MAX_TOTAL_DIAGNOSTIC_CHARS = MAX_DIAGNOSTIC_TOTAL_CHARS
 MAX_IDENTIFIER_CHARS = 256
 MAX_CYCLE_DISPLAY_NODES = 8
+MAX_TAKE_HISTORY_ITEMS = 4096
+MAX_TAKE_EVIDENCE_CHARS = 4096
+MAX_TAKE_REVIEW_FILES_PER_DIRECTORY = 4096
+MAX_REVIEWS_PER_TAKE_KEY = 2
+
+VERDICT_CLIP_STATUS = {
+    "accept": "accepted",
+    "accept_with_deviation": "accepted_with_deviation",
+    "repair": "repair",
+    "reject": "rejected",
+}
+POST_REVIEW_CLIP_STATUSES = frozenset(VERDICT_CLIP_STATUS.values())
+TAKE_HISTORY_REQUIRED_FIELDS = frozenset({"take_id", "clip_id", "verdict"})
+TAKE_HISTORY_ALLOWED_FIELDS = frozenset(
+    {*TAKE_HISTORY_REQUIRED_FIELDS, "evidence"}
+)
+AUTHORITATIVE_TAKE_REVIEW_FIELDS = frozenset(
+    {
+        "project_id",
+        "clip_id",
+        "take_id",
+        "source_status",
+        "verdict",
+        "observed_start_state",
+        "observed_end_state",
+        "completed_beats",
+        "incomplete_beats",
+        "unexpected_completed_beats",
+        "continuity_breaks",
+        "accepted_deviations",
+        "observation_confidence",
+        "uncertainties",
+        "requires_user_confirmation",
+    }
+)
+TAKE_REVIEW_SOURCE_STATUSES = frozenset(
+    {"generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"}
+)
 
 ParentIdKind = Literal["root", "invalid", "parent"]
 ParentLinkMode = Literal[
@@ -54,6 +92,19 @@ class LineageAnalysis:
     accepted_links: list[tuple[dict, dict]]
     provisional_links: list[tuple[dict, dict]]
     errors: list[str]
+
+
+@dataclass(frozen=True)
+class TakeReviewRecord:
+    path: Path
+    data: dict
+
+
+@dataclass(frozen=True)
+class TakeReviewIndex:
+    directory: Path
+    records_by_key: dict[tuple[str, str, str], list[TakeReviewRecord]]
+    diagnostics: tuple[str, ...]
 
 
 def _bounded(value: object, limit: int = 80) -> str:
@@ -122,6 +173,380 @@ def _append_error(errors: list[str], message: str, rel: str) -> None:
         finish_with_omission()
         return
     errors.append(candidate)
+
+
+def _append_take_error(errors: list[str], message: str, rel: str) -> None:
+    omission = _fit_error(f"{rel}: additional take reconciliation diagnostics omitted")
+    if errors and errors[-1] == omission:
+        return
+
+    def finish_with_omission() -> None:
+        total = sum(len(error) for error in errors)
+        while errors and total + len(omission) > MAX_TOTAL_DIAGNOSTIC_CHARS:
+            total -= len(errors.pop())
+        if len(errors) < MAX_LINEAGE_ERRORS:
+            errors.append(omission)
+
+    if len(errors) >= MAX_LINEAGE_ERRORS - 1:
+        if len(errors) == MAX_LINEAGE_ERRORS - 1:
+            finish_with_omission()
+        return
+    candidate = _fit_error(message)
+    if sum(len(error) for error in errors) + len(candidate) > MAX_TOTAL_DIAGNOSTIC_CHARS:
+        finish_with_omission()
+        return
+    errors.append(candidate)
+
+
+def _is_bounded_identifier(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and len(value) <= MAX_IDENTIFIER_CHARS
+    )
+
+
+def _is_take_review_path(path: Path) -> bool:
+    name = path.name
+    return (
+        "project-state" not in name
+        and (name == "take-review.json" or name.endswith("-take-review.json"))
+    )
+
+
+def build_take_review_index(
+    directory: Path,
+    *,
+    excluded_project_paths: Iterable[Path] = (),
+) -> TakeReviewIndex:
+    """Load candidate sibling reviews once, excluding every project document.
+
+    The hard file cap keeps an attacker-controlled directory from turning the
+    semantic check into an unbounded scan. A directory over the cap is invalid;
+    it never silently drops a review and reports success.
+    """
+
+    resolved_directory = directory.resolve()
+    excluded = {path.resolve() for path in excluded_project_paths}
+    excluded_file_ids: set[tuple[int, int]] = set()
+    for path in excluded:
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        if stat.st_ino:
+            excluded_file_ids.add((stat.st_dev, stat.st_ino))
+    candidates: list[Path] = []
+    diagnostics: list[str] = []
+    try:
+        entries = resolved_directory.iterdir()
+        for path in entries:
+            if not _is_take_review_path(path) or path.resolve() in excluded:
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                stat = None
+            if (
+                stat is not None
+                and stat.st_ino
+                and (stat.st_dev, stat.st_ino) in excluded_file_ids
+            ):
+                continue
+            candidates.append(path)
+            if len(candidates) > MAX_TAKE_REVIEW_FILES_PER_DIRECTORY:
+                diagnostics.append(
+                    f"sibling take-review file count exceeds "
+                    f"{MAX_TAKE_REVIEW_FILES_PER_DIRECTORY}"
+                )
+                candidates = candidates[:MAX_TAKE_REVIEW_FILES_PER_DIRECTORY]
+                break
+    except OSError as exc:
+        diagnostics.append(
+            f"cannot scan sibling take-review directory: {_safe_detail(str(exc))}"
+        )
+
+    records_by_key: dict[tuple[str, str, str], list[TakeReviewRecord]] = {}
+    for path in sorted(candidates, key=lambda candidate: candidate.name):
+        try:
+            review = load_strict_json(path)
+        except (OSError, UnicodeError, ValueError) as exc:
+            diagnostics.append(
+                f"sibling {safe_diagnostic_text(path.name, 120)} is invalid JSON: "
+                f"{_safe_detail(str(exc))}"
+            )
+            continue
+        if not isinstance(review, dict):
+            diagnostics.append(
+                f"sibling {safe_diagnostic_text(path.name, 120)} take-review must be an object"
+            )
+            continue
+
+        key_values = tuple(review.get(field) for field in ("project_id", "clip_id", "take_id"))
+        invalid_fields = [
+            field
+            for field, value in zip(("project_id", "clip_id", "take_id"), key_values)
+            if not _is_bounded_identifier(value)
+        ]
+        if invalid_fields:
+            diagnostics.append(
+                f"sibling {safe_diagnostic_text(path.name, 120)} take-review has invalid "
+                f"identity fields: {', '.join(invalid_fields)}"
+            )
+            continue
+
+        project_id, clip_id, take_id = key_values
+        assert isinstance(project_id, str)
+        assert isinstance(clip_id, str)
+        assert isinstance(take_id, str)
+        key = (project_id, clip_id, take_id)
+        records = records_by_key.setdefault(key, [])
+        if len(records) < MAX_REVIEWS_PER_TAKE_KEY:
+            records.append(TakeReviewRecord(path=path, data=review))
+
+    return TakeReviewIndex(
+        directory=resolved_directory,
+        records_by_key=records_by_key,
+        diagnostics=tuple(
+            bound_diagnostics(
+                diagnostics,
+                "additional sibling take-review index diagnostics omitted",
+            )
+        ),
+    )
+
+
+def build_take_review_indexes(project_paths: Iterable[Path]) -> dict[Path, TakeReviewIndex]:
+    """Build one review index per project directory for an entire validator run."""
+
+    excluded_by_directory: dict[Path, set[Path]] = {}
+    for project_path in project_paths:
+        resolved_path = project_path.resolve()
+        excluded_by_directory.setdefault(resolved_path.parent, set()).add(resolved_path)
+    return {
+        directory: build_take_review_index(
+            directory,
+            excluded_project_paths=excluded_paths,
+        )
+        for directory, excluded_paths in sorted(
+            excluded_by_directory.items(), key=lambda item: str(item[0])
+        )
+    }
+
+
+def validate_take_reconciliation(
+    data: dict,
+    clips_by_id: dict[str, dict],
+    rel: str,
+    review_index: TakeReviewIndex,
+) -> list[str]:
+    """Bind current post-review clip state to one history entry and one review."""
+
+    errors: list[str] = []
+    for diagnostic in review_index.diagnostics:
+        _append_take_error(errors, f"{rel}: {diagnostic}", rel)
+
+    history = data.get("take_history")
+    if not isinstance(history, list):
+        _append_take_error(errors, f"{rel}: take_history must be an array", rel)
+        history_entries: list[object] = []
+    else:
+        if len(history) > MAX_TAKE_HISTORY_ITEMS:
+            _append_take_error(
+                errors,
+                f"{rel}: take_history must contain at most {MAX_TAKE_HISTORY_ITEMS} entries; "
+                f"got {len(history)}",
+                rel,
+            )
+        history_entries = history[:MAX_TAKE_HISTORY_ITEMS]
+
+    latest_by_clip: dict[str, tuple[str, str]] = {}
+    seen_keys: set[tuple[str, str]] = set()
+    for index, entry in enumerate(history_entries):
+        label = f"{rel}: take_history[{index}]"
+        if not isinstance(entry, dict):
+            _append_take_error(errors, f"{label} must be an object", rel)
+            continue
+
+        missing = sorted(TAKE_HISTORY_REQUIRED_FIELDS - set(entry))
+        if missing:
+            _append_take_error(
+                errors,
+                f"{label} missing fields: {', '.join(missing)}",
+                rel,
+            )
+        unexpected = sorted(set(entry) - TAKE_HISTORY_ALLOWED_FIELDS)
+        if unexpected:
+            rendered_unexpected = ", ".join(
+                _bounded(field, 64) for field in unexpected[:8]
+            )
+            if len(unexpected) > 8:
+                rendered_unexpected += f", ... ({len(unexpected)} fields)"
+            _append_take_error(
+                errors,
+                f"{label} has unexpected fields: {rendered_unexpected}",
+                rel,
+            )
+
+        clip_id = entry.get("clip_id")
+        take_id = entry.get("take_id")
+        verdict = entry.get("verdict")
+        valid_entry = True
+        if not _is_bounded_identifier(clip_id):
+            _append_take_error(
+                errors,
+                f"{label} clip_id must be a non-empty string of at most "
+                f"{MAX_IDENTIFIER_CHARS} characters; got {_bounded(clip_id)}",
+                rel,
+            )
+            valid_entry = False
+        if not _is_bounded_identifier(take_id):
+            _append_take_error(
+                errors,
+                f"{label} take_id must be a non-empty string of at most "
+                f"{MAX_IDENTIFIER_CHARS} characters; got {_bounded(take_id)}",
+                rel,
+            )
+            valid_entry = False
+        if not isinstance(verdict, str) or verdict not in VERDICT_CLIP_STATUS:
+            _append_take_error(
+                errors,
+                f"{label} has invalid verdict {_bounded(verdict)}",
+                rel,
+            )
+            valid_entry = False
+        evidence = entry.get("evidence")
+        if "evidence" in entry and (
+            not isinstance(evidence, str) or len(evidence) > MAX_TAKE_EVIDENCE_CHARS
+        ):
+            _append_take_error(
+                errors,
+                f"{label} evidence must be a string of at most "
+                f"{MAX_TAKE_EVIDENCE_CHARS} characters",
+                rel,
+            )
+            valid_entry = False
+        if not valid_entry:
+            continue
+
+        assert isinstance(clip_id, str)
+        assert isinstance(take_id, str)
+        assert isinstance(verdict, str)
+        key = (clip_id, take_id)
+        if key in seen_keys:
+            _append_take_error(
+                errors,
+                f"{label} duplicates take {_identifier(take_id)} for clip "
+                f"{_identifier(clip_id)}",
+                rel,
+            )
+            continue
+        seen_keys.add(key)
+        if clip_id not in clips_by_id:
+            _append_take_error(
+                errors,
+                f"{label} refers to missing clip {_identifier(clip_id)}",
+                rel,
+            )
+            continue
+        latest_by_clip[clip_id] = (take_id, verdict)
+
+    project_id = data.get("project_id")
+    valid_project_id = _is_bounded_identifier(project_id)
+    if not valid_project_id:
+        _append_take_error(
+            errors,
+            f"{rel}: project_id must be a non-empty string of at most "
+            f"{MAX_IDENTIFIER_CHARS} characters for take reconciliation; "
+            f"got {_bounded(project_id)}",
+            rel,
+        )
+
+    for clip_id, (take_id, verdict) in latest_by_clip.items():
+        matches: list[TakeReviewRecord] = []
+        if valid_project_id:
+            assert isinstance(project_id, str)
+            matches = review_index.records_by_key.get((project_id, clip_id, take_id), [])
+        if not matches:
+            _append_take_error(
+                errors,
+                f"{rel}: latest take {_identifier(take_id)} for clip "
+                f"{_identifier(clip_id)} is missing its sibling take-review record",
+                rel,
+            )
+        elif len(matches) > 1:
+            _append_take_error(
+                errors,
+                f"{rel}: latest take {_identifier(take_id)} for clip "
+                f"{_identifier(clip_id)} has multiple sibling take-review records",
+                rel,
+            )
+        else:
+            review = matches[0].data
+            missing_review_fields = sorted(AUTHORITATIVE_TAKE_REVIEW_FIELDS - set(review))
+            if missing_review_fields:
+                _append_take_error(
+                    errors,
+                    f"{rel}: sibling take-review for take {_identifier(take_id)} is not "
+                    f"authoritative; missing fields: {', '.join(missing_review_fields)}",
+                    rel,
+                )
+            source_status = review.get("source_status")
+            if not isinstance(source_status, str) or source_status not in TAKE_REVIEW_SOURCE_STATUSES:
+                _append_take_error(
+                    errors,
+                    f"{rel}: sibling take-review for take {_identifier(take_id)} has invalid "
+                    f"source_status {_bounded(source_status)}",
+                    rel,
+                )
+            review_verdict = review.get("verdict")
+            if not isinstance(review_verdict, str) or review_verdict not in VERDICT_CLIP_STATUS:
+                _append_take_error(
+                    errors,
+                    f"{rel}: sibling take-review for take {_identifier(take_id)} has invalid "
+                    f"verdict {_bounded(review_verdict)}",
+                    rel,
+                )
+            elif review_verdict != verdict:
+                _append_take_error(
+                    errors,
+                    f"{rel}: take_history verdict {verdict} for take "
+                    f"{_identifier(take_id)} does not match sibling take-review verdict "
+                    f"{review_verdict}",
+                    rel,
+                )
+
+        actual = clips_by_id[clip_id].get("status")
+        expected = VERDICT_CLIP_STATUS[verdict]
+        if actual != expected:
+            rendered_actual = (
+                actual
+                if isinstance(actual, str) and actual in ALL_CLIP_STATUSES
+                else _bounded(actual)
+            )
+            _append_take_error(
+                errors,
+                f"{rel}: latest take {_identifier(take_id)} for clip "
+                f"{_identifier(clip_id)} has verdict {verdict}; clip status must be "
+                f"{expected}, not {rendered_actual}",
+                rel,
+            )
+
+    for clip_id, clip in clips_by_id.items():
+        status = clip.get("status")
+        if (
+            isinstance(status, str)
+            and status in POST_REVIEW_CLIP_STATUSES
+            and clip_id not in latest_by_clip
+        ):
+            _append_take_error(
+                errors,
+                f"{rel}: clip {_identifier(clip_id)} status {status} requires a current "
+                "take_history entry and sibling take-review record",
+                rel,
+            )
+
+    return errors
 
 
 def load_project_document(path: Path, root: Path) -> tuple[dict | None, str, list[str]]:

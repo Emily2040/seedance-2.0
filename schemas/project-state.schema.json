@@ -38,12 +38,39 @@
     "scenes": {"type": "array", "items": {"$ref": "#/$defs/scene"}},
     "beats": {"type": "array", "items": {"$ref": "#/$defs/beat"}},
     "clips": {"type": "array", "items": {"$ref": "#/$defs/clip"}},
-    "take_history": {"type": "array"},
+    "take_history": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {"$ref": "#/$defs/take_history_item"}
+    },
     "current_clip_id": {"type": "string"},
     "canon_revision": {"type": "integer", "minimum": 1},
     "updated_at": {"type": "string"}
   },
   "$defs": {
+    "take_history_item": {
+      "type": "object",
+      "required": ["take_id", "clip_id", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "take_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        },
+        "clip_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        },
+        "verdict": {
+          "enum": ["accept", "accept_with_deviation", "repair", "reject"]
+        },
+        "evidence": {"type": "string", "maxLength": 4096}
+      }
+    },
     "story": {
       "type": "object",
       "required": ["logline", "story_promise", "objective", "initial_condition", "final_outcome", "target_duration_sec", "tone", "medium"],

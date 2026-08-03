@@ -11,17 +11,81 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_PROJECT_STATE = ROOT / "examples" / "sequence-observed-deviation" / "project-state-before.json"
+REVIEWED_PROJECT_STATE = ROOT / "examples" / "sequence-airport-arrival" / "project-state.json"
+REVIEWED_TAKE = ROOT / "examples" / "sequence-airport-arrival" / "clip-01-take-review.json"
 
 
 class ProjectStateTests(unittest.TestCase):
-    def run_mutated_project(self, mutate) -> subprocess.CompletedProcess[str]:
+    @staticmethod
+    def review_for(project_id: str, clip_id: str, take_id: str, verdict: str) -> dict:
+        return {
+            "project_id": project_id,
+            "clip_id": clip_id,
+            "take_id": take_id,
+            "source_status": "reviewed",
+            "verdict": verdict,
+            "observed_start_state": {},
+            "observed_end_state": {},
+            "completed_beats": [],
+            "incomplete_beats": [],
+            "unexpected_completed_beats": [],
+            "continuity_breaks": [],
+            "accepted_deviations": [],
+            "observation_confidence": "high",
+            "uncertainties": [],
+            "requires_user_confirmation": False,
+        }
+
+    def reviews_for_history(self, data: dict) -> list[dict]:
+        return [
+            self.review_for(
+                data["project_id"],
+                entry["clip_id"],
+                entry["take_id"],
+                entry["verdict"],
+            )
+            for entry in data["take_history"]
+        ]
+
+    def run_mutated_project(
+        self,
+        mutate,
+        review_builder=None,
+    ) -> subprocess.CompletedProcess[str]:
         data = json.loads(BASE_PROJECT_STATE.read_text(encoding="utf-8"))
         mutate(data)
+        reviews = review_builder(data) if review_builder is not None else []
         with tempfile.TemporaryDirectory(prefix="lineage-test-") as temp_dir:
             repo = Path(temp_dir)
             fixture = repo / "examples" / "lineage" / "project-state.json"
             fixture.parent.mkdir(parents=True)
             fixture.write_text(json.dumps(data), encoding="utf-8")
+            for index, review in enumerate(reviews):
+                (fixture.parent / f"clip-{index}-take-review.json").write_text(
+                    json.dumps(review), encoding="utf-8"
+                )
+            return subprocess.run(
+                [sys.executable, str(ROOT / "scripts" / "project_state_check.py"), str(repo), "--strict"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+    def run_mutated_reviewed_project(self, project_mutate, review_mutate) -> subprocess.CompletedProcess[str]:
+        project = json.loads(REVIEWED_PROJECT_STATE.read_text(encoding="utf-8"))
+        review = json.loads(REVIEWED_TAKE.read_text(encoding="utf-8"))
+        project_mutate(project)
+        review_mutate(review)
+        with tempfile.TemporaryDirectory(prefix="take-reconcile-test-") as temp_dir:
+            repo = Path(temp_dir)
+            fixture_dir = repo / "examples" / "sequence"
+            fixture_dir.mkdir(parents=True)
+            (fixture_dir / "project-state.json").write_text(
+                json.dumps(project), encoding="utf-8"
+            )
+            (fixture_dir / "clip-01-take-review.json").write_text(
+                json.dumps(review), encoding="utf-8"
+            )
             return subprocess.run(
                 [sys.executable, str(ROOT / "scripts" / "project_state_check.py"), str(repo), "--strict"],
                 cwd=ROOT,
@@ -40,6 +104,61 @@ class ProjectStateTests(unittest.TestCase):
             text=True,
             capture_output=True,
         )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_rejected_canonical_take_cannot_leave_clip_accepted(self) -> None:
+        def reject_history(project: dict) -> None:
+            project["take_history"][-1]["verdict"] = "reject"
+
+        result = self.run_mutated_reviewed_project(
+            reject_history,
+            lambda review: review.update(verdict="reject", accepted_deviations=[]),
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "latest take take_clip01_a for clip clip_01 has verdict reject; "
+            "clip status must be rejected, not accepted_with_deviation",
+            result.stdout,
+        )
+
+    def test_sibling_review_verdict_must_match_take_history(self) -> None:
+        result = self.run_mutated_reviewed_project(
+            lambda project: None,
+            lambda review: review.update(verdict="reject", accepted_deviations=[]),
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "take_history verdict accept_with_deviation for take take_clip01_a "
+            "does not match sibling take-review verdict reject",
+            result.stdout,
+        )
+
+    def test_latest_take_history_entry_requires_its_review_record(self) -> None:
+        project = json.loads(REVIEWED_PROJECT_STATE.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory(prefix="take-reconcile-test-") as temp_dir:
+            repo = Path(temp_dir)
+            fixture_dir = repo / "examples" / "sequence"
+            fixture_dir.mkdir(parents=True)
+            (fixture_dir / "project-state.json").write_text(
+                json.dumps(project), encoding="utf-8"
+            )
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts" / "project_state_check.py"), str(repo), "--strict"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("latest take take_clip01_a for clip clip_01 is missing", result.stdout)
+
+    def test_earlier_rejected_take_does_not_override_latest_accepted_take(self) -> None:
+        def prepend_rejection(project: dict) -> None:
+            project["take_history"].insert(
+                0,
+                {"take_id": "take_clip01_rejected", "clip_id": "clip_01", "verdict": "reject"},
+            )
+
+        result = self.run_mutated_reviewed_project(prepend_rejection, lambda review: None)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_rejects_self_parenting(self) -> None:
@@ -146,12 +265,23 @@ class ProjectStateTests(unittest.TestCase):
 
     def test_preserves_valid_accepted_chain_with_planned_leaf(self) -> None:
         def accept_predecessors(data: dict) -> None:
+            data["take_history"] = []
             for clip_id in ("clip_01", "clip_02"):
                 clip = self.clip(data, clip_id)
                 clip["status"] = "accepted"
                 clip["observed_end_state"] = copy.deepcopy(clip["planned_end_state"])
+                data["take_history"].append(
+                    {
+                        "take_id": f"take_{clip_id}_accepted",
+                        "clip_id": clip_id,
+                        "verdict": "accept",
+                    }
+                )
 
-        result = self.run_mutated_project(accept_predecessors)
+        result = self.run_mutated_project(
+            accept_predecessors,
+            self.reviews_for_history,
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_preserves_rejected_leaf_with_accepted_parent(self) -> None:
@@ -162,6 +292,18 @@ class ProjectStateTests(unittest.TestCase):
             leaf = self.clip(data, "clip_02")
             leaf["status"] = "rejected"
             leaf["observed_end_state"] = None
+            data["take_history"] = [
+                {
+                    "take_id": "take_clip_01_accepted",
+                    "clip_id": "clip_01",
+                    "verdict": "accept",
+                },
+                {
+                    "take_id": "take_clip_02_rejected",
+                    "clip_id": "clip_02",
+                    "verdict": "reject",
+                },
+            ]
             data["clips"] = [root, leaf]
             data["beats"] = [
                 beat for beat in data["beats"] if beat.get("assigned_clip_id") != "clip_03"
@@ -169,7 +311,10 @@ class ProjectStateTests(unittest.TestCase):
             data["scenes"][0]["assigned_clip_ids"] = ["clip_01", "clip_02"]
             data["current_clip_id"] = "clip_02"
 
-        result = self.run_mutated_project(reject_leaf)
+        result = self.run_mutated_project(
+            reject_leaf,
+            self.reviews_for_history,
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_preserves_disconnected_valid_lineage_components(self) -> None:
