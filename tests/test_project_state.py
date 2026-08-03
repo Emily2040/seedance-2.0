@@ -106,6 +106,49 @@ class ProjectStateTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_later_standalone_contract_requires_parent(self) -> None:
+        contract_path = (
+            ROOT
+            / "examples"
+            / "sequence-airport-arrival"
+            / "clip-02-continuation-contract.json"
+        )
+        for mode in ("missing", "null"):
+            with self.subTest(parent=mode), tempfile.TemporaryDirectory(
+                prefix="contract-parent-test-"
+            ) as temp_dir:
+                repo = Path(temp_dir)
+                fixture_dir = repo / "examples" / "sequence"
+                fixture_dir.mkdir(parents=True)
+                (fixture_dir / "project-state.json").write_text(
+                    BASE_PROJECT_STATE.read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                if mode == "missing":
+                    contract.pop("parent_clip_id")
+                else:
+                    contract["parent_clip_id"] = None
+                (fixture_dir / "clip-02-continuation-contract.json").write_text(
+                    json.dumps(contract), encoding="utf-8"
+                )
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "scripts" / "project_state_check.py"),
+                        str(repo),
+                        "--strict",
+                    ],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                )
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn(
+                    "later clip sequence_index 2 must declare a non-empty parent_clip_id",
+                    result.stdout,
+                )
+
     def test_rejected_canonical_take_cannot_leave_clip_accepted(self) -> None:
         def reject_history(project: dict) -> None:
             project["take_history"][-1]["verdict"] = "reject"

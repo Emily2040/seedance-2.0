@@ -791,7 +791,11 @@ def validate_take_reconciliation(
 
         actual = clips_by_id[clip_id].get("status")
         expected = VERDICT_CLIP_STATUS[verdict]
-        if actual != expected:
+        if (
+            isinstance(actual, str)
+            and actual in POST_REVIEW_CLIP_STATUSES
+            and actual != expected
+        ):
             rendered_actual = (
                 actual
                 if isinstance(actual, str) and actual in ALL_CLIP_STATUSES
