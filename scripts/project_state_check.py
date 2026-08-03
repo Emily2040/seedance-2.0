@@ -2763,9 +2763,12 @@ def main() -> int:
     current_project_references: dict[str, set[str]] = {}
     for project_id, (version, _, project) in current_projects.items():
         current_project_versions[project_id] = version
+        references = project.get("reference_registry", [])
+        if not isinstance(references, list):
+            references = []
         current_project_references[project_id] = {
             reference.get("tag")
-            for reference in project.get("reference_registry", [])
+            for reference in references
             if isinstance(reference, dict) and isinstance(reference.get("tag"), str)
         }
         clips = project.get("clips", [])

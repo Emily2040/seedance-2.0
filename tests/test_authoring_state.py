@@ -529,6 +529,31 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertTrue(any(expected in error for error in errors), errors)
 
+    def test_main_guards_non_array_reference_registry_in_current_project_pass(self) -> None:
+        base = load_json("examples/sequence-airport-arrival/project-state.json")
+        for invalid in (None, 7, {}):
+            with self.subTest(reference_registry=invalid), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                project_path = root / "examples" / "project-state.json"
+                project_path.parent.mkdir(parents=True)
+                project = copy.deepcopy(base)
+                project["reference_registry"] = invalid
+                project_path.write_text(json.dumps(project), encoding="utf-8")
+
+                stdout = io.StringIO()
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    ["project_state_check.py", str(root), "--strict"],
+                ), redirect_stdout(stdout):
+                    exit_code = project_state_check.main()
+
+                self.assertEqual(exit_code, 1)
+                self.assertIn(
+                    "reference_registry must be an array of reference objects",
+                    stdout.getvalue(),
+                )
+
     def test_nested_unhashable_array_entries_are_diagnostic_not_exceptions(self) -> None:
         base = load_json("examples/sequence-airport-arrival/project-state.json")
         mutations = (
@@ -1769,6 +1794,44 @@ class AuthoringStateSchemaCompatibilityTests(unittest.TestCase):
             )
             with self.subTest(separator=ord(separator)):
                 self.assertTrue(list(validator.iter_errors(probe)))
+
+    def test_schemas_reject_blank_or_invisible_felt_intent(self) -> None:
+        project = load_json("examples/sequence-airport-arrival/project-state.json")
+        contract = load_json("examples/sequence-airport-arrival/clip-01-contract.json")
+        invisible_values = (
+            "",
+            " \t\u00a0",
+            "\u200b\u2060\ufeff",
+            "\u034f\ufe0f",
+            "\u2800\u3164\uffa0",
+            "\U000110bd",
+            "\U000110cd",
+            "\U00013430",
+            "\U0001bca0\U0001d173",
+            " \U000e0001 ",
+        )
+        for value in invisible_values:
+            with self.subTest(value=value):
+                project_probe = copy.deepcopy(project)
+                project_probe["clips"][0]["felt_intent"] = value
+                self.assertTrue(
+                    list(self.validator(self.project_schema).iter_errors(project_probe))
+                )
+
+                contract_probe = copy.deepcopy(contract)
+                contract_probe["felt_intent"] = value
+                self.assertTrue(
+                    list(self.validator(self.contract_schema).iter_errors(contract_probe))
+                )
+
+        for schema, document in (
+            (self.project_schema, project),
+            (self.contract_schema, contract),
+        ):
+            probe = copy.deepcopy(document)
+            target = probe["clips"][0] if "clips" in probe else probe
+            target["felt_intent"] = "\u200bWaiting at the threshold\u2060"
+            self.assertEqual(list(self.validator(schema).iter_errors(probe)), [])
 
     def test_lane_conditionals_require_matching_records_and_reject_null(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")

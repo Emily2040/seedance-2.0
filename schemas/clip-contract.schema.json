@@ -31,7 +31,7 @@
     "scene_id": {"type": "string", "minLength": 1, "pattern": "\\S"},
     "sequence_index": {"type": "integer", "minimum": 1},
     "narrative_job": {"type": "string"},
-    "felt_intent": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
+    "felt_intent": {"type": "string", "minLength": 1, "pattern": "^(?=.*[^\\s\\u00ad\\u034f\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u08e2\\u115f-\\u1160\\u17b4-\\u17b5\\u180b-\\u180f\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\u2800\\u3164\\ufe00-\\ufe0f\\ufeff\\uffa0\\ufff0-\\ufffb\ud804\udcbd\ud804\udccd\ud80d\udc30-\ud80d\udc38\ud82f\udca0-\ud82f\udca3\ud834\udd73-\ud834\udd7a\udb40\udc00-\udb43\udfff])[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
     "directors_read_lane": {"enum": ["narrative", "non_narrative"]},
     "authoring_state": {"$ref": "#/$defs/authoring_state"},
     "authoring_state_provenance": {"$ref": "#/$defs/authoring_state_provenance"},
