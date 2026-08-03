@@ -456,9 +456,26 @@ Run these checks before every release. The offline source-metadata check runs wi
 per-pull-request validation deliberately omits the flag, because metadata age
 depends on the calendar rather than on the change under test.
 
-Every check is offline. Exactly one of them, `schema_check.py`, needs a
-third-party library, so install the hash-pinned lock first — on a clean checkout
-that step otherwise stops the run:
+The checks themselves are offline after their build dependencies are installed.
+Two maintainer checks need third-party libraries: `schema_check.py` executes JSON
+Schema instances, while `build_masthead_outlines.py --check` reproduces the
+outlined masthead type. Install both hash-pinned toolchains first — the masthead
+installer rebuilds a dedicated checkout-specific temp venv, resolves the lock
+from the checkout, and creates it with `--without-pip`. Before that new venv's
+launcher can bootstrap pip or install anything, the parent publishes and re-reads
+an external initialized trust record for the runner and config. Only that
+verified path may run bundled `ensurepip` and force-reinstall the locked wheels.
+The installer retains the exact selected wheel bytes, validates pip's
+install-report hashes against the lock, and seals
+every installed distribution file from `RECORD`. Each installed import payload
+must also match the retained locked wheel byte-for-byte. Verification and
+rendering then require an external, checkout-keyed trust record that binds the
+venv runner, `pyvenv.cfg`, builder script, lock, and sealed marker; the runner
+must independently match the current Python installation's stdlib venv launcher.
+They run in a fresh `python -I -S -B` child that exposes the sealed site-packages
+only after startup, so `PYTHONPATH`, `sitecustomize`, `.pth` processing, a forged
+venv runner, a parent preload, or a same-version replacement cannot skip hash
+verification or shape the output:
 
 `schema_check.py` proves structure and record-local constraints; it does not and
 cannot prove graph-wide lineage. `project_state_check.py` and
@@ -480,6 +497,7 @@ the claims before changing a stamp.
 
 ```bash
 python -m pip install --require-hashes --requirement requirements-validation.lock
+python -I -S -B scripts/build_masthead_outlines.py --install-build-deps
 ```
 
 ```bash
@@ -488,7 +506,8 @@ python scripts/content_audit.py --strict
 python scripts/eval_schema_check.py --strict
 python scripts/schema_check.py --strict
 python scripts/design_audit.py --strict
-python scripts/build_hero.py --check
+python -I -S -B scripts/build_masthead_outlines.py --check
+python -I -S -B scripts/build_hero.py --check
 python scripts/source_registry_check.py --strict --enforce-freshness
 python scripts/vocab_schema_check.py --strict
 python scripts/project_state_check.py --strict
@@ -643,7 +662,51 @@ This is the quality gate, not a shape gate, so it lives outside offline CI; the 
 
 The front page follows an editorial design system rather than default AI styling: warm ink and paper themes, a serif display face paired with monospace specification labels, a single amber accent, and hairline rules — no gradients, no glow. Camera motifs are deliberately retired: no viewfinder marks, timecode, record dots, or aspect badges. They depict the tool rather than the work, and they are the visual cliché of every AI-video product.
 
-The masthead is generated from one geometry by [`scripts/build_hero.py`](scripts/build_hero.py), so its dark and light variants cannot drift apart; `--check` proves the committed SVGs still match the generator, and it runs in CI.
+The masthead is generated from one geometry by [`scripts/build_hero.py`](scripts/build_hero.py), so its dark and light variants cannot drift apart; the isolated `python -I -S -B scripts/build_hero.py --check` command proves the committed SVGs still match the generator, and it runs in CI.
+
+The outlined display type has a separate, build-only toolchain. Before changing
+the wordmark or tagline geometry, run `python -I -S -B scripts/build_masthead_outlines.py`
+and then `python -I -S -B scripts/build_hero.py`. A writing run first recreates a
+dedicated, marker-protected venv outside the checkout. The clear target is rejected when it
+is inside the repository, trust directory, Python installation, or a non-temp
+home subtree; equals a protected root; or would contain the repository, home
+directory, Python prefix, system temp root, or external trust directory. A
+dedicated descendant of the system temp directory remains allowed. The installer
+then uses pip's `--force-reinstall --require-hashes` against the resolved lock.
+The selected wheel artifacts are retained in the build venv; their hashes, pip's install
+report, and the sha256 of every locked-distribution file are sealed together,
+and the installed import bytes are compared directly with those retained wheel
+archives. The venv is created with `--without-pip`, so creation never starts its
+runner. The parent then stores and re-verifies a separate trust record outside
+the venv that binds the runner, config, trusted base Python, current builder
+script, lock, and initialized marker; the runner bytes must match the trusted
+stdlib venv launcher. Only then can the verified runner bootstrap bundled pip and
+perform the hash-locked installation. After sealing, the parent promotes that
+record only if those inputs are unchanged and binds the sealed marker too. A
+no-site `python -I -S -B` child verifies the package seal before adding the dedicated
+site-packages path or importing FontTools and uharfbuzz.
+Inherited loader, Python, pip, and virtualenv hooks are removed from child
+environments. The generator records the exact lock digest plus the FontTools,
+uharfbuzz, and HarfBuzz versions in
+`assets/masthead-outlines.json`. The current lock pins `uharfbuzz==0.55.0`, the
+latest stable release shown by [official PyPI metadata](https://pypi.org/project/uharfbuzz/0.55.0/)
+when the lock was reviewed on 2026-08-02; the newer 0.56 line was prerelease-only.
+Its six hashes are the published CPython abi3 wheels for Windows x86-64, Linux
+glibc/musl on x86-64 and ARM64, and macOS universal2. Before either SVG is
+written, `build_hero.py` independently requires the exact lock path, lock-byte
+digest, install policy, and builder-version map recorded in the outline asset,
+then renders both themes in memory so a second-theme failure cannot leave a
+half-updated pair.
+To prepare a later read-only check without regenerating, run
+`python -I -S -B scripts/build_masthead_outlines.py --install-build-deps` once and then
+use `python -I -S -B scripts/build_masthead_outlines.py --check` offline. Both commands
+resolve the same checkout-specific temp venv by default; CI passes an explicit
+run-attempt-specific `--build-env` under `/tmp`, because the hosted Linux
+`$RUNNER_TEMP` is below `$HOME` and the clear guard deliberately rejects home
+descendants. The wheelhouse remains under `$RUNNER_TEMP`; it is read, not cleared.
+A changed distribution file, retained wheel, install report, lock, runner, venv
+config, builder script, marker, startup hook, external trust record, or structured
+child result makes the offline check fail closed and requires a fresh install.
 
 The masthead and the hand-built operating diagram (`assets/hero-dark.svg`, `assets/hero-light.svg`, `assets/skill-map.svg`) are served through a `prefers-color-scheme` picture element; generated bitmap art lives only in the curated visual gallery, including the text-rich infographics.
 

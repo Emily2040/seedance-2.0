@@ -1,0 +1,42 @@
+# Reproducible, build-only toolchain for scripts/build_masthead_outlines.py.
+# These packages are not required by the installed Seedance skill at runtime.
+#
+# Hashes cover CPython 3.11-3.13 on Linux (glibc and musl, x86-64 and
+# aarch64), macOS (Intel and Apple silicon), and Windows (x86-64). The
+# universal FontTools wheel is retained as a fallback. Supporting another
+# interpreter or platform means adding its wheel hash, never relaxing
+# --require-hashes.
+--only-binary=:all:
+
+fonttools==4.63.0 \
+    --hash=sha256:2b8ae05d9eacf6081414d759c0a352769ac28ce31280d6bb8e77b03f9e3c449f \
+    --hash=sha256:79cdc9f567aec74a72918fd060283911406750cbc9fd28c1316023deb6ce31a9 \
+    --hash=sha256:2c14b4fd138c4bafcca294765c547914e1aa431ae1ca94ab99d8db08c958bd3b \
+    --hash=sha256:d76ac49f929aecaf82d83250b8347e099d7aecba0f4726c1d9b6df3b8bb5fe18 \
+    --hash=sha256:063e08bd17bd5a90127a14123de0d6a952dbc847695fd98b63c043d58057f90c \
+    --hash=sha256:37dd23e621e3b0aef1baa70a303b80aaf38449632cfc8fd2a55fb285bbccfc02 \
+    --hash=sha256:a9faff9e0c1f76f9fd55899d2ce785832efebab37eb8ae13995853aef178bef0 \
+    --hash=sha256:ef3048ef05dbb552b89817713d9cac912e00d0fde4a3105c00d29e52e10c89af \
+    --hash=sha256:58dc6bb86a78d782f00f9190ca02c119cf5bbe2807536e361e18d42019f877d8 \
+    --hash=sha256:59ac449f8cca9b4ffa08d2e7bbadad87ce710d69d1eda5c3c1ce579baa987272 \
+    --hash=sha256:cd7e9857e5e63738b9d9fd707bc1f59c8b09e5177726d23664db393c59bb08bd \
+    --hash=sha256:c2a2a42198b696a6f48fad91709afb55176e66a5e566131219dba372fb7f8c59 \
+    --hash=sha256:1e874792a8212b44583ea02189d9e693906b2f78b261f372f95d6c563210ac1d \
+    --hash=sha256:22135da48a348785c5e2d5d2d9d6bec5ed44adacbaeb9db12d9493bf6c6bfa68 \
+    --hash=sha256:ba04cb5891d4c0c21b6da95eda8d7b090021508a294fff33464fc7d241e0856b \
+    --hash=sha256:445af2eab030a16b9171ea8bdda7ebf7d96bda2df88ee182a464252f6e05e20d
+# Official PyPI release metadata: https://pypi.org/pypi/uharfbuzz/0.55.0/json
+# The six hashes below correspond, in order, to these CPython 3.10+ abi3 wheels:
+# - uharfbuzz-0.55.0-cp310-abi3-win_amd64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-musllinux_1_2_x86_64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-musllinux_1_2_aarch64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
+# - uharfbuzz-0.55.0-cp310-abi3-macosx_10_9_universal2.whl
+uharfbuzz==0.55.0 \
+    --hash=sha256:72f653625e33f68dda56b258b4b9dcd2ff9c9e4f21fd53c7bbff9d9620c4fba0 \
+    --hash=sha256:22415eaa87c670fac764053edfaebce1e05babd2cecb0e933170019ed3263109 \
+    --hash=sha256:7daeb0ba227246ed8a5a59f64fa23ecec282bc0af13167752d51ae304d20852a \
+    --hash=sha256:d594f9e02a21745846477f02e13e900bfe9a697bad975fb3c26e241b7a8256c1 \
+    --hash=sha256:13304721967d55e9718200453cae30f7952f95244af4b0fcb4561e8b456f5357 \
+    --hash=sha256:40df0ff4d0c7af29c07a8adc614fb0dd421d9c4d8a139362a80a4ceb71e94a71

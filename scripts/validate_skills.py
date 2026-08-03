@@ -106,6 +106,7 @@ REQUIRED_FILES = [
     "README.md",
     "SKILL.md",
     "CHANGELOG.md",
+    "requirements-masthead.lock",
     "V6_SEQUENCE_PROMPT_COMPILER_MANIFEST.md",
     "scripts/validate_skills.py",
     "scripts/content_audit.py",
