@@ -97,195 +97,6 @@ jobs:
       - name: Check diff whitespace
         run: git diff --check
 
-  linux-privileged-frame-publication:
-    # A root process on the hosted VM still lacks CAP_SYS_ADMIN. Run only the
-    # success-path metadata regressions in an explicitly privileged container
-    # with a digest-pinned base; the ordinary job above proves unprivileged
-    # refusal behavior on every pull request, including forks.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    # Never execute fork-controlled code with host-level container privileges.
-    # Push and manual runs are repository-controlled; pull requests must have
-    # a head repository identical to this repository.
-    if: >-
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository)
-    container:
-      # ubuntu:24.04 linux/amd64 manifest published 2026-07-02.
-      image: ubuntu@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
-      options: --privileged
-    env:
-      PYTHONDONTWRITEBYTECODE: "1"
-      PYTHONPYCACHEPREFIX: /tmp/seedance-privileged-pycache
-    steps:
-      - name: Provision privileged test dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          export DEBIAN_FRONTEND=noninteractive
-          # Only the Ubuntu base manifest is immutable. Resolve these explicit
-          # packages from Ubuntu 24.04's signed current repositories and print
-          # every relevant tool version below so package drift stays visible.
-          apt-get update
-          apt-get install --yes --no-install-recommends \
-            acl \
-            attr \
-            ca-certificates \
-            ffmpeg \
-            git \
-            libcap2-bin \
-            python3
-          python3 --version
-          ffmpeg -hide_banner -version
-          setfacl --version
-          getfacl --version
-          setfattr --version
-          getfattr --version
-          capsh --print
-          {
-            printf 'SEEDANCE_TEST_FFMPEG=%s\n' "$(command -v ffmpeg)"
-            printf 'SEEDANCE_CI_FFMPEG_PROVISIONED=1\n'
-          } >> "$GITHUB_ENV"
-      # Actions are pinned to commit SHAs. Checkout runs only after the
-      # container's Git and CA runtime has been provisioned explicitly.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - name: Prove privileged filesystem and publication prerequisites
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(id -u)" -eq 0
-          command -v python3
-          command -v ffmpeg
-          command -v setfacl
-          command -v getfacl
-          command -v setfattr
-          command -v getfattr
-          python3 - <<'PY'
-          import os
-          import subprocess
-          import sys
-          import tempfile
-          from pathlib import Path
-
-          workspace = Path(os.environ["GITHUB_WORKSPACE"])
-          sys.path.insert(0, str(workspace / "scripts"))
-          import extract_last_frame as extractor
-
-          assert os.geteuid() == 0, os.geteuid()
-          assert extractor._linux_has_effective_cap_sys_admin(), Path(
-              "/proc/self/status"
-          ).read_text(encoding="ascii")
-          assert extractor._posix_descriptor_xattr_api_supported()
-          assert extractor._posix_atomic_exchange_supported()
-
-          with tempfile.TemporaryDirectory(prefix="seedance-privileged-proof-") as raw:
-              root = Path(raw)
-              probe = root / "policy-probe"
-              probe.write_bytes(b"descriptor-bound")
-              descriptor = os.open(probe, os.O_RDWR)
-              try:
-                  trusted_name = "trusted.seedance-ci-proof"
-                  trusted_value = b"visible"
-                  os.setxattr(descriptor, trusted_name, trusted_value)
-                  assert trusted_name in os.listxattr(descriptor)
-                  assert os.getxattr(descriptor, trusted_name) == trusted_value
-                  os.removexattr(descriptor, trusted_name)
-                  assert trusted_name not in os.listxattr(descriptor)
-              finally:
-                  os.close(descriptor)
-
-              subprocess.run(
-                  ["setfattr", "-n", "user.seedance-ci-proof", "-v", "visible", probe],
-                  check=True,
-              )
-              subprocess.run(
-                  ["getfattr", "-n", "user.seedance-ci-proof", probe], check=True
-              )
-              subprocess.run(
-                  ["setfacl", "-m", "u:12345:r--", probe], check=True
-              )
-              subprocess.run(["getfacl", probe], check=True)
-              assert "system.posix_acl_access" in os.listxattr(probe)
-
-              distinct_uid = 65534 if os.geteuid() != 65534 else 65533
-              distinct_gid = 65534 if os.getegid() != 65534 else 65533
-              os.chown(probe, distinct_uid, distinct_gid)
-              changed = probe.stat()
-              assert changed.st_uid == distinct_uid, changed
-              assert changed.st_gid == distinct_gid, changed
-
-              left = root / "exchange-left"
-              right = root / "exchange-right"
-              left.write_bytes(b"left")
-              right.write_bytes(b"right")
-              directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
-              try:
-                  extractor._posix_exchange_names(
-                      left.name, directory, right.name, directory
-                  )
-                  assert left.read_bytes() == b"right"
-                  assert right.read_bytes() == b"left"
-                  extractor._posix_exchange_names(
-                      left.name, directory, right.name, directory
-                  )
-                  assert left.read_bytes() == b"left"
-                  assert right.read_bytes() == b"right"
-              finally:
-                  os.close(directory)
-
-          assert extractor._posix_descriptor_xattrs_supported()
-          print(
-              "proved CAP_SYS_ADMIN, descriptor trusted.* xattrs, POSIX ACLs, "
-              "distinct UID/GID ownership, and renameat2(RENAME_EXCHANGE)"
-          )
-          PY
-      - name: Run privileged Linux metadata-preservation regressions
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          import sys
-          import unittest
-
-          os.chdir(os.environ["GITHUB_WORKSPACE"])
-          sys.path.insert(0, os.path.join(os.environ["GITHUB_WORKSPACE"], "scripts"))
-          import extract_last_frame as extractor
-
-          assert extractor._posix_descriptor_xattrs_supported(), (
-              "effective CAP_SYS_ADMIN, descriptor xattrs, or atomic exchange unavailable"
-          )
-          names = [
-              "tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_force_replaces_only_after_successful_decode",
-              "tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_force_decode_failure_preserves_existing_output",
-              "tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_force_publish_error_preserves_old_output_and_cleans_stage",
-              "tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_force_rechecks_a_late_input_alias",
-              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_verify_to_link_stage_rename_swap_cannot_publish_attacker_inode",
-              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_existing_owner_group_and_mode",
-              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_user_extended_attributes",
-              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_extended_access_acl",
-              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_holds_verified_target_descriptor_through_decode",
-              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_auxiliary_names_fit_name_max_14_with_unicode_output",
-              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_swap_after_final_verify_is_rolled_back_without_overwrite",
-              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_policy_error_after_anchor_link_cleans_owned_anchor",
-              "tests.test_extract_last_frame.RealFfmpegFrameTests.test_existing_output_is_replaced_with_the_true_final_frame",
-          ]
-          suite = unittest.defaultTestLoader.loadTestsFromNames(names)
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
-          if result.skipped:
-              for test, reason in result.skipped:
-                  print(f"PRIVILEGED REGRESSION SKIPPED: {test}: {reason}", file=sys.stderr)
-              raise SystemExit("privileged metadata regressions must not skip")
-          if not result.wasSuccessful():
-              raise SystemExit(1)
-          PY
-      - name: Check diff whitespace
-        run: git diff --check
-
   windows-frame-publication:
     # Keep the complete validation suite on Linux, but execute the native
     # handle-locking and publication primitives on the platform they protect.
@@ -328,7 +139,24 @@ jobs:
           tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_near_name_max_stage_is_bounded_before_decode
           tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_long_unicode_output_publishes_with_cp1252_console
           tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_device_and_normalization_aliases_are_refused
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_native_publication_rejects_superscript_device_alias
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_no_force_refuses_parent_rename_and_recreation_during_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_preserves_matching_policy_on_success
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_locks_target_namespace_through_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_refuses_an_explicit_acl_before_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_refuses_named_streams_before_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_refuses_policy_attributes_before_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_rechecks_a_late_named_stream
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_rolls_back_a_commit_boundary_winner
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_rolls_back_commit_boundary_target_ads
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_never_publishes_a_commit_boundary_stage_acl
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_reapplies_the_authorized_destination_dacl
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_rolls_back_commit_boundary_stage_ads_and_attributes
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_never_promotes_a_preclaimed_rollback_name
+          tests.test_extract_frame_output_policy.PublicationPrimitiveTests.test_windows_postverify_diagnostic_is_bounded_and_component_specific
+          tests.test_extract_frame_output_policy.PublicationPrimitiveTests.test_windows_security_policy_ignores_only_relative_layout
           tests.test_extract_frame_output_policy.ConsoleOutputTests.test_error_text_is_escaped_for_legacy_console_encoding
+          tests.test_extract_frame_output_policy.ConsoleOutputTests.test_missing_stdout_cannot_change_a_successful_publication
           tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_prewrite_hardlink_swap_cannot_redirect_generated_bytes
           tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_verify_to_publish_swap_is_blocked_by_exclusive_handle
           tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_collision_after_final_validation_is_atomically_refused

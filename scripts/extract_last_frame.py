@@ -24,9 +24,9 @@ is misfiled as frame-blind.
 
 Existing output images are preserved by default. Pass --force only when replacing
 one is intentional. FFmpeg streams decoded frames back to this process instead of
-opening a mutable staging pathname. The retained complete frame is written through
-an owned handle and published atomically, so a failed run cannot expose a partial
-final output.
+opening a mutable staging pathname. A separate bounded FFmpeg invocation must decode
+the retained PNG before it is written through an owned handle and published
+atomically, so a failed run cannot expose a partial or undecodable final output.
 """
 from __future__ import annotations
 
@@ -79,6 +79,8 @@ WINDOWS_RESERVED_STEMS = {
     "CLOCK$",
     *(f"COM{index}" for index in range(1, 10)),
     *(f"LPT{index}" for index in range(1, 10)),
+    *(f"COM{digit}" for digit in "¹²³"),
+    *(f"LPT{digit}" for digit in "¹²³"),
 }
 
 
@@ -90,15 +92,31 @@ class FrameExtractionError(RuntimeError):
     """FFmpeg did not yield one complete frame."""
 
 
-def _write_console_line(message: object, *, stream: TextIO | None = None) -> None:
-    """Write without letting a legacy console encoding change program state."""
+_DEFAULT_CONSOLE_STREAM = object()
 
-    target = sys.stdout if stream is None else stream
-    text = str(message)
-    encoding = getattr(target, "encoding", None)
-    if encoding:
-        text = text.encode(encoding, errors="backslashreplace").decode(encoding)
-    target.write(text + "\n")
+
+def _write_console_line(
+    message: object,
+    *,
+    stream: TextIO | None | object = _DEFAULT_CONSOLE_STREAM,
+) -> None:
+    """Best-effort status output that can never change publication state."""
+
+    target = sys.stdout if stream is _DEFAULT_CONSOLE_STREAM else stream
+    if target is None:
+        return
+    try:
+        text = str(message)
+        encoding = getattr(target, "encoding", None)
+        if encoding:
+            text = text.encode(encoding, errors="backslashreplace").decode(encoding)
+        target.write(text + "\n")
+    except (AttributeError, OSError, UnicodeError, ValueError):
+        # ``pythonw.exe`` exposes no console streams, redirected consumers can
+        # close a pipe at any time, and StringIO raises ValueError once closed.
+        # Reporting is deliberately non-transactional: a completed atomic
+        # publication remains success even when there is nowhere to print it.
+        return
 
 
 @dataclass
@@ -129,6 +147,93 @@ class PosixReplacementSnapshot:
 
 
 @dataclass
+class WindowsReplacementSnapshot:
+    """Handle-bound Windows policy that must still match before replacement."""
+
+    descriptor: int
+    identity: tuple[int, int]
+    security_policy: str
+    policy_attributes: int
+    named_streams: tuple[str, ...]
+    content_digest: bytes
+
+
+@dataclass(frozen=True)
+class WindowsArtifactState:
+    """Identity, policy, and bytes for one transaction-bound Windows file."""
+
+    identity: tuple[int, int]
+    security_policy: str
+    policy_attributes: int
+    named_streams: tuple[str, ...]
+    content_digest: bytes
+
+
+def _split_win32_security_policy(policy: str) -> tuple[str, str, str, str, str]:
+    """Return owner, group, DACL entries/control, and label SDDL components."""
+
+    sections: dict[str, str] = {label: "" for label in "OGDS"}
+    starts = sorted(
+        (position, label)
+        for label in sections
+        if (position := policy.find(f"{label}:")) >= 0
+    )
+    for index, (position, label) in enumerate(starts):
+        end = starts[index + 1][0] if index + 1 < len(starts) else len(policy)
+        sections[label] = policy[position + 2 : end]
+
+    dacl = sections["D"]
+    first_ace = dacl.find("(")
+    if first_ace < 0:
+        dacl_control, dacl_entries = dacl, ""
+    else:
+        dacl_control, dacl_entries = dacl[:first_ace], dacl[first_ace:]
+    return (
+        sections["O"],
+        sections["G"],
+        dacl_entries,
+        dacl_control,
+        sections["S"],
+    )
+
+
+def _win32_artifact_differences(
+    expected: WindowsArtifactState,
+    observed: WindowsArtifactState,
+) -> tuple[str, ...]:
+    """Name mismatched postconditions without logging policy or file contents."""
+
+    differences: list[str] = []
+    if expected.content_digest != observed.content_digest:
+        differences.append("bytes")
+    if expected.identity != observed.identity:
+        differences.append("file identity")
+    if expected.security_policy != observed.security_policy:
+        expected_security = _split_win32_security_policy(expected.security_policy)
+        observed_security = _split_win32_security_policy(observed.security_policy)
+        labels = (
+            "owner",
+            "group",
+            "DACL entries",
+            "DACL control flags",
+            "mandatory label",
+        )
+        security_differences = [
+            label
+            for label, expected_value, observed_value in zip(
+                labels, expected_security, observed_security
+            )
+            if expected_value != observed_value
+        ]
+        differences.extend(security_differences or ("security descriptor",))
+    if expected.named_streams != observed.named_streams:
+        differences.append("named streams (ADS)")
+    if expected.policy_attributes != observed.policy_attributes:
+        differences.append("policy attributes")
+    return tuple(differences)
+
+
+@dataclass
 class PosixProbeArtifact:
     """One created exchange-probe inode, tracked before any fallible stat."""
 
@@ -142,14 +247,52 @@ if os.name == "nt":
     _GENERIC_READ = 0x80000000
     _GENERIC_WRITE = 0x40000000
     _DELETE = 0x00010000
+    _READ_CONTROL = 0x00020000
+    _WRITE_DAC = 0x00040000
+    _FILE_READ_ATTRIBUTES = 0x00000080
+    _FILE_SHARE_READ = 0x00000001
+    _FILE_SHARE_WRITE = 0x00000002
+    _FILE_SHARE_DELETE = 0x00000004
     _CREATE_NEW = 1
+    _OPEN_EXISTING = 3
     _FILE_ATTRIBUTE_NORMAL = 0x00000080
+    _FILE_ATTRIBUTE_ARCHIVE = 0x00000020
+    _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+    _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+    _FILE_STREAM_INFO_CLASS = 7
     _FILE_RENAME_INFO_EX_CLASS = 22
     _FILE_RENAME_FLAG_REPLACE_IF_EXISTS = 0x00000001
+    _FILE_RENAME_FLAG_POSIX_SEMANTICS = 0x00000002
     _FILE_DISPOSITION_INFO_CLASS = 4
     _ERROR_FILE_EXISTS = 80
     _ERROR_ALREADY_EXISTS = 183
+    _ERROR_HANDLE_EOF = 38
+    _ERROR_INSUFFICIENT_BUFFER = 122
+    _ERROR_MORE_DATA = 234
+    _ERROR_UNABLE_TO_REMOVE_REPLACED = 1175
+    _ERROR_UNABLE_TO_MOVE_REPLACEMENT = 1176
+    _ERROR_UNABLE_TO_MOVE_REPLACEMENT_2 = 1177
     _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+    _OWNER_SECURITY_INFORMATION = 0x00000001
+    _GROUP_SECURITY_INFORMATION = 0x00000002
+    _DACL_SECURITY_INFORMATION = 0x00000004
+    _SACL_SECURITY_INFORMATION = 0x00000008
+    _LABEL_SECURITY_INFORMATION = 0x00000010
+    _SDDL_REVISION_1 = 1
+    _UNPROTECTED_DACL_SECURITY_INFORMATION = 0x20000000
+    _PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
+    _SE_FILE_OBJECT = 1
+    _WINDOWS_POLICY_SECURITY_INFORMATION = (
+        _OWNER_SECURITY_INFORMATION
+        | _GROUP_SECURITY_INFORMATION
+        | _DACL_SECURITY_INFORMATION
+        | _LABEL_SECURITY_INFORMATION
+    )
+    # Archive is ordinary content state and NORMAL is meaningful only when no
+    # other bit is set. Every other attribute can carry user-visible or
+    # security policy (read-only, hidden, system, encryption, compression,
+    # integrity, recall, sparse, and similar filesystem-specific state).
+    _WINDOWS_NONPOLICY_ATTRIBUTES = _FILE_ATTRIBUTE_ARCHIVE | _FILE_ATTRIBUTE_NORMAL
 
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     _CreateFileW = _kernel32.CreateFileW
@@ -171,9 +314,20 @@ if os.name == "nt":
         wintypes.DWORD,
     )
     _SetFileInformationByHandle.restype = wintypes.BOOL
+    _GetFileInformationByHandleEx = _kernel32.GetFileInformationByHandleEx
+    _GetFileInformationByHandleEx.argtypes = (
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    )
+    _GetFileInformationByHandleEx.restype = wintypes.BOOL
     _CloseHandle = _kernel32.CloseHandle
     _CloseHandle.argtypes = (wintypes.HANDLE,)
     _CloseHandle.restype = wintypes.BOOL
+    _LocalFree = _kernel32.LocalFree
+    _LocalFree.argtypes = (ctypes.c_void_p,)
+    _LocalFree.restype = ctypes.c_void_p
     _GetFinalPathNameByHandleW = _kernel32.GetFinalPathNameByHandleW
     _GetFinalPathNameByHandleW.argtypes = (
         wintypes.HANDLE,
@@ -182,6 +336,57 @@ if os.name == "nt":
         wintypes.DWORD,
     )
     _GetFinalPathNameByHandleW.restype = wintypes.DWORD
+    _ReplaceFileW = _kernel32.ReplaceFileW
+    _ReplaceFileW.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.LPCWSTR,
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    )
+    _ReplaceFileW.restype = wintypes.BOOL
+
+    _advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    _GetKernelObjectSecurity = _advapi32.GetKernelObjectSecurity
+    _GetKernelObjectSecurity.argtypes = (
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    _GetKernelObjectSecurity.restype = wintypes.BOOL
+    _ConvertSecurityDescriptorToStringSecurityDescriptorW = (
+        _advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW
+    )
+    _ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = (
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.LPWSTR),
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    _ConvertSecurityDescriptorToStringSecurityDescriptorW.restype = wintypes.BOOL
+    _GetSecurityDescriptorDacl = _advapi32.GetSecurityDescriptorDacl
+    _GetSecurityDescriptorDacl.argtypes = (
+        ctypes.c_void_p,
+        ctypes.POINTER(wintypes.BOOL),
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(wintypes.BOOL),
+    )
+    _GetSecurityDescriptorDacl.restype = wintypes.BOOL
+    _SetSecurityInfo = _advapi32.SetSecurityInfo
+    _SetSecurityInfo.argtypes = (
+        wintypes.HANDLE,
+        ctypes.c_int,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    )
+    _SetSecurityInfo.restype = wintypes.DWORD
 
     class _FileRenameInfoEx(ctypes.Structure):
         _fields_ = (
@@ -242,13 +447,19 @@ def _paths_alias(left: Path, right: Path) -> bool:
     return False
 
 
+def _validate_windows_output_name(out: Path) -> None:
+    """Reject every Win32 device/normalization alias at each native boundary."""
+
+    name = out.name
+    normalized = name.rstrip(" .")
+    device_stem = normalized.split(".", 1)[0].upper()
+    if normalized != name or ":" in name or device_stem in WINDOWS_RESERVED_STEMS:
+        raise OutputPolicyError(f"unsafe Windows output filename: {name!r}")
+
+
 def _validate_output_target(clip: Path, out: Path, force: bool) -> None:
     if os.name == "nt":
-        name = out.name
-        normalized = name.rstrip(" .")
-        device_stem = normalized.split(".", 1)[0].upper()
-        if normalized != name or ":" in name or device_stem in WINDOWS_RESERVED_STEMS:
-            raise OutputPolicyError(f"unsafe Windows output filename: {name!r}")
+        _validate_windows_output_name(out)
     parent = out.parent
     if not parent.is_dir():
         raise OutputPolicyError(f"output directory not found: {parent}")
@@ -278,6 +489,60 @@ def _win32_extended_path(path: Path) -> str:
     return "\\\\?\\" + absolute
 
 
+def _win32_resolved_path(descriptor: int, subject: str) -> Path:
+    """Resolve one retained handle without trusting its original pathname."""
+
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+    required = _GetFinalPathNameByHandleW(handle, None, 0, 0)
+    if not required:
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            f"could not resolve {subject}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    buffer = ctypes.create_unicode_buffer(required + 1)
+    written = _GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
+    if not written or written >= len(buffer):
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            f"could not read {subject} path: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    resolved = buffer.value
+    if resolved.startswith("\\\\?\\UNC\\"):
+        return Path("\\\\" + resolved[8:])
+    if resolved.startswith("\\\\?\\"):
+        return Path(resolved[4:])
+    raise OutputPolicyError(f"{subject} returned an unsupported Windows path")
+
+
+def _win32_directory_descriptor(path: Path) -> int:
+    """Open the directory itself, never a followed junction target."""
+
+    handle = _CreateFileW(
+        _win32_extended_path(path),
+        _FILE_READ_ATTRIBUTES,
+        _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+        None,
+        _OPEN_EXISTING,
+        _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
+    if handle == _INVALID_HANDLE_VALUE:
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            f"cannot retain the Windows output directory {path}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    try:
+        return msvcrt.open_osfhandle(
+            int(handle), os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        )
+    except Exception:
+        _CloseHandle(handle)
+        raise
+
+
 def _win32_stage_descriptor(path: Path) -> int:
     handle = _CreateFileW(
         _win32_extended_path(path),
@@ -302,66 +567,518 @@ def _win32_stage_descriptor(path: Path) -> int:
         raise
 
 
-def _win32_target_from_stage_handle(stage: OutputStage, out: Path) -> str:
-    """Bind the destination to the staging handle's resolved parent directory."""
+def _win32_replacement_descriptor(path: Path) -> int:
+    """Open and namespace-lock the exact target for handle-bound rechecks."""
 
-    handle = wintypes.HANDLE(msvcrt.get_osfhandle(stage.descriptor))
-    required = _GetFinalPathNameByHandleW(handle, None, 0, 0)
-    if not required:
+    handle = _CreateFileW(
+        _win32_extended_path(path),
+        _GENERIC_READ | _READ_CONTROL | _FILE_READ_ATTRIBUTES,
+        # Readers can keep using the old image during decode. Denying default-
+        # stream write and delete sharing excludes conflicting existing opens,
+        # protects the image bytes, and locks the destination namespace between
+        # policy proof and commit. Security state and separately shared named
+        # streams are still re-audited immediately before publication. The
+        # handle is released only when ReplaceFileW is ready to capture the
+        # actual commit-boundary target in its rollback backup.
+        _FILE_SHARE_READ,
+        None,
+        _OPEN_EXISTING,
+        _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
+    if handle == _INVALID_HANDLE_VALUE:
         error = ctypes.get_last_error()
         raise OutputPolicyError(
-            "could not resolve the owned staging handle: "
+            f"cannot open existing Windows output policy for {path}: "
             f"[WinError {error}] {ctypes.FormatError(error).strip()}"
         )
-    buffer = ctypes.create_unicode_buffer(required + 1)
-    written = _GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
-    if not written or written >= len(buffer):
+    try:
+        return msvcrt.open_osfhandle(
+            int(handle), os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        )
+    except Exception:
+        _CloseHandle(handle)
+        raise
+
+
+def _win32_transaction_artifact_descriptor(
+    path: Path,
+    *,
+    restore_dacl: bool = False,
+) -> int:
+    """Open an unshared transaction artifact with delete authority."""
+
+    access = _GENERIC_READ | _DELETE | _READ_CONTROL | _FILE_READ_ATTRIBUTES
+    if restore_dacl:
+        access |= _WRITE_DAC
+    handle = _CreateFileW(
+        _win32_extended_path(path),
+        access,
+        _FILE_SHARE_READ,
+        None,
+        _OPEN_EXISTING,
+        _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
+    if handle == _INVALID_HANDLE_VALUE:
         error = ctypes.get_last_error()
         raise OutputPolicyError(
-            "could not read the owned staging path: "
+            f"cannot open Windows transaction artifact {path}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    try:
+        return msvcrt.open_osfhandle(
+            int(handle), os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        )
+    except Exception:
+        _CloseHandle(handle)
+        raise
+
+
+def _win32_security_descriptor(descriptor: int, out: Path) -> bytes:
+    """Read owner, group, DACL, and mandatory label from an open file."""
+
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+    needed = wintypes.DWORD(0)
+    ctypes.set_last_error(0)
+    first = _GetKernelObjectSecurity(
+        handle,
+        _WINDOWS_POLICY_SECURITY_INFORMATION,
+        None,
+        0,
+        ctypes.byref(needed),
+    )
+    error = ctypes.get_last_error()
+    if first or error != _ERROR_INSUFFICIENT_BUFFER or not needed.value:
+        raise OutputPolicyError(
+            f"cannot size the Windows security policy for {out}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    if needed.value > 1024 * 1024:
+        raise OutputPolicyError(
+            f"Windows security policy is too large to audit safely for {out}"
+        )
+    buffer = ctypes.create_string_buffer(needed.value)
+    if not _GetKernelObjectSecurity(
+        handle,
+        _WINDOWS_POLICY_SECURITY_INFORMATION,
+        buffer,
+        len(buffer),
+        ctypes.byref(needed),
+    ):
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            f"cannot inspect the Windows security policy for {out}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    return bytes(buffer.raw[: needed.value])
+
+
+def _canonicalize_win32_security_descriptor(raw: bytes, out: Path) -> str:
+    """Serialize policy components, not provider-specific relative offsets."""
+
+    buffer = ctypes.create_string_buffer(raw)
+    rendered = wintypes.LPWSTR()
+    rendered_length = wintypes.DWORD(0)
+    # GetKernelObjectSecurity returned only the mandatory-label portion of the
+    # SACL. Asking the converter for SACL text serializes that label alongside
+    # owner, group, and DACL. SDDL retains ACE order and ACL control flags while
+    # discarding irrelevant self-relative offsets and padding, which may differ
+    # across Windows filesystem providers after ReplaceFileW.
+    requested = (
+        _OWNER_SECURITY_INFORMATION
+        | _GROUP_SECURITY_INFORMATION
+        | _DACL_SECURITY_INFORMATION
+        | _SACL_SECURITY_INFORMATION
+    )
+    if not _ConvertSecurityDescriptorToStringSecurityDescriptorW(
+        buffer,
+        _SDDL_REVISION_1,
+        requested,
+        ctypes.byref(rendered),
+        ctypes.byref(rendered_length),
+    ):
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            f"cannot canonicalize the Windows security policy for {out}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    try:
+        if not rendered:
+            raise OutputPolicyError(
+                f"Windows returned an empty canonical security policy for {out}"
+            )
+        return ctypes.wstring_at(rendered)
+    finally:
+        _LocalFree(ctypes.cast(rendered, ctypes.c_void_p))
+
+
+def _win32_security_policy(descriptor: int, out: Path) -> str:
+    return _canonicalize_win32_security_descriptor(
+        _win32_security_descriptor(descriptor, out), out
+    )
+
+
+def _restore_win32_dacl(
+    descriptor: int,
+    authorized_descriptor: bytes,
+    authorized_policy: str,
+    out: Path,
+) -> None:
+    """Reapply and prove the handle-bound destination DACL after ReplaceFileW."""
+
+    raw = ctypes.create_string_buffer(authorized_descriptor)
+    present = wintypes.BOOL()
+    defaulted = wintypes.BOOL()
+    dacl = ctypes.c_void_p()
+    if not _GetSecurityDescriptorDacl(
+        raw,
+        ctypes.byref(present),
+        ctypes.byref(dacl),
+        ctypes.byref(defaulted),
+    ):
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            f"cannot read the authorized Windows DACL for {out}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    if not present.value or not dacl.value:
+        raise OutputPolicyError(
+            f"authorized Windows output has no bounded DACL: {out}"
+        )
+
+    expected_security = _split_win32_security_policy(authorized_policy)
+    protection = (
+        _PROTECTED_DACL_SECURITY_INFORMATION
+        if "P" in expected_security[3]
+        else _UNPROTECTED_DACL_SECURITY_INFORMATION
+    )
+    error = _SetSecurityInfo(
+        wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
+        _SE_FILE_OBJECT,
+        _DACL_SECURITY_INFORMATION | protection,
+        None,
+        None,
+        dacl,
+        None,
+    )
+    if error:
+        raise OutputPolicyError(
+            f"cannot restore the authorized Windows DACL for {out}: "
             f"[WinError {error}] {ctypes.FormatError(error).strip()}"
         )
 
-    resolved = buffer.value
-    if resolved.startswith("\\\\?\\UNC\\"):
-        dos_stage = "\\\\" + resolved[8:]
-    elif resolved.startswith("\\\\?\\"):
-        dos_stage = resolved[4:]
-    else:
-        raise OutputPolicyError("owned staging handle returned an unsupported Windows path")
-    anchored_stage = Path(dos_stage)
-    if anchored_stage.name.casefold() != stage.path.name.casefold():
-        raise OutputPolicyError("owned staging handle name changed; refusing publication")
+    observed_security = _split_win32_security_policy(
+        _win32_security_policy(descriptor, out)
+    )
+    differences = tuple(
+        label
+        for label, expected, observed in (
+            ("DACL entries", expected_security[2], observed_security[2]),
+            ("DACL control flags", expected_security[3], observed_security[3]),
+        )
+        if expected != observed
+    )
+    if differences:
+        raise OutputPolicyError(
+            "authorized Windows DACL did not survive canonical reapplication "
+            f"({', '.join(differences)}): {out}"
+        )
+
+
+def _win32_named_streams(descriptor: int, out: Path) -> tuple[str, ...]:
+    """Enumerate named streams through the open target handle, not its path."""
+
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+    buffer_size = 64 * 1024
+    while True:
+        buffer = ctypes.create_string_buffer(buffer_size)
+        ctypes.set_last_error(0)
+        if _GetFileInformationByHandleEx(
+            handle,
+            _FILE_STREAM_INFO_CLASS,
+            buffer,
+            len(buffer),
+        ):
+            break
+        error = ctypes.get_last_error()
+        if error == _ERROR_HANDLE_EOF:
+            return ()
+        if error in {_ERROR_INSUFFICIENT_BUFFER, _ERROR_MORE_DATA} and buffer_size < 1024 * 1024:
+            buffer_size *= 2
+            continue
+        raise OutputPolicyError(
+            f"cannot enumerate Windows output streams for {out}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+
+    raw = buffer.raw
+    offset = 0
+    named: list[str] = []
+    while True:
+        if offset + 24 > len(raw):
+            raise OutputPolicyError(
+                f"Windows returned a truncated stream-policy record for {out}"
+            )
+        next_offset, name_length, _size, _allocation = struct.unpack_from(
+            "<IIqq", raw, offset
+        )
+        name_start = offset + 24
+        name_end = name_start + name_length
+        if name_length % 2 or name_end > len(raw):
+            raise OutputPolicyError(
+                f"Windows returned an invalid stream-policy record for {out}"
+            )
+        try:
+            name = raw[name_start:name_end].decode("utf-16-le")
+        except UnicodeError as exc:
+            raise OutputPolicyError(
+                f"Windows returned an undecodable stream name for {out}"
+            ) from exc
+        if name.casefold() != "::$data".casefold():
+            named.append(name)
+        if not next_offset:
+            break
+        if next_offset % 8 or next_offset < 24 or offset + next_offset <= offset:
+            raise OutputPolicyError(
+                f"Windows returned an invalid stream-policy offset for {out}"
+            )
+        offset += next_offset
+    return tuple(sorted(named, key=str.casefold))
+
+
+def _win32_policy_attributes(descriptor: int, out: Path) -> int:
+    try:
+        info = os.fstat(descriptor)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot inspect Windows output attributes for {out}: {exc}"
+        ) from exc
+    attributes = getattr(info, "st_file_attributes", None)
+    if attributes is None:
+        raise OutputPolicyError(
+            f"Windows output attributes are unavailable for {out}; replacement was refused"
+        )
+    return int(attributes) & ~_WINDOWS_NONPOLICY_ATTRIBUTES
+
+
+def _snapshot_win32_policy(
+    descriptor: int,
+    out: Path,
+) -> tuple[str, int, tuple[str, ...]]:
+    return (
+        _win32_security_policy(descriptor, out),
+        _win32_policy_attributes(descriptor, out),
+        _win32_named_streams(descriptor, out),
+    )
+
+
+def _win32_content_digest(descriptor: int, out: Path) -> bytes:
+    """Hash one retained regular stream without reopening its mutable name."""
 
     try:
-        anchored_parent = os.stat(anchored_stage.parent)
-        requested_parent = os.stat(out.parent)
+        original_offset = os.lseek(descriptor, 0, os.SEEK_CUR)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        digest = hashlib.sha256()
+        total = 0
+        while True:
+            block = os.read(descriptor, 1024 * 1024)
+            if not block:
+                break
+            total += len(block)
+            if total > _MAX_FRAME_BYTES:
+                raise OutputPolicyError(
+                    f"Windows transaction artifact exceeds the safety limit: {out}"
+                )
+            digest.update(block)
+        return digest.digest()
     except OSError as exc:
-        raise OutputPolicyError(f"cannot verify output directory identity: {exc}") from exc
-    if _identity(anchored_parent) != _identity(requested_parent):
-        raise OutputPolicyError("output directory identity changed; refusing publication")
+        raise OutputPolicyError(
+            f"cannot hash the retained Windows transaction artifact {out}: {exc}"
+        ) from exc
+    finally:
+        try:
+            os.lseek(descriptor, original_offset, os.SEEK_SET)
+        except (OSError, UnboundLocalError):
+            pass
 
-    dos_target = str(anchored_stage.with_name(out.name))
-    if dos_target.startswith("\\\\"):
-        return "\\??\\UNC\\" + dos_target[2:]
-    return "\\??\\" + dos_target
+
+def _snapshot_win32_artifact(descriptor: int, out: Path) -> WindowsArtifactState:
+    try:
+        info = os.fstat(descriptor)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot inspect the Windows transaction artifact {out}: {exc}"
+        ) from exc
+    if not stat.S_ISREG(info.st_mode) or _is_reparse_point(info):
+        raise OutputPolicyError(
+            f"Windows transaction artifact is not a regular file: {out}"
+        )
+    security, attributes, streams = _snapshot_win32_policy(descriptor, out)
+    return WindowsArtifactState(
+        identity=_identity(info),
+        security_policy=security,
+        policy_attributes=attributes,
+        named_streams=streams,
+        content_digest=_win32_content_digest(descriptor, out),
+    )
+
+
+def _prepare_win32_replacement_metadata(
+    stage: OutputStage,
+    out: Path,
+) -> WindowsReplacementSnapshot:
+    """Permit replacement only when the stage already carries exact policy."""
+
+    existing_descriptor = -1
+    try:
+        existing_descriptor = _win32_replacement_descriptor(out)
+        existing = os.fstat(existing_descriptor)
+        if not stat.S_ISREG(existing.st_mode) or _is_reparse_point(existing):
+            raise OutputPolicyError(
+                f"--force only replaces a regular output file: {out}"
+            )
+        target_policy = _snapshot_win32_policy(existing_descriptor, out)
+        stage_policy = _snapshot_win32_policy(stage.descriptor, stage.path)
+        security_policy, policy_attributes, named_streams = target_policy
+        if named_streams:
+            raise OutputPolicyError(
+                "existing Windows output has named data streams that cannot be "
+                f"safely preserved: {named_streams!r}; replacement was refused"
+            )
+        if policy_attributes:
+            raise OutputPolicyError(
+                "existing Windows output has policy-bearing file attributes "
+                f"0x{policy_attributes:x}; replacement was refused: {out}"
+            )
+        if stage_policy != target_policy:
+            raise OutputPolicyError(
+                "existing Windows output security policy differs from the protected "
+                f"replacement stage; replacement was refused: {out}"
+            )
+        return WindowsReplacementSnapshot(
+            descriptor=existing_descriptor,
+            identity=_identity(existing),
+            security_policy=security_policy,
+            policy_attributes=policy_attributes,
+            named_streams=named_streams,
+            content_digest=_win32_content_digest(existing_descriptor, out),
+        )
+    except Exception:
+        if existing_descriptor >= 0:
+            try:
+                os.close(existing_descriptor)
+            except OSError:
+                pass
+        raise
+
+
+def _verify_win32_replacement_metadata(
+    snapshot: WindowsReplacementSnapshot,
+    stage: OutputStage,
+    out: Path,
+) -> None:
+    """Recheck both open inodes immediately before the atomic handle rename."""
+
+    try:
+        opened = os.fstat(snapshot.descriptor)
+        named = os.lstat(out)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot re-verify existing Windows output policy for {out}: {exc}"
+        ) from exc
+    if (
+        not stat.S_ISREG(opened.st_mode)
+        or _is_reparse_point(opened)
+        or _identity(opened) != snapshot.identity
+        or _identity(named) != snapshot.identity
+    ):
+        raise OutputPolicyError(
+            f"existing Windows output identity changed before publication: {out}"
+        )
+    expected = (
+        snapshot.security_policy,
+        snapshot.policy_attributes,
+        snapshot.named_streams,
+    )
+    if _snapshot_win32_policy(snapshot.descriptor, out) != expected:
+        raise OutputPolicyError(
+            f"existing Windows output policy changed before publication: {out}"
+        )
+    if _snapshot_win32_policy(stage.descriptor, stage.path) != expected:
+        raise OutputPolicyError(
+            f"protected Windows replacement policy changed before publication: {out}"
+        )
+
+
+def _verify_win32_target_directory(stage: OutputStage, out: Path) -> None:
+    """Prove the requested parent still names the retained staging directory."""
+
+    if (
+        stage.target_directory_descriptor is None
+        or stage.target_directory_identity is None
+    ):
+        raise OutputPolicyError("retained Windows output directory is unavailable")
+    try:
+        opened = os.fstat(stage.target_directory_descriptor)
+        named = os.lstat(out.parent)
+        resolved_stage = _win32_resolved_path(
+            stage.descriptor, "the owned staging handle"
+        )
+        staged_parent = os.stat(resolved_stage.parent)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot re-verify the Windows output directory for {out}: {exc}"
+        ) from exc
+    expected = stage.target_directory_identity
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or _is_reparse_point(opened)
+        or not stat.S_ISDIR(named.st_mode)
+        or _is_reparse_point(named)
+        or _identity(opened) != expected
+        or _identity(named) != expected
+        or _identity(staged_parent) != expected
+    ):
+        raise OutputPolicyError(
+            f"Windows output directory identity changed before publication: {out.parent}"
+        )
 
 
 def _win32_rename_by_handle(stage: OutputStage, out: Path, force: bool) -> None:
+    _validate_windows_output_name(out)
+    _verify_win32_target_directory(stage, out)
+    _win32_rename_open_handle(stage, out.name, force)
+
+
+def _win32_rename_open_handle(stage: OutputStage, target_name: str, force: bool) -> None:
+    """Rename the owned file inside its handle-resolved retained directory."""
+
     handle = wintypes.HANDLE(msvcrt.get_osfhandle(stage.descriptor))
-    # SetFileInformationByHandle consumes the NT object-manager spelling here.
-    # A DOS path can fail with ERROR_INVALID_NAME under the Windows sandbox,
-    # while a bare filename is resolved against the process cwd. Deriving the
-    # absolute target from the open staging handle also prevents a replaced
-    # parent junction from redirecting publication.
-    encoded_name = _win32_target_from_stage_handle(stage, out).encode("utf-16-le")
+    if stage.target_directory_descriptor is None:
+        raise OutputPolicyError("retained Windows output directory is unavailable")
+    anchored = _win32_resolved_path(stage.descriptor, "the owned Windows file handle")
+    dos_target = str(anchored.with_name(target_name))
+    if dos_target.startswith("\\\\"):
+        native_target = "\\??\\UNC\\" + dos_target[2:]
+    else:
+        native_target = "\\??\\" + dos_target
+    encoded_name = native_target.encode("utf-16-le")
     offset = _FileRenameInfoEx.FileName.offset
     # Microsoft's FILE_RENAME_INFORMATION contract requires at least the fixed
     # structure size plus the variable filename bytes, not merely the offset of
     # FileName plus those bytes.
     buffer = ctypes.create_string_buffer(ctypes.sizeof(_FileRenameInfoEx) + len(encoded_name))
     info = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfoEx)).contents
-    info.Flags = _FILE_RENAME_FLAG_REPLACE_IF_EXISTS if force else 0
+    # FILE_RENAME_FLAG_POSIX_SEMANTICS lets the force replacement commit while
+    # the audited old target is still held open with FILE_SHARE_DELETE. Keeping
+    # that handle alive is what makes the final identity/policy comparison
+    # descriptor-bound instead of reopening an attacker-controlled pathname.
+    info.Flags = (
+        _FILE_RENAME_FLAG_REPLACE_IF_EXISTS | _FILE_RENAME_FLAG_POSIX_SEMANTICS
+        if force
+        else 0
+    )
     info.RootDirectory = None
     info.FileNameLength = len(encoded_name)
     ctypes.memmove(ctypes.addressof(buffer) + offset, encoded_name, len(encoded_name))
@@ -371,15 +1088,17 @@ def _win32_rename_by_handle(stage: OutputStage, out: Path, force: bool) -> None:
         return
     error = ctypes.get_last_error()
     if not force and error in (_ERROR_FILE_EXISTS, _ERROR_ALREADY_EXISTS):
-        raise OutputPolicyError(f"output appeared during extraction and was preserved: {out}")
+        raise OutputPolicyError(
+            f"output appeared during extraction and was preserved: {target_name}"
+        )
     raise OutputPolicyError(
-        f"could not atomically {'replace' if force else 'publish'} output {out}: "
+        f"could not atomically {'replace' if force else 'publish'} output {target_name}: "
         f"[WinError {error}] {ctypes.FormatError(error).strip()}"
     )
 
 
-def _win32_mark_stage_for_deletion(stage: OutputStage) -> bool:
-    handle = wintypes.HANDLE(msvcrt.get_osfhandle(stage.descriptor))
+def _win32_mark_descriptor_for_deletion(descriptor: int, path: Path) -> bool:
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
     disposition = _FileDispositionInfo(1)
     if _SetFileInformationByHandle(
         handle,
@@ -390,11 +1109,344 @@ def _win32_mark_stage_for_deletion(stage: OutputStage) -> bool:
         return True
     error = ctypes.get_last_error()
     _write_console_line(
-        f"warning: could not delete owned staging handle for {stage.path}: "
+        f"warning: could not delete owned Windows handle for {path}: "
         f"[WinError {error}] {ctypes.FormatError(error).strip()}",
         stream=sys.stderr,
     )
     return False
+
+
+def _win32_mark_stage_for_deletion(stage: OutputStage) -> bool:
+    return _win32_mark_descriptor_for_deletion(stage.descriptor, stage.path)
+
+
+def _win32_auxiliary_path(parent: Path, tag: str) -> Path:
+    """Allocate a bounded, currently unclaimed transaction pathname."""
+
+    for _attempt in range(64):
+        candidate = parent / f".frame-{tag}-{secrets.token_hex(20)}"
+        if not _path_exists(candidate):
+            return candidate
+    raise OutputPolicyError(f"could not allocate a Windows {tag} transaction name")
+
+
+def _call_win32_replace_file(
+    replaced: Path,
+    replacement: Path,
+    backup: Path,
+) -> int | None:
+    """Run ReplaceFileW without metadata-ignore flags; return its Win32 error."""
+
+    ctypes.set_last_error(0)
+    if _ReplaceFileW(
+        _win32_extended_path(replaced),
+        _win32_extended_path(replacement),
+        _win32_extended_path(backup),
+        0,
+        None,
+        None,
+    ):
+        return None
+    return ctypes.get_last_error()
+
+
+def _rollback_win32_replace(
+    stage: OutputStage,
+    target: Path,
+    backup: Path,
+    expected_backup: WindowsArtifactState,
+    expected_rejected: WindowsArtifactState,
+) -> None:
+    """Preserve the rejected inode, then atomically restore the exact backup."""
+
+    discard = _win32_auxiliary_path(target.parent, "rejected")
+    try:
+        os.link(_win32_extended_path(target), _win32_extended_path(discard))
+    except OSError as exc:
+        raise OutputPolicyError(
+            "Windows rollback could not preserve the rejected inode; both files "
+            f"were left for recovery ({target}, {backup}): {exc}"
+        ) from exc
+
+    discard_descriptor = -1
+    backup_descriptor = -1
+    try:
+        discard_descriptor = _win32_transaction_artifact_descriptor(discard)
+        rejected = _snapshot_win32_artifact(discard_descriptor, discard)
+        try:
+            if _identity(os.lstat(target)) != rejected.identity:
+                raise OutputPolicyError(
+                    f"Windows rollback target changed before restoration: {target}"
+                )
+        except OSError as exc:
+            raise OutputPolicyError(
+                f"cannot inspect the Windows rollback target {target}: {exc}"
+            ) from exc
+
+        backup_descriptor = _win32_transaction_artifact_descriptor(backup)
+        backup_stage = OutputStage(
+            backup,
+            _identity(os.fstat(backup_descriptor)),
+            backup_descriptor,
+            target_directory_identity=stage.target_directory_identity,
+            target_directory_descriptor=stage.target_directory_descriptor,
+        )
+        _win32_rename_open_handle(backup_stage, target.name, True)
+        restored = _snapshot_win32_artifact(backup_descriptor, target)
+        if restored != expected_backup:
+            raise OutputPolicyError(
+                f"Windows rollback restored unexpected output state: {target}"
+            )
+        if rejected != expected_rejected:
+            raise OutputPolicyError(
+                "Windows rollback restored the prior output but preserved a late "
+                f"unrelated claimant for recovery at {discard}"
+            )
+        if not _win32_mark_descriptor_for_deletion(discard_descriptor, discard):
+            raise OutputPolicyError(
+                f"Windows rollback could not delete the rejected replacement: {discard}"
+            )
+    finally:
+        for descriptor in (backup_descriptor, discard_descriptor):
+            if descriptor >= 0:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+
+
+def _reopen_win32_stage_for_cleanup(stage: OutputStage, path: Path) -> None:
+    """Recover the generated inode after a pathname transaction did not consume it."""
+
+    if not _path_exists(path):
+        return
+    descriptor = _win32_transaction_artifact_descriptor(path)
+    try:
+        if _identity(os.fstat(descriptor)) != stage.identity:
+            raise OutputPolicyError(
+                f"Windows staging identity changed; unexpected path was preserved: {path}"
+            )
+    except Exception:
+        os.close(descriptor)
+        raise
+    stage.descriptor = descriptor
+    stage.path = path
+
+
+def _publish_win32_force_transaction(
+    stage: OutputStage,
+    replacement: WindowsReplacementSnapshot,
+    out: Path,
+) -> None:
+    """Replace with an exact backup, post-verify both sides, or roll back."""
+
+    _validate_windows_output_name(out)
+    _verify_win32_target_directory(stage, out)
+    _verify_win32_replacement_metadata(replacement, stage, out)
+    stage_state = _snapshot_win32_artifact(stage.descriptor, stage.path)
+    authorized_target_security = _win32_security_descriptor(
+        replacement.descriptor, out
+    )
+    if (
+        _canonicalize_win32_security_descriptor(authorized_target_security, out)
+        != replacement.security_policy
+    ):
+        raise OutputPolicyError(
+            f"existing Windows output security policy changed before publication: {out}"
+        )
+    expected_target = WindowsArtifactState(
+        identity=replacement.identity,
+        security_policy=replacement.security_policy,
+        policy_attributes=replacement.policy_attributes,
+        named_streams=replacement.named_streams,
+        content_digest=replacement.content_digest,
+    )
+    anchored_stage = _win32_resolved_path(stage.descriptor, "the owned staging handle")
+    if anchored_stage.name.casefold() != stage.path.name.casefold():
+        raise OutputPolicyError("owned staging handle name changed; refusing replacement")
+    target = anchored_stage.with_name(out.name)
+    backup = _win32_auxiliary_path(anchored_stage.parent, "rollback")
+
+    # ReplaceFileW deliberately opens the replacement with no sharing mode, so
+    # both audited file handles must be released for the atomic operation. The
+    # API's backup captures the *actual* target at the commit boundary; every
+    # postcondition below is checked before that recovery copy is deleted.
+    try:
+        os.close(replacement.descriptor)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"could not release the audited Windows target before replacement: {exc}"
+        ) from exc
+    replacement.descriptor = -1
+    try:
+        os.close(stage.descriptor)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"could not release the protected Windows stage before replacement: {exc}"
+        ) from exc
+    stage.descriptor = -1
+
+    error = _call_win32_replace_file(target, anchored_stage, backup)
+    if error is not None:
+        # The documented 1177 partial state moves the displaced target to the
+        # backup. When both names exist, the same transactional rollback below
+        # can restore it. Otherwise verify the old target and retain any backup
+        # rather than deleting an object whose provenance is uncertain.
+        if _path_exists(backup) and _path_exists(target):
+            backup_descriptor = _win32_transaction_artifact_descriptor(backup)
+            try:
+                backup_state = _snapshot_win32_artifact(backup_descriptor, backup)
+            finally:
+                os.close(backup_descriptor)
+            target_descriptor = _win32_replacement_descriptor(target)
+            try:
+                rejected_state = _snapshot_win32_artifact(target_descriptor, target)
+            finally:
+                os.close(target_descriptor)
+            if backup_state == expected_target and rejected_state != expected_target:
+                # A failed ReplaceFileW may have moved the audited target into
+                # its backup before failing. Restore only that exact inode. A
+                # caller that claimed our unpredictable backup name must never
+                # be promoted over an intact or ambiguous destination.
+                _rollback_win32_replace(
+                    stage, target, backup, backup_state, rejected_state
+                )
+            elif rejected_state != expected_target:
+                raise OutputPolicyError(
+                    "Windows replacement failed with ambiguous target and backup "
+                    f"state; both recovery artifacts were preserved: {target}, {backup}"
+                )
+        elif _path_exists(backup):
+            backup_descriptor = _win32_transaction_artifact_descriptor(backup)
+            try:
+                backup_state = _snapshot_win32_artifact(backup_descriptor, backup)
+                if backup_state != expected_target:
+                    raise OutputPolicyError(
+                        "Windows replacement failed with an untrusted rollback "
+                        f"artifact; it was preserved without publication: {backup}"
+                    )
+                backup_stage = OutputStage(
+                    backup,
+                    backup_state.identity,
+                    backup_descriptor,
+                    target_directory_identity=stage.target_directory_identity,
+                    target_directory_descriptor=stage.target_directory_descriptor,
+                )
+                _win32_rename_open_handle(backup_stage, out.name, False)
+                restored = _snapshot_win32_artifact(backup_descriptor, target)
+                if restored != expected_target:
+                    raise OutputPolicyError(
+                        "Windows partial-transaction recovery restored unexpected "
+                        f"output state: {target}"
+                    )
+            finally:
+                os.close(backup_descriptor)
+        elif not _path_exists(target):
+            raise OutputPolicyError(
+                "Windows replacement failed after both the target and rollback backup "
+                f"became unavailable: {target}, {backup}"
+            )
+        elif _path_exists(target):
+            target_descriptor = _win32_transaction_artifact_descriptor(target)
+            try:
+                if _snapshot_win32_artifact(target_descriptor, target) != expected_target:
+                    raise OutputPolicyError(
+                        f"failed Windows transaction left an unexpected target: {target}"
+                    )
+            finally:
+                os.close(target_descriptor)
+        _reopen_win32_stage_for_cleanup(stage, anchored_stage)
+        raise OutputPolicyError(
+            f"could not atomically replace Windows output {out}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+
+    backup_descriptor = -1
+    output_descriptor = -1
+    try:
+        backup_descriptor = _win32_transaction_artifact_descriptor(backup)
+        backup_state = _snapshot_win32_artifact(backup_descriptor, backup)
+        output_descriptor = _win32_transaction_artifact_descriptor(
+            target, restore_dacl=True
+        )
+        output_state = _snapshot_win32_artifact(output_descriptor, target)
+        violations: list[str] = []
+        backup_differences = _win32_artifact_differences(
+            expected_target, backup_state
+        )
+        if backup_differences:
+            violations.append(
+                "the displaced target changed at the commit boundary "
+                f"({', '.join(backup_differences)})"
+            )
+        # ReplaceFileW intentionally merges the replaced file's DACL into the
+        # replacement.  Filesystem providers may rewrite inherited ACE layout
+        # and DACL control flags while doing so.  Restore the exact DACL read
+        # from the retained destination handle, then compare its canonical ACEs
+        # and control flags; no DACL difference is ignored.
+        if output_state.identity == stage_state.identity:
+            try:
+                _restore_win32_dacl(
+                    output_descriptor,
+                    authorized_target_security,
+                    replacement.security_policy,
+                    target,
+                )
+            except OutputPolicyError:
+                violations.append(
+                    "the authorized destination DACL could not be restored exactly"
+                )
+            output_state = _snapshot_win32_artifact(output_descriptor, target)
+        output_differences = _win32_artifact_differences(stage_state, output_state)
+        if output_differences:
+            violations.append(
+                "the replacement changed after commit "
+                f"({', '.join(output_differences)})"
+            )
+        stage.descriptor = output_descriptor
+        try:
+            _verify_win32_target_directory(stage, out)
+        except OutputPolicyError:
+            violations.append("the output directory changed at the commit boundary")
+        finally:
+            stage.descriptor = -1
+        if violations:
+            os.close(output_descriptor)
+            output_descriptor = -1
+            os.close(backup_descriptor)
+            backup_descriptor = -1
+            _rollback_win32_replace(
+                stage, target, backup, backup_state, output_state
+            )
+            raise OutputPolicyError(
+                "Windows replacement transaction was rolled back: " + "; ".join(violations)
+            )
+
+        if not _win32_mark_descriptor_for_deletion(backup_descriptor, backup):
+            os.close(output_descriptor)
+            output_descriptor = -1
+            os.close(backup_descriptor)
+            backup_descriptor = -1
+            _rollback_win32_replace(
+                stage, target, backup, backup_state, output_state
+            )
+            raise OutputPolicyError(
+                "Windows replacement transaction was rolled back because the exact "
+                "backup could not be committed"
+            )
+        os.close(backup_descriptor)
+        backup_descriptor = -1
+        stage.descriptor = output_descriptor
+        output_descriptor = -1
+        stage.path = target
+        stage.published = True
+    finally:
+        for descriptor in (output_descriptor, backup_descriptor):
+            if descriptor >= 0:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
 
 
 def _unlink_open_posix_file(
@@ -444,23 +1496,81 @@ def _rmdir_open_posix_directory(
 def _create_output_stage(out: Path) -> OutputStage:
     suffix = out.suffix or ".img"
     if os.name == "nt":
-        target_digest = hashlib.sha256(
-            out.name.encode("utf-8", errors="surrogatepass")
-        ).hexdigest()[:16]
-        prefix = f".frame-{target_digest}.atomic-"
-        for _attempt in range(64):
-            path = out.parent / f"{prefix}{secrets.token_hex(16)}{suffix}"
-            try:
-                descriptor = _win32_stage_descriptor(path)
-            except FileExistsError:
-                continue
-            except OSError as exc:
+        target_descriptor = -1
+        descriptor = -1
+        path: Path | None = None
+        try:
+            target_descriptor = _win32_directory_descriptor(out.parent)
+            target_info = os.fstat(target_descriptor)
+            named_parent = os.lstat(out.parent)
+            if (
+                not stat.S_ISDIR(target_info.st_mode)
+                or _is_reparse_point(target_info)
+                or not stat.S_ISDIR(named_parent.st_mode)
+                or _is_reparse_point(named_parent)
+                or _identity(target_info) != _identity(named_parent)
+            ):
                 raise OutputPolicyError(
-                    f"cannot create locked output staging file beside {out}: {exc}"
-                ) from exc
+                    f"unsafe or unstable Windows output directory: {out.parent}"
+                )
+            target_identity = _identity(target_info)
+            target_digest = hashlib.sha256(
+                out.name.encode("utf-8", errors="surrogatepass")
+            ).hexdigest()[:16]
+            prefix = f".frame-{target_digest}.atomic-"
+            for _attempt in range(64):
+                path = out.parent / f"{prefix}{secrets.token_hex(16)}{suffix}"
+                try:
+                    descriptor = _win32_stage_descriptor(path)
+                except FileExistsError:
+                    continue
+                except (OSError, OutputPolicyError) as exc:
+                    raise OutputPolicyError(
+                        f"cannot create locked output staging file beside {out}: {exc}"
+                    ) from exc
+                break
+            else:
+                raise OutputPolicyError("could not allocate a unique output staging name")
+
             info = os.fstat(descriptor)
-            return OutputStage(path, _identity(info), descriptor)
-        raise OutputPolicyError("could not allocate a unique output staging name")
+            resolved_stage = _win32_resolved_path(
+                descriptor, "the newly created staging handle"
+            )
+            resolved_parent = os.stat(resolved_stage.parent)
+            current_parent = os.lstat(out.parent)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or _is_reparse_point(info)
+                or _identity(resolved_parent) != target_identity
+                or _identity(current_parent) != target_identity
+                or _is_reparse_point(current_parent)
+            ):
+                raise OutputPolicyError(
+                    "Windows output directory changed while the protected stage "
+                    f"was created: {out.parent}"
+                )
+            return OutputStage(
+                path,
+                _identity(info),
+                descriptor,
+                target_directory_identity=target_identity,
+                target_directory_descriptor=target_descriptor,
+            )
+        except Exception:
+            if descriptor >= 0:
+                cleanup_path = path if path is not None else out
+                cleanup_stage = OutputStage(cleanup_path, (-1, -1), descriptor)
+                _win32_mark_stage_for_deletion(cleanup_stage)
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+            if target_descriptor >= 0:
+                try:
+                    os.close(target_descriptor)
+                except OSError:
+                    pass
+            raise
 
     target_directory_flags = (
         os.O_RDONLY
@@ -1620,8 +2730,40 @@ def _cleanup_output_stage(stage: OutputStage) -> bool:
     success = True
     try:
         if os.name == "nt":
-            if not stage.published:
-                success = _win32_mark_stage_for_deletion(stage)
+            if (
+                not stage.published
+                and stage.descriptor < 0
+                and _path_exists(stage.path)
+            ):
+                recovered_descriptor = -1
+                try:
+                    recovered_descriptor = _win32_transaction_artifact_descriptor(
+                        stage.path
+                    )
+                    if _identity(os.fstat(recovered_descriptor)) == stage.identity:
+                        stage.descriptor = recovered_descriptor
+                        recovered_descriptor = -1
+                    else:
+                        _write_console_line(
+                            "warning: closed staging path identity changed; leaving "
+                            f"unexpected path untouched: {stage.path}",
+                            stream=sys.stderr,
+                        )
+                        success = False
+                except (OSError, OutputPolicyError) as exc:
+                    _write_console_line(
+                        f"warning: could not recover closed staging handle: {exc}",
+                        stream=sys.stderr,
+                    )
+                    success = False
+                finally:
+                    if recovered_descriptor >= 0:
+                        try:
+                            os.close(recovered_descriptor)
+                        except OSError:
+                            pass
+            if not stage.published and stage.descriptor >= 0:
+                success = _win32_mark_stage_for_deletion(stage) and success
         else:
             try:
                 if stage.directory_descriptor is None:
@@ -1662,15 +2804,26 @@ def _cleanup_output_stage(stage: OutputStage) -> bool:
                         )
                         success = False
     finally:
-        try:
-            os.close(stage.descriptor)
-        except OSError as exc:
-            _write_console_line(
-                f"warning: could not close staging handle: {exc}",
-                stream=sys.stderr,
-            )
-            success = False
+        if stage.descriptor >= 0:
+            try:
+                os.close(stage.descriptor)
+            except OSError as exc:
+                _write_console_line(
+                    f"warning: could not close staging handle: {exc}",
+                    stream=sys.stderr,
+                )
+                success = False
         stage.descriptor = -1
+        if os.name == "nt" and stage.target_directory_descriptor is not None:
+            try:
+                os.close(stage.target_directory_descriptor)
+            except OSError as exc:
+                _write_console_line(
+                    f"warning: could not close output directory handle: {exc}",
+                    stream=sys.stderr,
+                )
+                success = False
+            stage.target_directory_descriptor = None
         if os.name != "nt":
             if (
                 stage.directory_path is not None
@@ -1717,7 +2870,7 @@ def _publish_output(
     clip: Path,
     out: Path,
     force: bool,
-    replacement: PosixReplacementSnapshot | None = None,
+    replacement: PosixReplacementSnapshot | WindowsReplacementSnapshot | None = None,
 ) -> None:
     _verify_output_stage(stage, require_content=True)
     # Re-check immediately before publication. The locked Windows staging name
@@ -1725,36 +2878,33 @@ def _publish_output(
     _validate_output_target(clip, out, force)
     if os.name == "nt":
         if not force:
+            _verify_win32_target_directory(stage, out)
+            # The relative handle rename binds the destination to the retained
+            # directory and atomically refuses any late claimant. Mark first so
+            # an interruption immediately after the native commit cannot make
+            # cleanup delete the successfully published frame.
+            stage.published = True
             try:
-                # The exclusive handle prevents the source name from being
-                # swapped; hard-link creation is an atomic no-replace claim on
-                # the destination. Cleanup then deletes only the staging link.
-                # Python's ordinary Win32 path spelling can still hit MAX_PATH
-                # even when both filename components are valid. The owned
-                # stage and final target therefore use extended-length paths.
-                os.link(
-                    _win32_extended_path(stage.path),
-                    _win32_extended_path(out),
-                )
-            except FileExistsError as exc:
-                raise OutputPolicyError(
-                    f"output appeared during extraction and was preserved: {out}"
-                ) from exc
-            except OSError as exc:
-                raise OutputPolicyError(
-                    f"could not atomically publish output {out}: {exc}"
-                ) from exc
+                _win32_rename_by_handle(stage, out, False)
+                try:
+                    _verify_win32_target_directory(stage, out)
+                except OutputPolicyError as directory_error:
+                    # The relative commit landed in the retained directory. If
+                    # the caller's pathname stopped naming that directory at the
+                    # boundary, move the exact generated handle back to its
+                    # private name before reporting the refusal.
+                    _win32_rename_open_handle(stage, stage.path.name, False)
+                    stage.published = False
+                    raise directory_error
+            except Exception:
+                stage.published = False
+                raise
             return
-        # Mark first so an asynchronous interruption immediately after the
-        # native rename can never make cleanup delete a successfully published
-        # replacement. Ordinary failures reset the marker and delete the exact
-        # still-owned staging handle.
-        stage.published = True
-        try:
-            _win32_rename_by_handle(stage, out, force)
-        except Exception:
-            stage.published = False
-            raise
+        if not isinstance(replacement, WindowsReplacementSnapshot):
+            raise OutputPolicyError(
+                "handle-bound Windows replacement policy snapshot is unavailable"
+            )
+        _publish_win32_force_transaction(stage, replacement, out)
         return
 
     _verify_posix_target_directory(stage, out)
@@ -1783,6 +2933,7 @@ def _publish_output(
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _MAX_PNG_CHUNK_BYTES = 256 * 1024 * 1024
 _MAX_FRAME_BYTES = 512 * 1024 * 1024
+_PNG_PROBE_TIMEOUT_SECONDS = 60
 _OUTPUT_CODECS = {
     ".png": "png",
     ".jpg": "mjpeg",
@@ -1839,6 +2990,58 @@ def _read_png_frame(stream: BinaryIO) -> bytes | None:
             return bytes(frame)
 
 
+def _probe_decodable_png(ffmpeg: str, png_frame: bytes) -> None:
+    """Require a bounded independent decode before bytes become an anchor."""
+
+    if not png_frame or len(png_frame) > _MAX_FRAME_BYTES:
+        raise FrameExtractionError("retained PNG frame is outside the safety limit")
+    cmd = [
+        ffmpeg,
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-xerror",
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "png",
+        "-i",
+        "pipe:0",
+        "-map",
+        "0:v:0",
+        "-frames:v",
+        "1",
+        "-an",
+        "-f",
+        "null",
+        "-",
+    ]
+    with tempfile.TemporaryFile(mode="w+b") as stderr_file:
+        try:
+            completed = subprocess.run(
+                cmd,
+                input=png_frame,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_file,
+                timeout=_PNG_PROBE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise FrameExtractionError(
+                "retained PNG decode probe exceeded the safety timeout"
+            ) from exc
+        except OSError as exc:
+            raise FrameExtractionError(
+                f"could not start the retained PNG decode probe: {exc}"
+            ) from exc
+        stderr_file.seek(0)
+        detail = stderr_file.read().decode("utf-8", errors="replace")[-800:].strip()
+    if completed.returncode != 0:
+        raise FrameExtractionError(
+            detail or "ffmpeg rejected the retained PNG frame during the decode probe"
+        )
+
+
 def render_frame_png(ffmpeg: str, clip: Path, first: bool) -> bytes:
     """Stream every decoded frame and retain only the final complete PNG."""
 
@@ -1885,6 +3088,7 @@ def render_frame_png(ffmpeg: str, clip: Path, first: bool) -> bytes:
     if returncode != 0 or last_frame is None:
         detail = stderr_text or "ffmpeg returned no complete video frame"
         raise FrameExtractionError(detail)
+    _probe_decodable_png(ffmpeg, last_frame)
     return last_frame
 
 
@@ -1924,7 +3128,7 @@ def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) 
         supported = ", ".join(sorted(_OUTPUT_CODECS))
         raise OutputPolicyError(f"unsupported output image suffix {out.suffix!r}; use one of: {supported}")
     stage: OutputStage | None = None
-    replacement: PosixReplacementSnapshot | None = None
+    replacement: PosixReplacementSnapshot | WindowsReplacementSnapshot | None = None
     try:
         if os.name == "posix":
             if force:
@@ -1938,6 +3142,17 @@ def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) 
             stage = _create_output_stage(out)
             if force:
                 replacement = _prepare_posix_replacement_metadata(stage, out)
+        elif os.name == "nt":
+            # Retain the exact destination directory and create the protected
+            # stage before decode in both publication modes. A parent
+            # rename/recreation or junction substitution must never redirect a
+            # completed frame into a different directory.
+            stage = _create_output_stage(out)
+            if force:
+                # Bind the existing target and prove the protected stage already
+                # carries the same Windows owner/group/DACL/label, has no named
+                # streams, and has no policy-bearing attributes before decoding.
+                replacement = _prepare_win32_replacement_metadata(stage, out)
 
         png_frame = render_frame_png(ffmpeg, clip, first)
         content = _encode_frame_for_output(ffmpeg, png_frame, out)
@@ -1948,12 +3163,12 @@ def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) 
         _write_console_line(f"{'first' if first else 'last'} frame -> {out}")
         return 0
     finally:
-        if replacement is not None:
+        if replacement is not None and replacement.descriptor >= 0:
             try:
                 os.close(replacement.descriptor)
             except OSError as exc:
                 _write_console_line(
-                    f"warning: could not close replaced output metadata handle: {exc}",
+                    f"warning: could not close replaced output policy handle: {exc}",
                     stream=sys.stderr,
                 )
         if stage is not None:
@@ -2015,12 +3230,14 @@ def self_test() -> int:
     if not schema.exists():
         errors.append("schemas/take-review.schema.json missing")
     if errors:
-        print("extract_last_frame self-test FAILED:")
+        _write_console_line("extract_last_frame self-test FAILED:")
         for e in errors:
-            print(f"- {e}")
+            _write_console_line(f"- {e}")
         return 1
-    print(f"extract_last_frame self-test passed: {len(FRAME_READABLE)} frame-readable + "
-          f"{len(FRAME_BLIND)} frame-blind categories, take-review fields referenced.")
+    _write_console_line(
+        f"extract_last_frame self-test passed: {len(FRAME_READABLE)} frame-readable + "
+        f"{len(FRAME_BLIND)} frame-blind categories, take-review fields referenced."
+    )
     return 0
 
 
@@ -2058,7 +3275,7 @@ def main() -> int:
     if args.self_test:
         return self_test()
     if args.emit_record and not args.clip:
-        print(build_record())
+        _write_console_line(build_record())
         return 0
     if not args.clip:
         parser.error("clip path required (or use --self-test / --emit-record)")
@@ -2069,7 +3286,9 @@ def main() -> int:
         return 1
     ffmpeg = args.ffmpeg or shutil.which("ffmpeg")
     if not ffmpeg:
-        print("ffmpeg not found on PATH; install it or pass --ffmpeg /path/to/ffmpeg")
+        _write_console_line(
+            "ffmpeg not found on PATH; install it or pass --ffmpeg /path/to/ffmpeg"
+        )
         return 2
     suffix = ".first.png" if args.first_frame else ".last.png"
     out = Path(args.output) if args.output else clip.with_suffix(clip.suffix + suffix)
@@ -2085,8 +3304,8 @@ def main() -> int:
         _write_console_line(f"output failed safely: {exc}")
         return 1
     if rc == 0 and args.emit_record:
-        print()
-        print(build_record())
+        _write_console_line("")
+        _write_console_line(build_record())
     return rc
 
 

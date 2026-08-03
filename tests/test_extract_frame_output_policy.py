@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import contextlib
+import ctypes
 import errno
 import hashlib
 import io
@@ -44,6 +45,14 @@ class _WorkspaceTempfiles:
 tempfile = _WorkspaceTempfiles()
 
 
+def _from_extended_windows_path(value: str) -> Path:
+    if value.startswith("\\\\?\\UNC\\"):
+        return Path("\\\\" + value[8:])
+    if value.startswith("\\\\?\\"):
+        return Path(value[4:])
+    return Path(value)
+
+
 class OutputPolicyTestCase(unittest.TestCase):
     def invoke(self, *arguments: str) -> tuple[int, str, str]:
         stdout = io.StringIO()
@@ -62,6 +71,8 @@ class OutputPolicyTestCase(unittest.TestCase):
             *root.glob(".*.atomic-*"),
             *root.glob(".f-*"),
             *root.glob(".frame-exchange-*"),
+            *root.glob(".frame-rollback-*"),
+            *root.glob(".frame-rejected-*"),
             *root.glob(".x*"),
         ]
 
@@ -137,13 +148,13 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                 self.assertFalse(output.exists())
                 # POSIX proves staging-namespace and replacement policy support
                 # before decode, but the final output remains invisible.
-                expected_stage_count = 1 if os.name == "posix" else 0
+                expected_stage_count = 1 if os.name in {"posix", "nt"} else 0
                 self.assertEqual(len(self.stage_paths(root)), expected_stage_count)
                 return b"complete frame"
 
             with mock.patch.object(
                 extractor, "render_frame_png", side_effect=render
-            ) as render_frame:
+            ):
                 result, stdout, stderr = self.invoke(
                     str(clip), "--ffmpeg", "fake-ffmpeg", "--output", str(output)
                 )
@@ -238,6 +249,623 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
             self.assertEqual(result, 1, stdout + stderr)
             self.assertEqual(output.read_bytes(), b"old frame")
             self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows ACL policy is platform-specific")
+    def test_windows_force_preserves_matching_policy_on_success(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                before = extractor._snapshot_win32_policy(descriptor, output)
+            finally:
+                os.close(descriptor)
+
+            with mock.patch.object(
+                extractor, "render_frame_png", return_value=b"new complete frame"
+            ) as render:
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                after = extractor._snapshot_win32_policy(descriptor, output)
+            finally:
+                os.close(descriptor)
+            self.assertEqual(result, 0, stdout + stderr)
+            render.assert_called_once_with("fake-ffmpeg", clip, False)
+            self.assertEqual(output.read_bytes(), b"new complete frame")
+            self.assertEqual(after, before)
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows namespace locking is platform-specific")
+    def test_windows_force_locks_target_namespace_through_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            attacker = root / "late-swap.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            attacker.write_bytes(b"unrelated file")
+
+            def render(_ffmpeg: str, _clip: Path, _first: bool) -> bytes:
+                with self.assertRaises(PermissionError):
+                    os.replace(attacker, output)
+                self.assertEqual(output.read_bytes(), b"old frame")
+                return b"new complete frame"
+
+            with mock.patch.object(
+                extractor, "render_frame_png", side_effect=render
+            ) as render_frame:
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 0, stdout + stderr)
+            render_frame.assert_called_once_with("fake-ffmpeg", clip, False)
+            self.assertEqual(output.read_bytes(), b"new complete frame")
+            self.assertEqual(attacker.read_bytes(), b"unrelated file")
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows ACL policy is platform-specific")
+    def test_windows_force_refuses_an_explicit_acl_before_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            configured = subprocess.run(
+                ["icacls", str(output), "/grant", "*S-1-1-0:(R)"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(configured.returncode, 0)
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                before = extractor._win32_security_descriptor(descriptor, output)
+            finally:
+                os.close(descriptor)
+
+            with mock.patch.object(
+                extractor, "render_frame_png", return_value=b"new frame"
+            ) as render:
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                after = extractor._win32_security_descriptor(descriptor, output)
+            finally:
+                os.close(descriptor)
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("security policy differs", stdout)
+            render.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(after, before)
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows named streams are platform-specific")
+    def test_windows_force_refuses_named_streams_before_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            stream_path = str(output) + ":Zone.Identifier"
+            marker = b"[ZoneTransfer]\r\nZoneId=3\r\n"
+            with open(stream_path, "wb") as stream:
+                stream.write(marker)
+
+            with mock.patch.object(
+                extractor, "render_frame_png", return_value=b"new frame"
+            ) as render:
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("named data streams", stdout)
+            render.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            with open(stream_path, "rb") as stream:
+                self.assertEqual(stream.read(), marker)
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows attributes are platform-specific")
+    def test_windows_force_refuses_policy_attributes_before_decode(self) -> None:
+        get_attributes = ctypes.windll.kernel32.GetFileAttributesW
+        set_attributes = ctypes.windll.kernel32.SetFileAttributesW
+        get_attributes.argtypes = (ctypes.c_wchar_p,)
+        get_attributes.restype = ctypes.c_uint32
+        set_attributes.argtypes = (ctypes.c_wchar_p, ctypes.c_uint32)
+        set_attributes.restype = ctypes.c_int
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            extended = extractor._win32_extended_path(output)
+            original = get_attributes(extended)
+            self.assertNotEqual(original, 0xFFFFFFFF)
+            self.assertTrue(set_attributes(extended, original | 0x2))
+            try:
+                with mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"new frame"
+                ) as render:
+                    result, stdout, stderr = self.invoke(
+                        str(clip),
+                        "--ffmpeg",
+                        "fake-ffmpeg",
+                        "--output",
+                        str(output),
+                        "--force",
+                    )
+
+                self.assertEqual(result, 1, stdout + stderr)
+                self.assertIn("policy-bearing file attributes", stdout)
+                render.assert_not_called()
+                self.assertEqual(output.read_bytes(), b"old frame")
+                self.assertTrue(get_attributes(extended) & 0x2)
+                self.assertEqual(self.stage_paths(root), [])
+            finally:
+                set_attributes(extended, original)
+
+    @unittest.skipUnless(os.name == "nt", "Windows named streams are platform-specific")
+    def test_windows_force_rechecks_a_late_named_stream(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            stream_path = str(output) + ":late-policy"
+
+            def render(_ffmpeg: str, _clip: Path, _first: bool) -> bytes:
+                with open(stream_path, "wb") as stream:
+                    stream.write(b"appeared during decode")
+                return b"new frame"
+
+            with mock.patch.object(
+                extractor, "render_frame_png", side_effect=render
+            ) as render_frame:
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("policy changed before publication", stdout)
+            render_frame.assert_called_once_with("fake-ffmpeg", clip, False)
+            self.assertEqual(output.read_bytes(), b"old frame")
+            with open(stream_path, "rb") as stream:
+                self.assertEqual(stream.read(), b"appeared during decode")
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows replacement transactions are platform-specific")
+    def test_windows_force_rolls_back_a_commit_boundary_winner(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            moved_old = root / "moved-old-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            real_replace = extractor._ReplaceFileW
+            calls = 0
+
+            def replace_with_attack(
+                replaced: str,
+                replacement: str,
+                backup: str,
+                flags: int,
+                exclude: object,
+                reserved: object,
+            ) -> int:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    target = _from_extended_windows_path(replaced)
+                    os.replace(target, moved_old)
+                    target.write_bytes(b"late unrelated winner")
+                return int(
+                    real_replace(replaced, replacement, backup, flags, exclude, reserved)
+                )
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"generated frame"
+                ),
+                mock.patch.object(
+                    extractor, "_ReplaceFileW", side_effect=replace_with_attack
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("rolled back", stdout)
+            self.assertEqual(calls, 1)
+            self.assertEqual(output.read_bytes(), b"late unrelated winner")
+            self.assertEqual(moved_old.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows replacement transactions are platform-specific")
+    def test_windows_force_rolls_back_commit_boundary_target_ads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            real_replace = extractor._ReplaceFileW
+            calls = 0
+            marker = b"late policy stream"
+
+            def replace_with_attack(
+                replaced: str,
+                replacement: str,
+                backup: str,
+                flags: int,
+                exclude: object,
+                reserved: object,
+            ) -> int:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    target = _from_extended_windows_path(replaced)
+                    with open(str(target) + ":late-policy", "wb") as stream:
+                        stream.write(marker)
+                return int(
+                    real_replace(replaced, replacement, backup, flags, exclude, reserved)
+                )
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"generated frame"
+                ),
+                mock.patch.object(
+                    extractor, "_ReplaceFileW", side_effect=replace_with_attack
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("rolled back", stdout)
+            self.assertEqual(calls, 1)
+            self.assertEqual(output.read_bytes(), b"old frame")
+            with open(str(output) + ":late-policy", "rb") as stream:
+                self.assertEqual(stream.read(), marker)
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows replacement transactions are platform-specific")
+    def test_windows_force_never_publishes_a_commit_boundary_stage_acl(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                expected_security = extractor._win32_security_descriptor(
+                    descriptor, output
+                )
+            finally:
+                os.close(descriptor)
+            real_replace = extractor._ReplaceFileW
+            calls = 0
+
+            def replace_with_attack(
+                replaced: str,
+                replacement: str,
+                backup: str,
+                flags: int,
+                exclude: object,
+                reserved: object,
+            ) -> int:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    stage_path = _from_extended_windows_path(replacement)
+                    subprocess.run(
+                        ["icacls", str(stage_path), "/grant", "*S-1-1-0:(R)"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                return int(
+                    real_replace(replaced, replacement, backup, flags, exclude, reserved)
+                )
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"generated frame"
+                ),
+                mock.patch.object(
+                    extractor, "_ReplaceFileW", side_effect=replace_with_attack
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                final_security = extractor._win32_security_descriptor(descriptor, output)
+            finally:
+                os.close(descriptor)
+            self.assertEqual(result, 0, stdout + stderr)
+            self.assertEqual(calls, 1)
+            self.assertEqual(output.read_bytes(), b"generated frame")
+            self.assertEqual(final_security, expected_security)
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows DACL restoration is platform-specific")
+    def test_windows_force_reapplies_the_authorized_destination_dacl(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                expected_security = extractor._win32_security_policy(
+                    descriptor, output
+                )
+            finally:
+                os.close(descriptor)
+            real_replace = extractor._ReplaceFileW
+            calls = 0
+
+            def replace_with_normalized_dacl(
+                replaced: str,
+                replacement: str,
+                backup: str,
+                flags: int,
+                exclude: object,
+                reserved: object,
+            ) -> int:
+                nonlocal calls
+                calls += 1
+                result = int(
+                    real_replace(
+                        replaced, replacement, backup, flags, exclude, reserved
+                    )
+                )
+                if result:
+                    target = _from_extended_windows_path(replaced)
+                    subprocess.run(
+                        ["icacls", str(target), "/inheritance:d"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    subprocess.run(
+                        ["icacls", str(target), "/grant", "*S-1-1-0:(R)"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    changed_descriptor = extractor._win32_replacement_descriptor(
+                        target
+                    )
+                    try:
+                        changed_security = extractor._win32_security_policy(
+                            changed_descriptor, target
+                        )
+                    finally:
+                        os.close(changed_descriptor)
+                    self.assertNotEqual(
+                        extractor._split_win32_security_policy(expected_security)[2:4],
+                        extractor._split_win32_security_policy(changed_security)[2:4],
+                    )
+                return result
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"generated frame"
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_ReplaceFileW",
+                    side_effect=replace_with_normalized_dacl,
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                final_security = extractor._win32_security_policy(descriptor, output)
+            finally:
+                os.close(descriptor)
+            self.assertEqual(result, 0, stdout + stderr)
+            self.assertEqual(calls, 1)
+            self.assertEqual(output.read_bytes(), b"generated frame")
+            self.assertEqual(final_security, expected_security)
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows replacement transactions are platform-specific")
+    def test_windows_force_rolls_back_commit_boundary_stage_ads_and_attributes(self) -> None:
+        get_attributes = ctypes.windll.kernel32.GetFileAttributesW
+        set_attributes = ctypes.windll.kernel32.SetFileAttributesW
+        get_attributes.argtypes = (ctypes.c_wchar_p,)
+        get_attributes.restype = ctypes.c_uint32
+        set_attributes.argtypes = (ctypes.c_wchar_p, ctypes.c_uint32)
+        set_attributes.restype = ctypes.c_int
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            original_attributes = get_attributes(extractor._win32_extended_path(output))
+            real_replace = extractor._ReplaceFileW
+            calls = 0
+
+            def replace_with_attack(
+                replaced: str,
+                replacement: str,
+                backup: str,
+                flags: int,
+                exclude: object,
+                reserved: object,
+            ) -> int:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    stage_path = _from_extended_windows_path(replacement)
+                    with open(str(stage_path) + ":late-stage-policy", "wb") as stream:
+                        stream.write(b"must not publish")
+                    current = get_attributes(str(stage_path))
+                    self.assertNotEqual(current, 0xFFFFFFFF)
+                    self.assertTrue(set_attributes(str(stage_path), current | 0x2))
+                return int(
+                    real_replace(replaced, replacement, backup, flags, exclude, reserved)
+                )
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"generated frame"
+                ),
+                mock.patch.object(
+                    extractor, "_ReplaceFileW", side_effect=replace_with_attack
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("rolled back", stdout)
+            self.assertEqual(calls, 1)
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(
+                get_attributes(extractor._win32_extended_path(output)),
+                original_attributes,
+            )
+            with self.assertRaises(OSError):
+                open(str(output) + ":late-stage-policy", "rb")
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows replacement transactions are platform-specific")
+    def test_windows_force_never_promotes_a_preclaimed_rollback_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "approved-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            calls = 0
+
+            def fail_with_preclaimed_backup(
+                replaced: str,
+                replacement: str,
+                backup: str,
+                flags: int,
+                exclude: object,
+                reserved: object,
+            ) -> int:
+                del replaced, replacement, flags, exclude, reserved
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    _from_extended_windows_path(backup).write_bytes(
+                        b"unrelated backup claimant"
+                    )
+                    ctypes.set_last_error(80)
+                return 0
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"generated frame"
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_ReplaceFileW",
+                    side_effect=fail_with_preclaimed_backup,
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertEqual(calls, 1)
+            self.assertEqual(output.read_bytes(), b"old frame")
+            recovery = self.stage_paths(root)
+            self.assertEqual(len(recovery), 1)
+            self.assertIn(".frame-rollback-", recovery[0].name)
+            self.assertEqual(recovery[0].read_bytes(), b"unrelated backup claimant")
 
     def test_force_cannot_replace_the_input_clip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -463,6 +1091,12 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                 "AUX.txt",
                 "COM1.jpg",
                 "LPT9.png",
+                "COM¹.png",
+                "COM².jpg",
+                "COM³.webp",
+                "LPT¹.png",
+                "LPT².jpg",
+                "LPT³.webp",
                 "frame.png.",
                 "frame.png ",
                 "frame.png:alternate",
@@ -483,6 +1117,75 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                     self.assertEqual(result, 1, stdout + stderr)
                     render.assert_not_called()
                     self.assertIn("unsafe Windows output filename", stdout)
+
+    @unittest.skipUnless(os.name == "nt", "Windows filename aliases are platform-specific")
+    def test_windows_native_publication_rejects_superscript_device_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            safe_output = root / "safe-frame.png"
+            unsafe_output = root / "COM¹.png"
+            stage = extractor._create_output_stage(safe_output)
+            try:
+                extractor._write_output_stage(stage, b"complete frame")
+                with self.assertRaisesRegex(
+                    extractor.OutputPolicyError, "unsafe Windows output filename"
+                ):
+                    extractor._win32_rename_by_handle(stage, unsafe_output, False)
+                self.assertFalse(extractor._path_exists(unsafe_output))
+            finally:
+                extractor._cleanup_output_stage(stage)
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows directory handles are platform-specific")
+    def test_windows_no_force_refuses_parent_rename_and_recreation_during_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            original_tree = root / "original-tree"
+            replacement_tree = root / "replacement-tree"
+            original_parent = original_tree / "frames"
+            replacement_parent = replacement_tree / "frames"
+            original_parent.mkdir(parents=True)
+            replacement_parent.mkdir(parents=True)
+            route = root / "route"
+            subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(route), str(original_tree)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            clip = root / "accepted-take.mp4"
+            output = route / "frames" / "published-frame.png"
+            clip.write_bytes(b"clip")
+
+            def render(_ffmpeg: str, _clip: Path, _first: bool) -> bytes:
+                os.rmdir(route)
+                subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(route), str(replacement_tree)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                return b"complete frame"
+
+            with mock.patch.object(
+                extractor, "render_frame_png", side_effect=render
+            ) as render_frame:
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("output directory identity changed", stdout)
+            render_frame.assert_called_once_with("fake-ffmpeg", clip, False)
+            self.assertFalse(output.exists())
+            self.assertFalse((original_parent / output.name).exists())
+            self.assertFalse((replacement_parent / output.name).exists())
+            self.assertEqual(self.stage_paths(original_parent), [])
+            self.assertEqual(self.stage_paths(replacement_parent), [])
 
 
 class AdversarialPublicationTests(OutputPolicyTestCase):
@@ -577,18 +1280,22 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
             victim = root / "victim.bin"
             clip.write_bytes(b"clip")
             victim.write_bytes(b"VICTIM_PAYLOAD")
-            original_link = extractor.os.link
+            original_rename = extractor._win32_rename_open_handle
             swap_attempted = False
 
-            def attack(source: Path, target: Path) -> None:
+            def attack(
+                stage: extractor.OutputStage, target_name: str, force: bool
+            ) -> None:
                 nonlocal swap_attempted
                 swap_attempted = True
                 with self.assertRaises(OSError):
-                    Path(source).unlink()
-                original_link(source, target)
+                    stage.path.unlink()
+                original_rename(stage, target_name, force)
 
             with mock.patch.object(extractor, "render_frame_png", return_value=b"GENERATED_FRAME"):
-                with mock.patch.object(extractor.os, "link", side_effect=attack):
+                with mock.patch.object(
+                    extractor, "_win32_rename_open_handle", side_effect=attack
+                ):
                     result, stdout, stderr = self.invoke(
                         str(clip), "--ffmpeg", "fake-ffmpeg", "--output", str(output)
                     )
@@ -606,14 +1313,21 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
             clip = root / "accepted-take.mp4"
             output = root / "frame.png"
             clip.write_bytes(b"clip")
-            original_link = extractor.os.link
+            original_rename = extractor._win32_rename_open_handle
 
-            def collide(source: Path, target: Path) -> None:
-                Path(target).write_bytes(b"LATE_WINNER")
-                original_link(source, target)
+            def collide(
+                stage: extractor.OutputStage, target_name: str, force: bool
+            ) -> None:
+                anchored = extractor._win32_resolved_path(
+                    stage.descriptor, "the test staging handle"
+                )
+                anchored.with_name(target_name).write_bytes(b"LATE_WINNER")
+                original_rename(stage, target_name, force)
 
             with mock.patch.object(extractor, "render_frame_png", return_value=b"GENERATED_FRAME"):
-                with mock.patch.object(extractor.os, "link", side_effect=collide):
+                with mock.patch.object(
+                    extractor, "_win32_rename_open_handle", side_effect=collide
+                ):
                     result, stdout, stderr = self.invoke(
                         str(clip), "--ffmpeg", "fake-ffmpeg", "--output", str(output)
                     )
@@ -663,8 +1377,8 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
                 if os.name == "nt":
                     publish_patch = mock.patch.object(
                         extractor,
-                        "_win32_rename_by_handle",
-                        side_effect=extractor.OutputPolicyError("locked"),
+                        "_call_win32_replace_file",
+                        return_value=5,
                     )
                 else:
                     original_exchange = extractor._posix_exchange_names
@@ -707,8 +1421,15 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
             output = root / "approved-frame.png"
             clip.write_bytes(b"clip must survive")
             output.write_bytes(b"old frame")
+            blocked = False
 
             def collide(_ffmpeg: str, _clip: Path, _first: bool) -> bytes:
+                nonlocal blocked
+                if os.name == "nt":
+                    with self.assertRaises(OSError):
+                        output.unlink()
+                    blocked = True
+                    return b"new complete frame"
                 output.unlink()
                 try:
                     os.link(clip, output)
@@ -726,9 +1447,14 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
                     "--force",
                 )
 
-            self.assertEqual(result, 1, stdout + stderr)
             self.assertEqual(clip.read_bytes(), b"clip must survive")
-            self.assertTrue(os.path.samefile(clip, output))
+            if os.name == "nt":
+                self.assertEqual(result, 0, stdout + stderr)
+                self.assertTrue(blocked)
+                self.assertEqual(output.read_bytes(), b"new complete frame")
+            else:
+                self.assertEqual(result, 1, stdout + stderr)
+                self.assertTrue(os.path.samefile(clip, output))
             self.assertEqual(self.stage_paths(root), [])
 
 
@@ -1804,8 +2530,144 @@ class ConsoleOutputTests(unittest.TestCase):
             "output refused for C:\\frames\\\\u96ea.png\n",
         )
 
+    def test_missing_closed_and_broken_console_streams_are_nonfatal(self) -> None:
+        closed = io.StringIO()
+        closed.close()
+
+        class BrokenStream(io.StringIO):
+            def write(self, text: str) -> int:
+                raise BrokenPipeError("consumer closed the pipe")
+
+        extractor._write_console_line("no console", stream=None)
+        extractor._write_console_line("closed console", stream=closed)
+        extractor._write_console_line("broken console", stream=BrokenStream())
+
+    def test_missing_stdout_cannot_change_a_successful_publication(self) -> None:
+        class BrokenStream(io.StringIO):
+            def write(self, text: str) -> int:
+                raise BrokenPipeError("consumer closed the pipe")
+
+        closed = io.StringIO()
+        closed.close()
+        streams = (("missing", None), ("closed", closed), ("broken", BrokenStream()))
+        for label, stream in streams:
+            with self.subTest(stream=label), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                clip = root / "accepted-take.mp4"
+                output = root / "published-frame.png"
+                clip.write_bytes(b"clip")
+
+                with (
+                    mock.patch.object(
+                        extractor, "render_frame_png", return_value=b"COMPLETE_FRAME"
+                    ),
+                    mock.patch.object(extractor.sys, "stdout", stream),
+                ):
+                    result = extractor.extract_frame(
+                        "fake-ffmpeg", clip, output, False, False
+                    )
+
+                self.assertEqual(result, 0)
+                self.assertEqual(output.read_bytes(), b"COMPLETE_FRAME")
+
 
 class PublicationPrimitiveTests(unittest.TestCase):
+    def test_windows_postverify_diagnostic_is_bounded_and_component_specific(self) -> None:
+        baseline = extractor.WindowsArtifactState(
+            identity=(1, 2),
+            security_policy="O:SYG:BAD:PAI(A;;FA;;;SY)S:(ML;;NW;;;ME)",
+            policy_attributes=0,
+            named_streams=(),
+            content_digest=b"digest",
+        )
+
+        def changed(**updates: object) -> extractor.WindowsArtifactState:
+            values = {
+                "identity": baseline.identity,
+                "security_policy": baseline.security_policy,
+                "policy_attributes": baseline.policy_attributes,
+                "named_streams": baseline.named_streams,
+                "content_digest": baseline.content_digest,
+            }
+            values.update(updates)
+            return extractor.WindowsArtifactState(**values)
+
+        cases = (
+            ("bytes", changed(content_digest=b"other")),
+            ("file identity", changed(identity=(1, 3))),
+            (
+                "owner",
+                changed(security_policy="O:BAG:BAD:PAI(A;;FA;;;SY)S:(ML;;NW;;;ME)"),
+            ),
+            (
+                "group",
+                changed(security_policy="O:SYG:SYD:PAI(A;;FA;;;SY)S:(ML;;NW;;;ME)"),
+            ),
+            (
+                "DACL entries",
+                changed(security_policy="O:SYG:BAD:PAI(A;;FR;;;SY)S:(ML;;NW;;;ME)"),
+            ),
+            (
+                "DACL control flags",
+                changed(security_policy="O:SYG:BAD:AI(A;;FA;;;SY)S:(ML;;NW;;;ME)"),
+            ),
+            (
+                "mandatory label",
+                changed(security_policy="O:SYG:BAD:PAI(A;;FA;;;SY)S:(ML;;NW;;;HI)"),
+            ),
+            ("named streams (ADS)", changed(named_streams=(":audit:$DATA",))),
+            ("policy attributes", changed(policy_attributes=2)),
+        )
+        for label, observed in cases:
+            with self.subTest(label=label):
+                self.assertEqual(
+                    extractor._win32_artifact_differences(baseline, observed),
+                    (label,),
+                )
+
+        all_differences = extractor._win32_artifact_differences(
+            baseline,
+            extractor.WindowsArtifactState(
+                identity=(9, 9),
+                security_policy="O:BAG:SYD:AI(A;;FR;;;BA)S:(ML;;NW;;;HI)",
+                policy_attributes=2,
+                named_streams=(":audit:$DATA",),
+                content_digest=b"other",
+            ),
+        )
+        self.assertEqual(all_differences, tuple(label for label, _ in cases))
+        self.assertLessEqual(len(", ".join(all_differences)), 160)
+
+    @unittest.skipUnless(os.name == "nt", "Windows security descriptors are platform-specific")
+    def test_windows_security_policy_ignores_only_relative_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "frame.png"
+            output.write_bytes(b"frame")
+            descriptor = extractor._win32_replacement_descriptor(output)
+            try:
+                raw = extractor._win32_security_descriptor(descriptor, output)
+            finally:
+                os.close(descriptor)
+
+            # A self-relative descriptor may place its components at any valid
+            # offsets. Insert aligned padding and retarget every non-null
+            # owner/group/SACL/DACL offset without changing one policy byte.
+            shifted = bytearray(raw[:20] + b"\0\0\0\0" + raw[20:])
+            for field_offset in (4, 8, 12, 16):
+                component_offset = struct.unpack_from("<I", raw, field_offset)[0]
+                if component_offset:
+                    struct.pack_into(
+                        "<I", shifted, field_offset, component_offset + 4
+                    )
+
+            self.assertNotEqual(bytes(shifted), raw)
+            self.assertEqual(
+                extractor._canonicalize_win32_security_descriptor(raw, output),
+                extractor._canonicalize_win32_security_descriptor(
+                    bytes(shifted), output
+                ),
+            )
+
     def test_linux_capability_proof_reads_the_effective_cap_sys_admin_bit(self) -> None:
         cases = (
             ("Name:\tpython\nCapEff:\t0000000000000000\n", False),
@@ -2026,7 +2888,15 @@ class PngStreamTests(unittest.TestCase):
         return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
 
     def minimal_png(self, marker: bytes) -> bytes:
-        return extractor._PNG_SIGNATURE + self.chunk(b"tEXt", marker) + self.chunk(b"IEND", b"")
+        ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+        scanline = zlib.compress(b"\x00\x00\x00\x00")
+        return (
+            extractor._PNG_SIGNATURE
+            + self.chunk(b"IHDR", ihdr)
+            + self.chunk(b"tEXt", b"marker\x00" + marker)
+            + self.chunk(b"IDAT", scanline)
+            + self.chunk(b"IEND", b"")
+        )
 
     def test_concatenated_stream_returns_complete_frames_in_order(self) -> None:
         first = self.minimal_png(b"first")
@@ -2040,6 +2910,17 @@ class PngStreamTests(unittest.TestCase):
     def test_truncated_stream_is_rejected(self) -> None:
         with self.assertRaises(extractor.FrameExtractionError):
             extractor._read_png_frame(io.BytesIO(extractor._PNG_SIGNATURE + b"\x00"))
+
+    @unittest.skipUnless(FFMPEG, "decode-probe regression requires ffmpeg")
+    def test_crc_valid_but_undecodable_png_is_rejected_by_probe(self) -> None:
+        invalid = extractor._PNG_SIGNATURE + self.chunk(b"IEND", b"")
+
+        with self.assertRaises(extractor.FrameExtractionError):
+            extractor._probe_decodable_png(str(FFMPEG), invalid)
+
+    @unittest.skipUnless(FFMPEG, "decode-probe regression requires ffmpeg")
+    def test_stream_fixtures_are_genuinely_decodable_pngs(self) -> None:
+        extractor._probe_decodable_png(str(FFMPEG), self.minimal_png(b"valid"))
 
 
 @unittest.skipUnless(FFMPEG, "protected pipeline integration requires ffmpeg")
@@ -2116,6 +2997,9 @@ class OutputPolicyDocumentationTests(unittest.TestCase):
         self.assertIn("replacement is refused", security)
         self.assertIn("effective `CAP_SYS_ADMIN`", security)
         self.assertIn("creating a new output needs no capability", security)
+        self.assertIn("`ReplaceFileW`", security)
+        self.assertIn("non-reparse destination directory", security)
+        self.assertIn("`COM¹`", security)
 
 
 if __name__ == "__main__":
