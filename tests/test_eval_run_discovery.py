@@ -402,7 +402,8 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                 role_overrides={"references/private-rubric.md": "evaluator"},
             )
             with self.assertRaisesRegex(
-                eval_run.HarnessError, "symbolic or reparse alias|escapes"
+                eval_run.HarnessError,
+                "symbolic link, junction, or reparse point|escapes",
             ):
                 self.snapshot(root)
 
