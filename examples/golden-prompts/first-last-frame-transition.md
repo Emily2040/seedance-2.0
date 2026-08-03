@@ -14,7 +14,7 @@ Mode: FLF2V. `@Image1` is first frame. `@Image2` is final visual target. No unre
 
 ## Lint Result
 
-lint: pass
+Run `python scripts/prompt_lint.py --strict` for the computed result; this document does not self-certify a pass.
 
 ## Control-Critical Sentences
 

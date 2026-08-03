@@ -24,3 +24,12 @@ Use a 0-4 scale for sequence-state evals:
 Dimensions: routing correctness, story architecture, clip-scope control, actual-state grounding, continuity integrity, reference binding, mode and surface selection, endpoint quality, prompt architecture, uncertainty handling, safety and rights.
 
 Release threshold: all critical continuation cases score 4, no dimension scores below 3, overall average is at least 3.5, and existing standalone behavior does not regress.
+
+For `scripts/prompt_architecture_stress.py --strict`, “no dimension below 3”
+means every applicable dimension on every `skill_formula` case, not an average
+dimension score across the arm. The arm average must also remain at least 3.5,
+and cross-case duplicate or near-duplicate prompts fail when their briefs are
+materially different. This deterministic gate catches structural, relevance,
+explicit contradiction, and repetition failures only. It does not judge
+creativity or originality; comparative creative quality requires blinded model
+evaluation and native-language human review.

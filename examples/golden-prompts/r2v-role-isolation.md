@@ -14,7 +14,7 @@ Mode: R2V. `@Image1` controls original character identity. `@Video1` controls ca
 
 ## Lint Result
 
-lint: pass
+Run `python scripts/prompt_lint.py --strict` for the computed result; this document does not self-certify a pass.
 
 ## Control-Critical Sentences
 
