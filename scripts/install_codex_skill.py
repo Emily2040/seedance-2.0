@@ -49,6 +49,8 @@ COPY_TEMP_MAX_BASENAME_BYTES = (
     len(COPY_TEMP_COMPACT_PREFIX) + COPY_TEMP_MAX_TOKEN_CHARS
 )
 RUNTIME_DEPENDENCY_PREFIXES = ((b"[ref:", "ref"), (b"[skill:", "skill"))
+PRIVATE_DELETE_MARKER = "deletion-authority.json"
+PRIVATE_DELETE_FORMAT_VERSION = 1
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -527,8 +529,7 @@ def _read_stable_regular_bytes(
         raise ValueError(f"{label} is hard-linked: {relative}")
     if before.st_size < 0 or before.st_size > max_bytes:
         raise ValueError(f"{label} exceeds {max_bytes} bytes: {relative}")
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags)
+    descriptor = _open_regular_read_descriptor(path)
     try:
         with _locked_record_descriptor(
             descriptor,
@@ -982,7 +983,7 @@ def _locked_record_descriptor(
     *,
     exclusive: bool = True,
 ) -> Iterator[None]:
-    """Hold a shared or exclusive lock while authoritative bytes are read."""
+    """Coordinate reads; POSIX shared/exclusive locks remain advisory."""
     if range_length <= 0 or range_length >= 1 << 64:
         raise ValueError("installer file lock range is invalid")
     if os.name == "nt":
@@ -1188,7 +1189,7 @@ def _read_json_record(path: Path) -> tuple[dict[str, object], bytes]:
         return binding.value, binding.raw
 
 
-def _read_stable_regular_bytes(path: Path) -> bytes:
+def _read_stable_path_bytes(path: Path) -> bytes:
     """Return one point-in-time byte snapshot of a non-link regular file."""
     before = path.lstat()
     if (
@@ -1709,18 +1710,39 @@ def write_completion_marker(
     destination: Path, contract: PayloadContract
 ) -> None:
     manifest = _validate_payload_manifest(dict(sorted(contract.file_manifest().items())))
-    record = {
-        "contract_sha256": contract.contract_sha256,
-        "declared_paths": list(contract.declared),
+    record = _completion_marker_record(manifest)
+    if (
+        record["contract_sha256"] != contract.contract_sha256
+        or tuple(record["declared_paths"]) != contract.declared
+        or record["payload_manifest_sha256"]
+        != contract.payload_manifest_sha256
+    ):
+        raise RuntimeError("completion marker differs from the frozen payload contract")
+    marker = destination / COMPLETION_MARKER
+    _write_json_exclusive(marker, record)
+
+
+def _completion_marker_record(
+    manifest: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    manifest = _validate_payload_manifest(dict(sorted(manifest.items())))
+    declared = tuple(manifest)
+    payload_manifest_metadata = manifest.get(PAYLOAD_MANIFEST.as_posix())
+    if payload_manifest_metadata is None:
+        raise ValueError("payload manifest is absent from the completion manifest")
+    payload_manifest_sha256 = str(payload_manifest_metadata["sha256"])
+    return {
+        "contract_sha256": _contract_sha256(
+            payload_manifest_sha256, declared, manifest
+        ),
+        "declared_paths": list(declared),
         "format_version": COMPLETION_FORMAT_VERSION,
         "skill_name": SKILL_NAME,
         "file_count": len(manifest),
         "payload_manifest_path": PAYLOAD_MANIFEST.as_posix(),
-        "payload_manifest_sha256": contract.payload_manifest_sha256,
+        "payload_manifest_sha256": payload_manifest_sha256,
         "files": manifest,
     }
-    marker = destination / COMPLETION_MARKER
-    _write_json_exclusive(marker, record)
 
 
 def validate_completed_install(destination: Path) -> tuple[bool, str]:
@@ -2404,7 +2426,7 @@ def _inspect_owned_stage(
         except (OSError, RuntimeError, ValueError):
             if require_complete:
                 raise
-            provenance_raw = _read_stable_regular_bytes(provenance_path)
+            provenance_raw = _read_stable_path_bytes(provenance_path)
             if not expected_provenance_raw.startswith(provenance_raw):
                 raise RuntimeError(
                     "incomplete stage provenance is not an exact publication prefix"
@@ -2454,7 +2476,7 @@ def _inspect_owned_stage(
             except (OSError, RuntimeError, ValueError):
                 if require_complete:
                     raise
-                completion_raw = _read_stable_regular_bytes(
+                completion_raw = _read_stable_path_bytes(
                     path / COMPLETION_MARKER
                 )
                 if not expected_completion_raw.startswith(completion_raw):
@@ -4075,20 +4097,6 @@ def promote_staged_install(
         transaction_raw,
         transaction_binding,
     ):
-        if expected_contract is not None:
-            if not isinstance(expected_contract, PayloadContract):
-                raise TypeError("promotion contract has an unsupported type")
-            if transaction["payload_manifest"] != expected_contract.file_manifest():
-                raise RuntimeError("stage transaction names a different payload contract")
-        if replacement_state is not None and replacement_state not in {
-            "missing",
-            "complete",
-            "incomplete",
-            "unknown",
-        }:
-            raise ValueError("replacement state is invalid")
-        if type(force) is not bool:
-            raise TypeError("force flag must be boolean")
         _promote_staged_install_bound(
             stage,
             destination,
@@ -4096,6 +4104,9 @@ def promote_staged_install(
             transaction,
             transaction_raw,
             transaction_binding,
+            expected_contract,
+            replacement_state,
+            force,
         )
 
 
@@ -4106,8 +4117,22 @@ def _promote_staged_install_bound(
     transaction: Mapping[str, object],
     transaction_raw: bytes,
     transaction_binding: BoundJsonRecord,
+    expected_contract: PayloadContract | None,
+    replacement_state: str | None,
+    force: bool,
 ) -> None:
     backup = skills_dir / BACKUP_NAME
+    if expected_contract is not None:
+        if not isinstance(expected_contract, PayloadContract):
+            raise TypeError("promotion contract has an unsupported type")
+        if transaction["payload_manifest"] != expected_contract.file_manifest():
+            raise RuntimeError("stage transaction names a different payload contract")
+    if replacement_state is not None and replacement_state not in {
+        "missing", "complete", "incomplete", "unknown"
+    }:
+        raise ValueError("replacement state is invalid")
+    if type(force) is not bool:
+        raise TypeError("force flag must be boolean")
     if stage != skills_dir / str(transaction["stage_name"]):
         raise RuntimeError("stage path does not match the active transaction")
     if _path_exists(backup):
