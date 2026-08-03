@@ -15,7 +15,7 @@ Two modes:
   (default)     Live. Uses the selected provider's API key. Runs responder +
                 judge for each case, prints per-case scores, aggregates against
                 the rubric thresholds, and (with --ledger) writes a markdown
-                score ledger.
+                evidence ledger.
 
 Standard library only; honors HTTPS_PROXY and SSL_CERT_FILE from the environment.
 This script is intentionally NOT part of the strict offline CI gate - run it
@@ -79,6 +79,7 @@ EXPECTED_RUBRIC_SHA256 = "ebde922cda2ac9c9a0efa6a5f73e0ca06a2493dd5644817a2845b4
 # Thresholds sourced from references/eval-rubric.md.
 LEGACY_MIN, LEGACY_AVG = 2, 2.6          # 0-3 scale
 SEQUENCE_CRIT, SEQUENCE_AVG, SEQUENCE_FLOOR = 4, 3.5, 3  # 0-4 scale
+RESULT_STATUSES = {"scored", "harness_error"}
 SEQUENCE_DIMENSIONS = (
     "routing correctness",
     "story architecture",
@@ -2165,43 +2166,17 @@ def judge(
         max_tokens=900,
     )
     if not raw.strip():
-        return {
-            "overall_score": 0,
-            "pass": False,
-            "notes": "judge returned no JSON",
-            "criterion_scores": {},
-            "dimension_scores": {},
-        }
+        raise HarnessError("judge returned no JSON")
     try:
         raw_size = len(raw.encode("utf-8"))
     except UnicodeEncodeError:
         raw_size = JUDGE_RESPONSE_MAX_BYTES + 1
     if raw_size > JUDGE_RESPONSE_MAX_BYTES:
-        return {
-            "overall_score": 0,
-            "pass": False,
-            "notes": "judge JSON exceeds the 900-byte response limit",
-            "criterion_scores": {},
-            "dimension_scores": {},
-        }
+        raise HarnessError("judge JSON exceeds the 900-byte response limit")
     try:
         return parse_json_object(raw, "judge")
-    except (json.JSONDecodeError, ValueError):
-        return {
-            "overall_score": 0,
-            "pass": False,
-            "notes": "unparseable judge JSON",
-            "criterion_scores": {},
-            "dimension_scores": {},
-        }
-    except HarnessError:
-        return {
-            "overall_score": 0,
-            "pass": False,
-            "notes": "unparseable judge JSON",
-            "criterion_scores": {},
-            "dimension_scores": {},
-        }
+    except (HarnessError, json.JSONDecodeError, ValueError) as exc:
+        raise HarnessError("unparseable judge JSON") from exc
 
 
 def failed_verdict(case: dict, notes: str) -> dict:
@@ -2279,19 +2254,24 @@ def _compact_json_string_prefix(value: str, limit: int) -> str:
     return value[:low]
 
 
-def _invalid_normalized_verdict(problems: list[str], notes: str = "") -> dict:
-    detail = "; ".join(dict.fromkeys(problems))
-    suffix = f"; judge notes: {notes}" if notes else ""
+def harness_error_result(notes: str) -> dict:
+    """Return auditable non-score evidence for a failed harness operation."""
+    if not isinstance(notes, str) or not _is_utf8_encodable(notes):
+        notes = "invalid harness error text"
     return {
-        "overall_score": 0,
-        "pass": False,
-        "notes": _compact_json_string_prefix(
-            f"invalid judge verdict: {detail}{suffix}",
-            JUDGE_NOTES_MAX_BYTES,
-        ),
+        "status": "harness_error",
+        "overall_score": None,
+        "pass": None,
+        "notes": _compact_json_string_prefix(notes, JUDGE_NOTES_MAX_BYTES),
         "assertion_scores": [],
         "dimension_scores": [],
     }
+
+
+def _invalid_normalized_verdict(problems: list[str], notes: str = "") -> dict:
+    detail = "; ".join(dict.fromkeys(problems))
+    suffix = f"; judge notes: {notes}" if notes else ""
+    return harness_error_result(f"invalid judge verdict: {detail}{suffix}")
 
 
 def normalize_verdict(case: dict, verdict: object) -> dict:
@@ -2406,6 +2386,7 @@ def normalize_verdict(case: dict, verdict: object) -> dict:
         else []
     )
     return {
+        "status": "scored",
         "overall_score": score,
         "pass": passed,
         "notes": notes,
@@ -2481,13 +2462,13 @@ def _provenance_errors(
     label: str,
     source_manifest: Mapping[str, str] | None,
     *,
-    failed_zero_score: bool,
+    allow_missing: bool,
 ) -> list[str]:
     errors: list[str] = []
     if sources is None:
-        if not failed_zero_score:
+        if not allow_missing:
             errors.append(
-                f"{label}: discovery-failed provenance requires a failed zero-score row"
+                f"{label}: missing provenance requires a harness error or scored zero failure"
             )
         return errors
     if not isinstance(sources, list):
@@ -2541,15 +2522,27 @@ def _row_integrity_errors(
     if type(sequence) is not bool:
         errors.append(f"{label}: sequence must be a boolean")
 
-    score = row.get("score")
-    maximum = 4 if sequence is True else 3
-    if type(score) is not int or not 0 <= score <= maximum:
+    status = row.get("status")
+    if status not in RESULT_STATUSES:
         errors.append(
-            f"{label}: invalid score {score!r}; expected an integer on the 0-{maximum} scale"
+            f"{label}: status must be one of {', '.join(sorted(RESULT_STATUSES))}"
         )
 
-    if type(row.get("pass")) is not bool:
-        errors.append(f"{label}: pass must be a boolean")
+    score = row.get("score")
+    passed = row.get("pass")
+    if status == "harness_error":
+        if score is not None:
+            errors.append(f"{label}: harness_error score must be null")
+        if passed is not None:
+            errors.append(f"{label}: harness_error pass must be null")
+    else:
+        maximum = 4 if sequence is True else 3
+        if type(score) is not int or not 0 <= score <= maximum:
+            errors.append(
+                f"{label}: invalid score {score!r}; expected an integer on the 0-{maximum} scale"
+            )
+        if type(passed) is not bool:
+            errors.append(f"{label}: pass must be a boolean")
     critical = row.get("critical")
     if type(critical) is not bool:
         errors.append(f"{label}: critical must be a boolean")
@@ -2561,6 +2554,8 @@ def _row_integrity_errors(
         errors.append(f"{label}: notes must be a string")
     elif not _is_utf8_encodable(notes):
         errors.append(f"{label}: notes contain an unpaired surrogate")
+    elif status == "harness_error" and not notes.strip():
+        errors.append(f"{label}: harness_error notes must explain the failure")
 
     if source_manifest is not None or "sources" in row:
         if "sources" not in row:
@@ -2571,7 +2566,10 @@ def _row_integrity_errors(
                     row["sources"],
                     label,
                     source_manifest,
-                    failed_zero_score=(row.get("pass") is False and row.get("score") == 0),
+                    allow_missing=(
+                        status == "harness_error"
+                        or (status == "scored" and passed is False and score == 0)
+                    ),
                 )
             )
 
@@ -2579,6 +2577,8 @@ def _row_integrity_errors(
     if not isinstance(dimension_scores, list):
         errors.append(f"{label}: dimension_scores must be a list")
         dimension_scores = []
+    if status == "harness_error" and dimension_scores:
+        errors.append(f"{label}: harness_error rows cannot carry dimension scores")
     seen_dimensions: dict[str, int] = {}
     for dimension_row in dimension_scores:
         if not isinstance(dimension_row, dict):
@@ -2599,12 +2599,12 @@ def _row_integrity_errors(
         if dimension in seen_dimensions:
             errors.append(f"{label}: duplicate dimension score {dimension}")
         seen_dimensions[dimension] = dimension_score
-    if sequence is True and (
+    if status != "harness_error" and sequence is True and (
         set(seen_dimensions) != set(SEQUENCE_DIMENSIONS)
         or len(dimension_scores) != len(SEQUENCE_DIMENSIONS)
     ):
         errors.append(f"{label}: sequence dimension coverage is incomplete")
-    if sequence is False and dimension_scores:
+    if status != "harness_error" and sequence is False and dimension_scores:
         errors.append(f"{label}: legacy row contains sequence dimension scores")
     return errors
 
@@ -2666,7 +2666,7 @@ def _expected_metadata_errors(
 
 
 def assess_run(
-    scored: list[object],
+    results: list[object],
     *,
     expected_ids: list[str] | None = None,
     expected_cases: Mapping[str, object] | None = None,
@@ -2689,7 +2689,7 @@ def assess_run(
     if type(release_eligible) is not bool:
         integrity_errors.append("release_eligible must be a boolean")
         release_eligible = False
-    if not scored:
+    if not results:
         integrity_errors.append("no scored results were produced")
 
     release_requested = release_eligible is True
@@ -2881,14 +2881,14 @@ def assess_run(
             )
             repository_manifest_valid = False
 
-    for index, row in enumerate(scored):
+    for index, row in enumerate(results):
         integrity_errors.extend(
             _row_integrity_errors(row, index, validated_source_manifest)
         )
 
     actual_ids = [
         row.get("id")
-        for row in scored
+        for row in results
         if (
             isinstance(row, dict)
             and isinstance(row.get("id"), str)
@@ -2979,7 +2979,7 @@ def assess_run(
         integrity_errors.append("unexpected result ids: " + ", ".join(unexpected))
 
     if expected_cases is not None and isinstance(expected_cases, Mapping):
-        for index, row in enumerate(scored):
+        for index, row in enumerate(results):
             if not isinstance(row, dict):
                 continue
             case_id = row.get("id")
@@ -3022,12 +3022,16 @@ def assess_run(
 
     valid_rows = [
         row
-        for index, row in enumerate(scored)
+        for index, row in enumerate(results)
         if not _row_integrity_errors(row, index, validated_source_manifest)
     ]
-    legacy = [row for row in valid_rows if not row["sequence"]]
-    sequence = [row for row in valid_rows if row["sequence"]]
-    failed_verdicts = [row["id"] for row in valid_rows if row["pass"] is False]
+    scored_rows = [row for row in valid_rows if row["status"] == "scored"]
+    harness_errors = [
+        row["id"] for row in valid_rows if row["status"] == "harness_error"
+    ]
+    legacy = [row for row in scored_rows if not row["sequence"]]
+    sequence = [row for row in scored_rows if row["sequence"]]
+    failed_verdicts = [row["id"] for row in scored_rows if row["pass"] is False]
 
     legacy_average = sum(row["score"] for row in legacy) / len(legacy) if legacy else None
     legacy_below = [row["id"] for row in legacy if row["score"] < LEGACY_MIN]
@@ -3058,9 +3062,16 @@ def assess_run(
     ):
         thresholds_pass = False
 
-    run_pass = not integrity_errors and not failed_verdicts and thresholds_pass
+    run_pass = (
+        not integrity_errors
+        and not harness_errors
+        and not failed_verdicts
+        and thresholds_pass
+    )
     release_verdict = (
-        "NOT ELIGIBLE" if not release_eligible else ("PASS" if run_pass else "FAIL")
+        "NOT ELIGIBLE"
+        if not release_eligible or harness_errors
+        else ("PASS" if run_pass else "FAIL")
     )
     repository_sha256 = (
         frozen_repository_sha256(
@@ -3087,7 +3098,7 @@ def assess_run(
         ),
         "selected_count": selected_count,
         "total_expected": total_expected,
-        "completed_count": len(scored),
+        "completed_count": len(results),
         "repository_file_count": (
             len(validated_repository_manifest)
             if validated_repository_manifest is not None and repository_manifest_valid
@@ -3095,6 +3106,8 @@ def assess_run(
         ),
         "repository_sha256": repository_sha256,
         "repository_role_counts": repository_role_counts,
+        "scored_count": len(scored_rows),
+        "harness_errors": harness_errors,
         "integrity_errors": integrity_errors,
         "failed_verdicts": failed_verdicts,
         "legacy_count": len(legacy),
@@ -3117,6 +3130,11 @@ def print_assessment(report: dict) -> int:
             print(f"  - {error}")
     if report["failed_verdicts"]:
         print("\nFailed verdicts:", ", ".join(report["failed_verdicts"]))
+    if report["harness_errors"]:
+        print(
+            "\nHarness errors (excluded from quality averages):",
+            ", ".join(report["harness_errors"]),
+        )
 
     if report["legacy_count"]:
         print(
@@ -3151,7 +3169,7 @@ def print_assessment(report: dict) -> int:
 
 
 def aggregate(
-    scored: list[object],
+    results: list[object],
     *,
     expected_ids: list[str] | None = None,
     expected_cases: Mapping[str, object] | None = None,
@@ -3164,7 +3182,7 @@ def aggregate(
 ) -> int:
     return print_assessment(
         assess_run(
-            scored,
+            results,
             expected_ids=expected_ids,
             expected_cases=expected_cases,
             release_eligible=release_eligible,
@@ -4274,8 +4292,8 @@ def _render_ledger_row(index: int, row: object) -> str:
     """Render even malformed evidence rows without preserving a stale ledger."""
     if not isinstance(row, dict):
         return (
-            f"| [invalid row {index + 1}] | invalid | invalid | invalid | invalid | INVALID | "
-            "result is not an object |"
+            f"| [invalid row {index + 1}] | invalid | invalid | invalid | invalid | invalid | "
+            "INVALID | result is not an object |"
         )
 
     raw_id = row.get("id")
@@ -4286,6 +4304,8 @@ def _render_ledger_row(index: int, row: object) -> str:
     )
     sequence = row.get("sequence")
     scale = "0-4" if sequence is True else "0-3" if sequence is False else "invalid"
+    raw_status = row.get("status")
+    status = raw_status if raw_status in RESULT_STATUSES else "invalid"
 
     raw_dimensions = row.get("dimension_scores", [])
     dimension_parts: list[str] = []
@@ -4313,9 +4333,17 @@ def _render_ledger_row(index: int, row: object) -> str:
     )
 
     raw_score = row.get("score")
-    score = str(raw_score) if type(raw_score) is int else "invalid"
+    score = (
+        "n/a"
+        if status == "harness_error" and raw_score is None
+        else str(raw_score) if type(raw_score) is int else "invalid"
+    )
     raw_pass = row.get("pass")
-    passed = "yes" if raw_pass is True else "NO" if raw_pass is False else "INVALID"
+    passed = (
+        "n/a"
+        if status == "harness_error" and raw_pass is None
+        else "yes" if raw_pass is True else "NO" if raw_pass is False else "INVALID"
+    )
     raw_note = row.get("notes", "")
     note = (
         _safe_markdown_text(raw_note)
@@ -4323,14 +4351,14 @@ def _render_ledger_row(index: int, row: object) -> str:
         else "[invalid non-string notes]"
     )
     return (
-        f"| {case_id} | {scale} | {dimensions} | {safe_provenance} | "
+        f"| {case_id} | {status} | {scale} | {dimensions} | {safe_provenance} | "
         f"{score} | {passed} | {note} |"
     )
 
 
 def write_ledger(
     path: Path,
-    scored: list[object],
+    results: list[object],
     model: str,
     stamp: str,
     provider_name: str,
@@ -4353,7 +4381,7 @@ def write_ledger(
     if _destination_guard is not None:
         _destination_guard()
     report = assess_run(
-        scored,
+        results,
         expected_ids=expected_ids,
         expected_cases=expected_cases,
         total_expected=total_expected,
@@ -4392,10 +4420,13 @@ def write_ledger(
     lines = [
         "# Eval Run Ledger",
         "",
-        f"Last scored: **{safe_stamp}** with responder model `{safe_model}` and judge model "
+        f"Last run: **{safe_stamp}** with responder model `{safe_model}` and judge model "
         f"`{safe_judge_model}` via provider `{safe_provider_name}` in region `{safe_region}` and "
         "`scripts/eval_run.py`.",
         scope_line,
+        f"Evidence status: **{report['scored_count']} scored**, "
+        f"**{len(report['harness_errors'])} harness error(s)**. Harness-error rows "
+        "are excluded from quality averages and make release evidence ineligible.",
         f"Run verdict: **{report['run_verdict']}**. Release verdict: "
         f"**{report['release_verdict']}**.",
         (
@@ -4418,13 +4449,26 @@ def write_ledger(
             for error in report["integrity_errors"]
         )
         lines.append("")
+    if report["harness_errors"]:
+        lines.extend(["## Harness errors", ""])
+        for row in results:
+            if isinstance(row, dict) and row.get("status") == "harness_error":
+                case_id = _safe_markdown_text(str(row.get("id", "[unknown]")))
+                notes = row.get("notes", "")
+                detail = (
+                    _safe_markdown_text(notes, limit=500)
+                    if isinstance(notes, str)
+                    else "[invalid non-string notes]"
+                )
+                lines.append(f"- **{case_id}:** {detail}")
+        lines.append("")
     lines.extend(
         [
-            "| id | scale | dimension scores | frozen sources (path@sha256) | score | pass | notes |",
-            "|---|---|---|---|---|---|---|",
+            "| id | status | scale | dimension scores | frozen sources (path@sha256) | score | pass | notes |",
+            "|---|---|---|---|---|---|---|---|",
         ]
     )
-    for index, row in sorted(enumerate(scored), key=_ledger_row_sort_key):
+    for index, row in sorted(enumerate(results), key=_ledger_row_sort_key):
         lines.append(_render_ledger_row(index, row))
     def final_bound_check() -> None:
         if isinstance(snapshot, FrozenRepository):
@@ -4471,8 +4515,9 @@ def _write_bootstrap_failure_ledger(
         return
     row = {
         "id": "__harness__",
-        "score": 0,
-        "pass": False,
+        "status": "harness_error",
+        "score": None,
+        "pass": None,
         "sequence": False,
         "critical": False,
         "notes": message,
@@ -4518,7 +4563,11 @@ def main() -> int:
     parser.add_argument("--judge-model", default=None, help="override judge model (defaults to --model)")
     parser.add_argument("--id", action="append", help="run only these case ids")
     parser.add_argument("--limit", type=int, default=0, help="cap number of cases (0 = all)")
-    parser.add_argument("--ledger", default=None, help="write a markdown score ledger to this path")
+    parser.add_argument(
+        "--ledger",
+        default=None,
+        help="write a markdown evidence ledger to this path",
+    )
     parser.add_argument("--stamp", default="unstamped", help="date label for the ledger (pass an ISO date)")
     args = parser.parse_args()
 
@@ -4609,16 +4658,16 @@ def main() -> int:
     if not api_key:
         print(
             f"{provider.api_key_env} not set. Use --self-test for an offline wiring check, "
-            "or export a key to run a live scored pass."
+            "or export a key to run a live evaluation."
         )
         return 2
 
-    scored: list[dict] = []
+    results: list[dict] = []
     for case in cases:
         cid = case["id"]
         source_paths: list[str] | None = None
         try:
-            verdict, source_paths = run_case(
+            raw_verdict, source_paths = run_case(
                 snapshot,
                 case,
                 model,
@@ -4631,16 +4680,23 @@ def main() -> int:
         except CaseRunError as exc:
             source_paths = list(exc.sources)
             print(f"[{cid}] evaluation error: {exc}")
-            verdict = failed_verdict(case, f"evaluation error: {exc}")
-        except (HarnessError, TimeoutError) as exc:
+            verdict = harness_error_result(f"evaluation error: {exc}")
+        except (ProviderResponseError, TimeoutError) as exc:
+            print(f"[{cid}] discovery transport error: {exc}")
+            verdict = harness_error_result(f"discovery transport error: {exc}")
+        except HarnessError as exc:
             print(f"[{cid}] discovery error: {exc}")
             verdict = failed_verdict(case, f"discovery error: {exc}")
-        verdict = normalize_verdict(case, verdict)
+            verdict = normalize_verdict(case, verdict)
+        else:
+            verdict = normalize_verdict(case, raw_verdict)
+        status = verdict["status"]
         score = verdict["overall_score"]
         passed = verdict["pass"]
-        scored.append(
+        results.append(
             {
                 "id": cid,
+                "status": status,
                 "score": score,
                 "pass": passed,
                 "sequence": is_sequence_case(case),
@@ -4654,11 +4710,13 @@ def main() -> int:
                 ),
             }
         )
-        print(f"[{cid}] sources: {source_provenance_label(scored[-1]['sources'])}")
-        print(
-            f"[{cid}] {'PASS' if passed else 'FAIL'} score={score} :: "
-            f"{str(verdict.get('notes', ''))[:70]}"
+        print(f"[{cid}] sources: {source_provenance_label(results[-1]['sources'])}")
+        outcome = (
+            "HARNESS_ERROR score=n/a"
+            if status == "harness_error"
+            else f"{'PASS' if passed else 'FAIL'} score={score}"
         )
+        print(f"[{cid}] {outcome} :: {str(verdict.get('notes', ''))[:70]}")
 
     snapshot_error: str | None = None
     try:
@@ -4667,21 +4725,15 @@ def main() -> int:
         snapshot_error = _safe_exception_detail(exc, "", limit=500)
         release_eligible = False
         print(f"Frozen input verification failed: {snapshot_error}")
-        for row in scored:
-            row["score"] = 0
-            row["pass"] = False
+        for row in results:
+            row["status"] = "harness_error"
+            row["score"] = None
+            row["pass"] = None
             row["notes"] = f"snapshot verification failure: {snapshot_error}"
-            row["dimension_scores"] = (
-                [
-                    {"dimension": dimension, "score": 0}
-                    for dimension in SEQUENCE_DIMENSIONS
-                ]
-                if row["sequence"]
-                else []
-            )
+            row["dimension_scores"] = []
 
     report = assess_run(
-        scored,
+        results,
         expected_cases=selected_case_metadata,
         release_eligible=release_eligible,
         total_expected=len(all_cases),
@@ -4692,7 +4744,7 @@ def main() -> int:
         try:
             write_ledger(
                 ledger_path,
-                scored,
+                results,
                 model,
                 args.stamp,
                 args.provider,

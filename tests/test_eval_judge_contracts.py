@@ -524,6 +524,7 @@ class JudgeContractTests(unittest.TestCase):
                 self.endpoint,
             )
         normalized = eval_run.normalize_verdict(case, verdict)
+        self.assertEqual(normalized["status"], "scored")
         self.assertTrue(normalized["pass"], normalized["notes"])
         self.assertEqual(normalized["notes"], notes)
 
@@ -552,7 +553,9 @@ class JudgeContractTests(unittest.TestCase):
         for verdict in mutations:
             with self.subTest(verdict=verdict):
                 normalized = eval_run.normalize_verdict(case, verdict)
-                self.assertFalse(normalized["pass"])
+                self.assertEqual(normalized["status"], "harness_error")
+                self.assertIsNone(normalized["overall_score"])
+                self.assertIsNone(normalized["pass"])
                 self.assertIn("invalid judge verdict", normalized["notes"])
 
     def test_duplicate_nested_criterion_id_is_rejected_by_strict_json(self) -> None:
@@ -567,8 +570,11 @@ class JudgeContractTests(unittest.TestCase):
         oversized = compact_json(response_for(case)) + (
             " " * eval_run.JUDGE_RESPONSE_MAX_BYTES
         )
-        with mock.patch.object(eval_run, "call_api", return_value=oversized):
-            verdict = eval_run.judge(
+        with (
+            mock.patch.object(eval_run, "call_api", return_value=oversized),
+            self.assertRaisesRegex(eval_run.HarnessError, "900-byte"),
+        ):
+            eval_run.judge(
                 case,
                 "candidate response",
                 self.model,
@@ -577,8 +583,6 @@ class JudgeContractTests(unittest.TestCase):
                 self.provider,
                 self.endpoint,
             )
-        self.assertFalse(verdict["pass"])
-        self.assertIn("900-byte", verdict["notes"])
 
     def test_judge_context_is_bounded_before_the_provider_call(self) -> None:
         case = self.cases[0]
