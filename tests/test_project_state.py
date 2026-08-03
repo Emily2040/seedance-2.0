@@ -256,6 +256,15 @@ class ProjectStateTests(unittest.TestCase):
                 contract = json.loads(contract_path.read_text(encoding="utf-8"))
                 contract["status"] = status
                 contract["observed_end_state"] = endpoint
+                # This fixture exercises the legacy/default standalone endpoint
+                # contract. Lane-bound strict contracts require their matching
+                # project snapshot, prompt, and protected provenance ledger.
+                for field in (
+                    "directors_read_lane",
+                    "authoring_state",
+                    "authoring_state_provenance",
+                ):
+                    contract.pop(field, None)
                 (fixture_dir / "clip-01-contract.json").write_text(
                     json.dumps(contract),
                     encoding="utf-8",
@@ -266,7 +275,6 @@ class ProjectStateTests(unittest.TestCase):
                         sys.executable,
                         str(ROOT / "scripts" / "project_state_check.py"),
                         str(repo),
-                        "--strict",
                     ],
                     cwd=ROOT,
                     text=True,

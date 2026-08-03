@@ -2118,6 +2118,12 @@ def sequence_paths(root: Path) -> list[Path]:
     paths = []
     for path in examples.rglob("*.json"):
         path = validate_repo_input_path(root, path)
+        if is_take_review_path(path):
+            # Review candidates are loaded once, after project discovery, by
+            # the bounded shared review index.  Generic discovery must not
+            # pre-read bytes that the authority reader may reject by size or
+            # file identity.
+            continue
         try:
             obj = load_json(path, root)
         except Exception:
