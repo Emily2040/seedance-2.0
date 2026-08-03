@@ -342,9 +342,19 @@ def _safe_exception_detail(
         detail = detail.encode("utf-8", errors="backslashreplace").decode("utf-8")
     redaction_sentinel = '"<seedance-redacted>"'
     if api_key:
-        detail = re.sub(
-            re.escape(api_key), redaction_sentinel, detail, flags=re.I
-        )
+        secret_variants = {api_key}
+        try:
+            secret_variants.add(
+                api_key.encode("unicode_escape").decode("ascii")
+            )
+            secret_variants.add(json.dumps(api_key, ensure_ascii=True)[1:-1])
+        except (UnicodeError, ValueError):
+            pass
+        for secret in sorted(secret_variants, key=len, reverse=True):
+            if secret:
+                detail = re.sub(
+                    re.escape(secret), redaction_sentinel, detail, flags=re.I
+                )
     for pattern in SECRET_PATTERNS:
         detail = pattern.sub(
             lambda match: match.group(1) + redaction_sentinel,
@@ -1999,6 +2009,18 @@ def _call_api_unredacted(
     endpoint: str,
     max_tokens: int = 1500,
 ) -> str:
+    if not isinstance(api_key, str) or not api_key:
+        raise ProviderResponseError("model API credential must be a non-empty string")
+    if not _is_utf8_encodable(api_key) or any(
+        ord(character) < 0x20 or ord(character) == 0x7F
+        for character in api_key
+    ):
+        # urllib/http.client can include repr(header_value) in its exception.
+        # Refuse control-bearing credentials before constructing the request so
+        # escaped CR/LF forms can never enter a transport diagnostic.
+        raise ProviderResponseError(
+            "model API credential is not a valid HTTP header value"
+        )
     payload = json.dumps({
         "model": model,
         "max_tokens": max_tokens,

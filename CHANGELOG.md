@@ -55,8 +55,9 @@ Nothing yet.
   snapshot. Eval inputs now fail closed on unclassified files, aliases, digest
   drift, fixture-path leakage, post-snapshot mutation, and fabricated ledger
   provenance. Canonical eval/rubric digests prevent semantic contract gutting.
-- Kept issue #29's material judge-criteria fields separate and prompt-inert;
-  discovery hardening does not claim to score those fields.
+- Kept issue #29's material judge-criteria fields out of the responder prompt
+  while preserving their live-judge scoring; discovery hardening does not move
+  those rubric-bound criteria into responder context.
 - Split capability claims in `capability-map` into four separately-verified layers — model capability, surface access, request syntax, and returned adherence — because a single "supported" cell conflated things that fail for different reasons.
 - Stopped the wall-clock freshness gate from failing unrelated pull requests. `source_registry_check.py` now warns past 14 days and errors past 30 only under the new `--enforce-freshness` flag, which the release checklist and the scheduled job pass. The drift check between two checked-in dates stays fatal, since it cannot be triggered by the calendar alone.
 - Hardened the validation workflow: actions pinned to commit SHAs, `permissions: contents: read`, a cancel-in-progress concurrency group, and no committed bytecode.
