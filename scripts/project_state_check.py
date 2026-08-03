@@ -2607,7 +2607,10 @@ def validate_contract(
                 f"{label}: directors_read_lane {lane!r} does not match current project clip "
                 f"{expected_lane!r}"
             )
-        if obj.get("status") != current_clip.get("status"):
+        if (
+            is_string_enum(obj.get("status"), CURRENT_CONTRACT_STATUSES)
+            and obj.get("status") != current_clip.get("status")
+        ):
             errors.append(
                 f"{label}: status {obj.get('status')!r} does not match current project clip "
                 f"{current_clip.get('status')!r}"
@@ -2676,48 +2679,61 @@ def select_current_projects(
     identities, and crossed coordinates are incomparable; neither case may be
     resolved by filesystem ordering.
     """
-    selected: dict[str, tuple[tuple[int, int], Path, dict]] = {}
-    ambiguous: set[str] = set()
-
     def label(path: Path) -> str:
         try:
             return path.relative_to(root).as_posix()
         except ValueError:
             return path.as_posix()
 
+    grouped: dict[str, list[tuple[tuple[int, int], Path, dict]]] = {}
     for path, project in snapshots:
         project_id = project.get("project_id")
         if not isinstance(project_id, str):
             continue
-        version = project_version(project, path)
-        existing = selected.get(project_id)
-        if existing is None:
-            selected[project_id] = (version, path, project)
+        grouped.setdefault(project_id, []).append(
+            (project_version(project, path), path, project)
+        )
+
+    selected: dict[str, tuple[tuple[int, int], Path, dict]] = {}
+    for project_id in sorted(grouped):
+        records = sorted(grouped[project_id], key=lambda item: label(item[1]))
+        ambiguous = False
+        for left_index, (left_version, left_path, _) in enumerate(records):
+            for right_version, right_path, _ in records[left_index + 1 :]:
+                if left_version == right_version:
+                    errors.append(
+                        f"duplicate project snapshot revision for {project_id}: "
+                        f"canon_revision={left_version[0]}, "
+                        f"state_revision={left_version[1]} in "
+                        f"{label(left_path)} and {label(right_path)}"
+                    )
+                    ambiguous = True
+                    continue
+                left_dominates = all(
+                    left >= right
+                    for left, right in zip(left_version, right_version)
+                )
+                right_dominates = all(
+                    right >= left
+                    for left, right in zip(left_version, right_version)
+                )
+                if not left_dominates and not right_dominates:
+                    errors.append(
+                        f"incomparable project snapshot revisions for {project_id}: "
+                        f"{label(left_path)} has {left_version}, "
+                        f"{label(right_path)} has {right_version}"
+                    )
+                    ambiguous = True
+        if ambiguous:
             continue
-
-        existing_version, existing_path, _ = existing
-        if version == existing_version:
-            errors.append(
-                f"duplicate project snapshot revision for {project_id}: "
-                f"canon_revision={version[0]}, state_revision={version[1]} in "
-                f"{label(existing_path)} and {label(path)}"
+        selected[project_id] = next(
+            record
+            for record in records
+            if all(
+                all(current >= other for current, other in zip(record[0], candidate[0]))
+                for candidate in records
             )
-            ambiguous.add(project_id)
-            continue
-
-        candidate_dominates = all(a >= b for a, b in zip(version, existing_version))
-        existing_dominates = all(a >= b for a, b in zip(existing_version, version))
-        if candidate_dominates:
-            selected[project_id] = (version, path, project)
-        elif not existing_dominates:
-            errors.append(
-                f"incomparable project snapshot revisions for {project_id}: "
-                f"{label(existing_path)} has {existing_version}, {label(path)} has {version}"
-            )
-            ambiguous.add(project_id)
-
-    for project_id in ambiguous:
-        selected.pop(project_id, None)
+        )
     return selected
 
 

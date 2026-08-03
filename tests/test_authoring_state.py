@@ -37,6 +37,36 @@ NARRATIVE_FIELDS = {
     "prompt_carriers",
 }
 NON_NARRATIVE_FIELDS = {"utility_intent", "non_narrative_refusal"}
+NARRATIVE_TEXT_FIELDS = (
+    "dramatic_function",
+    "turn",
+    "pov",
+    "power_shift",
+    "hidden_want_objective",
+    "obstacle_tactic",
+    "subtext_contradiction",
+    "visible_suppressed_behavior",
+    "non_transferable_detail",
+    "stock_solution_refused",
+    "value_before",
+    "value_after",
+)
+INVISIBLE_AUTHORING_TEXT_VALUES = (
+    "",
+    " \t\u00a0",
+    "\u200b\u2060\ufeff",
+    "\u034f\ufe0f",
+    "\u2800\u3164\uffa0",
+    "\U000110bd",
+    "\U000110cd",
+    "\U00013430",
+    "\U0001bca0\U0001d173",
+    " \U000e0001 ",
+    "...",
+    "!!!",
+    "，。！？",
+    "—–",
+)
 CAPSULE_FIELDS = (
     "DRAMATIC FUNCTION:",
     "TURN:",
@@ -299,7 +329,49 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             path = Path(tmp) / "project-state.json"
             path.write_text(json.dumps(project), encoding="utf-8")
+            clips_by_id = {
+                clip.get("clip_id"): clip
+                for clip in project.get("clips", [])
+                if isinstance(clip, dict) and isinstance(clip.get("clip_id"), str)
+            }
+            for index, history in enumerate(project.get("take_history", [])):
+                if not isinstance(history, dict):
+                    continue
+                clip = clips_by_id.get(history.get("clip_id"), {})
+                review = {
+                    "project_id": project.get("project_id"),
+                    "clip_id": history.get("clip_id"),
+                    "take_id": history.get("take_id"),
+                    "source_status": "reviewed",
+                    "verdict": history.get("verdict"),
+                    "observed_start_state": (
+                        clip.get("observed_start_state")
+                        if isinstance(clip.get("observed_start_state"), dict)
+                        else {}
+                    ),
+                    "observed_end_state": (
+                        clip.get("observed_end_state")
+                        if isinstance(clip.get("observed_end_state"), dict)
+                        else {}
+                    ),
+                    "completed_beats": [],
+                    "incomplete_beats": [],
+                    "unexpected_completed_beats": [],
+                    "continuity_breaks": [],
+                    "accepted_deviations": [],
+                    "observation_confidence": "high",
+                    "uncertainties": [],
+                    "requires_user_confirmation": False,
+                }
+                (Path(tmp) / f"{index:04d}-take-review.json").write_text(
+                    json.dumps(review), encoding="utf-8"
+                )
             return project_state_check.validate_project(path, ROOT, strict=strict)
+
+    def test_runtime_rejects_invisible_and_punctuation_only_authoring_text(self) -> None:
+        for value in INVISIBLE_AUTHORING_TEXT_VALUES:
+            with self.subTest(value=value):
+                self.assertFalse(project_state_check.has_visible_text(value))
 
     def test_strict_requires_record_for_either_explicit_lane(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")
@@ -401,6 +473,41 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
             historical_ledger=protected_historical_ledger(),
         )
         self.assertTrue(any("missing authoring_state" in error for error in errors), errors)
+
+    def test_historical_terminal_contract_does_not_match_current_repair_status(self) -> None:
+        project = load_json("examples/sequence-airport-arrival/project-state.json")
+        current_clip = copy.deepcopy(project["clips"][0])
+        current_clip["status"] = "repair"
+        contract = load_json(
+            "examples/sequence-airport-arrival/clip-01-contract.json"
+        )
+        prompt = (
+            ROOT / "examples/sequence-airport-arrival/clip-01-prompt.md"
+        ).read_text(encoding="utf-8")
+        errors: list[str] = []
+
+        project_state_check.validate_contract(
+            contract,
+            "historical terminal contract",
+            errors,
+            strict=True,
+            current_clip=current_clip,
+            prompt=prompt,
+            current_project_version=(
+                project["canon_revision"],
+                project["state_revision"],
+            ),
+            source_references={
+                reference["tag"] for reference in project["reference_registry"]
+            },
+            historical_ledger=protected_historical_ledger(),
+            consumed_historical_keys=set(),
+        )
+
+        self.assertFalse(
+            any("status" in error and "current project clip" in error for error in errors),
+            errors,
+        )
 
     def test_non_narrative_lane_requires_exact_two_line_record(self) -> None:
         project = load_json("examples/standalone-clip/project-state.json")
@@ -1351,6 +1458,14 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
             ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md"
         ).read_text(encoding="utf-8")
         downgraded_clip["status"] = "rejected"
+        downgraded_project["take_history"].append(
+            {
+                "take_id": "take_clip02_rejected",
+                "clip_id": "clip_02",
+                "verdict": "reject",
+                "evidence": "Synthetic terminal state for the provenance rollback test.",
+            }
+        )
         downgraded["status"] = "rejected"
         downgraded["authoring_state"]["hidden_want_objective"] = "status downgrade rewrite"
         downgraded["authoring_state_provenance"]["authoring_state_sha256"] = (
@@ -1717,6 +1832,35 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         self.assertNotIn(base["project_id"], selected)
         self.assertTrue(any("incomparable project snapshot revisions" in error for error in errors), errors)
 
+    def test_all_snapshot_pairs_are_compared_independently_of_input_order(self) -> None:
+        base = load_json("examples/sequence-airport-arrival/project-state.json")
+        records = []
+        for name, version in (
+            ("a", (3, 3)),
+            ("b", (2, 1)),
+            ("c", (1, 2)),
+        ):
+            project = copy.deepcopy(base)
+            project["canon_revision"], project["state_revision"] = version
+            records.append((ROOT / f"examples/{name}/project-state.json", project))
+
+        observed = []
+        for ordered in (records, list(reversed(records))):
+            errors: list[str] = []
+            selected = project_state_check.select_current_projects(
+                ordered,
+                ROOT,
+                errors,
+            )
+            self.assertNotIn(base["project_id"], selected)
+            observed.append(errors)
+
+        self.assertEqual(observed[0], observed[1])
+        self.assertTrue(
+            any("incomparable project snapshot revisions" in error for error in observed[0]),
+            observed[0],
+        )
+
 
 class AuthoringStateSchemaCompatibilityTests(unittest.TestCase):
     @classmethod
@@ -1731,6 +1875,7 @@ class AuthoringStateSchemaCompatibilityTests(unittest.TestCase):
 
     def test_schema_definitions_match_and_keep_legacy_absence(self) -> None:
         for definition in (
+            "visible_one_line_text",
             "authoring_state_provenance",
             "authoring_state",
             "narrative_authoring_state",
@@ -1798,19 +1943,7 @@ class AuthoringStateSchemaCompatibilityTests(unittest.TestCase):
     def test_schemas_reject_blank_or_invisible_felt_intent(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")
         contract = load_json("examples/sequence-airport-arrival/clip-01-contract.json")
-        invisible_values = (
-            "",
-            " \t\u00a0",
-            "\u200b\u2060\ufeff",
-            "\u034f\ufe0f",
-            "\u2800\u3164\uffa0",
-            "\U000110bd",
-            "\U000110cd",
-            "\U00013430",
-            "\U0001bca0\U0001d173",
-            " \U000e0001 ",
-        )
-        for value in invisible_values:
+        for value in INVISIBLE_AUTHORING_TEXT_VALUES:
             with self.subTest(value=value):
                 project_probe = copy.deepcopy(project)
                 project_probe["clips"][0]["felt_intent"] = value
@@ -1832,6 +1965,43 @@ class AuthoringStateSchemaCompatibilityTests(unittest.TestCase):
             target = probe["clips"][0] if "clips" in probe else probe
             target["felt_intent"] = "\u200bWaiting at the threshold\u2060"
             self.assertEqual(list(self.validator(schema).iter_errors(probe)), [])
+
+    def test_schemas_reject_blank_or_invisible_authoring_state_text(self) -> None:
+        project = load_json("examples/sequence-airport-arrival/project-state.json")
+        contract = load_json("examples/sequence-airport-arrival/clip-01-contract.json")
+        documents = (
+            (self.project_schema, project, lambda probe: probe["clips"][0]),
+            (self.contract_schema, contract, lambda probe: probe),
+        )
+
+        for schema, document, select_clip in documents:
+            for field in NARRATIVE_TEXT_FIELDS:
+                for value in INVISIBLE_AUTHORING_TEXT_VALUES:
+                    with self.subTest(lane="narrative", field=field, value=value):
+                        probe = copy.deepcopy(document)
+                        select_clip(probe)["authoring_state"][field] = value
+                        self.assertTrue(list(self.validator(schema).iter_errors(probe)))
+
+            for value in INVISIBLE_AUTHORING_TEXT_VALUES:
+                with self.subTest(
+                    lane="narrative", field="prompt_carriers", value=value
+                ):
+                    probe = copy.deepcopy(document)
+                    select_clip(probe)["authoring_state"]["prompt_carriers"] = [value]
+                    self.assertTrue(list(self.validator(schema).iter_errors(probe)))
+
+            for field in sorted(NON_NARRATIVE_FIELDS):
+                for value in INVISIBLE_AUTHORING_TEXT_VALUES:
+                    with self.subTest(lane="non_narrative", field=field, value=value):
+                        probe = copy.deepcopy(document)
+                        clip = select_clip(probe)
+                        clip["directors_read_lane"] = "non_narrative"
+                        clip["authoring_state"] = {
+                            "utility_intent": "Show the seal clearing in one insert.",
+                            "non_narrative_refusal": "No invented agency or psychology.",
+                        }
+                        clip["authoring_state"][field] = value
+                        self.assertTrue(list(self.validator(schema).iter_errors(probe)))
 
     def test_lane_conditionals_require_matching_records_and_reject_null(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")

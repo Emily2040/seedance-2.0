@@ -1,0 +1,17 @@
+{
+  "project_id": "seq_mixed_lane_calibration",
+  "clip_id": "clip_01",
+  "take_id": "take_clip01_a",
+  "source_status": "reviewed",
+  "verdict": "accept",
+  "observed_start_state": {},
+  "observed_end_state": {},
+  "completed_beats": [],
+  "incomplete_beats": [],
+  "unexpected_completed_beats": [],
+  "continuity_breaks": [],
+  "accepted_deviations": [],
+  "observation_confidence": "high",
+  "uncertainties": [],
+  "requires_user_confirmation": false
+}
