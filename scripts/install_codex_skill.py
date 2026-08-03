@@ -54,6 +54,7 @@ PORTABLE_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
 MAX_INSTALL_FILE_BYTES = 64 * 1024 * 1024
 MAX_INSTALL_PAYLOAD_BYTES = 256 * 1024 * 1024
 MAX_INSTALLED_README_BYTES = 4 * 1024 * 1024
+INSTALLED_PAYLOAD_FILE_MODE = 0o644
 REPOSITORY_URL = "https://github.com/Emily2040/seedance-2.0"
 ARCHIVE_ONLY_PATHS = frozenset({"references/migrated"})
 INSTALLED_README_PATH = "README.md"
@@ -1990,9 +1991,13 @@ def rewrite_installed_readme_text(text: str) -> str:
         text,
         README_VALIDATION_START,
         README_VALIDATION_END,
-        "Release validators, tests, and the credential-reading live evaluator are "
-        "maintainer tools and are not shipped in the installed runtime package. "
-        f"[Run validation from a source checkout]({REPOSITORY_URL}#validation).",
+        "Offline validators remain in the installed runtime under `scripts/`, "
+        "including [`validate_skills.py`](scripts/validate_skills.py), "
+        "[`content_audit.py`](scripts/content_audit.py), and "
+        "[`design_audit.py`](scripts/design_audit.py), together with the shipped "
+        "schema and contract checks. The test suite and the credential-reading "
+        "live evaluator `eval_run.py` are source-only. "
+        f"[Run the full release suite from a source checkout]({REPOSITORY_URL}#validation).",
         "validation",
     )
 
@@ -2068,8 +2073,13 @@ def build_install_payload_plan(
 
 def _write_regular_bytes_exclusive(path: Path, raw: bytes) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
-    descriptor = os.open(path, flags, 0o600)
+    descriptor = os.open(path, flags, INSTALLED_PAYLOAD_FILE_MODE)
     try:
+        if os.name != "nt":
+            # Payloads may be installed into a project by one account and read
+            # by an agent or CI account. Override a restrictive caller umask,
+            # while leaving transaction/provenance records private.
+            os.fchmod(descriptor, INSTALLED_PAYLOAD_FILE_MODE)
         offset = 0
         while offset < len(raw):
             written = os.write(descriptor, raw[offset:])

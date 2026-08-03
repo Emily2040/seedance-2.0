@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 import sys
 import tempfile
 import unittest
@@ -128,15 +130,58 @@ class RuntimePayloadContractTests(unittest.TestCase):
         self.assertNotIn("assets/hero-command-center.png", installed_readme)
         self.assertNotIn("therefore resolve only in this repository", installed_readme)
 
-    def test_installed_readme_does_not_advertise_omitted_maintenance_tools(self) -> None:
+    def test_installed_readme_distinguishes_shipped_and_omitted_validation_tools(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload = self.install(Path(tmp))
             installed_readme = (payload / "README.md").read_text(encoding="utf-8")
 
-        self.assertIn("Run validation from a source checkout", installed_readme)
+        self.assertIn("Offline validators remain in the installed runtime", installed_readme)
+        self.assertIn("scripts/validate_skills.py", installed_readme)
+        self.assertIn("scripts/content_audit.py", installed_readme)
+        self.assertIn("scripts/design_audit.py", installed_readme)
+        self.assertIn("test suite", installed_readme)
+        self.assertIn("credential-reading live evaluator", installed_readme)
+        self.assertIn("Run the full release suite from a source checkout", installed_readme)
         self.assertNotIn("scripts/eval_run.py", installed_readme)
         self.assertNotIn("unittest discover", installed_readme)
         self.assertNotIn("compileall scripts tests", installed_readme)
+        declared = set(installer.load_payload_manifest(ROOT))
+        for relative in (
+            "scripts/validate_skills.py",
+            "scripts/content_audit.py",
+            "scripts/design_audit.py",
+        ):
+            self.assertIn(relative, declared)
+        self.assertNotIn("scripts/eval_run.py", declared)
+
+    @unittest.skipIf(os.name == "nt", "POSIX payload mode contract")
+    def test_payload_files_remain_shared_readable_under_restrictive_umask(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            previous_umask = os.umask(0o077)
+            try:
+                payload = self.install(Path(tmp))
+            finally:
+                os.umask(previous_umask)
+
+            for relative in (
+                "README.md",
+                "SKILL.md",
+                "scripts/validate_skills.py",
+                "scripts/content_audit.py",
+                "scripts/design_audit.py",
+            ):
+                with self.subTest(relative=relative):
+                    mode = stat.S_IMODE(
+                        payload.joinpath(*relative.split("/")).stat().st_mode
+                    )
+                    self.assertEqual(mode, installer.INSTALLED_PAYLOAD_FILE_MODE)
+
+            for metadata_name in (
+                installer.COMPLETION_MARKER,
+                installer.PROVENANCE_MARKER,
+            ):
+                mode = stat.S_IMODE((payload / metadata_name).stat().st_mode)
+                self.assertEqual(mode & 0o077, 0)
 
     def test_active_guidance_and_source_gallery_remain_intact(self) -> None:
         self.assertTrue((ROOT / "assets" / "hero-command-center.png").is_file())
