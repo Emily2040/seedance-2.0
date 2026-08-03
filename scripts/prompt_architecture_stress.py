@@ -683,6 +683,15 @@ NEGATION_RESET = re.compile(
     r"render\b|show\b|star\b|light\b(?!\s+of\b)|illuminate\b)",
     re.I,
 )
+POSITIVE_WHILE_RESET = re.compile(
+    r"\bwhile\b(?P<prefix>[^.;]{0,100}?)"
+    r"\b(?P<predicate>illuminat\w*|lights?|casts?|glows?|shines?|provides?)\b",
+    re.I,
+)
+PREDICATE_COORDINATION_BOUNDARY = re.compile(
+    r",|\b(?:and|but|however|then|whereas)\b",
+    re.I,
+)
 DOUBLE_NEGATED_EXCLUSION = re.compile(
     r"\b(?:do not|does not|must not|will not|should not|can(?:not| not)|never|"
     r"don['\u2019]t|doesn['\u2019]t|mustn['\u2019]t|won['\u2019]t|"
@@ -4684,6 +4693,34 @@ def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
     return 0.0, f"no brief-specific material survives; expected one of: {', '.join(sorted(brief_terms)[:6])}"
 
 
+def _positive_while_reset_positions(clause: str) -> list[int]:
+    """Locate affirmative light predicates introduced by ``while``.
+
+    Polarity is decided only from the bounded text before the predicate.  A
+    later modifier such as ``without flicker`` therefore cannot retroactively
+    turn an affirmative illumination clause into an exclusion reset.
+    """
+    positions: list[int] = []
+    for match in POSITIVE_WHILE_RESET.finditer(clause):
+        # Negation belongs to the predicate only when it survives the most
+        # recent coordination boundary.  ``does not move and sunlight
+        # illuminates`` must not negate ``illuminates``; coordinated subjects
+        # such as ``sunlight and moonlight do not illuminate`` still retain
+        # their local ``do not`` tail after the split.
+        prefix = match.group("prefix")
+        boundaries = list(PREDICATE_COORDINATION_BOUNDARY.finditer(prefix))
+        local_start = boundaries[-1].end() if boundaries else 0
+        predicate_prefix = prefix[local_start:][-48:]
+        if NEGATED_PREFIX.search(predicate_prefix) is not None:
+            continue
+        positions.append(match.start())
+        if local_start:
+            # End an unrelated scoped negation (for example ``does not move``)
+            # before the affirmative light subject that follows coordination.
+            positions.append(match.start("prefix") + local_start)
+    return positions
+
+
 @lru_cache(maxsize=4096)
 def _scoped_exclusion_interval_index(
     text: str,
@@ -4699,9 +4736,10 @@ def _scoped_exclusion_interval_index(
             (match.start(), match.end())
             for match in DOUBLE_NEGATED_EXCLUSION.finditer(clause)
         ]))
-        reset_positions = [
-            match.start() for match in NEGATION_RESET.finditer(clause)
-        ]
+        reset_positions = sorted(
+            [match.start() for match in NEGATION_RESET.finditer(clause)]
+            + _positive_while_reset_positions(clause)
+        )
         for exclusion in SCOPED_EXCLUSION.finditer(clause):
             if position_is_quoted(text, clause_start + exclusion.start()):
                 continue
@@ -4745,10 +4783,16 @@ def _entailed_action_interval_index(
 def match_is_negated(text: str, start: int) -> bool:
     if _position_in_interval_index(_entailed_action_interval_index(text), start):
         return False
-    short_prefix = text[max(0, start - 36):start]
+    short_window_start = max(0, start - 36)
+    short_prefix = text[short_window_start:start]
+    boundaries = list(PREDICATE_COORDINATION_BOUNDARY.finditer(short_prefix))
+    if boundaries:
+        local_start = boundaries[-1].end()
+        short_window_start += local_start
+        short_prefix = short_prefix[local_start:]
     short_match = NEGATED_PREFIX.search(short_prefix)
     if short_match:
-        global_short_start = max(0, start - 36) + short_match.start()
+        global_short_start = short_window_start + short_match.start()
         double_negated = any(
             match.start() <= short_match.start() < match.end()
             for match in DOUBLE_NEGATED_EXCLUSION.finditer(short_prefix)

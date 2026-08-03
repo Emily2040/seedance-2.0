@@ -14,7 +14,7 @@ Mode: edit. `@Video1` is source clip. Change one layer only.
 
 ## Lint Result
 
-lint: pass
+Run `python scripts/prompt_lint.py --strict` for the computed result; this document does not self-certify a pass.
 
 ## Control-Critical Sentences
 
