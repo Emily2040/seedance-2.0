@@ -9,6 +9,7 @@ import errno
 import hashlib
 import io
 import os
+import re
 import shutil
 import stat
 import struct
@@ -594,7 +595,7 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
             output.write_bytes(b"old frame")
             descriptor = extractor._win32_replacement_descriptor(output)
             try:
-                expected_security = extractor._win32_security_descriptor(
+                expected_security = extractor._win32_security_policy(
                     descriptor, output
                 )
             finally:
@@ -643,7 +644,7 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
 
             descriptor = extractor._win32_replacement_descriptor(output)
             try:
-                final_security = extractor._win32_security_descriptor(descriptor, output)
+                final_security = extractor._win32_security_policy(descriptor, output)
             finally:
                 os.close(descriptor)
             self.assertEqual(result, 0, stdout + stderr)
@@ -667,6 +668,16 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                 )
             finally:
                 os.close(descriptor)
+            expected_dacl = extractor._split_win32_security_policy(
+                expected_security
+            )
+            expected_flags = re.findall(
+                r"\([^;]+;([^;]*);", expected_dacl[2]
+            )
+            self.assertIn("AI", expected_dacl[3])
+            self.assertNotIn("P", expected_dacl[3])
+            self.assertTrue(expected_flags)
+            self.assertTrue(all("ID" in flags for flags in expected_flags))
             real_replace = extractor._ReplaceFileW
             calls = 0
 
@@ -708,10 +719,19 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                         )
                     finally:
                         os.close(changed_descriptor)
-                    self.assertNotEqual(
-                        extractor._split_win32_security_policy(expected_security)[2:4],
-                        extractor._split_win32_security_policy(changed_security)[2:4],
+                    changed_dacl = extractor._split_win32_security_policy(
+                        changed_security
                     )
+                    changed_flags = re.findall(
+                        r"\([^;]+;([^;]*);", changed_dacl[2]
+                    )
+                    self.assertNotEqual(
+                        expected_dacl[2:4],
+                        changed_dacl[2:4],
+                    )
+                    self.assertIn("P", changed_dacl[3])
+                    self.assertTrue(any("ID" not in flags for flags in changed_flags))
+                    self.assertIn("WD", changed_dacl[2])
                 return result
 
             with (
