@@ -263,6 +263,50 @@ class ExecutionTests(unittest.TestCase):
         rejected_with_object["clips"][2]["observed_end_state"] = {}
         self.assertTrue(list(validator.iter_errors(rejected_with_object)))
 
+    def test_project_schema_strictly_bounds_take_history_items(self) -> None:
+        schema = schema_check.load_json(ROOT / "schemas/project-state.schema.json")
+        validator = schema_check.Draft202012Validator(schema)
+        base = json.loads(
+            (ROOT / "examples/sequence-airport-arrival/project-state.json").read_text(
+                "utf-8"
+            )
+        )
+
+        for verdict in ("accept", "accept_with_deviation", "repair", "reject"):
+            with self.subTest(valid_verdict=verdict):
+                data = json.loads(json.dumps(base))
+                data["take_history"][0]["verdict"] = verdict
+                self.assertEqual(list(validator.iter_errors(data)), [])
+
+        attacks = {
+            "missing verdict": lambda item: item.pop("verdict"),
+            "array verdict": lambda item: item.update(verdict=[]),
+            "unknown verdict": lambda item: item.update(verdict="Accept"),
+            "blank take id": lambda item: item.update(take_id="   "),
+            "overlong take id": lambda item: item.update(take_id="x" * 257),
+            "blank clip id": lambda item: item.update(clip_id=""),
+            "overlong clip id": lambda item: item.update(clip_id="x" * 257),
+            "non-string evidence": lambda item: item.update(evidence=[]),
+            "overlong evidence": lambda item: item.update(evidence="x" * 4097),
+            "unexpected field": lambda item: item.update(authority="claimed"),
+        }
+        for label, mutate in attacks.items():
+            with self.subTest(attack=label):
+                data = json.loads(json.dumps(base))
+                mutate(data["take_history"][0])
+                self.assertTrue(list(validator.iter_errors(data)), label)
+
+        too_many = json.loads(json.dumps(base))
+        too_many["take_history"] = [
+            {
+                "take_id": f"take_{index}",
+                "clip_id": "clip_01",
+                "verdict": "accept",
+            }
+            for index in range(4097)
+        ]
+        self.assertTrue(list(validator.iter_errors(too_many)))
+
     def test_clip_contract_schema_enforces_local_status_and_endpoint_invariants(self) -> None:
         schema = schema_check.load_json(ROOT / "schemas/clip-contract.schema.json")
         self.assertIn("Structural and record-local", schema["description"])

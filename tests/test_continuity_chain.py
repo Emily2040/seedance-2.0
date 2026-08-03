@@ -19,12 +19,47 @@ import project_state_check  # noqa: E402
 
 
 class ContinuityChainTests(unittest.TestCase):
-    def validate_mutated_project(self, mutate) -> tuple[list[str], list[str]]:
+    @staticmethod
+    def review_for(data: dict, clip_id: str, take_id: str, verdict: str) -> dict:
+        return {
+            "project_id": data["project_id"],
+            "clip_id": clip_id,
+            "take_id": take_id,
+            "source_status": "reviewed",
+            "verdict": verdict,
+            "observed_start_state": {},
+            "observed_end_state": {},
+            "completed_beats": [],
+            "incomplete_beats": [],
+            "unexpected_completed_beats": [],
+            "continuity_breaks": [],
+            "accepted_deviations": [],
+            "observation_confidence": "high",
+            "uncertainties": [],
+            "requires_user_confirmation": False,
+        }
+
+    def validate_mutated_project(
+        self,
+        mutate,
+        with_reviews: bool = False,
+    ) -> tuple[list[str], list[str]]:
         data = json.loads(BASE_PROJECT_STATE.read_text(encoding="utf-8"))
         mutate(data)
         with tempfile.TemporaryDirectory(prefix="continuity-lineage-") as temp_dir:
             fixture = Path(temp_dir) / "project-state.json"
             fixture.write_text(json.dumps(data), encoding="utf-8")
+            if with_reviews:
+                for index, entry in enumerate(data["take_history"]):
+                    review = self.review_for(
+                        data,
+                        entry["clip_id"],
+                        entry["take_id"],
+                        entry["verdict"],
+                    )
+                    (fixture.parent / f"clip-{index}-take-review.json").write_text(
+                        json.dumps(review), encoding="utf-8"
+                    )
             return continuity_chain_check.validate(fixture, ROOT)
 
     def validate_mutated_project_with_both(self, mutate) -> tuple[list[str], list[str]]:
@@ -101,8 +136,15 @@ class ContinuityChainTests(unittest.TestCase):
             parent["status"] = "accepted"
             parent["observed_end_state"] = copy.deepcopy(child["planned_start_state"])
             child["status"] = "ready"
+            data["take_history"] = [
+                {
+                    "take_id": "take_clip_01_accepted",
+                    "clip_id": "clip_01",
+                    "verdict": "accept",
+                }
+            ]
 
-        errors, warnings = self.validate_mutated_project(accept_parent)
+        errors, warnings = self.validate_mutated_project(accept_parent, with_reviews=True)
         self.assertEqual(errors, [])
         self.assertEqual(warnings, [])
 

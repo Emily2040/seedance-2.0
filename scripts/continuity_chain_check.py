@@ -6,8 +6,11 @@ from pathlib import Path
 
 from lineage_contract import (
     analyze_lineage,
+    build_take_review_indexes,
     bound_validation_diagnostics,
     load_project_document,
+    TakeReviewIndex,
+    validate_take_reconciliation,
 )
 from strict_json import bound_diagnostics
 
@@ -56,15 +59,23 @@ def state_value(state: dict | None, key: str):
     return None
 
 
-def validate(path: Path, root: Path) -> tuple[list[str], list[str]]:
+def validate(
+    path: Path,
+    root: Path,
+    review_index: TakeReviewIndex | None = None,
+) -> tuple[list[str], list[str]]:
     data, rel, errors = load_project_document(path, root)
     warnings: list[str] = []
     if data is None:
         return bound_validation_diagnostics(errors, rel), warnings
     lineage = analyze_lineage(data.get("clips"), rel)
     errors.extend(lineage.errors)
+    if review_index is None:
+        review_index = build_take_review_indexes([path])[path.resolve().parent]
+    errors.extend(
+        validate_take_reconciliation(data, lineage.clips_by_id, rel, review_index)
+    )
     for clip, parent in lineage.accepted_links:
-        parent_id = parent.get("clip_id")
         end_state = parent.get("observed_end_state")
         start_state = clip.get("planned_start_state")
         if not start_state:
@@ -94,8 +105,14 @@ def main() -> int:
     root = Path(args.repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
-    for path in sorted((root / "examples").rglob("*project-state*.json")) if (root / "examples").exists() else []:
-        e, w = validate(path, root)
+    paths = (
+        sorted((root / "examples").rglob("*project-state*.json"))
+        if (root / "examples").exists()
+        else []
+    )
+    review_indexes = build_take_review_indexes(paths)
+    for path in paths:
+        e, w = validate(path, root, review_indexes[path.resolve().parent])
         errors.extend(e)
         warnings.extend(w)
     warnings = bound_diagnostics(warnings, "additional continuity warnings omitted")

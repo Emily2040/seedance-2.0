@@ -81,6 +81,25 @@ When an accepted clip differs from plan:
 
 Rejected footage does not alter canon and cannot become a continuation parent.
 
+`take_history` is chronological per clip. Every clip in a post-review canonical
+state (`accepted`, `accepted_with_deviation`, `repair`, or `rejected`) must have
+a current history entry and exactly one sibling take-review record. The last
+entry for that clip is authoritative: its `take_id` and verdict must match the
+review, and the verdict must map to the clip's current status. A post-review
+status without both records is invalid; an empty history is only valid while no
+clip has reached one of those states. Earlier rejected attempts may remain as
+history, but they do not override a later accepted take and do not need to stay
+inline with their archived reviews.
+
+Each inline history item is a closed object with `take_id`, `clip_id`, and
+`verdict`, plus optional `evidence`. IDs are non-blank and at most 256
+characters, evidence is at most 4096 characters, verdict is one of `accept`,
+`accept_with_deviation`, `repair`, or `reject`, and the inline array is capped
+at 4096 items. Archive older attempts before reaching that cap. Both semantic
+validators use the same bounded reconciliation contract and index sibling
+reviews once per directory; a project-state document cannot serve as its own
+review.
+
 ## Project State Capsule
 
 Use a readable capsule for cross-session continuation. A new conversation cannot be assumed to possess hidden prior memory.
