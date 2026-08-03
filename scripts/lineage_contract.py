@@ -497,6 +497,16 @@ def _load_checked_take_review(
         )
 
 
+def load_bounded_take_review(path: Path) -> object:
+    """Load one standalone review through the same bounded authority path."""
+
+    status, payload, _ = _load_checked_take_review(path, set())
+    if status != "loaded":
+        detail = payload if isinstance(payload, str) else "cannot be loaded safely"
+        raise ValueError(f"take-review {detail}")
+    return payload
+
+
 def build_take_review_index(
     directory: Path,
     *,
@@ -753,6 +763,11 @@ def validate_take_reconciliation(
         )
 
     for clip_id, (take_id, verdict) in latest_by_clip.items():
+        actual = clips_by_id[clip_id].get("status")
+        if not (
+            isinstance(actual, str) and actual in POST_REVIEW_CLIP_STATUSES
+        ):
+            continue
         matches: list[TakeReviewRecord] = []
         if valid_project_id:
             assert isinstance(project_id, str)
@@ -789,13 +804,8 @@ def validate_take_reconciliation(
                     rel,
                 )
 
-        actual = clips_by_id[clip_id].get("status")
         expected = VERDICT_CLIP_STATUS[verdict]
-        if (
-            isinstance(actual, str)
-            and actual in POST_REVIEW_CLIP_STATUSES
-            and actual != expected
-        ):
+        if actual != expected:
             rendered_actual = (
                 actual
                 if isinstance(actual, str) and actual in ALL_CLIP_STATUSES

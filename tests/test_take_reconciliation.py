@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import copy
+import io
 import json
 import os
 import sys
@@ -114,9 +116,38 @@ class TakeReconciliationTests(unittest.TestCase):
                 ]
                 project["current_clip_id"] = "clip_01"
                 project["clips"][0]["status"] = status
-                project_errors, continuity_errors = self.validate(project, [self.review()])
+                project_errors, continuity_errors = self.validate(project, [])
                 self.assertEqual(project_errors, [])
                 self.assertEqual(continuity_errors, [])
+
+    def test_project_state_main_never_rereads_oversized_indexed_review(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="take-main-size-cap-") as temp_dir:
+            root = Path(temp_dir)
+            directory = root / "examples" / "sequence"
+            directory.mkdir(parents=True)
+            project_path = directory / "project-state.json"
+            review_path = directory / "clip-0-take-review.json"
+            project_path.write_text(json.dumps(self.project()), encoding="utf-8")
+            review_path.write_bytes(b"x" * 65)
+
+            loaded_paths: list[Path] = []
+            original_load = project_state_check.load_json
+
+            def tracked_generic_load(path: Path) -> object:
+                loaded_paths.append(path)
+                return original_load(path)
+
+            with mock.patch.object(
+                lineage_contract, "MAX_TAKE_REVIEW_BYTES", 64
+            ), mock.patch.object(
+                project_state_check, "load_json", side_effect=tracked_generic_load
+            ), mock.patch.object(
+                sys, "argv", ["project_state_check.py", str(root), "--strict"]
+            ), contextlib.redirect_stdout(io.StringIO()):
+                result = project_state_check.main()
+
+            self.assertEqual(result, 1)
+            self.assertNotIn(review_path, loaded_paths)
 
     def test_malformed_history_verdict_types_fail_cleanly_in_both_consumers(self) -> None:
         for verdict in ([], {}, None, True, 1):
