@@ -58,7 +58,10 @@ class OutputPolicyTestCase(unittest.TestCase):
         return result, stdout.getvalue(), stderr.getvalue()
 
     def stage_paths(self, root: Path) -> list[Path]:
-        return list(root.glob(".*.atomic-*"))
+        return [
+            *root.glob(".*.atomic-*"),
+            *root.glob(".frame-exchange-probe-*"),
+        ]
 
 
 class OutputCollisionCliTests(OutputPolicyTestCase):
@@ -130,7 +133,10 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
 
             def render(_ffmpeg: str, _clip: Path, _first: bool) -> bytes:
                 self.assertFalse(output.exists())
-                self.assertEqual(self.stage_paths(root), [])
+                # POSIX proves staging-namespace and replacement policy support
+                # before decode, but the final output remains invisible.
+                expected_stage_count = 1 if os.name == "posix" else 0
+                self.assertEqual(len(self.stage_paths(root)), expected_stage_count)
                 return b"complete frame"
 
             with mock.patch.object(
@@ -402,6 +408,47 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
             finally:
                 os.unlink(extended_output)
 
+    @unittest.skipUnless(os.name == "nt", "Windows console encodings are platform-specific")
+    def test_windows_long_unicode_output_publishes_with_cp1252_console(self) -> None:
+        class StrictCp1252(io.StringIO):
+            @property
+            def encoding(self) -> str:
+                return "cp1252"
+
+            def write(self, text: str) -> int:
+                text.encode(self.encoding, errors="strict")
+                return super().write(text)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / ("雪" * 240 + ".png")
+            clip.write_bytes(b"clip")
+            console = StrictCp1252()
+            self.assertGreater(len(str(output.resolve())), 260)
+
+            with (
+                mock.patch.object(
+                    extractor,
+                    "render_frame_png",
+                    return_value=b"GENERATED_FRAME",
+                ),
+                mock.patch.object(extractor.sys, "stdout", console),
+            ):
+                result = extractor.extract_frame(
+                    "fake-ffmpeg", clip, output, False, False
+                )
+
+            extended_output = extractor._win32_extended_path(output)
+            try:
+                self.assertEqual(result, 0)
+                with open(extended_output, "rb") as published:
+                    self.assertEqual(published.read(), b"GENERATED_FRAME")
+                self.assertIn("\\u96ea", console.getvalue())
+                self.assertEqual(self.stage_paths(root), [])
+            finally:
+                os.unlink(extended_output)
+
     @unittest.skipUnless(os.name == "nt", "Windows filename aliases are platform-specific")
     def test_windows_device_and_normalization_aliases_are_refused(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -618,8 +665,22 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
                         side_effect=extractor.OutputPolicyError("locked"),
                     )
                 else:
+                    original_exchange = extractor._posix_exchange_names
+                    exchange_calls = 0
+
+                    def fail_publication_exchange(*args: object) -> None:
+                        nonlocal exchange_calls
+                        exchange_calls += 1
+                        # The pre-decode filesystem probe exchanges twice. Fail
+                        # the actual publication exchange, after decode.
+                        if exchange_calls == 3:
+                            raise PermissionError("locked")
+                        original_exchange(*args)
+
                     publish_patch = mock.patch.object(
-                        extractor.os, "replace", side_effect=PermissionError("locked")
+                        extractor,
+                        "_posix_exchange_names",
+                        side_effect=fail_publication_exchange,
                     )
                 with publish_patch:
                     result, stdout, stderr = self.invoke(
@@ -775,6 +836,86 @@ class PosixPublicationTests(OutputPolicyTestCase):
                 extractor._create_output_stage(output)
 
             self.assertEqual(len(swaps), 1)
+            replacement_name, displaced_name = swaps[0]
+            self.assertTrue((root / replacement_name.name).is_dir())
+            self.assertTrue((root / displaced_name.name).is_dir())
+
+    def test_mkdir_then_initial_stat_failure_cleans_exact_private_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output = root / "frame.png"
+            victim = root / "keep.txt"
+            victim.write_bytes(b"KEEP")
+            original_stat = extractor.os.stat
+            failed = False
+
+            def fail_created_directory_stat(
+                path: str | os.PathLike[str],
+                *args: object,
+                **kwargs: object,
+            ) -> os.stat_result:
+                nonlocal failed
+                name = os.fspath(path)
+                if (
+                    not failed
+                    and kwargs.get("dir_fd") is not None
+                    and isinstance(name, str)
+                    and ".atomic-" in name
+                ):
+                    failed = True
+                    raise OSError(errno.EIO, "injected initial stat failure")
+                return original_stat(path, *args, **kwargs)
+
+            with (
+                mock.patch.object(
+                    extractor.os,
+                    "stat",
+                    side_effect=fail_created_directory_stat,
+                ),
+                self.assertRaisesRegex(
+                    extractor.OutputPolicyError,
+                    "injected initial stat failure",
+                ),
+            ):
+                extractor._create_output_stage(output)
+
+            self.assertTrue(failed)
+            self.assertEqual(victim.read_bytes(), b"KEEP")
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_stage_open_then_initial_fstat_failure_cleans_exact_file_and_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output = root / "frame.png"
+            victim = root / "keep.txt"
+            victim.write_bytes(b"KEEP")
+            original_fstat = extractor.os.fstat
+            failed = False
+
+            def fail_created_file_fstat(descriptor: int) -> os.stat_result:
+                nonlocal failed
+                info = original_fstat(descriptor)
+                if not failed and stat.S_ISREG(info.st_mode):
+                    failed = True
+                    raise OSError(errno.EIO, "injected initial file fstat failure")
+                return info
+
+            with (
+                mock.patch.object(
+                    extractor.os,
+                    "fstat",
+                    side_effect=fail_created_file_fstat,
+                ),
+                self.assertRaisesRegex(
+                    extractor.OutputPolicyError,
+                    "injected initial file fstat failure",
+                ),
+            ):
+                extractor._create_output_stage(output)
+
+            self.assertTrue(failed)
+            self.assertEqual(victim.read_bytes(), b"KEEP")
+            self.assertEqual(self.stage_paths(root), [])
 
     def test_private_directory_creation_stays_bound_to_open_target_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -901,14 +1042,25 @@ class PosixPublicationTests(OutputPolicyTestCase):
     def test_force_preserves_existing_owner_group_and_mode(self) -> None:
         if not extractor._posix_descriptor_xattrs_supported():
             self.skipTest("descriptor-bound Linux metadata APIs unavailable")
+        if not hasattr(os, "geteuid") or os.geteuid() != 0:
+            self.skipTest("real distinct-owner preservation requires root")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             clip = root / "accepted-take.mp4"
             output = root / "frame.png"
             clip.write_bytes(b"clip")
             output.write_bytes(b"old frame")
+            distinct_uid = 65534
+            distinct_gid = 65534
+            if distinct_uid == os.geteuid():
+                distinct_uid = 65533
+            if distinct_gid == os.getegid():
+                distinct_gid = 65533
+            os.chown(output, distinct_uid, distinct_gid)
             output.chmod(0o664)
             before = output.stat()
+            self.assertNotEqual(before.st_uid, os.geteuid())
+            self.assertNotEqual(before.st_gid, os.getegid())
             previous_umask = os.umask(0o077)
             try:
                 with mock.patch.object(
@@ -922,9 +1074,107 @@ class PosixPublicationTests(OutputPolicyTestCase):
 
             after = output.stat()
             self.assertEqual(result, 0)
-            self.assertEqual(after.st_uid, before.st_uid)
-            self.assertEqual(after.st_gid, before.st_gid)
+            self.assertEqual(after.st_uid, distinct_uid)
+            self.assertEqual(after.st_gid, distinct_gid)
             self.assertEqual(stat.S_IMODE(after.st_mode), 0o664)
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_holds_verified_target_descriptor_through_decode(self) -> None:
+        if not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("complete Linux replacement contract unavailable")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            original_prepare = extractor._prepare_posix_replacement_metadata
+            snapshots: list[extractor.PosixReplacementSnapshot] = []
+
+            def capture_snapshot(
+                stage: extractor.OutputStage,
+                candidate: Path,
+            ) -> extractor.PosixReplacementSnapshot:
+                snapshot = original_prepare(stage, candidate)
+                snapshots.append(snapshot)
+                return snapshot
+
+            def render(_ffmpeg: str, _clip: Path, _first: bool) -> bytes:
+                self.assertEqual(len(snapshots), 1)
+                opened = os.fstat(snapshots[0].descriptor)
+                self.assertEqual(extractor._identity(opened), snapshots[0].identity)
+                self.assertEqual(output.read_bytes(), b"old frame")
+                return b"GENERATED_FRAME"
+
+            with (
+                mock.patch.object(
+                    extractor,
+                    "_prepare_posix_replacement_metadata",
+                    side_effect=capture_snapshot,
+                ),
+                mock.patch.object(extractor, "render_frame_png", side_effect=render),
+            ):
+                result = extractor.extract_frame(
+                    "fake-ffmpeg", clip, output, False, True
+                )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(output.read_bytes(), b"GENERATED_FRAME")
+            with self.assertRaises(OSError):
+                os.fstat(snapshots[0].descriptor)
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_swap_after_final_verify_is_rolled_back_without_overwrite(self) -> None:
+        if not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("complete Linux replacement contract unavailable")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            old_stash = root / "verified-old-frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"VERIFIED_OLD_FRAME")
+            original_verify = extractor._verify_posix_replacement_metadata
+            attacked = False
+
+            def swap_after_verify(
+                snapshot: extractor.PosixReplacementSnapshot,
+                stage: extractor.OutputStage,
+                candidate: Path,
+            ) -> None:
+                nonlocal attacked
+                original_verify(snapshot, stage, candidate)
+                if not attacked:
+                    attacked = True
+                    candidate.replace(old_stash)
+                    candidate.write_bytes(b"LATE_UNVERIFIED_TARGET")
+
+            with (
+                mock.patch.object(
+                    extractor,
+                    "render_frame_png",
+                    return_value=b"GENERATED_FRAME",
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_verify_posix_replacement_metadata",
+                    side_effect=swap_after_verify,
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertTrue(attacked)
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("destination changed after verification", stdout)
+            self.assertEqual(output.read_bytes(), b"LATE_UNVERIFIED_TARGET")
+            self.assertEqual(old_stash.read_bytes(), b"VERIFIED_OLD_FRAME")
             self.assertEqual(self.stage_paths(root), [])
 
     @unittest.skipUnless(
@@ -1052,7 +1302,7 @@ class PosixPublicationTests(OutputPolicyTestCase):
             self.assertEqual(result, 1, stdout + stderr)
             self.assertIn("security.selinux", stdout)
             self.assertIn("replacement was refused", stdout)
-            render.assert_called_once_with("fake-ffmpeg", clip, False)
+            render.assert_not_called()
             getxattr.assert_not_called()
             self.assertEqual(output.read_bytes(), b"old frame")
             self.assertEqual(self.stage_paths(root), [])
@@ -1174,8 +1424,134 @@ class PosixPublicationTests(OutputPolicyTestCase):
             self.assertEqual(result, 1, stdout + stderr)
             self.assertIn("cannot enumerate extended metadata", stdout)
             self.assertIn("replacement was refused", stdout)
-            render.assert_called_once_with("fake-ffmpeg", clip, False)
+            render.assert_not_called()
             getxattr.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_refuses_failed_trusted_namespace_probe_before_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+
+            with (
+                mock.patch.object(
+                    extractor,
+                    "_posix_descriptor_xattrs_supported",
+                    return_value=True,
+                ),
+                mock.patch.object(extractor.os, "listxattr", return_value=[]),
+                mock.patch.object(
+                    extractor.os,
+                    "setxattr",
+                    side_effect=OSError(errno.EPERM, "trusted namespace denied"),
+                ),
+                mock.patch.object(
+                    extractor,
+                    "render_frame_png",
+                    return_value=b"GENERATED_FRAME",
+                ) as render,
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("privileged extended-metadata namespace", stdout)
+            self.assertIn("replacement was refused", stdout)
+            render.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_refuses_cross_account_writable_directory_before_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            root.chmod(0o777)
+            try:
+                with (
+                    mock.patch.object(
+                        extractor,
+                        "_posix_descriptor_xattrs_supported",
+                        return_value=True,
+                    ),
+                    mock.patch.object(
+                        extractor,
+                        "render_frame_png",
+                        return_value=b"GENERATED_FRAME",
+                    ) as render,
+                ):
+                    result, stdout, stderr = self.invoke(
+                        str(clip),
+                        "--ffmpeg",
+                        "fake-ffmpeg",
+                        "--output",
+                        str(output),
+                        "--force",
+                    )
+            finally:
+                root.chmod(0o700)
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("not writable by group or others", stdout)
+            render.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_refuses_failed_atomic_exchange_probe_before_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+
+            with (
+                mock.patch.object(
+                    extractor,
+                    "_posix_descriptor_xattrs_supported",
+                    return_value=True,
+                ),
+                mock.patch.object(extractor.os, "listxattr", return_value=[]),
+                mock.patch.object(
+                    extractor,
+                    "_prove_linux_privileged_xattr_visibility",
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_posix_exchange_names",
+                    side_effect=OSError(errno.ENOTSUP, "exchange unsupported"),
+                ),
+                mock.patch.object(
+                    extractor,
+                    "render_frame_png",
+                    return_value=b"GENERATED_FRAME",
+                ) as render,
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("identity-safe atomic exchange", stdout)
+            self.assertIn("replacement was refused", stdout)
+            render.assert_not_called()
             self.assertEqual(output.read_bytes(), b"old frame")
             self.assertEqual(self.stage_paths(root), [])
 
@@ -1267,6 +1643,29 @@ class OutputEncodingTests(unittest.TestCase):
         self.assertEqual(encoded, completed.stdout)
 
 
+class ConsoleOutputTests(unittest.TestCase):
+    def test_error_text_is_escaped_for_legacy_console_encoding(self) -> None:
+        class StrictCp1252(io.StringIO):
+            @property
+            def encoding(self) -> str:
+                return "cp1252"
+
+            def write(self, text: str) -> int:
+                text.encode(self.encoding, errors="strict")
+                return super().write(text)
+
+        stream = StrictCp1252()
+        extractor._write_console_line(
+            "output refused for C:\\frames\\雪.png",
+            stream=stream,
+        )
+
+        self.assertEqual(
+            stream.getvalue(),
+            "output refused for C:\\frames\\\\u96ea.png\n",
+        )
+
+
 class PublicationPrimitiveTests(unittest.TestCase):
     def test_linux_capability_proof_reads_the_effective_cap_sys_admin_bit(self) -> None:
         cases = (
@@ -1331,6 +1730,99 @@ class PublicationPrimitiveTests(unittest.TestCase):
         self.assertEqual(link.call_args_list[1].kwargs["src_dir_fd"], 42)
         self.assertFalse(link.call_args_list[1].kwargs["follow_symlinks"])
         verify.assert_called_once_with(stage, require_content=True)
+
+    def test_force_exchange_rolls_back_a_post_exchange_identity_failure(self) -> None:
+        stage = extractor.OutputStage(
+            Path("private/frame.png"),
+            (1, 2),
+            41,
+            directory_descriptor=42,
+            target_directory_descriptor=43,
+        )
+        snapshot = extractor.PosixReplacementSnapshot(
+            descriptor=44,
+            identity=(1, 3),
+            uid=1000,
+            gid=1000,
+            mode=0o640,
+            extended_attributes=(),
+        )
+        with (
+            mock.patch.object(extractor.secrets, "token_hex", return_value="a" * 32),
+            mock.patch.object(extractor, "_verify_posix_force_directory_contract"),
+            mock.patch.object(extractor, "_posix_link_open_stage"),
+            mock.patch.object(extractor, "_verify_posix_replacement_metadata"),
+            mock.patch.object(extractor, "_verify_posix_staged_replacement_metadata"),
+            mock.patch.object(extractor, "_posix_exchange_names") as exchange,
+            mock.patch.object(
+                extractor,
+                "_verify_posix_exchanged_replacement",
+                side_effect=extractor.OutputPolicyError(
+                    "destination changed after verification"
+                ),
+            ),
+            mock.patch.object(extractor, "_rollback_posix_exchange") as rollback,
+            self.assertRaisesRegex(
+                extractor.OutputPolicyError,
+                "destination changed after verification",
+            ),
+        ):
+            extractor._publish_posix_force_exchange(
+                stage,
+                snapshot,
+                Path("frame.png"),
+            )
+
+        exchange.assert_called_once_with("publish-" + "a" * 32 + ".png", 42, "frame.png", 43)
+        rollback.assert_called_once_with(
+            stage,
+            "publish-" + "a" * 32 + ".png",
+            Path("frame.png"),
+        )
+        self.assertFalse(stage.published)
+
+    def test_force_exchange_marks_published_only_after_exact_old_anchor_delete(self) -> None:
+        stage = extractor.OutputStage(
+            Path("private/frame.png"),
+            (1, 2),
+            41,
+            directory_descriptor=42,
+            target_directory_descriptor=43,
+        )
+        snapshot = extractor.PosixReplacementSnapshot(
+            descriptor=44,
+            identity=(1, 3),
+            uid=1000,
+            gid=1000,
+            mode=0o640,
+            extended_attributes=(),
+        )
+        with (
+            mock.patch.object(extractor.secrets, "token_hex", return_value="b" * 32),
+            mock.patch.object(extractor, "_verify_posix_force_directory_contract"),
+            mock.patch.object(extractor, "_posix_link_open_stage"),
+            mock.patch.object(extractor, "_verify_posix_replacement_metadata"),
+            mock.patch.object(extractor, "_verify_posix_staged_replacement_metadata"),
+            mock.patch.object(extractor, "_posix_exchange_names"),
+            mock.patch.object(extractor, "_verify_posix_exchanged_replacement"),
+            mock.patch.object(
+                extractor,
+                "_unlink_open_posix_file",
+                return_value=True,
+            ) as unlink,
+        ):
+            extractor._publish_posix_force_exchange(
+                stage,
+                snapshot,
+                Path("frame.png"),
+            )
+
+        unlink.assert_called_once_with(
+            44,
+            "publish-" + "b" * 32 + ".png",
+            42,
+        )
+        self.assertTrue(stage.published)
 
 
 class PngStreamTests(unittest.TestCase):

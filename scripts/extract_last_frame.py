@@ -31,6 +31,7 @@ final output.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import errno
 import hashlib
 import os
@@ -44,10 +45,9 @@ import tempfile
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, TextIO
 
 if os.name == "nt":
-    import ctypes
     import msvcrt
     from ctypes import wintypes
 
@@ -87,6 +87,17 @@ class OutputPolicyError(RuntimeError):
 
 class FrameExtractionError(RuntimeError):
     """FFmpeg did not yield one complete frame."""
+
+
+def _write_console_line(message: object, *, stream: TextIO | None = None) -> None:
+    """Write without letting a legacy console encoding change program state."""
+
+    target = sys.stdout if stream is None else stream
+    text = str(message)
+    encoding = getattr(target, "encoding", None)
+    if encoding:
+        text = text.encode(encoding, errors="backslashreplace").decode(encoding)
+    target.write(text + "\n")
 
 
 @dataclass
@@ -171,6 +182,24 @@ if os.name == "nt":
 
     class _FileDispositionInfo(ctypes.Structure):
         _fields_ = (("DeleteFile", wintypes.BOOL),)
+
+
+_RENAME_EXCHANGE = 2
+_renameat2 = None
+if sys.platform.startswith("linux"):
+    try:
+        _renameat2 = ctypes.CDLL(None, use_errno=True).renameat2
+    except (AttributeError, OSError):
+        _renameat2 = None
+    else:
+        _renameat2.argtypes = (
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        )
+        _renameat2.restype = ctypes.c_int
 
 
 def _identity(info: os.stat_result) -> tuple[int, int]:
@@ -349,11 +378,56 @@ def _win32_mark_stage_for_deletion(stage: OutputStage) -> bool:
     ):
         return True
     error = ctypes.get_last_error()
-    sys.stderr.write(
+    _write_console_line(
         f"warning: could not delete owned staging handle for {stage.path}: "
-        f"[WinError {error}] {ctypes.FormatError(error).strip()}\n"
+        f"[WinError {error}] {ctypes.FormatError(error).strip()}",
+        stream=sys.stderr,
     )
     return False
+
+
+def _unlink_open_posix_file(
+    descriptor: int,
+    name: str,
+    directory_descriptor: int,
+) -> bool:
+    """Unlink only when the anchored name still denotes the open file."""
+
+    try:
+        opened = os.fstat(descriptor)
+        named = os.stat(
+            name,
+            dir_fd=directory_descriptor,
+            follow_symlinks=False,
+        )
+        if not stat.S_ISREG(opened.st_mode) or _identity(named) != _identity(opened):
+            return False
+        os.unlink(name, dir_fd=directory_descriptor)
+        return True
+    except OSError:
+        return False
+
+
+def _rmdir_open_posix_directory(
+    descriptor: int,
+    name: str,
+    target_directory_descriptor: int,
+) -> bool:
+    """Remove only when the anchored name still denotes the open directory."""
+
+    try:
+        opened = os.fstat(descriptor)
+        named = os.stat(
+            name,
+            dir_fd=target_directory_descriptor,
+            follow_symlinks=False,
+        )
+        if not stat.S_ISDIR(opened.st_mode) or _identity(named) != _identity(opened):
+            return False
+        os.rmdir(name, dir_fd=target_directory_descriptor)
+        return True
+    except OSError:
+        return False
 
 
 def _create_output_stage(out: Path) -> OutputStage:
@@ -391,6 +465,7 @@ def _create_output_stage(out: Path) -> OutputStage:
     descriptor = -1
     directory_path: Path | None = None
     directory_identity: tuple[int, int] | None = None
+    stage_name: str | None = None
     try:
         # Keep the mutable staging name inside a private directory. Directory
         # descriptors then anchor every lookup even if the parent pathname is
@@ -411,6 +486,10 @@ def _create_output_stage(out: Path) -> OutputStage:
             raise OutputPolicyError(
                 "could not allocate a unique private output staging directory"
             )
+        # Record the created name before opening it so a replacement between
+        # mkdir and open is detected. If this first stat itself fails, the
+        # exception path reopens the unpredictable owner-only name and binds
+        # cleanup to that descriptor before removing anything.
         created_directory = os.stat(
             directory_path.name,
             dir_fd=target_descriptor,
@@ -436,6 +515,10 @@ def _create_output_stage(out: Path) -> OutputStage:
         if (
             not stat.S_ISDIR(opened_directory.st_mode)
             or _identity(opened_directory) != directory_identity
+            or (
+                hasattr(os, "geteuid")
+                and opened_directory.st_uid != os.geteuid()
+            )
         ):
             raise OutputPolicyError(
                 "output staging directory changed while opening; refusing publication"
@@ -481,28 +564,74 @@ def _create_output_stage(out: Path) -> OutputStage:
             target_directory_descriptor=target_descriptor,
         )
     except (OSError, OutputPolicyError) as exc:
+        if descriptor >= 0 and directory_descriptor >= 0 and stage_name is not None:
+            _unlink_open_posix_file(
+                descriptor,
+                stage_name,
+                directory_descriptor,
+            )
         if descriptor >= 0:
             try:
                 os.close(descriptor)
             except OSError:
                 pass
+        if (
+            directory_descriptor < 0
+            and directory_path is not None
+            and target_descriptor >= 0
+        ):
+            try:
+                directory_descriptor = os.open(
+                    directory_path.name,
+                    private_directory_flags,
+                    dir_fd=target_descriptor,
+                )
+                opened_directory = os.fstat(directory_descriptor)
+                if (
+                    stat.S_ISDIR(opened_directory.st_mode)
+                    and (
+                        not hasattr(os, "geteuid")
+                        or opened_directory.st_uid == os.geteuid()
+                    )
+                    and stat.S_IMODE(opened_directory.st_mode) == 0o700
+                ):
+                    directory_identity = _identity(opened_directory)
+            except OSError:
+                directory_descriptor = -1
+        if directory_descriptor >= 0 and directory_identity is None:
+            try:
+                opened_directory = os.fstat(directory_descriptor)
+                if (
+                    stat.S_ISDIR(opened_directory.st_mode)
+                    and (
+                        not hasattr(os, "geteuid")
+                        or opened_directory.st_uid == os.geteuid()
+                    )
+                    and stat.S_IMODE(opened_directory.st_mode) == 0o700
+                ):
+                    directory_identity = _identity(opened_directory)
+            except OSError:
+                pass
+        if (
+            directory_descriptor >= 0
+            and directory_path is not None
+            and target_descriptor >= 0
+            and directory_identity is not None
+        ):
+            try:
+                opened_directory = os.fstat(directory_descriptor)
+            except OSError:
+                pass
+            else:
+                if _identity(opened_directory) == directory_identity:
+                    _rmdir_open_posix_directory(
+                        directory_descriptor,
+                        directory_path.name,
+                        target_descriptor,
+                    )
         if directory_descriptor >= 0:
             try:
                 os.close(directory_descriptor)
-            except OSError:
-                pass
-        if directory_path is not None and target_descriptor >= 0:
-            try:
-                named_directory = os.stat(
-                    directory_path.name,
-                    dir_fd=target_descriptor,
-                    follow_symlinks=False,
-                )
-                if (
-                    directory_identity is not None
-                    and _identity(named_directory) == directory_identity
-                ):
-                    os.rmdir(directory_path.name, dir_fd=target_descriptor)
             except OSError:
                 pass
         if target_descriptor >= 0:
@@ -708,11 +837,41 @@ def _posix_descriptor_xattr_api_supported() -> bool:
     )
 
 
+def _posix_atomic_exchange_supported() -> bool:
+    return sys.platform.startswith("linux") and _renameat2 is not None
+
+
 def _posix_descriptor_xattrs_supported() -> bool:
     return (
         _posix_descriptor_xattr_api_supported()
         and _linux_has_effective_cap_sys_admin()
+        and _posix_atomic_exchange_supported()
     )
+
+
+def _posix_exchange_names(
+    left_name: str,
+    left_directory_descriptor: int,
+    right_name: str,
+    right_directory_descriptor: int,
+) -> None:
+    """Atomically exchange two Linux directory entries."""
+
+    if not _posix_atomic_exchange_supported():
+        raise OutputPolicyError(
+            "Linux renameat2(RENAME_EXCHANGE) is unavailable; replacement was refused"
+        )
+    ctypes.set_errno(0)
+    result = _renameat2(
+        left_directory_descriptor,
+        os.fsencode(left_name),
+        right_directory_descriptor,
+        os.fsencode(right_name),
+        _RENAME_EXCHANGE,
+    )
+    if result != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
 
 
 def _require_posix_replacement_metadata_contract(out: Path) -> None:
@@ -727,6 +886,8 @@ def _require_posix_replacement_metadata_contract(out: Path) -> None:
             "the process lacks effective CAP_SYS_ADMIN and cannot prove visibility "
             "of hidden trusted or security metadata"
         )
+    elif not _posix_atomic_exchange_supported():
+        reason = "Linux renameat2(RENAME_EXCHANGE) is unavailable"
     else:
         reason = "the process cannot prove complete extended-metadata visibility"
     raise OutputPolicyError(f"{reason}; refusing --force replacement of {out}")
@@ -814,6 +975,135 @@ def _prove_linux_privileged_xattr_visibility(descriptor: int, out: Path) -> None
         raise OutputPolicyError(f"{failure} for {out}; replacement was refused")
 
 
+def _probe_posix_atomic_exchange(stage: OutputStage, out: Path) -> None:
+    """Prove RENAME_EXCHANGE support on the actual output filesystem."""
+
+    if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
+        raise OutputPolicyError("POSIX publication handles are unavailable")
+    names = (
+        f"exchange-probe-a-{secrets.token_hex(8)}",
+        f".frame-exchange-probe-{secrets.token_hex(8)}",
+    )
+    directories = (
+        stage.directory_descriptor,
+        stage.target_directory_descriptor,
+    )
+    descriptors: list[int] = []
+    identities: list[tuple[int, int]] = []
+    failure: Exception | None = None
+    try:
+        for name, directory_descriptor in zip(names, directories):
+            descriptor = os.open(
+                name,
+                os.O_RDWR
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_CLOEXEC", 0),
+                0o600,
+                dir_fd=directory_descriptor,
+            )
+            descriptors.append(descriptor)
+            identities.append(_identity(os.fstat(descriptor)))
+
+        _posix_exchange_names(
+            names[0],
+            directories[0],
+            names[1],
+            directories[1],
+        )
+        swapped = tuple(
+            _identity(
+                os.stat(
+                    name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            )
+            for name, directory_descriptor in zip(names, directories)
+        )
+        if swapped != (identities[1], identities[0]):
+            raise OutputPolicyError(
+                "Linux atomic-exchange probe returned unexpected identities"
+            )
+
+        _posix_exchange_names(
+            names[0],
+            directories[0],
+            names[1],
+            directories[1],
+        )
+        restored = tuple(
+            _identity(
+                os.stat(
+                    name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            )
+            for name, directory_descriptor in zip(names, directories)
+        )
+        if restored != tuple(identities):
+            raise OutputPolicyError(
+                "Linux atomic-exchange probe could not restore its identities"
+            )
+    except (OSError, OutputPolicyError) as exc:
+        failure = exc
+    finally:
+        for name, directory_descriptor in zip(names, directories):
+            try:
+                named = os.stat(
+                    name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except OSError:
+                continue
+            named_identity = _identity(named)
+            for descriptor, identity in zip(descriptors, identities):
+                if named_identity == identity:
+                    _unlink_open_posix_file(
+                        descriptor,
+                        name,
+                        directory_descriptor,
+                    )
+                    break
+        for descriptor in descriptors:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+    if failure is not None:
+        raise OutputPolicyError(
+            f"the output filesystem cannot perform an identity-safe atomic exchange for "
+            f"{out}; replacement was refused: {failure}"
+        ) from failure
+
+
+def _verify_posix_force_directory_contract(stage: OutputStage, out: Path) -> None:
+    """Require the namespace to exclude cross-account exchange interference."""
+
+    if stage.target_directory_descriptor is None:
+        raise OutputPolicyError("output directory handle is unavailable")
+    try:
+        target_directory = os.fstat(stage.target_directory_descriptor)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot inspect the output directory policy for {out}: {exc}"
+        ) from exc
+    if (
+        not stat.S_ISDIR(target_directory.st_mode)
+        or (
+            hasattr(os, "geteuid")
+            and target_directory.st_uid != os.geteuid()
+        )
+        or stat.S_IMODE(target_directory.st_mode) & 0o022
+    ):
+        raise OutputPolicyError(
+            "--force requires an output directory owned by the effective user "
+            f"and not writable by group or others: {out.parent}"
+        )
+
+
 def _prepare_posix_replacement_metadata(
     stage: OutputStage,
     out: Path,
@@ -824,6 +1114,7 @@ def _prepare_posix_replacement_metadata(
         raise OutputPolicyError("output directory handle is unavailable")
     existing_descriptor = -1
     try:
+        _verify_posix_force_directory_contract(stage, out)
         existing_descriptor = os.open(
             out.name,
             os.O_RDONLY
@@ -843,6 +1134,7 @@ def _prepare_posix_replacement_metadata(
             out,
         )
         _prove_linux_privileged_xattr_visibility(stage.descriptor, out)
+        _probe_posix_atomic_exchange(stage, out)
         if (
             hasattr(os, "fchown")
             and (staged.st_uid != existing.st_uid or staged.st_gid != existing.st_gid)
@@ -929,6 +1221,224 @@ def _verify_posix_replacement_metadata(
         )
 
 
+def _verify_posix_staged_replacement_metadata(
+    snapshot: PosixReplacementSnapshot,
+    stage: OutputStage,
+    out: Path,
+) -> None:
+    """Recheck copied policy after encoding and before namespace mutation."""
+
+    try:
+        staged = os.fstat(stage.descriptor)
+        attributes = _snapshot_posix_extended_attributes(stage.descriptor, out)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot re-verify staged output metadata for {out}: {exc}"
+        ) from exc
+    if (
+        not stat.S_ISREG(staged.st_mode)
+        or _identity(staged) != stage.identity
+        or staged.st_uid != snapshot.uid
+        or staged.st_gid != snapshot.gid
+        or stat.S_IMODE(staged.st_mode) != snapshot.mode
+        or attributes != snapshot.extended_attributes
+    ):
+        raise OutputPolicyError(
+            f"staged output permissions or extended metadata changed before publication: {out}"
+        )
+
+
+def _verify_posix_exchanged_replacement(
+    snapshot: PosixReplacementSnapshot,
+    stage: OutputStage,
+    publish_name: str,
+    out: Path,
+) -> None:
+    """Verify both entries after exchange before the transaction commits."""
+
+    if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
+        raise OutputPolicyError("POSIX publication handles are unavailable")
+    try:
+        displaced = os.stat(
+            publish_name,
+            dir_fd=stage.directory_descriptor,
+            follow_symlinks=False,
+        )
+        published = os.stat(
+            out.name,
+            dir_fd=stage.target_directory_descriptor,
+            follow_symlinks=False,
+        )
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot verify the atomic replacement transaction for {out}: {exc}"
+        ) from exc
+
+    _verify_posix_staged_replacement_metadata(snapshot, stage, out)
+    try:
+        opened = os.fstat(snapshot.descriptor)
+        attributes = _snapshot_posix_extended_attributes(snapshot.descriptor, out)
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot verify displaced output metadata for {out}: {exc}"
+        ) from exc
+    if (
+        not stat.S_ISREG(displaced.st_mode)
+        or _identity(displaced) != snapshot.identity
+        or _identity(opened) != snapshot.identity
+        or opened.st_uid != snapshot.uid
+        or opened.st_gid != snapshot.gid
+        or stat.S_IMODE(opened.st_mode) != snapshot.mode
+        or attributes != snapshot.extended_attributes
+        or not stat.S_ISREG(published.st_mode)
+        or _identity(published) != stage.identity
+    ):
+        raise OutputPolicyError(
+            "the destination changed after verification; the atomic replacement "
+            f"must be rolled back: {out}"
+        )
+
+
+def _rollback_posix_exchange(
+    stage: OutputStage,
+    publish_name: str,
+    out: Path,
+) -> None:
+    """Reverse an uncommitted exchange and preserve the displaced destination."""
+
+    if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
+        raise OutputPolicyError("POSIX rollback handles are unavailable")
+    try:
+        displaced_before = os.stat(
+            publish_name,
+            dir_fd=stage.directory_descriptor,
+            follow_symlinks=False,
+        )
+        published_before = os.stat(
+            out.name,
+            dir_fd=stage.target_directory_descriptor,
+            follow_symlinks=False,
+        )
+        if _identity(published_before) != stage.identity:
+            raise OutputPolicyError(
+                "the destination changed during rollback; displaced output was retained "
+                f"inside the protected staging directory for recovery: {out}"
+            )
+        displaced_identity = _identity(displaced_before)
+        _posix_exchange_names(
+            publish_name,
+            stage.directory_descriptor,
+            out.name,
+            stage.target_directory_descriptor,
+        )
+        restored = os.stat(
+            out.name,
+            dir_fd=stage.target_directory_descriptor,
+            follow_symlinks=False,
+        )
+        staged_anchor = os.stat(
+            publish_name,
+            dir_fd=stage.directory_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            _identity(restored) != displaced_identity
+            or _identity(staged_anchor) != stage.identity
+        ):
+            raise OutputPolicyError(
+                f"atomic replacement rollback could not be verified for {out}"
+            )
+        if not _unlink_open_posix_file(
+            stage.descriptor,
+            publish_name,
+            stage.directory_descriptor,
+        ):
+            raise OutputPolicyError(
+                f"could not remove the exact staged publication anchor after rollback: {out}"
+            )
+    except OutputPolicyError:
+        raise
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"could not roll back the atomic replacement of {out}: {exc}"
+        ) from exc
+
+
+def _publish_posix_force_exchange(
+    stage: OutputStage,
+    replacement: PosixReplacementSnapshot,
+    out: Path,
+) -> None:
+    """Compare, exchange, verify, and commit a Linux force replacement."""
+
+    if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
+        raise OutputPolicyError("POSIX publication handles are unavailable")
+    publish_name = f"publish-{secrets.token_hex(16)}{out.suffix or '.img'}"
+    linked = False
+    exchanged = False
+    try:
+        _verify_posix_force_directory_contract(stage, out)
+        _posix_link_open_stage(
+            stage,
+            publish_name,
+            stage.directory_descriptor,
+        )
+        linked = True
+        _verify_posix_replacement_metadata(replacement, stage, out)
+        _verify_posix_staged_replacement_metadata(replacement, stage, out)
+        _posix_exchange_names(
+            publish_name,
+            stage.directory_descriptor,
+            out.name,
+            stage.target_directory_descriptor,
+        )
+        exchanged = True
+        _verify_posix_exchanged_replacement(
+            replacement,
+            stage,
+            publish_name,
+            out,
+        )
+        if not _unlink_open_posix_file(
+            replacement.descriptor,
+            publish_name,
+            stage.directory_descriptor,
+        ):
+            raise OutputPolicyError(
+                f"could not commit deletion of the exact replaced output for {out}"
+            )
+        linked = False
+        exchanged = False
+    except (OSError, OutputPolicyError) as exc:
+        rollback_error: OutputPolicyError | None = None
+        if exchanged:
+            try:
+                _rollback_posix_exchange(stage, publish_name, out)
+                linked = False
+                exchanged = False
+            except OutputPolicyError as rollback_exc:
+                rollback_error = rollback_exc
+        elif linked:
+            if _unlink_open_posix_file(
+                stage.descriptor,
+                publish_name,
+                stage.directory_descriptor,
+            ):
+                linked = False
+
+        if rollback_error is not None:
+            raise OutputPolicyError(
+                f"atomic replacement failed and rollback also failed for {out}: "
+                f"{rollback_error}"
+            ) from exc
+        if isinstance(exc, OutputPolicyError):
+            raise
+        raise OutputPolicyError(
+            f"could not atomically replace output {out}: {exc}"
+        ) from exc
+    stage.published = True
+
+
 def _write_output_stage(stage: OutputStage, content: bytes) -> None:
     try:
         os.lseek(stage.descriptor, 0, os.SEEK_SET)
@@ -966,7 +1476,10 @@ def _cleanup_output_stage(stage: OutputStage) -> bool:
             except FileNotFoundError:
                 info = None
             except OSError as exc:
-                sys.stderr.write(f"warning: could not inspect staging path {stage.path}: {exc}\n")
+                _write_console_line(
+                    f"warning: could not inspect staging path {stage.path}: {exc}",
+                    stream=sys.stderr,
+                )
                 success = False
                 info = None
             if info is not None:
@@ -975,74 +1488,79 @@ def _cleanup_output_stage(stage: OutputStage) -> bool:
                     or _is_reparse_point(info)
                     or _identity(info) != stage.identity
                 ):
-                    sys.stderr.write(
+                    _write_console_line(
                         "warning: staging path identity changed; leaving unexpected path "
-                        f"untouched: {stage.path}\n"
+                        f"untouched: {stage.path}",
+                        stream=sys.stderr,
                     )
                     success = False
                 else:
                     try:
                         os.unlink(stage.path.name, dir_fd=stage.directory_descriptor)
                     except OSError as exc:
-                        sys.stderr.write(
-                            f"warning: could not remove staging file {stage.path}: {exc}\n"
+                        _write_console_line(
+                            f"warning: could not remove staging file {stage.path}: {exc}",
+                            stream=sys.stderr,
                         )
                         success = False
     finally:
         try:
             os.close(stage.descriptor)
         except OSError as exc:
-            sys.stderr.write(f"warning: could not close staging handle: {exc}\n")
+            _write_console_line(
+                f"warning: could not close staging handle: {exc}",
+                stream=sys.stderr,
+            )
             success = False
         stage.descriptor = -1
         if os.name != "nt":
+            if (
+                stage.directory_path is not None
+                and stage.directory_identity is not None
+                and stage.directory_descriptor is not None
+                and stage.target_directory_descriptor is not None
+            ):
+                if not _rmdir_open_posix_directory(
+                    stage.directory_descriptor,
+                    stage.directory_path.name,
+                    stage.target_directory_descriptor,
+                ):
+                    _write_console_line(
+                        "warning: could not remove protected staging directory "
+                        f"{stage.directory_path}",
+                        stream=sys.stderr,
+                    )
+                    success = False
             if stage.directory_descriptor is not None:
                 try:
                     os.close(stage.directory_descriptor)
                 except OSError as exc:
-                    sys.stderr.write(
-                        f"warning: could not close staging directory handle: {exc}\n"
+                    _write_console_line(
+                        f"warning: could not close staging directory handle: {exc}",
+                        stream=sys.stderr,
                     )
                     success = False
                 stage.directory_descriptor = None
-            if (
-                stage.directory_path is not None
-                and stage.directory_identity is not None
-                and stage.target_directory_descriptor is not None
-            ):
-                try:
-                    named_directory = os.stat(
-                        stage.directory_path.name,
-                        dir_fd=stage.target_directory_descriptor,
-                        follow_symlinks=False,
-                    )
-                    if _identity(named_directory) != stage.directory_identity:
-                        raise OSError("staging directory identity changed")
-                    os.rmdir(
-                        stage.directory_path.name,
-                        dir_fd=stage.target_directory_descriptor,
-                    )
-                except FileNotFoundError:
-                    pass
-                except OSError as exc:
-                    sys.stderr.write(
-                        "warning: could not remove protected staging directory "
-                        f"{stage.directory_path}: {exc}\n"
-                    )
-                    success = False
             if stage.target_directory_descriptor is not None:
                 try:
                     os.close(stage.target_directory_descriptor)
                 except OSError as exc:
-                    sys.stderr.write(
-                        f"warning: could not close output directory handle: {exc}\n"
+                    _write_console_line(
+                        f"warning: could not close output directory handle: {exc}",
+                        stream=sys.stderr,
                     )
                     success = False
                 stage.target_directory_descriptor = None
     return success
 
 
-def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> None:
+def _publish_output(
+    stage: OutputStage,
+    clip: Path,
+    out: Path,
+    force: bool,
+    replacement: PosixReplacementSnapshot | None = None,
+) -> None:
     _verify_output_stage(stage, require_content=True)
     # Re-check immediately before publication. The locked Windows staging name
     # cannot be swapped before the atomic link/handle-rename operations below.
@@ -1084,52 +1602,11 @@ def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> N
     _verify_posix_target_directory(stage, out)
 
     if force:
-        replacement = _prepare_posix_replacement_metadata(stage, out)
-        if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
-            try:
-                os.close(replacement.descriptor)
-            except OSError:
-                pass
-            raise OutputPolicyError("POSIX publication handles are unavailable")
-        publish_name = f"publish-{secrets.token_hex(16)}{out.suffix or '.img'}"
-        try:
-            # Create the rename source from the verified descriptor inside the
-            # private staging directory, then atomically replace the target by
-            # directory descriptor. A swapped stage.path is never consulted.
-            _posix_link_open_stage(
-                stage,
-                publish_name,
-                stage.directory_descriptor,
+        if replacement is None:
+            raise OutputPolicyError(
+                "descriptor-bound replacement metadata snapshot is unavailable"
             )
-            _verify_posix_replacement_metadata(replacement, stage, out)
-            os.replace(
-                publish_name,
-                out.name,
-                src_dir_fd=stage.directory_descriptor,
-                dst_dir_fd=stage.target_directory_descriptor,
-            )
-        except (OSError, OutputPolicyError) as exc:
-            try:
-                linked = os.stat(
-                    publish_name,
-                    dir_fd=stage.directory_descriptor,
-                    follow_symlinks=False,
-                )
-                if _identity(linked) == stage.identity:
-                    os.unlink(publish_name, dir_fd=stage.directory_descriptor)
-            except OSError:
-                pass
-            if isinstance(exc, OutputPolicyError):
-                raise
-            raise OutputPolicyError(f"could not atomically replace output {out}: {exc}") from exc
-        finally:
-            try:
-                os.close(replacement.descriptor)
-            except OSError as exc:
-                sys.stderr.write(
-                    f"warning: could not close replaced output metadata handle: {exc}\n"
-                )
-        stage.published = True
+        _publish_posix_force_exchange(stage, replacement, out)
         return
 
     if stage.target_directory_descriptor is None:
@@ -1288,21 +1765,41 @@ def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) 
     if out.suffix.lower() not in _OUTPUT_CODECS:
         supported = ", ".join(sorted(_OUTPUT_CODECS))
         raise OutputPolicyError(f"unsupported output image suffix {out.suffix!r}; use one of: {supported}")
-    if force and os.name == "posix":
-        # Common unprivileged Linux callers cannot see trusted.* metadata.
-        # Refuse that known-impossible replacement before paying decode cost;
-        # descriptor-bound source and filesystem checks still run at publish.
-        _require_posix_replacement_metadata_contract(out)
-    png_frame = render_frame_png(ffmpeg, clip, first)
-    content = _encode_frame_for_output(ffmpeg, png_frame, out)
-    stage = _create_output_stage(out)
+    stage: OutputStage | None = None
+    replacement: PosixReplacementSnapshot | None = None
     try:
+        if os.name == "posix":
+            if force:
+                # Common unprivileged Linux callers cannot see trusted.*
+                # metadata. Refuse this known-impossible contract before even
+                # allocating staging state.
+                _require_posix_replacement_metadata_contract(out)
+            # On POSIX, namespace support and every auditable replacement
+            # policy check run before decode. Keep both the stage and the old
+            # target descriptor bound across the expensive work.
+            stage = _create_output_stage(out)
+            if force:
+                replacement = _prepare_posix_replacement_metadata(stage, out)
+
+        png_frame = render_frame_png(ffmpeg, clip, first)
+        content = _encode_frame_for_output(ffmpeg, png_frame, out)
+        if stage is None:
+            stage = _create_output_stage(out)
         _write_output_stage(stage, content)
-        _publish_output(stage, clip, out, force)
-        print(f"{'first' if first else 'last'} frame -> {out}")
+        _publish_output(stage, clip, out, force, replacement)
+        _write_console_line(f"{'first' if first else 'last'} frame -> {out}")
         return 0
     finally:
-        _cleanup_output_stage(stage)
+        if replacement is not None:
+            try:
+                os.close(replacement.descriptor)
+            except OSError as exc:
+                _write_console_line(
+                    f"warning: could not close replaced output metadata handle: {exc}",
+                    stream=sys.stderr,
+                )
+        if stage is not None:
+            _cleanup_output_stage(stage)
 
 
 def build_record() -> str:
@@ -1333,11 +1830,11 @@ def run_ffmpeg(
     try:
         return extract_frame(ffmpeg, clip, out, first, force)
     except OutputPolicyError as exc:
-        print(f"output refused: {exc}")
+        _write_console_line(f"output refused: {exc}")
     except FrameExtractionError as exc:
-        print(f"extraction failed for {clip}: {exc}")
+        _write_console_line(f"extraction failed for {clip}: {exc}")
     except OSError as exc:
-        print(f"output failed safely: {exc}")
+        _write_console_line(f"output failed safely: {exc}")
     return 1
 
 
@@ -1410,7 +1907,7 @@ def main() -> int:
 
     clip = Path(args.clip)
     if not clip.exists():
-        print(f"clip not found: {clip}")
+        _write_console_line(f"clip not found: {clip}")
         return 1
     ffmpeg = args.ffmpeg or shutil.which("ffmpeg")
     if not ffmpeg:
@@ -1421,13 +1918,13 @@ def main() -> int:
     try:
         rc = extract_frame(ffmpeg, clip, out, args.first_frame, args.force)
     except OutputPolicyError as exc:
-        print(f"output refused: {exc}")
+        _write_console_line(f"output refused: {exc}")
         return 1
     except FrameExtractionError as exc:
-        print(f"extraction failed for {clip}: {exc}")
+        _write_console_line(f"extraction failed for {clip}: {exc}")
         return 1
     except OSError as exc:
-        print(f"output failed safely: {exc}")
+        _write_console_line(f"output failed safely: {exc}")
         return 1
     if rc == 0 and args.emit_record:
         print()

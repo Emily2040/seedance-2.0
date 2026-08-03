@@ -109,30 +109,38 @@ jobs:
             "$python_path" - <<'PY'
           import os
           import sys
+          import unittest
 
+          os.chdir(os.environ["GITHUB_WORKSPACE"])
           sys.path.insert(0, os.path.join(os.environ["GITHUB_WORKSPACE"], "scripts"))
           import extract_last_frame as extractor
 
           assert extractor._posix_descriptor_xattrs_supported(), (
-              "effective CAP_SYS_ADMIN or descriptor xattr APIs unavailable"
+              "effective CAP_SYS_ADMIN, descriptor xattrs, or atomic exchange unavailable"
           )
+          names = [
+              "tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_force_replaces_only_after_successful_decode",
+              "tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_force_decode_failure_preserves_existing_output",
+              "tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_force_publish_error_preserves_old_output_and_cleans_stage",
+              "tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_force_rechecks_a_late_input_alias",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_verify_to_link_stage_rename_swap_cannot_publish_attacker_inode",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_existing_owner_group_and_mode",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_user_extended_attributes",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_extended_access_acl",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_holds_verified_target_descriptor_through_decode",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_swap_after_final_verify_is_rolled_back_without_overwrite",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_policy_error_after_anchor_link_cleans_owned_anchor",
+              "tests.test_extract_last_frame.RealFfmpegFrameTests.test_existing_output_is_replaced_with_the_true_final_frame",
+          ]
+          suite = unittest.defaultTestLoader.loadTestsFromNames(names)
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if result.skipped:
+              for test, reason in result.skipped:
+                  print(f"PRIVILEGED REGRESSION SKIPPED: {test}: {reason}", file=sys.stderr)
+              raise SystemExit("privileged metadata regressions must not skip")
+          if not result.wasSuccessful():
+              raise SystemExit(1)
           PY
-          sudo env \
-            PYTHONDONTWRITEBYTECODE=1 \
-            PYTHONPYCACHEPREFIX=/tmp/seedance-root-pycache \
-            SEEDANCE_TEST_FFMPEG="$SEEDANCE_TEST_FFMPEG" \
-            SEEDANCE_CI_FFMPEG_PROVISIONED=1 \
-            "$python_path" -m unittest -v \
-            tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_force_replaces_only_after_successful_decode \
-            tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_force_decode_failure_preserves_existing_output \
-            tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_force_publish_error_preserves_old_output_and_cleans_stage \
-            tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_force_rechecks_a_late_input_alias \
-            tests.test_extract_frame_output_policy.PosixPublicationTests.test_verify_to_link_stage_rename_swap_cannot_publish_attacker_inode \
-            tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_existing_owner_group_and_mode \
-            tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_user_extended_attributes \
-            tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_extended_access_acl \
-            tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_policy_error_after_anchor_link_cleans_owned_anchor \
-            tests.test_extract_last_frame.RealFfmpegFrameTests.test_existing_output_is_replaced_with_the_true_final_frame
       - name: Compile Python files
         run: python -m compileall scripts tests
       - name: Check diff whitespace
@@ -178,7 +186,9 @@ jobs:
         run: >-
           python -m unittest -v
           tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_near_name_max_stage_is_bounded_before_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_long_unicode_output_publishes_with_cp1252_console
           tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_device_and_normalization_aliases_are_refused
+          tests.test_extract_frame_output_policy.ConsoleOutputTests.test_error_text_is_escaped_for_legacy_console_encoding
           tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_prewrite_hardlink_swap_cannot_redirect_generated_bytes
           tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_verify_to_publish_swap_is_blocked_by_exclusive_handle
           tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_collision_after_final_validation_is_atomically_refused
