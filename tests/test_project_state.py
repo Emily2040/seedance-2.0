@@ -149,6 +149,132 @@ class ProjectStateTests(unittest.TestCase):
                     result.stdout,
                 )
 
+    def test_first_standalone_contract_must_not_declare_parent(self) -> None:
+        contract_path = (
+            ROOT / "examples" / "sequence-airport-arrival" / "clip-01-contract.json"
+        )
+        with tempfile.TemporaryDirectory(prefix="contract-root-test-") as temp_dir:
+            repo = Path(temp_dir)
+            fixture_dir = repo / "examples" / "sequence"
+            fixture_dir.mkdir(parents=True)
+            (fixture_dir / "project-state.json").write_text(
+                BASE_PROJECT_STATE.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            contract["parent_clip_id"] = "external_parent"
+            (fixture_dir / "clip-01-contract.json").write_text(
+                json.dumps(contract), encoding="utf-8"
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts" / "project_state_check.py"),
+                    str(repo),
+                    "--strict",
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "first clip sequence_index 1 must not declare parent_clip_id",
+            result.stdout,
+        )
+
+    def test_standalone_terminal_contract_enforces_observed_endpoint(self) -> None:
+        contract_path = (
+            ROOT / "examples" / "sequence-airport-arrival" / "clip-01-contract.json"
+        )
+        cases = (
+            ("accepted", "missing", None, "accepted clip clip_01 observed_end_state must be a non-empty object"),
+            ("accepted", "empty", {}, "accepted clip clip_01 observed_end_state must be a non-empty object"),
+            ("accepted_with_deviation", "null", None, "accepted clip clip_01 observed_end_state must be a non-empty object"),
+            ("rejected", "missing", None, "rejected clip clip_01 observed_end_state must be null"),
+            ("rejected", "object", {"summary": "must not publish"}, "rejected clip clip_01 observed_end_state must be null"),
+        )
+        for status, endpoint_mode, endpoint, expected in cases:
+            with (
+                self.subTest(status=status, endpoint=endpoint_mode),
+                tempfile.TemporaryDirectory(prefix="contract-endpoint-test-") as temp_dir,
+            ):
+                repo = Path(temp_dir)
+                fixture_dir = repo / "examples" / "sequence"
+                fixture_dir.mkdir(parents=True)
+                (fixture_dir / "project-state.json").write_text(
+                    BASE_PROJECT_STATE.read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                contract["status"] = status
+                if endpoint_mode == "missing":
+                    contract.pop("observed_end_state", None)
+                else:
+                    contract["observed_end_state"] = endpoint
+                (fixture_dir / "clip-01-contract.json").write_text(
+                    json.dumps(contract),
+                    encoding="utf-8",
+                )
+
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "scripts" / "project_state_check.py"),
+                        str(repo),
+                        "--strict",
+                    ],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                )
+
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn(expected, result.stdout)
+
+    def test_standalone_terminal_contract_accepts_status_consistent_endpoint(self) -> None:
+        contract_path = (
+            ROOT / "examples" / "sequence-airport-arrival" / "clip-01-contract.json"
+        )
+        for status, endpoint in (
+            ("accepted", {"summary": "usable endpoint"}),
+            ("accepted_with_deviation", {"summary": "usable endpoint"}),
+            ("rejected", None),
+        ):
+            with (
+                self.subTest(status=status),
+                tempfile.TemporaryDirectory(prefix="contract-endpoint-control-") as temp_dir,
+            ):
+                repo = Path(temp_dir)
+                fixture_dir = repo / "examples" / "sequence"
+                fixture_dir.mkdir(parents=True)
+                (fixture_dir / "project-state.json").write_text(
+                    BASE_PROJECT_STATE.read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                contract["status"] = status
+                contract["observed_end_state"] = endpoint
+                (fixture_dir / "clip-01-contract.json").write_text(
+                    json.dumps(contract),
+                    encoding="utf-8",
+                )
+
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "scripts" / "project_state_check.py"),
+                        str(repo),
+                        "--strict",
+                    ],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_rejected_canonical_take_cannot_leave_clip_accepted(self) -> None:
         def reject_history(project: dict) -> None:
             project["take_history"][-1]["verdict"] = "reject"
