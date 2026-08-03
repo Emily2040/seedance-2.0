@@ -577,6 +577,133 @@ class AdversarialMutationTests(unittest.TestCase):
         )
         self.assertGreaterEqual(purpose_score[0], 3.0, purpose_score)
 
+    def test_target_alternatives_inherit_shared_heads_and_attributes(self) -> None:
+        cases = (
+            (
+                "Create an animation of a surgeon named Mara or Nia.",
+                (
+                    frozenset({"surgeon", "mara"}),
+                    frozenset({"surgeon", "nia"}),
+                ),
+            ),
+            (
+                "Create an animation of a red emergency surgeon or nurse.",
+                (
+                    frozenset({"red", "emergency", "surgeon"}),
+                    frozenset({"red", "emergency", "nurse"}),
+                ),
+            ),
+            (
+                "Create an animation of a masked surgeon or busker.",
+                (
+                    frozenset({"mask", "surgeon"}),
+                    frozenset({"mask", "busker"}),
+                ),
+            ),
+            (
+                "Create an animation of a surgeon named Mara or a nurse named Nia.",
+                (
+                    frozenset({"surgeon", "mara"}),
+                    frozenset({"nurse", "nia"}),
+                ),
+            ),
+            (
+                "Create an animation of a masked surgeon or a nurse.",
+                (
+                    frozenset({"mask", "surgeon"}),
+                    frozenset({"nurse"}),
+                ),
+            ),
+        )
+        for brief, expected in cases:
+            with self.subTest(brief=brief):
+                self.assertEqual(
+                    stress.explicit_target_requirement_groups(brief),
+                    expected,
+                )
+
+        named = "Create an animation of a surgeon named Mara or Nia."
+        for complete in (
+            "Animate a surgeon named Mara.",
+            "Animate a surgeon named Nia.",
+        ):
+            with self.subTest(complete=complete):
+                self.assertGreaterEqual(
+                    stress.score_brief_traceability(named, complete)[0],
+                    3.0,
+                )
+        missing_head = stress.score_brief_traceability(
+            named, "Animate Nia standing alone."
+        )
+        self.assertLess(missing_head[0], 3.0, missing_head)
+
+        shared_modifiers = (
+            "Create an animation of a red emergency surgeon or nurse."
+        )
+        complete_nurse = stress.score_brief_traceability(
+            shared_modifiers, "Animate a red emergency nurse."
+        )
+        plain_nurse = stress.score_brief_traceability(
+            shared_modifiers, "Animate a nurse."
+        )
+        self.assertGreaterEqual(complete_nurse[0], 3.0, complete_nurse)
+        self.assertLess(plain_nurse[0], 3.0, plain_nurse)
+
+    def test_relational_object_alternatives_keep_subject_and_action(self) -> None:
+        shared = (
+            "Create an animation of a surgeon holding a red case or blue bag."
+        )
+        self.assertEqual(
+            stress.explicit_target_requirement_clauses(shared),
+            ((
+                frozenset({"surgeon", "hold", "red", "case"}),
+                frozenset({"surgeon", "hold", "blue", "bag"}),
+            ),),
+        )
+        for complete in (
+            "Animate a surgeon holding a red case.",
+            "Animate a surgeon holding a blue bag.",
+        ):
+            with self.subTest(complete=complete):
+                self.assertGreaterEqual(
+                    stress.score_brief_traceability(shared, complete)[0],
+                    3.0,
+                )
+        for incomplete in (
+            "Animate a surgeon beside a blue bag.",
+            "Animate a nurse holding a blue bag.",
+        ):
+            with self.subTest(incomplete=incomplete):
+                self.assertLess(
+                    stress.score_brief_traceability(shared, incomplete)[0],
+                    3.0,
+                )
+
+        full_subject_branches = (
+            "Create an animation of a surgeon holding a red case or a nurse "
+            "holding a blue bag."
+        )
+        self.assertEqual(
+            stress.explicit_target_requirement_clauses(full_subject_branches),
+            ((
+                frozenset({"surgeon", "hold", "red", "case"}),
+                frozenset({"nurse", "hold", "blue", "bag"}),
+            ),),
+        )
+
+        three_objects = (
+            "Create an animation of a surgeon holding a red case, blue bag, or "
+            "green box."
+        )
+        self.assertEqual(
+            stress.explicit_target_requirement_clauses(three_objects),
+            ((
+                frozenset({"surgeon", "hold", "red", "case"}),
+                frozenset({"surgeon", "hold", "blue", "bag"}),
+                frozenset({"surgeon", "hold", "green", "box"}),
+            ),),
+        )
+
     def test_target_evidence_must_be_affirmative_and_unquoted(self) -> None:
         brief = "Create an animation of a masked surgeon."
         invalid_prompts = (
@@ -604,6 +731,62 @@ class AdversarialMutationTests(unittest.TestCase):
                 self.assertTrue({"mask", "surgeon"}.issubset(terms), terms)
                 score = stress.score_brief_traceability(brief, prompt)
                 self.assertGreaterEqual(score[0], 3.0, score)
+
+    def test_postpositive_exclusions_and_balanced_quotes_are_not_evidence(self) -> None:
+        brief = "Create an animation of a masked surgeon."
+        excluded = (
+            "The masked surgeon is not shown; animate a masked busker.",
+            "The masked surgeon never appears; animate a masked busker.",
+            "The masked surgeon is absent; animate a masked busker.",
+            "The masked surgeon is deliberately omitted; animate a masked busker.",
+            "The masked surgeon is left out; animate a masked busker.",
+            "Omit the masked surgeon and animate a masked busker.",
+        )
+        for prompt in excluded:
+            with self.subTest(exclusion=prompt):
+                score = stress.score_brief_traceability(brief, prompt)
+                self.assertLess(score[0], 3.0, score)
+
+        quoted_forms = (
+            ("«", "»"),
+            ("„", "“"),
+            ("「", "」"),
+            ("『", "』"),
+            ("《", "》"),
+            ("〈", "〉"),
+            ("〝", "〞"),
+            ("‚", "‘"),
+            ("‹", "›"),
+            ("``", "``"),
+            ("```", "```"),
+            ("`", "`"),
+        )
+        for opener, closer in quoted_forms:
+            with self.subTest(quote=f"{opener}{closer}"):
+                prompt = (
+                    "Animate a masked busker whose placard reads "
+                    f"{opener}masked surgeon{closer}."
+                )
+                score = stress.score_brief_traceability(brief, prompt)
+                self.assertLess(score[0], 3.0, score)
+
+        later_affirmative = (
+            "A masked surgeon is absent from the poster, but a masked surgeon "
+            "enters the animation."
+        )
+        self.assertTrue(
+            {"mask", "surgeon"}.issubset(
+                stress.affirmative_trace_terms(later_affirmative)
+            )
+        )
+
+        non_exclusion_compounds = (
+            ("An absent-minded surgeon enters.", "surgeon"),
+            ("A missing-link researcher enters.", "researcher"),
+        )
+        for prompt, expected in non_exclusion_compounds:
+            with self.subTest(compound=prompt):
+                self.assertIn(expected, stress.affirmative_trace_terms(prompt))
 
     def test_reference_descriptions_cannot_steal_mandatory_output_targets(self) -> None:
         brief = (
@@ -638,6 +821,37 @@ class AdversarialMutationTests(unittest.TestCase):
         )
         self.assertEqual(
             stress.explicit_target_requirement_clauses(required_after_asset),
+            ((frozenset({"mask", "surgeon"}),),),
+        )
+
+        embedded_request_forms = (
+            "Generate from the reference image of a cobalt palette an animation "
+            "of a masked surgeon.",
+            "Build from @Image1, which is an image of a cobalt palette, an "
+            "animation of a masked surgeon.",
+            "Produce using the source video of a cobalt palette a portrait of "
+            "a masked surgeon.",
+            "Use @Image1 (a reference image of a cobalt palette) to create an "
+            "animation of a masked surgeon.",
+            "Using the uploaded portrait of a cobalt busker, render a video of "
+            "a masked surgeon.",
+            "Use a reference image featuring a cobalt palette to create an "
+            "animation featuring a masked surgeon.",
+            "Reference portrait depicting a cobalt busker; create a shot "
+            "depicting a masked surgeon.",
+        )
+        for embedded in embedded_request_forms:
+            with self.subTest(embedded=embedded):
+                self.assertEqual(
+                    stress.explicit_target_requirement_clauses(embedded),
+                    ((frozenset({"mask", "surgeon"}),),),
+                )
+
+        requested_reference_output = (
+            "Create a reference image depicting a masked surgeon."
+        )
+        self.assertEqual(
+            stress.explicit_target_requirement_clauses(requested_reference_output),
             ((frozenset({"mask", "surgeon"}),),),
         )
 
@@ -694,6 +908,71 @@ class AdversarialMutationTests(unittest.TestCase):
             stress.explicit_target_requirement_clauses(repeated_request),
             stress.explicit_target_requirement_clauses(comma_list),
         )
+
+    def test_comma_listed_subjects_remain_individually_mandatory(self) -> None:
+        brief = (
+            "Create an animation of a masked surgeon, a red nurse, and a blue "
+            "busker."
+        )
+        self.assertEqual(
+            stress.explicit_target_requirement_clauses(brief),
+            (
+                (frozenset({"mask", "surgeon"}),),
+                (frozenset({"red", "nurse"}),),
+                (frozenset({"blue", "busker"}),),
+            ),
+        )
+        complete = stress.score_brief_traceability(
+            brief,
+            "Animate a masked surgeon, a red nurse, and a blue busker.",
+        )
+        missing_middle = stress.score_brief_traceability(
+            brief,
+            "Animate a masked surgeon and a blue busker.",
+        )
+        self.assertGreaterEqual(complete[0], 3.0, complete)
+        self.assertLess(missing_middle[0], 3.0, missing_middle)
+
+        alternatives = (
+            "Create an animation of either a surgeon, a nurse, or a busker."
+        )
+        self.assertEqual(
+            stress.explicit_target_requirement_clauses(alternatives),
+            ((
+                frozenset({"surgeon"}),
+                frozenset({"nurse"}),
+                frozenset({"busker"}),
+            ),),
+        )
+        location_control = (
+            "Create an animation of a masked surgeon, in a red warehouse, "
+            "opening a blue case."
+        )
+        self.assertEqual(
+            stress.explicit_target_requirement_clauses(location_control),
+            ((frozenset({"mask", "surgeon"}),),),
+        )
+
+        comma_only = (
+            "Create an animation of a masked surgeon, red nurse, blue busker."
+        )
+        self.assertEqual(
+            stress.explicit_target_requirement_clauses(comma_only),
+            (
+                (frozenset({"mask", "surgeon"}),),
+                (frozenset({"red", "nurse"}),),
+                (frozenset({"blue", "busker"}),),
+            ),
+        )
+        no_oxford_comma = (
+            "Create an animation of a masked surgeon, a red nurse and a blue "
+            "busker."
+        )
+        no_oxford_score = stress.score_brief_traceability(
+            no_oxford_comma,
+            "Animate only a masked surgeon and a red nurse.",
+        )
+        self.assertLess(no_oxford_score[0], 3.0, no_oxford_score)
 
     def test_traceability_rejects_an_action_reversal_despite_shared_nouns(self) -> None:
         brief = "A courier opens the red case in the warehouse."
@@ -965,6 +1244,163 @@ class AdversarialMutationTests(unittest.TestCase):
             stress.reversed_action_requirements(brief, positive_control),
             (),
         )
+        self.assertGreaterEqual(
+            stress.score_brief_traceability(brief, positive_control)[0],
+            3.0,
+        )
+        for guaranteed in (
+            "A courier never fails to open the red case.",
+            "A courier cannot fail to open the red case.",
+        ):
+            with self.subTest(guaranteed=guaranteed):
+                self.assertTrue(stress.action_mentions(guaranteed)[0][3])
+
+    def test_action_negation_ends_before_a_later_finite_positive_event(self) -> None:
+        brief = "A courier opens the red case."
+        negative_prefixes = (
+            "cannot open",
+            "can't open",
+            "fails to open",
+            "refuses to open",
+            "is unable to open",
+            "is denied permission to open",
+            "is denied opening",
+            "is forbidden from opening",
+            "is prevented from opening",
+        )
+        for prefix in negative_prefixes:
+            with self.subTest(prefix=prefix):
+                prompt = f"A courier {prefix} the red case and closes it."
+                mentions = stress.action_mentions(prompt)
+                self.assertTrue(
+                    any(
+                        action == "open" and not positive
+                        for action, _, _, positive, _ in mentions
+                    ),
+                    mentions,
+                )
+                self.assertTrue(
+                    any(
+                        action == "close" and positive
+                        for action, _, _, positive, _ in mentions
+                    ),
+                    mentions,
+                )
+                self.assertIn(
+                    "open->close",
+                    stress.reversed_action_requirements(brief, prompt),
+                )
+
+        shared_scope = (
+            "A courier cannot open or close the red case.",
+            "A courier cannot open and close the red case.",
+            "A courier proceeds without opening or closing the red case.",
+            "The red case cannot be opened or closed.",
+            "A courier cannot open the case and carefully close it.",
+        )
+        for prompt in shared_scope:
+            with self.subTest(shared_scope=prompt):
+                mentions = stress.action_mentions(prompt)
+                self.assertTrue(mentions, prompt)
+                self.assertTrue(
+                    all(not positive for _, _, _, positive, _ in mentions),
+                    mentions,
+                )
+
+        finite_resets = (
+            "The case cannot be opened and is closed by a courier.",
+            "A courier cannot open the case and will close it.",
+            "A courier cannot open the case and does close it.",
+            "A courier cannot open the case and workers close it.",
+        )
+        for prompt in finite_resets:
+            with self.subTest(finite_reset=prompt):
+                mentions = stress.action_mentions(prompt)
+                self.assertTrue(
+                    any(
+                        action == "close" and positive
+                        for action, _, _, positive, _ in mentions
+                    ),
+                    mentions,
+                )
+
+    def test_every_positive_brief_action_must_survive_on_its_object(self) -> None:
+        brief = "A courier opens the red case in the warehouse."
+        substitutions = (
+            "A courier carries the red case in the warehouse.",
+            "A courier looks at the red case in the warehouse.",
+            "The red case remains untouched in the warehouse.",
+            "A courier is denied opening the red case in the warehouse.",
+            "A courier is forbidden from opening the red case in the warehouse.",
+            "A courier tries to open the red case in the warehouse.",
+            "A courier refuses opening the red case in the warehouse.",
+            "A courier might open the red case in the warehouse.",
+            "Opening the red case is denied in the warehouse.",
+            "Opening the red case is not allowed in the warehouse.",
+        )
+        for prompt in substitutions:
+            with self.subTest(prompt=prompt):
+                score = stress.score_brief_traceability(brief, prompt)
+                self.assertEqual(score[0], 0.0, score)
+                self.assertIn("positive action missing", score[1])
+
+        supplied = stress.score_brief_traceability(
+            brief,
+            "In the warehouse, a courier carefully opens the bright red case.",
+        )
+        self.assertGreaterEqual(supplied[0], 3.0, supplied)
+
+        polite_imperatives = (
+            "Could you open the red case in the warehouse?",
+            "Would you open the red case in the warehouse?",
+        )
+        for prompt in polite_imperatives:
+            with self.subTest(polite=prompt):
+                mentions = stress.action_mentions(prompt)
+                self.assertTrue(mentions and mentions[0][3], mentions)
+                self.assertEqual(
+                    stress.missing_positive_action_requirements(brief, prompt),
+                    (),
+                )
+
+    def test_action_shaped_nouns_and_states_do_not_create_requirements(self) -> None:
+        controls = (
+            "Man waits at a desert bus stop",
+            "Closed door to open doorway transition",
+            "Opening scene at a bus stop",
+            "A sealed case rests on the bench.",
+            "The glass door is open.",
+        )
+        for brief in controls:
+            with self.subTest(brief=brief):
+                self.assertEqual(stress.action_mentions(brief), ())
+
+        predicates = (
+            "Open the red case.",
+            "Please open the red case.",
+            "Couriers open red cases.",
+            "The red case opened suddenly.",
+            "The courier stopped the cart.",
+            "The courier raised the flag.",
+            "The courier arrived at the station.",
+            "Closed doors open.",
+        )
+        for brief in predicates:
+            with self.subTest(brief=brief):
+                self.assertTrue(stress.action_mentions(brief), brief)
+
+        self.assertTrue(
+            stress.missing_positive_action_requirements(
+                "The red door opens.",
+                "The blue case opens.",
+            )
+        )
+        self.assertFalse(
+            stress.missing_positive_action_requirements(
+                "The red door opens.",
+                "The bright red door opens.",
+            )
+        )
 
     def test_action_objects_require_requested_discriminative_modifiers(self) -> None:
         brief = "A courier opens the red case."
@@ -1001,6 +1437,79 @@ class AdversarialMutationTests(unittest.TestCase):
             "open->close",
             stress.reversed_action_requirements(long_red_object, long_blue_reversal),
         )
+
+    def test_postnominal_descriptors_preserve_the_object_head(self) -> None:
+        cases = (
+            (
+                "A courier opens the case painted red.",
+                "A courier closes the case painted red.",
+                {"red", "case"},
+            ),
+            (
+                "A courier opens the case marked red.",
+                "A courier closes the case marked red.",
+                {"red", "case"},
+            ),
+            (
+                "A courier opens the case with a red stripe.",
+                "A courier closes the case with a red stripe.",
+                {"red", "stripe", "case"},
+            ),
+            (
+                "A courier opens case number seven.",
+                "A courier closes case number seven.",
+                {"seven", "case"},
+            ),
+            (
+                "A courier opens the case bearing a red stripe.",
+                "A courier closes the case bearing a red stripe.",
+                {"red", "stripe", "case"},
+            ),
+            (
+                "A courier opens a case labeled SEVEN.",
+                "A courier closes a case labeled SEVEN.",
+                {"seven", "case"},
+            ),
+            (
+                "A courier opens the case that is painted red.",
+                "A courier closes the case that is painted red.",
+                {"red", "case"},
+            ),
+            (
+                "A courier opens the case which bears a red stripe.",
+                "A courier closes the case which bears a red stripe.",
+                {"red", "stripe", "case"},
+            ),
+        )
+        for brief, reversal, expected_terms in cases:
+            with self.subTest(brief=brief):
+                identity = stress.action_mentions(brief)[0][4]
+                self.assertEqual(identity[-1], "case", identity)
+                self.assertTrue(expected_terms.issubset(identity), identity)
+                self.assertIn(
+                    "open->close",
+                    stress.reversed_action_requirements(brief, reversal),
+                )
+
+        descriptor_mismatches = (
+            (
+                "A courier opens the case painted red.",
+                "A courier opens the case painted blue.",
+            ),
+            (
+                "A courier opens the case with a red stripe.",
+                "A courier opens the case with a blue stripe.",
+            ),
+            (
+                "A courier opens case number seven.",
+                "A courier opens case number eight.",
+            ),
+        )
+        for brief, prompt in descriptor_mismatches:
+            with self.subTest(prompt=prompt):
+                self.assertTrue(
+                    stress.missing_positive_action_requirements(brief, prompt)
+                )
 
     def test_sequencing_cues_separate_phases_but_while_creates_conflicts(self) -> None:
         safe = " ".join([
@@ -1087,6 +1596,14 @@ class AdversarialMutationTests(unittest.TestCase):
             "Camera stays locked off. Next shot, camera pushes in.",
             "Camera stays locked off. Shot 2: camera pushes in.",
             "Camera stays locked off. Cut to camera pushing in.",
+            "Camera stays locked off. Second shot, camera pushes in.",
+            "Camera stays locked off. Shot two: camera pushes in.",
+            "Camera stays locked off. In second shot, camera pushes in.",
+            "Camera stays locked off. Next scene, camera pushes in.",
+            "Camera stays locked off. Scene 2: camera pushes in.",
+            "Camera stays locked off. Cut. Camera pushes in.",
+            "Camera stays locked off. Following shot, camera pushes in.",
+            "Camera stays locked off. Take 2: camera pushes in.",
         )
         for prompt in shot_boundaries:
             with self.subTest(shot_boundary=prompt):
@@ -1100,10 +1617,14 @@ class AdversarialMutationTests(unittest.TestCase):
 
         simultaneous_controls = (
             "Next shot, camera stays locked off while camera pushes in.",
+            "Second shot, camera stays locked off while camera pushes in.",
             "Camera stays locked off while camera pushes in. Next shot, the courier exits.",
             "Camera stays locked off. Next shot, camera pushes in at the same time.",
             "Camera stays locked off. The next shot glass sits beside camera pushing in.",
+            "Camera stays locked off. The second shot glass sits beside camera pushing in.",
+            "Camera stays locked off. Scene 2 camera pushes in at the same time.",
             'Camera stays locked off as the editor says "Cut to" before camera pushes in.',
+            'Camera stays locked off as the editor says "Cut." before camera pushes in.',
         )
         for prompt in simultaneous_controls:
             with self.subTest(simultaneous_control=prompt):
