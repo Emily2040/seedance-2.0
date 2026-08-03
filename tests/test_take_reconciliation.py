@@ -602,6 +602,11 @@ class TakeReconciliationTests(unittest.TestCase):
                 review = self.review()
                 project["project_id"] = f"project_{suffix}"
                 review["project_id"] = f"project_{suffix}"
+                for clip in project["clips"]:
+                    for snapshot in clip.get(
+                        "contract_authoring_state_snapshots", []
+                    ):
+                        snapshot["project_id"] = project["project_id"]
                 project_path = directory / f"project-state-{suffix}.json"
                 review_path = directory / f"clip-{suffix}-take-review.json"
                 project_path.write_text(json.dumps(project), encoding="utf-8")

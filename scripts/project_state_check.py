@@ -2078,6 +2078,12 @@ def looks_like_clip_contract(path: Path, obj: object | None = None) -> bool:
 def sequence_paths(root: Path) -> list[Path]:
     paths = []
     for path in (root / "examples").rglob("*.json") if (root / "examples").exists() else []:
+        if is_take_review_path(path):
+            # Review candidates are loaded once, after project discovery, by
+            # the bounded shared review index.  Generic discovery must not
+            # pre-read bytes that the authority reader may reject by size or
+            # file identity.
+            continue
         try:
             obj = load_json(path)
         except Exception:
