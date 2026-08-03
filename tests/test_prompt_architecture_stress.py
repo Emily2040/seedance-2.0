@@ -293,6 +293,50 @@ class AdversarialMutationTests(unittest.TestCase):
             findings,
         )
 
+    def test_small_requirement_swaps_are_materially_different_without_category_lists(self) -> None:
+        prompt = "A courier opens a case in the warehouse and sets it on the bench."
+        swaps = (
+            ("red", "blue"),
+            ("silk", "leather"),
+            ("50mm", "85mm"),
+            ("dawn", "midnight"),
+        )
+        for left_value, right_value in swaps:
+            with self.subTest(left=left_value, right=right_value):
+                left = f"Courier opens the {left_value} case in the warehouse"
+                right = f"Courier opens the {right_value} case in the warehouse"
+                self.assertTrue(stress.bounded_requirement_delta(left, right))
+                self.assertTrue(stress.materially_different_briefs(left, right))
+                findings = stress.corpus_duplicate_findings([
+                    {
+                        "id": "requirement-a",
+                        "arm": "skill_formula",
+                        "mode": "T2V",
+                        "brief": left,
+                        "prompt": prompt,
+                    },
+                    {
+                        "id": "requirement-b",
+                        "arm": "skill_formula",
+                        "mode": "T2V",
+                        "brief": right,
+                        "prompt": prompt,
+                    },
+                ])
+                self.assertTrue(any("duplicate prompt" in item for item in findings), findings)
+
+        added_requirement = (
+            "Courier opens the case in the warehouse",
+            "Courier opens the red case in the warehouse",
+        )
+        self.assertTrue(stress.materially_different_briefs(*added_requirement))
+
+        grammar_only = (
+            "Courier opens a case in the warehouse",
+            "The courier opens the case in the warehouse",
+        )
+        self.assertFalse(stress.materially_different_briefs(*grammar_only))
+
     def test_duplicate_prompt_for_the_same_brief_is_not_called_cross_case_drift(self) -> None:
         prompt = next(r["prompt"] for r in shipped_corpus() if r["id"] == "b09-s")
         records = [
@@ -347,6 +391,27 @@ class AdversarialMutationTests(unittest.TestCase):
         )
         self.assertLess(wrong_edit_layer[0], 3.0, wrong_edit_layer)
         self.assertLess(wrong_transition_subject[0], 3.0, wrong_transition_subject)
+
+    def test_structural_contracts_cannot_replace_target_evidence(self) -> None:
+        brief = "Create a three-shot 2D animation of a surgeon."
+        wrong = stress.score_brief_traceability(
+            brief,
+            "Create a three-shot 2D animation of a busker.",
+        )
+        correct = stress.score_brief_traceability(
+            brief,
+            "Storyboard three cuts in two-dimensional animation showing the surgeon.",
+        )
+        self.assertLess(wrong[0], 3.0, wrong)
+        self.assertIn("surgeon", wrong[1])
+        self.assertGreaterEqual(correct[0], 3.0, correct)
+
+        secondary_attributes = stress.score_brief_traceability(
+            "Create a three-shot 2D animation of an adult surgeon in a red coat.",
+            "Create a three-shot 2D animation of an adult busker in a red coat.",
+        )
+        self.assertLess(secondary_attributes[0], 3.0, secondary_attributes)
+        self.assertIn("surgeon", secondary_attributes[1])
 
     def test_sequencing_cues_separate_phases_but_while_creates_conflicts(self) -> None:
         safe = " ".join([
@@ -458,6 +523,53 @@ class AdversarialMutationTests(unittest.TestCase):
         )
         findings = stress.contradiction_findings(pair_local)
         self.assertTrue(any(finding.startswith("camera:") for finding in findings), findings)
+
+    def test_each_conflicting_pair_needs_its_own_sequence_boundary(self) -> None:
+        masked = (
+            "Camera orbits, then camera pushes in during the static framing."
+        )
+        findings = stress.contradiction_findings(masked)
+        self.assertTrue(any(finding.startswith("camera:") for finding in findings), findings)
+
+        fully_phased = (
+            "Camera orbits, then camera pushes in, then static framing holds."
+        )
+        self.assertFalse(
+            any(
+                finding.startswith("camera:")
+                for finding in stress.contradiction_findings(fully_phased)
+            )
+        )
+
+        sound_masked = (
+            "Sound: room tone, then absolute silence with rain at the same time."
+        )
+        findings = stress.contradiction_findings(sound_masked)
+        self.assertTrue(any(finding.startswith("sound:") for finding in findings), findings)
+
+    def test_quoted_silence_words_are_dialogue_not_audio_directives(self) -> None:
+        valid_dialogue = (
+            'The actor says "No sound?" Sound: room tone and rain.',
+            "The actor says 'silence, please.' Sound: room tone and rain.",
+            "The actor says \u201cAbsolute silence?\u201d Sound: room tone and rain.",
+            "The actor says \u2018No sound?\u2019 Sound: room tone and rain.",
+        )
+        for prompt in valid_dialogue:
+            with self.subTest(prompt=prompt):
+                self.assertFalse(
+                    any(
+                        finding.startswith("sound:")
+                        for finding in stress.contradiction_findings(prompt)
+                    ),
+                    stress.contradiction_findings(prompt),
+                )
+
+        actual_directive = (
+            'The actor says "No sound?" Sound: room tone and absolute silence '
+            "at the same time."
+        )
+        findings = stress.contradiction_findings(actual_directive)
+        self.assertTrue(any(finding.startswith("sound:") for finding in findings), findings)
 
     def test_reference_exclusions_do_not_count_as_positive_lighting(self) -> None:
         prompts = (

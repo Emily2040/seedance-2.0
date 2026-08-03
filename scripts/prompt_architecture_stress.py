@@ -209,6 +209,7 @@ TOKEN_ALIASES = {
     "sprout": "sprout",
     "seed": "sprout",
     "mov": "move",
+    "notic": "notice",
     "driv": "drive",
     "preserv": "preserve",
     "receiv": "receive",
@@ -228,13 +229,13 @@ COUNT_WORDS = {
     )
 }
 COUNTED_SHOT_REQUEST = re.compile(
-    r"\b(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+"
+    r"\b(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)[-\s]+"
     r"(?:cuts?|shots?|panels?)\b",
     re.I,
 )
 NUMBERED_SHOT_MARKER = re.compile(r"\b(?:shot|cut|panel)\s*(?P<count>\d+)\b", re.I)
 ANIMATION_CONTRACT = re.compile(
-    r"\b(?:2d|two[- ]dimensional|animat\w*|storyboards?|animation boards?)\b",
+    r"\b(?:animation boards?|storyboards?|2d|two[- ]dimensional|animat\w*)\b",
     re.I,
 )
 FROM_TO_CONTRACT = re.compile(r"\bfrom\b[^.!?]{0,100}\bto\b", re.I)
@@ -262,6 +263,32 @@ SOURCE_PRESERVATION_CONTRACT = re.compile(
     r"\bchange\s+only\b|\bonly\s+the\s+(?:light|lighting|exposure|grade)\b",
     re.I,
 )
+
+# Format words may prove a shot/animation contract, but they are not evidence
+# that the requested subject survived. Keep this deliberately small and derive
+# most entries from the actual matched contract spans instead of maintaining a
+# fixture-specific noun list.
+TARGET_CONTROL_TERMS = {
+    "another", "brief", "fix", "good", "known", "one", "otherwise", "short",
+    "sequence", "state", "without",
+}
+EXPLICIT_TARGET_INTRO = re.compile(
+    r"\b(?:of|featuring|depicting|showing|starring|about)\s+"
+    r"(?P<target>[^,.;!?]{1,80})",
+    re.I,
+)
+TARGET_PHRASE_BREAKS = {
+    "after", "as", "at", "before", "during", "in", "inside", "near", "on",
+    "outside", "that", "under", "when", "where", "which", "while", "who",
+    "with",
+}
+TARGET_ACTION_BREAKS = {
+    "arrive", "carry", "close", "cross", "depart", "drag", "drive", "enter",
+    "exit", "float", "hang", "hold", "inspect", "kneel", "lean", "lift",
+    "look", "lower", "move", "notice", "open", "play", "pour", "protect",
+    "push", "raise", "reach", "read", "receive", "rest", "run", "scrub",
+    "sit", "slide", "stand", "step", "turn", "wait", "walk", "wear",
+}
 
 DIRECT_SEQUENCE_BRIDGE = re.compile(
     r"^\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*(?:and\s+)?"
@@ -466,6 +493,63 @@ def trace_terms(text: str) -> frozenset[str]:
     })
 
 
+@lru_cache(maxsize=4096)
+def structural_contract_terms(text: str) -> frozenset[str]:
+    """Return words whose only evidence value is a format contract.
+
+    Counts and animation-medium labels are scored separately by
+    ``production_trace_contracts``. Reusing them as target evidence lets a
+    three-shot animation of one subject falsely validate another subject.
+    """
+    terms: set[str] = set()
+    for pattern in (COUNTED_SHOT_REQUEST, NUMBERED_SHOT_MARKER, ANIMATION_CONTRACT):
+        for match in pattern.finditer(text):
+            terms.update(lexical_tokens(match.group(0)))
+    return frozenset(terms)
+
+
+@lru_cache(maxsize=4096)
+def target_trace_terms(text: str) -> frozenset[str]:
+    """Return non-structural brief material that the prompt must carry."""
+    return frozenset(
+        trace_terms(text) - structural_contract_terms(text) - TARGET_CONTROL_TERMS
+    )
+
+
+@lru_cache(maxsize=4096)
+def explicit_target_requirements(text: str) -> frozenset[str]:
+    """Extract a bounded target phrase from common production-brief grammar.
+
+    This is intentionally lexical rather than pretending to be a full parser.
+    It gives an explicit ``animation of X`` / ``take of X`` target independent
+    authority over format contracts and stops at the first action or scene
+    modifier. Hyphenated modifiers remain requirements alongside the head noun.
+    """
+    match = EXPLICIT_TARGET_INTRO.search(text)
+    if not match:
+        return frozenset()
+    requirements: list[str] = []
+    structural = structural_contract_terms(text)
+    for token in lexical_tokens(match.group("target")):
+        if requirements and (
+            token in TARGET_PHRASE_BREAKS or token in TARGET_ACTION_BREAKS
+        ):
+            break
+        if (
+            token in FUNCTION_WORDS
+            or token in PRODUCTION_GENERIC
+            or token in TRACE_GENERIC
+            or token in TARGET_CONTROL_TERMS
+            or token in structural
+            or len(token) <= 2
+        ):
+            continue
+        requirements.append(token)
+        if len(requirements) == 3:
+            break
+    return frozenset(requirements)
+
+
 def shot_count_contract(text: str) -> int | None:
     match = COUNTED_SHOT_REQUEST.search(text)
     if match:
@@ -506,14 +590,37 @@ def semantic_trace_anchors(brief: str, prompt: str) -> tuple[str, ...]:
 
 
 def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
-    """Require brief-specific material, not shared production vocabulary."""
-    brief_terms = trace_terms(brief)
+    """Require target evidence independently from structural contracts."""
+    brief_terms = target_trace_terms(brief)
     prompt_terms = trace_terms(prompt)
     matched = sorted(brief_terms & prompt_terms)
     semantic = semantic_trace_anchors(brief, prompt)
+    explicit_targets = explicit_target_requirements(brief)
+    missing_targets = sorted(explicit_targets - prompt_terms)
+    if missing_targets:
+        return 0.0, (
+            "requested target changed or disappeared; missing: "
+            + ", ".join(missing_targets)
+        )
     evidence_count = len(matched) + len(semantic)
     if not brief_terms and not semantic:
         return 0.0, "brief has no usable non-generic material to trace"
+    if brief_terms and not matched:
+        return 0.0, (
+            "no target-specific material survives; expected one of: "
+            + ", ".join(sorted(brief_terms)[:6])
+        )
+    if not brief_terms:
+        if len(semantic) >= 2:
+            return 4.0, (
+                "brief trace carried through (contracts: "
+                + ", ".join(semantic)
+                + ")"
+            )
+        return 2.0, (
+            "only one production contract survives and no target evidence is "
+            f"available: {semantic[0]}"
+        )
     if evidence_count >= 2:
         parts = []
         if matched:
@@ -625,23 +732,47 @@ def position_is_quoted(text: str, position: int) -> bool:
     )
 
 
-def positive_families(text: str, families: dict[str, re.Pattern[str]]) -> set[str]:
-    present: set[str] = set()
-    for name, pattern in families.items():
-        if any(not match_is_negated(text, match.start()) for match in pattern.finditer(text)):
-            present.add(name)
-    return present
+def named_positive_directives(
+    text: str,
+    families: dict[str, re.Pattern[str]],
+    *,
+    ignore_quoted: bool = False,
+) -> list[tuple[str, int, int]]:
+    directives = {
+        (name, match.start(), match.end())
+        for name, pattern in families.items()
+        for match in pattern.finditer(text)
+        if not match_is_negated(text, match.start())
+        and not (ignore_quoted and position_is_quoted(text, match.start()))
+    }
+    return sorted(directives, key=lambda item: (item[1], item[2], item[0]))
+
+
+def positive_families(
+    text: str,
+    families: dict[str, re.Pattern[str]],
+    *,
+    ignore_quoted: bool = False,
+) -> set[str]:
+    return {
+        name
+        for name, _, _ in named_positive_directives(
+            text, families, ignore_quoted=ignore_quoted
+        )
+    }
 
 
 def positive_positions(
     text: str,
     families: dict[str, re.Pattern[str]],
+    *,
+    ignore_quoted: bool = False,
 ) -> list[tuple[int, int]]:
     return [
-        (match.start(), match.end())
-        for pattern in families.values()
-        for match in pattern.finditer(text)
-        if not match_is_negated(text, match.start())
+        (start, end)
+        for _, start, end in named_positive_directives(
+            text, families, ignore_quoted=ignore_quoted
+        )
     ]
 
 
@@ -649,220 +780,201 @@ def named_positive_positions(
     text: str,
     families: dict[str, re.Pattern[str]],
     names: set[str],
+    *,
+    ignore_quoted: bool = False,
 ) -> list[tuple[int, int]]:
     return positive_positions(
         text,
         {name: pattern for name, pattern in families.items() if name in names},
+        ignore_quoted=ignore_quoted,
     )
+
+
+def directive_pair_is_sequenced(
+    text: str,
+    left: tuple[int, int],
+    right: tuple[int, int],
+) -> bool:
+    (left_start, left_end), (right_start, right_end) = sorted((left, right))
+    # A simultaneity qualifier can follow the final directive, outside its
+    # regex match. Inspect only the remainder of its local clause so an
+    # unrelated cue in a later sentence cannot poison a valid transition.
+    local_end_match = re.search(r"[.;!?\n]", text[right_end:])
+    local_end = (
+        right_end + local_end_match.start()
+        if local_end_match
+        else len(text)
+    )
+    if TRAILING_SIMULTANEOUS_CUE.fullmatch(text[right_end:local_end]):
+        return False
+    bridge = text[left_end:right_start]
+    if DIRECT_SIMULTANEOUS_BRIDGE.fullmatch(bridge):
+        return False
+    if DIRECT_SEQUENCE_BRIDGE.fullmatch(bridge):
+        return True
+    # Permit an explicit event boundary only when it culminates in a cue
+    # directly attached to the later directive. An unrelated "then/before"
+    # elsewhere between the directives is not enough.
+    if EVENT_SEQUENCE_BRIDGE.fullmatch(bridge):
+        return True
+
+    prefix = text[max(0, left_start - 32):left_start]
+    if re.search(r"\bfrom\b\s*$", prefix, re.I) and re.fullmatch(
+        r"\s*to\s*", bridge, re.I
+    ):
+        return True
+    return False
 
 
 def directives_are_sequenced(
     text: str,
     positions: list[tuple[int, int]],
 ) -> bool:
-    if len(positions) < 2:
-        return False
+    """Return true only when every adjacent directive changes phase."""
     ordered = sorted(set(positions))
-    # A simultaneity qualifier can follow the final directive, outside its
-    # regex match. Inspect only the remainder of its local clause so an
-    # unrelated cue in a later sentence cannot poison a valid transition.
-    local_end_match = re.search(r"[.;!?\n]", text[ordered[-1][1]:])
-    local_end = (
-        ordered[-1][1] + local_end_match.start()
-        if local_end_match
-        else len(text)
+    if len(ordered) < 2:
+        return False
+    return all(
+        directive_pair_is_sequenced(text, left, right)
+        for left, right in zip(ordered, ordered[1:])
     )
-    if TRAILING_SIMULTANEOUS_CUE.fullmatch(text[ordered[-1][1]:local_end]):
-        return False
-    adjacent = list(zip(ordered, ordered[1:]))
-    if any(
-        DIRECT_SIMULTANEOUS_BRIDGE.fullmatch(text[left_end:right_start])
-        for (_, left_end), (right_start, _) in adjacent
-    ):
-        return False
-    for (left_start, left_end), (right_start, _) in adjacent:
-        bridge = text[left_end:right_start]
-        if DIRECT_SEQUENCE_BRIDGE.fullmatch(bridge):
-            return True
-        # Permit an explicit event boundary only when it culminates in a cue
-        # directly attached to the later directive. An unrelated "then/before"
-        # elsewhere between the directives is not enough.
-        if EVENT_SEQUENCE_BRIDGE.fullmatch(bridge):
-            return True
-
-        prefix = text[max(0, left_start - 32):left_start]
-        if re.search(r"\bfrom\b\s*$", prefix, re.I) and re.fullmatch(
-            r"\s*to\s*", bridge, re.I
-        ):
-            return True
-    return False
 
 
-def contradiction_findings(prompt: str) -> list[str]:
-    """Find explicit, local incompatibilities without interpreting creative intent."""
+def directive_phase_families(
+    text: str,
+    directives: list[tuple[str, int, int]],
+) -> list[set[str]]:
+    """Partition directives by explicit pair-local sequence boundaries."""
+    if not directives:
+        return []
+    ordered = sorted(set(directives), key=lambda item: (item[1], item[2], item[0]))
+    phases: list[set[str]] = [{ordered[0][0]}]
+    previous = (ordered[0][1], ordered[0][2])
+    for name, start, end in ordered[1:]:
+        current = (start, end)
+        if directive_pair_is_sequenced(text, previous, current):
+            phases.append({name})
+        else:
+            phases[-1].add(name)
+        previous = current
+    return phases
+
+
+def scoped_contradiction_findings(text: str) -> list[str]:
+    """Find conflicts inside pair-local directive phases for one text scope."""
     findings: list[str] = []
-    sentences = [part.strip() for part in re.split(r"(?<=[.!?;])\s+", prompt) if part.strip()]
 
-    for sentence in sentences:
-        camera = positive_families(sentence, CAMERA_FAMILIES)
-        dynamic = camera - {"locked"}
-        camera_sequenced = directives_are_sequenced(
-            sentence,
-            positive_positions(sentence, CAMERA_FAMILIES),
-        )
-        push_pull_sequenced = directives_are_sequenced(
-            sentence,
-            named_positive_positions(
-                sentence, CAMERA_FAMILIES, {"push", "pull"}
-            ),
-        )
-        if "locked" in camera and dynamic and not camera_sequenced:
+    camera_directives = named_positive_directives(
+        text, CAMERA_FAMILIES, ignore_quoted=True
+    )
+    for phase in directive_phase_families(text, camera_directives):
+        dynamic = phase - {"locked"}
+        if "locked" in phase and dynamic:
             findings.append(
                 "camera: locked/static framing conflicts with simultaneous "
                 + ", ".join(sorted(dynamic))
             )
-        elif len(dynamic) >= 3 and not camera_sequenced:
+            break
+        if len(dynamic) >= 3:
             findings.append(
                 "camera: three or more simultaneous move families are stacked: "
                 + ", ".join(sorted(dynamic))
             )
-        elif {"push", "pull"}.issubset(dynamic) and not push_pull_sequenced:
+            break
+        if {"push", "pull"}.issubset(dynamic):
             findings.append("camera: simultaneous push-in and pull-out directives")
+            break
 
-        light_sources = positive_families(sentence, LIGHT_SOURCE_FAMILIES)
-        light_sequenced = directives_are_sequenced(
-            sentence,
-            positive_positions(sentence, LIGHT_SOURCE_FAMILIES),
-        )
-        exclusive_light = re.search(
-            r"\b(single|sole|only)\b[^.;]{0,80}\b(light|lit|sources?)\b",
-            sentence,
-            re.I,
-        )
-        if len(light_sources) >= 2 and exclusive_light and not light_sequenced:
-            findings.append(
-                "light: an exclusive source claim names multiple sources: "
-                + ", ".join(sorted(light_sources))
-            )
-        elif len(light_sources) >= 3 and not light_sequenced:
-            findings.append(
-                "light: three or more unphased source families are stacked: "
-                + ", ".join(sorted(light_sources))
-            )
-
-        sound_layers = positive_families(sentence, SOUND_LAYER_FAMILIES)
-        has_silence = bool(SILENCE.search(sentence))
-        sound_positions = positive_positions(sentence, SOUND_LAYER_FAMILIES)
-        sound_positions.extend((match.start(), match.end()) for match in SILENCE.finditer(sentence))
-        sound_sequenced = directives_are_sequenced(sentence, sound_positions)
-        if has_silence and sound_layers and not sound_sequenced:
-            findings.append(
-                "sound: silence conflicts with simultaneous layers: "
-                + ", ".join(sorted(sound_layers))
-            )
-        elif len(sound_layers) >= 5 and not sound_sequenced:
-            findings.append(
-                "sound: five or more unphased layers are stacked: "
-                + ", ".join(sorted(sound_layers))
-            )
-
-        action_positions = [
-            (match.start(), match.end())
-            for pattern in (STILL_ACTION, CONTINUING_ACTION)
-            for match in pattern.finditer(sentence)
-        ]
-        action_sequenced = directives_are_sequenced(sentence, action_positions)
-        if STILL_ACTION.search(sentence) and CONTINUING_ACTION.search(sentence) and not action_sequenced:
-            findings.append("action: stillness conflicts with continuing locomotion")
-
-    # Punctuation must not turn simultaneous incompatible directives into a
-    # false negative. Re-run the hard conflicts across the whole prompt while
-    # still honoring explicit phase cues between the directives.
-    global_camera = positive_families(prompt, CAMERA_FAMILIES)
-    global_dynamic = global_camera - {"locked"}
-    global_camera_sequenced = directives_are_sequenced(
-        prompt, positive_positions(prompt, CAMERA_FAMILIES)
+    light_directives = named_positive_directives(
+        text, LIGHT_SOURCE_FAMILIES, ignore_quoted=True
     )
-    global_push_pull_sequenced = directives_are_sequenced(
-        prompt,
-        named_positive_positions(prompt, CAMERA_FAMILIES, {"push", "pull"}),
-    )
-    if (
-        "locked" in global_camera
-        and global_dynamic
-        and not global_camera_sequenced
-        and not any(finding.startswith("camera:") for finding in findings)
-    ):
-        findings.append(
-            "camera: locked/static framing conflicts with unphased "
-            + ", ".join(sorted(global_dynamic))
-        )
-    elif (
-        len(global_dynamic) >= 3
-        and not global_camera_sequenced
-        and not any(finding.startswith("camera:") for finding in findings)
-    ):
-        findings.append(
-            "camera: three or more unphased move families are stacked: "
-            + ", ".join(sorted(global_dynamic))
-        )
-    elif (
-        {"push", "pull"}.issubset(global_dynamic)
-        and not global_push_pull_sequenced
-        and not any(finding.startswith("camera:") for finding in findings)
-    ):
-        findings.append("camera: unphased push-in and pull-out directives")
-
-    global_lights = positive_families(prompt, LIGHT_SOURCE_FAMILIES)
-    global_light_positions = positive_positions(prompt, LIGHT_SOURCE_FAMILIES)
-    global_exclusive_light = re.search(
+    light_phases = directive_phase_families(text, light_directives)
+    exclusive_light = re.search(
         r"\b(single|sole|only)\b[^.;]{0,80}\b(light|lit|sources?)\b",
-        prompt,
+        text,
         re.I,
     )
-    if (
-        len(global_lights) >= 2
-        and global_exclusive_light
-        and not directives_are_sequenced(prompt, global_light_positions)
-        and not any(finding.startswith("light:") for finding in findings)
-    ):
-        findings.append(
-            "light: an exclusive source claim conflicts with another unphased source: "
-            + ", ".join(sorted(global_lights))
-        )
+    for phase in light_phases:
+        if len(phase) >= 2 and exclusive_light:
+            findings.append(
+                "light: an exclusive source claim names simultaneous sources: "
+                + ", ".join(sorted(phase))
+            )
+            break
+        if len(phase) >= 3:
+            findings.append(
+                "light: three or more unphased source families are stacked: "
+                + ", ".join(sorted(phase))
+            )
+            break
 
-    global_sound = positive_families(prompt, SOUND_LAYER_FAMILIES)
-    global_sound_positions = positive_positions(prompt, SOUND_LAYER_FAMILIES)
-    global_sound_positions.extend((match.start(), match.end()) for match in SILENCE.finditer(prompt))
-    if (
-        SILENCE.search(prompt)
-        and global_sound
-        and not directives_are_sequenced(prompt, global_sound_positions)
-        and not any(finding.startswith("sound:") for finding in findings)
-    ):
-        findings.append(
-            "sound: silence conflicts with unphased layers: "
-            + ", ".join(sorted(global_sound))
-        )
+    sound_directives = named_positive_directives(
+        text, SOUND_LAYER_FAMILIES, ignore_quoted=True
+    )
+    sound_directives.extend(
+        ("silence", match.start(), match.end())
+        for match in SILENCE.finditer(text)
+        if not match_is_negated(text, match.start())
+        and not position_is_quoted(text, match.start())
+    )
+    for phase in directive_phase_families(text, sound_directives):
+        layers = phase - {"silence"}
+        if "silence" in phase and layers:
+            findings.append(
+                "sound: silence conflicts with simultaneous layers: "
+                + ", ".join(sorted(layers))
+            )
+            break
+        if len(layers) >= 5:
+            findings.append(
+                "sound: five or more unphased layers are stacked: "
+                + ", ".join(sorted(layers))
+            )
+            break
 
-    global_action_positions = [
-        (match.start(), match.end())
-        for pattern in (STILL_ACTION, CONTINUING_ACTION)
-        for match in pattern.finditer(prompt)
+    action_families = {
+        "still": STILL_ACTION,
+        "continuing": CONTINUING_ACTION,
+    }
+    action_directives = named_positive_directives(
+        text, action_families, ignore_quoted=True
+    )
+    if any(
+        {"still", "continuing"}.issubset(phase)
+        for phase in directive_phase_families(text, action_directives)
+    ):
+        findings.append("action: stillness conflicts with continuing locomotion")
+    return findings
+
+
+def contradiction_findings(prompt: str) -> list[str]:
+    """Find explicit incompatibilities without interpreting creative intent."""
+    findings: list[str] = []
+    sentences = [
+        part.strip()
+        for part in re.split(r"(?<=[.!?;])\s+", prompt)
+        if part.strip()
     ]
-    if (
-        STILL_ACTION.search(prompt)
-        and CONTINUING_ACTION.search(prompt)
-        and not directives_are_sequenced(prompt, global_action_positions)
-        and not any(finding.startswith("action:") for finding in findings)
-    ):
-        findings.append("action: stillness conflicts with unphased continuing locomotion")
+    for sentence in sentences:
+        findings.extend(scoped_contradiction_findings(sentence))
+
+    # Punctuation must not hide an unphased pair. Re-run across the whole
+    # prompt, but add at most one finding per category already found locally.
+    for finding in scoped_contradiction_findings(prompt):
+        category = finding.split(":", 1)[0] + ":"
+        if not any(existing.startswith(category) for existing in findings):
+            findings.append(finding)
 
     added_audio = any(
         not match_is_negated(prompt, match.start())
+        and not position_is_quoted(prompt, match.start())
         for match in ADDED_AUDIO.finditer(prompt)
     )
-    if UNCHANGED_AUDIO.search(prompt) and added_audio:
+    unchanged_audio = any(
+        not position_is_quoted(prompt, match.start())
+        for match in UNCHANGED_AUDIO.finditer(prompt)
+    )
+    if unchanged_audio and added_audio:
         findings.append("sound: preserve-source-audio and add-new-audio directives conflict")
     return list(dict.fromkeys(findings))
 
@@ -975,10 +1087,53 @@ def opposite_action_mutation(left: str, right: str) -> bool:
 
 
 @lru_cache(maxsize=8192)
+def bounded_requirement_delta(left: str, right: str) -> bool:
+    """Detect a small changed production requirement in otherwise shared briefs.
+
+    A Jaccard cutoff is weakest exactly where duplicate detection matters most:
+    one changed subject, material, colour, location, lens, duration, or other
+    content token inside a heavily shared brief. Compare the residual content
+    requirements directly, including one-sided additions, while excluding
+    grammar and delivery adverbs. This is category-agnostic rather than a colour
+    vocabulary or a fixture exception.
+    """
+    ignored = (
+        FUNCTION_WORDS
+        | PRODUCTION_GENERIC
+        | TRACE_GENERIC
+        | TARGET_CONTROL_TERMS
+        | ACTION_MODIFIERS
+    )
+
+    def requirements(text: str) -> Counter[str]:
+        return Counter(
+            token
+            for token in lexical_tokens(text)
+            if token not in ignored
+            and not token.endswith("ly")
+            and (len(token) > 2 or token.isdigit())
+        )
+
+    left_counts = requirements(left)
+    right_counts = requirements(right)
+    shared = left_counts & right_counts
+    left_delta = left_counts - right_counts
+    right_delta = right_counts - left_counts
+    residual_count = sum(left_delta.values()) + sum(right_delta.values())
+    if residual_count == 0 or len(shared) < 2:
+        return False
+    # Larger rewrites are already handled by the set-similarity branch below;
+    # this branch exists for the narrow high-overlap blind spot.
+    return residual_count <= 4
+
+
+@lru_cache(maxsize=8192)
 def materially_different_briefs(left: str, right: str) -> bool:
     if normalized_prompt(left) == normalized_prompt(right):
         return False
     if opposite_action_mutation(left, right):
+        return True
+    if bounded_requirement_delta(left, right):
         return True
     left_terms = trace_terms(left) or set(lexical_tokens(left))
     right_terms = trace_terms(right) or set(lexical_tokens(right))
