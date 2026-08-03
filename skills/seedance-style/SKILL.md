@@ -21,6 +21,8 @@ metadata:
 
 # seedance-style
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Translate style requests into production descriptors. Style should describe medium, texture, palette, lens or render behavior, period cues, and composition. Do not rely on studio, franchise, artist, or living-creator names when a safer descriptive style can preserve the user's intent.
 
 ## Intent

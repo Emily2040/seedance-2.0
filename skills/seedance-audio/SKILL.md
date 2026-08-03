@@ -21,6 +21,8 @@ metadata:
 
 # seedance-audio
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use this for dialogue, lip-sync, sound layers, music, ambience, beat-sync, audio-reference mapping, desync troubleshooting, or sound-driven visual timing. Audio should support the visible beat instead of becoming a second competing prompt.
 
 Load [audio-guide](../../references/audio-guide.md) for how the audio model behaves, per-language dialogue capacity, the voice-reference lip-sync path, beat-sync, desync repair, audio-reference conflicts, and multi-character workarounds. Load [audio-post-delivery](../../references/audio-post-delivery.md) when the user needs stems, M&E, dubbing, loudness, sync, mix, or delivery guidance.

@@ -20,6 +20,8 @@ metadata:
 
 # seedance-lighting
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Lighting should describe physical sources and transitions, not abstract beauty. A useful lighting prompt tells the model where the light comes from, its color temperature, how shadows behave, what atmosphere catches the light, and whether the light changes during the clip.
 
 Load [color-pipeline-aces](../../references/color-pipeline-aces.md) when the user asks for ACES, HDR/SDR, show look, grade, LUT, CDL, product color, or professional color handoff. Load [directing-engine](../../references/directing-engine.md) for lighting as emotion - ratio, key direction, color temperature, motivation, and light that changes with the dramatic turn - so the light expresses the scene's intention rather than just illuminating it.

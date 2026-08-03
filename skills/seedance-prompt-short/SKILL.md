@@ -20,6 +20,8 @@ metadata:
 
 # seedance-prompt-short
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Compress Seedance prompts without losing the production signal. A short prompt still needs mode, subject, action, camera, light, sound when useful, and constraints. Remove filler before removing physical details.
 
 Load the [Director's Read](../../references/directors-read.md) before compression, even when the requested output is only one line. Narrative, story, and performance briefs complete its ten-field internal record first; non-narrative utility, product-only, abstract, VFX, and ambient briefs use its two-line utility intent and refusal without fabricated drama. Short means compressed output, not skipped judgment.

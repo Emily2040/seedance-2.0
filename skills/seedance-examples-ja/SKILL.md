@@ -20,6 +20,8 @@ metadata:
 
 # seedance-examples-ja
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use Japanese examples as native prompt patterns, not translated English templates. Preserve reference tags exactly: `@Image1`, `@Image2`, `@Video1`, and `@Audio1` remain unchanged inside Japanese sentences.
 
 ## Intent

@@ -4676,11 +4676,16 @@ def stage_validated_install(
     contract: PayloadContract,
     *,
     force: bool = False,
+    authorized_destination: ExistingInstallClassification | None = None,
 ) -> Path:
     if not isinstance(contract, PayloadContract):
         raise TypeError("staging requires a frozen payload contract")
     if type(force) is not bool:
         raise TypeError("force flag must be boolean")
+    if authorized_destination is not None and not isinstance(
+        authorized_destination, ExistingInstallClassification
+    ):
+        raise TypeError("authorized destination classification has an unsupported type")
     repo_root = _absolute_lexical(repo_root)
     skills_dir, destination = _canonical_install_paths(
         skills_dir,
@@ -4706,6 +4711,14 @@ def stage_validated_install(
     if _path_exists(stage) or _path_exists(quarantine):
         raise RuntimeError("random transaction artifact name already exists")
     classification = _classify_existing_install_bound(destination, contract)
+    if (
+        authorized_destination is not None
+        and classification != authorized_destination
+    ):
+        raise RuntimeError(
+            "destination changed after its replacement policy was authorized; "
+            "preserving the current path"
+        )
     replacement_state = classification.state
     old_snapshot = classification.snapshot
     if replacement_state not in REPLACEMENT_STATES:
@@ -4954,6 +4967,7 @@ def main() -> int:
                 skills_dir,
                 contract,
                 force=args.force,
+                authorized_destination=classification,
             )
             promote_staged_install(
                 stage,

@@ -22,6 +22,8 @@ metadata:
 
 # seedance-copyright
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use this before finalizing prompts involving protected IP, named brands, public figures, private people, voices, logos, songs, studios, exact scenes, or lookalike character requests. The goal is not to dilute the idea; the goal is to preserve the creative function with original, authorized, and safer production language.
 
 ## Intent

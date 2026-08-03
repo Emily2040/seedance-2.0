@@ -147,6 +147,33 @@ class InstallPayloadTests(unittest.TestCase):
                 stage, skills_dir / installer.SKILL_NAME, skills_dir, contract
             )
 
+    def test_staging_is_bound_to_the_authorized_destination_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            destination = skills_dir / installer.SKILL_NAME
+            contract = installer.load_payload_contract(source)
+            authorized = installer._classify_existing_install_bound(
+                destination, contract
+            )
+            destination.mkdir()
+            sentinel = destination / "user-data.txt"
+            sentinel.write_text("preserve\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimeError, "destination changed"):
+                installer.stage_validated_install(
+                    source,
+                    skills_dir,
+                    contract,
+                    authorized_destination=authorized,
+                )
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
     def test_public_transaction_entrypoints_reject_redirected_destinations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

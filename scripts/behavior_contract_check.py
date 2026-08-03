@@ -47,28 +47,59 @@ REQUIRED_SNIPPETS = {
 }
 
 
+PROMPT_PRODUCING_SKILLS = {
+    "skills/seedance-antislop/SKILL.md",
+    "skills/seedance-audio/SKILL.md",
+    "skills/seedance-camera/SKILL.md",
+    "skills/seedance-continuation/SKILL.md",
+    "skills/seedance-copyright/SKILL.md",
+    "skills/seedance-examples-ja/SKILL.md",
+    "skills/seedance-examples-ko/SKILL.md",
+    "skills/seedance-examples-zh/SKILL.md",
+    "skills/seedance-filter/SKILL.md",
+    "skills/seedance-interview-short/SKILL.md",
+    "skills/seedance-interview/SKILL.md",
+    "skills/seedance-lighting/SKILL.md",
+    "skills/seedance-motion/SKILL.md",
+    "skills/seedance-prompt-short/SKILL.md",
+    "skills/seedance-prompt/SKILL.md",
+    "skills/seedance-recipes/SKILL.md",
+    "skills/seedance-sequence/SKILL.md",
+    "skills/seedance-style/SKILL.md",
+    "skills/seedance-troubleshoot/SKILL.md",
+    "skills/seedance-vfx/SKILL.md",
+    "skills/seedance-vocab-en/SKILL.md",
+    "skills/seedance-vocab-es/SKILL.md",
+    "skills/seedance-vocab-ja/SKILL.md",
+    "skills/seedance-vocab-ko/SKILL.md",
+    "skills/seedance-vocab-ru/SKILL.md",
+    "skills/seedance-vocab-zh/SKILL.md",
+}
+
+# Keep exemptions explicit and exhaustive. A newly added skill cannot silently
+# escape the Director's Read merely because this route table was not updated.
+NON_PROMPT_PRODUCING_SKILLS = {
+    "skills/seedance-characters/SKILL.md": (
+        "returns a character card and continuity constraints, not prompt text"
+    ),
+    "skills/seedance-pipeline/SKILL.md": (
+        "returns a sourced workflow plan and names the next artifact, not prompt text"
+    ),
+}
+
 DIRECTORS_READ_ROUTES = {
     "SKILL.md": "references/directors-read.md",
-    "skills/seedance-interview/SKILL.md": "../../references/directors-read.md",
-    "skills/seedance-interview-short/SKILL.md": "../../references/directors-read.md",
-    "skills/seedance-prompt/SKILL.md": "../../references/directors-read.md",
-    "skills/seedance-prompt-short/SKILL.md": "../../references/directors-read.md",
-    "skills/seedance-sequence/SKILL.md": "../../references/directors-read.md",
-    "skills/seedance-continuation/SKILL.md": "../../references/directors-read.md",
+    **{
+        rel: "../../references/directors-read.md"
+        for rel in sorted(PROMPT_PRODUCING_SKILLS)
+    },
     "references/directing-engine.md": "directors-read.md",
     "references/prompt-compiler.md": "directors-read.md",
 }
 
 DIRECTORS_READ_ACTIVATION_PHRASES = {
     "SKILL.md": "before any route drafts, compresses, or compiles a prompt",
-    "skills/seedance-interview/SKILL.md": "before converting any answer into a brief",
-    "skills/seedance-interview-short/SKILL.md": "before producing the compact brief",
-    "skills/seedance-prompt/SKILL.md": "before any drafting or compression",
-    "skills/seedance-prompt-short/SKILL.md": "before compression",
-    "skills/seedance-sequence/SKILL.md": "before any narrative, story, or performance clip is compiled",
-    "skills/seedance-continuation/SKILL.md": (
-        "after the source gate is satisfied and before the next prompt is compiled"
-    ),
+    **{rel: "before producing prompt text" for rel in PROMPT_PRODUCING_SKILLS},
     "references/directing-engine.md": "load the [Director's Read](directors-read.md) first on every route",
     "references/prompt-compiler.md": "before compilation",
 }
@@ -100,6 +131,50 @@ DIRECTORS_READ_CASES = {
     "dancer-masks-missed-cue": "narrative",
     "hands-only-assembly-demo": "non_narrative",
 }
+
+GENRE_LIBRARY_LANES = {
+    "Product / commercial reveal": "non-narrative",
+    "Music video beat": "narrative",
+    "Horror / suspense": "narrative",
+    "Anime / 2D power-up": "narrative",
+    "Action / pursuit": "narrative",
+    "Comedy pratfall": "narrative",
+    "UGC / caught real moment": "narrative",
+    "Transformation / VFX brand reveal": "non-narrative",
+    "Establishing / landscape": "non-narrative",
+    "Beauty / cosmetics": "non-narrative",
+    "Food / culinary": "non-narrative",
+    "Automotive / commercial": "non-narrative",
+    "High fashion / editorial": "narrative",
+    "Fashion runway": "narrative",
+    "Real estate / property tour": "non-narrative",
+    "Talking-head pitch (口播)": "narrative",
+    "Sports / hype": "narrative",
+    "Fitness / workout": "narrative",
+    "Travel / cinematic vlog": "narrative",
+    "Dialogue-driven two-hander": "narrative",
+    "Short drama (短剧)": "narrative",
+    "Romance": "narrative",
+    "Noir / detective": "narrative",
+    "Fantasy / epic": "narrative",
+    "Sci-fi": "narrative",
+    "Nostalgia / vintage memory": "narrative",
+    "3D / CG animation": "narrative",
+    "Stop-motion / claymation": "narrative",
+    "Kids / children's content": "narrative",
+    "Documentary interview": "narrative",
+    "Nature / wildlife": "narrative",
+    "Pet / animal portrait": "narrative",
+    "Time-lapse / hyperlapse": "non-narrative",
+}
+
+GENRE_FIELD_RE = re.compile(
+    r"`(?P<field>[^`]+)`:\s*(?P<value>.*?)(?=;\s*`[^`]+`:\s*|$)"
+)
+GENRE_ENTRY_RE = re.compile(
+    r"^### (?P<name>.+?)\n(?P<body>.*?)(?=^### |\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 
 CREATIVE_STOP_TERMS = {
     "a", "after", "an", "and", "as", "at", "be", "before", "but", "by", "for",
@@ -278,6 +353,18 @@ def validate_directors_read_routes(root: Path, errors: list[str]) -> None:
 
     root = root.resolve()
     canonical = (root / "references" / "directors-read.md").resolve()
+    actual_skills = {
+        path.relative_to(root).as_posix()
+        for path in (root / "skills").rglob("SKILL.md")
+    }
+    classified_skills = PROMPT_PRODUCING_SKILLS | set(NON_PROMPT_PRODUCING_SKILLS)
+    for rel in sorted(actual_skills - classified_skills):
+        errors.append(
+            f"{rel}: skill must be classified as prompt-producing or explicitly exempt"
+        )
+    for rel in sorted(classified_skills - actual_skills):
+        errors.append(f"{rel}: stale Director's Read skill classification")
+
     for rel, target in DIRECTORS_READ_ROUTES.items():
         path = root / rel
         if not path.is_file():
@@ -395,6 +482,89 @@ def validate_directors_read_cases(root: Path, errors: list[str]) -> None:
             errors.append(f"{case_label} has an unsupported expected_lane")
 
 
+def validate_directors_read_genre_library(root: Path, errors: list[str]) -> None:
+    """Require every genre example to exercise a complete canonical lane record."""
+
+    rel = "references/directing-engine-genre-library.md"
+    path = root / rel
+    if not path.is_file():
+        errors.append(f"missing {rel}")
+        return
+    entries = {
+        match.group("name"): match.group("body")
+        for match in GENRE_ENTRY_RE.finditer(path.read_text(encoding="utf-8"))
+    }
+    if set(entries) != set(GENRE_LIBRARY_LANES):
+        missing = sorted(set(GENRE_LIBRARY_LANES) - set(entries))
+        extra = sorted(set(entries) - set(GENRE_LIBRARY_LANES))
+        errors.append(
+            f"{rel}: expected the canonical 33 genre entries; missing={missing}, extra={extra}"
+        )
+        return
+
+    for name, expected_lane in GENRE_LIBRARY_LANES.items():
+        label = f"{rel}: {name}"
+        body = entries[name]
+        read_match = re.search(
+            r"^- \*\*Read - (narrative|non-narrative) lane\.\*\* (?P<record>.+)$",
+            body,
+            re.MULTILINE,
+        )
+        if read_match is None:
+            errors.append(f"{label} must declare one canonical lane record")
+            continue
+        actual_lane = read_match.group(1)
+        if actual_lane != expected_lane:
+            errors.append(f"{label} must use the {expected_lane} lane")
+            continue
+        pairs = GENRE_FIELD_RE.findall(read_match.group("record"))
+        record = {field: value.strip() for field, value in pairs}
+        if len(record) != len(pairs):
+            errors.append(f"{label} repeats a canonical record field")
+
+        prompt_match = re.search(r"^- \*\*Prompt:\*\* `(.+)`$", body, re.MULTILINE)
+        if prompt_match is None:
+            errors.append(f"{label} needs one compiled prompt")
+            continue
+        prompt = prompt_match.group(1)
+
+        if expected_lane == "narrative":
+            if list(record) != DIRECTORS_READ_FIELDS:
+                errors.append(f"{label} must carry the ordered ten-field narrative record")
+                continue
+            if not all(record.values()):
+                errors.append(f"{label} has an empty narrative field")
+                continue
+            errors.extend(
+                creative_specificity_errors(
+                    record,
+                    prompt,
+                    label=label,
+                    carrier_fields=(
+                        "visible suppressed behavior",
+                        "non-transferable detail",
+                    ),
+                )
+            )
+            leaked = [
+                field for field in DIRECTORS_READ_FIELDS
+                if f"{field.casefold()}:" in prompt.casefold()
+            ]
+            if leaked:
+                errors.append(f"{label} leaked internal labels: {', '.join(leaked)}")
+        else:
+            if list(record) != ["utility intent", "non-narrative refusal"]:
+                errors.append(f"{label} must carry only the two-field non-narrative record")
+                continue
+            if "no invented" not in record["non-narrative refusal"].casefold():
+                errors.append(f"{label} needs an explicit no-invented-drama refusal")
+            errors.extend(
+                utility_prompt_relevance_errors(
+                    record["utility intent"], prompt, label=label
+                )
+            )
+
+
 DOMAIN_FILES = [
     "skills/seedance-camera/SKILL.md",
     "skills/seedance-motion/SKILL.md",
@@ -468,6 +638,7 @@ def main() -> int:
             errors.append(f"{rel}: must not replace the Director's Read with memory")
 
     validate_directors_read_cases(root, errors)
+    validate_directors_read_genre_library(root, errors)
 
     if errors:
         print("Behavior contract errors:")

@@ -21,6 +21,8 @@ metadata:
 
 # seedance-sequence
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use this when the user's idea is larger than one reliable generation, when connected clips are requested, or when the user says continue, extend, next part, part two, next scene, or make it longer. Plan globally, generate locally: the skill plans the whole story, but compiles only the next unresolved clip.
 
 Load the [Director's Read](../../references/directors-read.md), [sequence-project-state](../../references/sequence-project-state.md), [continuation-handoff](../../references/continuation-handoff.md), [prompt-compiler](../../references/prompt-compiler.md), [surface-prompt-profiles](../../references/surface-prompt-profiles.md), [event-density](../../references/event-density.md), and [continuity-qc](../../references/continuity-qc.md). Load [reference-transfer-contract](../../references/reference-transfer-contract.md) when references are present and [dense-storyboard-mode](../../references/dense-storyboard-mode.md) when the request contains many shots or animation panels. Load [directing-engine](../../references/directing-engine.md) to set one directorial voice for the whole story and plan the long-form spine so the look is authored by one hand across every clip. For a user's first multi-clip project, [sequence-worked-trace](../../references/sequence-worked-trace.md) walks the whole loop once - plan, deviation, reconciliation, chain cap, re-anchor, resume.

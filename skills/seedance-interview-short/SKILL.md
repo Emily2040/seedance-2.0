@@ -21,6 +21,8 @@ metadata:
 
 # seedance-interview-short
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use this when speed matters more than exhaustive creative discovery. The goal is to turn a vague idea into a compact director brief with no more than three questions, then route to prompt writing.
 
 Speed does not bypass story judgment. Load the [Director's Read](../../references/directors-read.md) before producing the compact brief. Complete its ten-field internal record for every narrative, story, or performance idea; for a utility, product-only, abstract, VFX, or ambient idea with no requested agency or performance, record its two-line non-narrative intent and refusal instead. Never reconstruct the read from remembered craft.

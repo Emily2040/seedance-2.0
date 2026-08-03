@@ -137,7 +137,7 @@ Idea: "a couple breaks up at the kitchen table."
 - **Setup:** medium close-up on him at eye-level, 50mm-feel compression, a very slow push-in that finishes as the realization lands; soft warm practical from a window behind her so she is slightly haloed and he is in plainer light; cool evening outside; near-silence, a tap dripping, one chair scrape.
 - **Performance:** he wipes the same spot on a plate twice, sets it down, and stops - hands still, eyes on the plate, not on her. One true gesture: the second wipe that goes nowhere.
 - **Coherence test:** every instrument says "realization arriving" - push-in, quiet, the halo that puts her already elsewhere, the stalled hands. Behavior, not "sad." Motivated window light. Matches voice. Hands simple, camera locked enough to hold the face.
-- **Final prompt sentence:** `Medium close-up on Character A at a kitchen table, eye-level, gentle compression; he wipes a plate, pauses mid-motion, sets it down and goes still with his eyes down; very slow push-in over the clip; soft warm window light behind Character B haloes her while his side stays plain; cool dusk outside; near-silence with a dripping tap and one chair scrape; preserve faces and hands, keep motion small.`
+- **Final prompt sentence:** `Medium close-up on Character A at a kitchen table, eye-level, gentle compression; he wipes the chipped rim of the plate from their first flat twice, pauses mid-motion, sets that chipped plate down, and goes still with his eyes on it; very slow push-in over the clip; soft warm window light behind Character B haloes her while his side stays plain; cool dusk outside; near-silence with a dripping tap and one chair scrape; preserve faces and hands, keep motion small.`
 
 ## Worked Example - A Three-Clip Spine
 

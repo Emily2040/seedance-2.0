@@ -20,6 +20,8 @@ metadata:
 
 # seedance-vocab-ja
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use Japanese cinematic vocabulary when the user asks for Japanese prompt wording, bilingual delivery, compact translation, or production vocabulary for camera, lighting, motion, VFX, and audio. Preserve reference tags exactly: `@Image1`, `@Video1`, and `@Audio1` remain in English brackets.
 
 ## Intent

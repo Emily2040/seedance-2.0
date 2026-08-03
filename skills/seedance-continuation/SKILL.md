@@ -21,6 +21,8 @@ metadata:
 
 # seedance-continuation
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use this for seamless continuation, intentional next shots, bridge clips, tail repair, and re-anchoring after drift. A continuation prompt must be grounded in accepted footage, not only in the old plan.
 
 Load the [Director's Read](../../references/directors-read.md), [continuation-handoff](../../references/continuation-handoff.md), [sequence-project-state](../../references/sequence-project-state.md), [prompt-compiler](../../references/prompt-compiler.md), [reference-transfer-contract](../../references/reference-transfer-contract.md), and [continuity-qc](../../references/continuity-qc.md). Load [failure-atlas](../../references/failure-atlas.md) when the continuation failed or drift is visible. Load [directing-engine](../../references/directing-engine.md) so the next clip inherits the project's directorial voice and its position on the long-form spine; the look never re-rolls between clips.

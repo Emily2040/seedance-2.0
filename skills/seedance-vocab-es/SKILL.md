@@ -20,6 +20,8 @@ metadata:
 
 # seedance-vocab-es
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use Spanish cinematic vocabulary when the user asks for Spanish prompts, bilingual delivery, or compact translation of camera, lighting, action, VFX, audio, and production constraints. Preserve reference tags exactly: `@Image1`, `@Video1`, `@Audio1` must never be translated.
 
 ## Intent

@@ -21,6 +21,8 @@ metadata:
 
 # seedance-interview
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 The front door - and three different people walk through it. The same questions do not serve all three:
 
 - someone with **no idea yet**, carrying only a feeling and no words for it;

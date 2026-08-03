@@ -21,6 +21,8 @@ metadata:
 
 # seedance-vfx
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 VFX prompts need material behavior, source, timing, and consequence. Treat every effect as physical: it starts somewhere, interacts with light and objects, changes over time, and ends in a visible state. Avoid generic words such as magical, explosive, or cinematic unless they are translated into particles, fluids, smoke, light, debris, deformation, or energy behavior.
 
 ## Intent

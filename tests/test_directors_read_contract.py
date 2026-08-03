@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -52,7 +53,32 @@ def directors_read_case_errors(cases: list[dict]) -> list[str]:
         return errors
 
 
+def genre_library_errors() -> list[str]:
+    errors: list[str] = []
+    behavior.validate_directors_read_genre_library(ROOT, errors)
+    return errors
+
+
 class DirectorsReadContractTests(unittest.TestCase):
+    def test_every_skill_is_explicitly_classified(self) -> None:
+        actual = {
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "skills").rglob("SKILL.md")
+        }
+        classified = behavior.PROMPT_PRODUCING_SKILLS | set(
+            behavior.NON_PROMPT_PRODUCING_SKILLS
+        )
+
+        self.assertEqual(actual, classified)
+        self.assertEqual(
+            set(ROUTES) - {
+                "SKILL.md",
+                "references/directing-engine.md",
+                "references/prompt-compiler.md",
+            },
+            behavior.PROMPT_PRODUCING_SKILLS,
+        )
+
     def test_one_canonical_contract_routes_every_prompt_path(self) -> None:
         errors: list[str] = []
         behavior.validate_directors_read_routes(ROOT, errors)
@@ -98,6 +124,23 @@ class DirectorsReadContractTests(unittest.TestCase):
         text = (ROOT / CANONICAL).read_text(encoding="utf-8")
         for field in FIELDS:
             self.assertIn(f"`{field}`", text, field)
+
+    def test_all_33_genre_examples_use_complete_canonical_records(self) -> None:
+        self.assertEqual(len(behavior.GENRE_LIBRARY_LANES), 33)
+        self.assertEqual(genre_library_errors(), [])
+
+    def test_core_example_carries_the_chipped_plate_into_final_prompt(self) -> None:
+        text = (ROOT / "references/directing-engine.md").read_text(encoding="utf-8")
+        final_prompt = re.search(
+            r"\*\*Final prompt sentence:\*\* `(?P<prompt>[^`]+)`",
+            text,
+        )
+
+        self.assertIsNotNone(final_prompt)
+        assert final_prompt is not None
+        prompt = final_prompt.group("prompt").casefold()
+        self.assertIn("chipped", prompt)
+        self.assertIn("plate from their first flat", prompt)
 
     def test_contract_pins_narrative_boundary_and_compilation_boundary(self) -> None:
         text = (ROOT / CANONICAL).read_text(encoding="utf-8").lower()
