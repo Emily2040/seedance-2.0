@@ -356,6 +356,13 @@ class CommandLineBehaviourTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("must contain exactly one last_verified field", result.stdout)
 
+    def test_rejects_split_line_reference_stamp(self) -> None:
+        today = date.today().isoformat()
+        result = self.run_fixture(reference_text=f"last_verified:\n{today}\n")
+
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("platform-surface-matrix.md has malformed last_verified", result.stdout)
+
     def test_rejects_future_reference_stamp(self) -> None:
         future = date.today() + timedelta(days=1)
         result = self.run_fixture(reference_text=f"last_verified: {future.isoformat()}\n")

@@ -10,7 +10,7 @@ from pathlib import Path
 
 REQUIRED_LABELS = ["confirmed", "volatile", "field-observed", "unverified", "internal"]
 REQUIRED_OFFICIAL_MARKERS = ["seed.bytedance.com", "volcengine.com", "arxiv.org", "runwayml.com"]
-LAST_VERIFIED_FIELD = re.compile(r"^last_verified:\s*(.*?)\s*$", re.M)
+LAST_VERIFIED_FIELD = re.compile(r"^last_verified:[ \t]*(.*?)[ \t]*$", re.M)
 
 # Wall-clock staleness thresholds for references/source-registry.md.
 STALE_WARN_DAYS = 14
