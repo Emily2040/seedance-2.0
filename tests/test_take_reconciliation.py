@@ -149,6 +149,31 @@ class TakeReconciliationTests(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertNotIn(review_path, loaded_paths)
 
+    def test_review_like_backup_name_still_uses_generic_json_validation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="take-backup-name-") as temp_dir:
+            root = Path(temp_dir)
+            directory = root / "examples" / "sequence"
+            directory.mkdir(parents=True)
+            (directory / "project-state.json").write_text(
+                json.dumps(self.project()), encoding="utf-8"
+            )
+            (directory / "clip-0-take-review.json").write_text(
+                json.dumps(self.review()), encoding="utf-8"
+            )
+            backup = directory / "clip-take-review-backup.json"
+            backup.write_text("{", encoding="utf-8")
+            output = io.StringIO()
+
+            with mock.patch.object(
+                sys, "argv", ["project_state_check.py", str(root), "--strict"]
+            ), contextlib.redirect_stdout(output):
+                result = project_state_check.main()
+
+            self.assertEqual(result, 1)
+            self.assertIn(
+                "clip-take-review-backup.json: invalid JSON", output.getvalue()
+            )
+
     def test_malformed_history_verdict_types_fail_cleanly_in_both_consumers(self) -> None:
         for verdict in ([], {}, None, True, 1):
             with self.subTest(verdict=verdict):
