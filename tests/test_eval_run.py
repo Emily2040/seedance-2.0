@@ -903,6 +903,41 @@ class EvalRunProviderTests(unittest.TestCase):
         self.assertEqual(surrogate_detail, "bad surrogate \\ud800 [REDACTED]")
         surrogate_detail.encode("utf-8")
 
+        control_key = "sk-header-secret\r\nleak"
+        escaped_key = control_key.encode("unicode_escape").decode("ascii")
+        escaped_detail = eval_run._safe_exception_detail(
+            ValueError(f"Invalid header value {control_key!r}"),
+            control_key,
+        )
+        self.assertNotIn(control_key, escaped_detail)
+        self.assertNotIn(escaped_key, escaped_detail)
+        self.assertIn("[REDACTED]", escaped_detail)
+
+    def test_control_bearing_api_keys_are_rejected_before_urllib(self) -> None:
+        provider, endpoint, model = eval_run.resolve_provider(
+            "anthropic", "global_en", None
+        )
+        for separator in ("\r", "\n", "\r\n"):
+            with self.subTest(separator=repr(separator)):
+                api_key = f"sk-header-secret{separator}leak"
+                escaped_key = api_key.encode("unicode_escape").decode("ascii")
+                with (
+                    mock.patch.object(eval_run.urllib.request, "urlopen") as urlopen,
+                    self.assertRaises(eval_run.ProviderResponseError) as raised,
+                ):
+                    eval_run.call_api(
+                        "system", "user", model, api_key, provider, endpoint
+                    )
+
+                message = str(raised.exception)
+                urlopen.assert_not_called()
+                self.assertNotIn(api_key, message)
+                self.assertNotIn(escaped_key, message)
+                self.assertEqual(
+                    message,
+                    "model API credential is not a valid HTTP header value",
+                )
+
     def test_transport_rejects_non_byte_success_bodies_after_closing(self) -> None:
         provider, endpoint, model = eval_run.resolve_provider(
             "minimax", "global_en", None
