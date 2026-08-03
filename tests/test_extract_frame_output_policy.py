@@ -5,6 +5,7 @@ from __future__ import annotations
 import concurrent.futures
 import contextlib
 import errno
+import hashlib
 import io
 import os
 import shutil
@@ -132,7 +133,9 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                 self.assertEqual(self.stage_paths(root), [])
                 return b"complete frame"
 
-            with mock.patch.object(extractor, "render_frame_png", side_effect=render):
+            with mock.patch.object(
+                extractor, "render_frame_png", side_effect=render
+            ) as render_frame:
                 result, stdout, stderr = self.invoke(
                     str(clip), "--ffmpeg", "fake-ffmpeg", "--output", str(output)
                 )
@@ -174,7 +177,9 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                 self.assertEqual(output.read_bytes(), b"old frame")
                 return b"new complete frame"
 
-            with mock.patch.object(extractor, "render_frame_png", side_effect=render):
+            with mock.patch.object(
+                extractor, "render_frame_png", side_effect=render
+            ) as render_frame:
                 result, stdout, stderr = self.invoke(
                     str(clip),
                     "--ffmpeg",
@@ -184,11 +189,23 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                     "--force",
                 )
 
-            self.assertEqual(result, 0, stdout + stderr)
-            self.assertEqual(output.read_bytes(), b"new complete frame")
+            if (
+                os.name == "posix"
+                and not extractor._posix_descriptor_xattrs_supported()
+            ):
+                self.assertEqual(result, 1, stdout + stderr)
+                self.assertIn("refusing --force replacement", stdout)
+                render_frame.assert_not_called()
+                self.assertEqual(output.read_bytes(), b"old frame")
+            else:
+                self.assertEqual(result, 0, stdout + stderr)
+                render_frame.assert_called_once_with("fake-ffmpeg", clip, False)
+                self.assertEqual(output.read_bytes(), b"new complete frame")
             self.assertEqual(self.stage_paths(root), [])
 
     def test_force_decode_failure_preserves_existing_output(self) -> None:
+        if os.name == "posix" and not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("complete Linux extended-metadata visibility unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             clip = root / "accepted-take.mp4"
@@ -335,6 +352,55 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
             self.assertEqual(result, 1, stdout + stderr)
             render.assert_not_called()
             self.assertIn("unsupported output image suffix", stdout)
+
+    @unittest.skipUnless(os.name == "nt", "Windows filename aliases are platform-specific")
+    def test_windows_near_name_max_stage_is_bounded_before_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / ("f" * 250 + ".png")
+            clip.write_bytes(b"clip")
+            original_stage_descriptor = extractor._win32_stage_descriptor
+            stage_names: list[str] = []
+
+            def capture_stage(path: Path) -> int:
+                stage_names.append(path.name)
+                return original_stage_descriptor(path)
+
+            with (
+                mock.patch.object(
+                    extractor,
+                    "render_frame_png",
+                    return_value=b"GENERATED_FRAME",
+                ) as render,
+                mock.patch.object(
+                    extractor,
+                    "_win32_stage_descriptor",
+                    side_effect=capture_stage,
+                ),
+            ):
+                result = extractor.extract_frame(
+                    "fake-ffmpeg", clip, output, False, False
+                )
+
+            extended_output = extractor._win32_extended_path(output)
+            try:
+                self.assertEqual(result, 0)
+                render.assert_called_once_with("fake-ffmpeg", clip, False)
+                with open(extended_output, "rb") as published:
+                    self.assertEqual(published.read(), b"GENERATED_FRAME")
+                self.assertEqual(len(stage_names), 1)
+                target_digest = hashlib.sha256(
+                    output.name.encode("utf-8", errors="surrogatepass")
+                ).hexdigest()[:16]
+                self.assertTrue(
+                    stage_names[0].startswith(f".frame-{target_digest}.atomic-"),
+                    stage_names[0],
+                )
+                self.assertLessEqual(len(stage_names[0]), 255)
+                self.assertEqual(self.stage_paths(root), [])
+            finally:
+                os.unlink(extended_output)
 
     @unittest.skipUnless(os.name == "nt", "Windows filename aliases are platform-specific")
     def test_windows_device_and_normalization_aliases_are_refused(self) -> None:
@@ -535,6 +601,8 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
             self.assertEqual(self.stage_paths(root), [])
 
     def test_force_publish_error_preserves_old_output_and_cleans_stage(self) -> None:
+        if os.name == "posix" and not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("complete Linux extended-metadata visibility unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             clip = root / "accepted-take.mp4"
@@ -568,6 +636,8 @@ class AdversarialPublicationTests(OutputPolicyTestCase):
             self.assertEqual(self.stage_paths(root), [])
 
     def test_force_rechecks_a_late_input_alias(self) -> None:
+        if os.name == "posix" and not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("complete Linux extended-metadata visibility unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             clip = root / "accepted-take.mp4"
@@ -606,7 +676,12 @@ class PosixPublicationTests(OutputPolicyTestCase):
         "descriptor-bound /proc/self/fd publication is Linux-specific",
     )
     def test_verify_to_link_stage_rename_swap_cannot_publish_attacker_inode(self) -> None:
-        for force in (False, True):
+        force_modes = (
+            (False, True)
+            if extractor._posix_descriptor_xattrs_supported()
+            else (False,)
+        )
+        for force in force_modes:
             with self.subTest(force=force), tempfile.TemporaryDirectory() as temp_dir:
                 root = Path(temp_dir)
                 clip = root / "accepted-take.mp4"
@@ -754,6 +829,54 @@ class PosixPublicationTests(OutputPolicyTestCase):
             finally:
                 extractor._cleanup_output_stage(stage)
 
+    def test_near_name_max_output_uses_bounded_stage_without_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            name_max = int(os.pathconf(root, "PC_NAME_MAX"))
+            clip = root / "accepted-take.mp4"
+            output = root / ("f" * 250 + ".png")
+            if len(os.fsencode(output.name)) > name_max:
+                self.skipTest(
+                    f"filesystem NAME_MAX={name_max} cannot represent the 254-byte fixture"
+                )
+            clip.write_bytes(b"clip")
+            original_stage_name = extractor._posix_stage_directory_name
+            stage_names: list[str] = []
+
+            def capture_stage_name(candidate: Path, descriptor: int) -> str:
+                name = original_stage_name(candidate, descriptor)
+                stage_names.append(name)
+                return name
+
+            with (
+                mock.patch.object(
+                    extractor,
+                    "render_frame_png",
+                    return_value=b"GENERATED_FRAME",
+                ) as render,
+                mock.patch.object(
+                    extractor,
+                    "_posix_stage_directory_name",
+                    side_effect=capture_stage_name,
+                ),
+            ):
+                result = extractor.extract_frame(
+                    "fake-ffmpeg", clip, output, False, False
+                )
+
+            self.assertEqual(result, 0)
+            render.assert_called_once_with("fake-ffmpeg", clip, False)
+            self.assertEqual(output.read_bytes(), b"GENERATED_FRAME")
+            self.assertEqual(len(stage_names), 1)
+            directory_name = stage_names[0]
+            target_digest = hashlib.sha256(os.fsencode(output.name)).hexdigest()[:16]
+            self.assertTrue(
+                directory_name.startswith(f".frame-{target_digest}.atomic-"),
+                directory_name,
+            )
+            self.assertLessEqual(len(os.fsencode(directory_name)), name_max)
+            self.assertEqual(self.stage_paths(root), [])
+
     def test_new_output_mode_honors_process_umask(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -776,6 +899,8 @@ class PosixPublicationTests(OutputPolicyTestCase):
             self.assertEqual(self.stage_paths(root), [])
 
     def test_force_preserves_existing_owner_group_and_mode(self) -> None:
+        if not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("descriptor-bound Linux metadata APIs unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             clip = root / "accepted-take.mp4"
@@ -802,7 +927,290 @@ class PosixPublicationTests(OutputPolicyTestCase):
             self.assertEqual(stat.S_IMODE(after.st_mode), 0o664)
             self.assertEqual(self.stage_paths(root), [])
 
+    @unittest.skipUnless(
+        sys.platform.startswith("linux"),
+        "descriptor-bound extended-attribute contract is Linux-specific",
+    )
+    def test_force_preserves_user_extended_attributes(self) -> None:
+        if not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("complete Linux extended-metadata visibility unavailable")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            attribute = "user.seedance-publication-test"
+            value = b"shared-review-policy"
+            try:
+                os.setxattr(output, attribute, value)
+            except OSError as exc:
+                unsupported = {
+                    errno.EACCES,
+                    errno.EPERM,
+                    errno.ENOTSUP,
+                    getattr(errno, "EOPNOTSUPP", errno.ENOTSUP),
+                }
+                if exc.errno in unsupported:
+                    self.skipTest(f"filesystem user xattrs unavailable: {exc}")
+                raise
+
+            with mock.patch.object(
+                extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+            ):
+                result = extractor.extract_frame("fake-ffmpeg", clip, output, False, True)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(output.read_bytes(), b"GENERATED_FRAME")
+            self.assertEqual(os.getxattr(output, attribute), value)
+            self.assertEqual(self.stage_paths(root), [])
+
+    @unittest.skipUnless(
+        sys.platform.startswith("linux"),
+        "Linux POSIX ACL xattr contract",
+    )
+    def test_force_preserves_extended_access_acl(self) -> None:
+        setfacl = shutil.which("setfacl")
+        if setfacl is None:
+            self.skipTest("setfacl is unavailable")
+        if not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("complete Linux extended-metadata visibility unavailable")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            numeric_uid = os.getuid() + 100000
+            configured = subprocess.run(
+                [setfacl, "-m", f"u:{numeric_uid}:r--", str(output)],
+                capture_output=True,
+                text=True,
+            )
+            if configured.returncode != 0:
+                self.skipTest(
+                    "filesystem access ACLs unavailable: "
+                    + (configured.stderr.strip() or configured.stdout.strip())
+                )
+            try:
+                before_acl = os.getxattr(output, "system.posix_acl_access")
+            except OSError as exc:
+                self.skipTest(f"access ACL xattr unavailable: {exc}")
+
+            with mock.patch.object(
+                extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+            ):
+                result = extractor.extract_frame("fake-ffmpeg", clip, output, False, True)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(output.read_bytes(), b"GENERATED_FRAME")
+            self.assertEqual(
+                os.getxattr(output, "system.posix_acl_access"),
+                before_acl,
+            )
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_refuses_detected_security_policy_xattr(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+                ) as render,
+                mock.patch.object(
+                    extractor,
+                    "_posix_descriptor_xattrs_supported",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_prove_linux_privileged_xattr_visibility",
+                ),
+                mock.patch.object(
+                    extractor.os,
+                    "listxattr",
+                    return_value=["security.selinux"],
+                ),
+                mock.patch.object(extractor.os, "getxattr") as getxattr,
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("security.selinux", stdout)
+            self.assertIn("replacement was refused", stdout)
+            render.assert_called_once_with("fake-ffmpeg", clip, False)
+            getxattr.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_refuses_when_extended_policy_cannot_be_audited(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+                ) as render,
+                mock.patch.object(
+                    extractor,
+                    "_posix_descriptor_xattrs_supported",
+                    return_value=False,
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_posix_descriptor_xattr_api_supported",
+                    return_value=False,
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("lacks descriptor-bound extended-metadata APIs", stdout)
+            render.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_refuses_without_effective_cap_sys_admin(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+                ) as render,
+                mock.patch.object(
+                    extractor,
+                    "_posix_descriptor_xattr_api_supported",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_linux_has_effective_cap_sys_admin",
+                    return_value=False,
+                ),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("effective CAP_SYS_ADMIN", stdout)
+            self.assertIn("hidden trusted or security metadata", stdout)
+            render.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_refuses_when_xattr_enumeration_is_unsupported(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+                ) as render,
+                mock.patch.object(
+                    extractor,
+                    "_posix_descriptor_xattrs_supported",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    extractor,
+                    "_prove_linux_privileged_xattr_visibility",
+                ),
+                mock.patch.object(
+                    extractor.os,
+                    "listxattr",
+                    side_effect=OSError(errno.ENOTSUP, "not supported"),
+                ),
+                mock.patch.object(extractor.os, "getxattr") as getxattr,
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("cannot enumerate extended metadata", stdout)
+            self.assertIn("replacement was refused", stdout)
+            render.assert_called_once_with("fake-ffmpeg", clip, False)
+            getxattr.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_non_linux_posix_force_refuses_unexposed_acl_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "frame.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+
+            with (
+                mock.patch.object(
+                    extractor, "render_frame_png", return_value=b"GENERATED_FRAME"
+                ) as render,
+                mock.patch.object(extractor.sys, "platform", "darwin"),
+            ):
+                result, stdout, stderr = self.invoke(
+                    str(clip),
+                    "--ffmpeg",
+                    "fake-ffmpeg",
+                    "--output",
+                    str(output),
+                    "--force",
+                )
+
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("non-Linux POSIX runtime", stdout)
+            render.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"old frame")
+            self.assertEqual(self.stage_paths(root), [])
+
     def test_force_policy_error_after_anchor_link_cleans_owned_anchor(self) -> None:
+        if not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("descriptor-bound Linux metadata APIs unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             clip = root / "accepted-take.mp4"
@@ -860,6 +1268,23 @@ class OutputEncodingTests(unittest.TestCase):
 
 
 class PublicationPrimitiveTests(unittest.TestCase):
+    def test_linux_capability_proof_reads_the_effective_cap_sys_admin_bit(self) -> None:
+        cases = (
+            ("Name:\tpython\nCapEff:\t0000000000000000\n", False),
+            (f"CapEff:\t{1 << extractor._CAP_SYS_ADMIN:016x}\n", True),
+            ("CapEff:\tnot-hex\n", False),
+            ("Name:\tpython\n", False),
+        )
+        for status, expected in cases:
+            with (
+                self.subTest(status=status),
+                mock.patch.object(extractor.sys, "platform", "linux"),
+                mock.patch.object(extractor.Path, "read_text", return_value=status),
+            ):
+                self.assertEqual(
+                    extractor._linux_has_effective_cap_sys_admin(), expected
+                )
+
     def test_linux_link_source_is_the_open_staging_descriptor(self) -> None:
         stage = extractor.OutputStage(
             Path("mutable-stage-name.png"),
@@ -1000,6 +1425,10 @@ class OutputPolicyDocumentationTests(unittest.TestCase):
         self.assertIn("late destination collisions are preserved", changelog)
         security = (root / "SECURITY.md").read_text(encoding="utf-8")
         self.assertIn("same Unix account", security)
+        self.assertIn("Linux access ACLs", security)
+        self.assertIn("replacement is refused", security)
+        self.assertIn("effective `CAP_SYS_ADMIN`", security)
+        self.assertIn("creating a new output needs no capability", security)
 
 
 if __name__ == "__main__":

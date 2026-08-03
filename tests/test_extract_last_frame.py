@@ -175,6 +175,11 @@ class RealFfmpegFrameTests(unittest.TestCase):
             self.assert_true_last_frame(clip, actual, expected)
 
     def test_existing_output_is_replaced_with_the_true_final_frame(self) -> None:
+        if (
+            os.name == "posix"
+            and not extractor._posix_descriptor_xattrs_supported()
+        ):
+            self.skipTest("complete Linux extended-metadata visibility unavailable")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             clip = root / "blue-to-red.mp4"

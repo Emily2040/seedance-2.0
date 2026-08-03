@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import errno
+import hashlib
 import os
 import secrets
 import shutil
@@ -101,6 +102,18 @@ class OutputStage:
     target_directory_identity: tuple[int, int] | None = None
     target_directory_descriptor: int | None = None
     published: bool = False
+
+
+@dataclass(frozen=True)
+class PosixReplacementSnapshot:
+    """Descriptor-bound metadata that must still match at publication."""
+
+    descriptor: int
+    identity: tuple[int, int]
+    uid: int
+    gid: int
+    mode: int
+    extended_attributes: tuple[tuple[str, bytes], ...]
 
 
 if os.name == "nt":
@@ -345,8 +358,11 @@ def _win32_mark_stage_for_deletion(stage: OutputStage) -> bool:
 
 def _create_output_stage(out: Path) -> OutputStage:
     suffix = out.suffix or ".img"
-    prefix = f".{out.stem}.atomic-"
     if os.name == "nt":
+        target_digest = hashlib.sha256(
+            out.name.encode("utf-8", errors="surrogatepass")
+        ).hexdigest()[:16]
+        prefix = f".frame-{target_digest}.atomic-"
         for _attempt in range(64):
             path = out.parent / f"{prefix}{secrets.token_hex(16)}{suffix}"
             try:
@@ -384,7 +400,7 @@ def _create_output_stage(out: Path) -> OutputStage:
         target_descriptor = os.open(out.parent, target_directory_flags)
         target_info = os.fstat(target_descriptor)
         for _attempt in range(64):
-            directory_name = f"{prefix}{secrets.token_hex(16)}"
+            directory_name = _posix_stage_directory_name(out, target_descriptor)
             try:
                 os.mkdir(directory_name, 0o700, dir_fd=target_descriptor)
             except FileExistsError:
@@ -501,6 +517,47 @@ def _create_output_stage(out: Path) -> OutputStage:
         ) from exc
 
 
+def _posix_stage_directory_name(out: Path, target_descriptor: int) -> str:
+    """Return a private staging component bounded by the target filesystem."""
+
+    try:
+        name_max = int(os.fpathconf(target_descriptor, "PC_NAME_MAX"))
+    except (OSError, ValueError) as exc:
+        raise OutputPolicyError(
+            f"cannot determine the output filesystem name limit for {out}: {exc}"
+        ) from exc
+    if name_max <= 0:
+        raise OutputPolicyError(
+            f"output filesystem reported an invalid component limit for {out}: {name_max}"
+        )
+
+    token = secrets.token_hex(16)
+    preferred = f".{out.stem}.atomic-{token}"
+    if len(os.fsencode(preferred)) <= name_max:
+        return preferred
+
+    # A valid final basename can consume almost all of NAME_MAX. Do not copy
+    # that stem into the private directory name: keep a stable target digest
+    # plus independent collision entropy instead.
+    target_digest = hashlib.sha256(os.fsencode(out.name)).hexdigest()[:16]
+    bounded = f".frame-{target_digest}.atomic-{token}"
+    if len(os.fsencode(bounded)) <= name_max:
+        return bounded
+
+    # Very small NAME_MAX filesystems still get a random digest name rather
+    # than an overlong component. POSIX permits limits as small as 14 bytes.
+    compact_prefix = ".f-"
+    available = name_max - len(os.fsencode(compact_prefix))
+    if available < 8:
+        raise OutputPolicyError(
+            f"output filesystem component limit is too small for safe staging: {name_max}"
+        )
+    compact_digest = hashlib.sha256(
+        os.fsencode(out.name) + b"\0" + token.encode("ascii")
+    ).hexdigest()
+    return compact_prefix + compact_digest[:available]
+
+
 def _verify_output_stage(stage: OutputStage, *, require_content: bool) -> None:
     """Verify the open object; a pathname lookup is never the authority."""
     try:
@@ -614,35 +671,262 @@ def _posix_link_open_stage(
         )
 
 
-def _preserve_posix_replacement_permissions(stage: OutputStage, out: Path) -> None:
-    """Carry POSIX owner, group, and mode across an intentional replacement."""
+_CAP_SYS_ADMIN = 21
+
+
+def _linux_has_effective_cap_sys_admin() -> bool:
+    """Prove visibility of Linux's privileged extended-attribute namespace."""
+
+    if not sys.platform.startswith("linux"):
+        return False
+    try:
+        status = Path("/proc/self/status").read_text(encoding="ascii")
+    except (OSError, UnicodeError):
+        return False
+    for line in status.splitlines():
+        label, separator, value = line.partition(":")
+        if label != "CapEff" or not separator:
+            continue
+        try:
+            effective = int(value.strip(), 16)
+        except ValueError:
+            return False
+        return bool(effective & (1 << _CAP_SYS_ADMIN))
+    return False
+
+
+def _posix_descriptor_xattr_api_supported() -> bool:
+    # Python's descriptor xattr API is Linux-specific, and access ACLs on
+    # macOS and other POSIX systems are not necessarily exposed as xattrs.
+    # Refuse there instead of mistaking an empty xattr list for no policy.
+    if not sys.platform.startswith("linux"):
+        return False
+    supports_fd = getattr(os, "supports_fd", set())
+    return all(
+        hasattr(os, name) and getattr(os, name) in supports_fd
+        for name in ("listxattr", "getxattr", "setxattr", "removexattr")
+    )
+
+
+def _posix_descriptor_xattrs_supported() -> bool:
+    return (
+        _posix_descriptor_xattr_api_supported()
+        and _linux_has_effective_cap_sys_admin()
+    )
+
+
+def _require_posix_replacement_metadata_contract(out: Path) -> None:
+    if _posix_descriptor_xattrs_supported():
+        return
+    if not sys.platform.startswith("linux"):
+        reason = "this non-Linux POSIX runtime does not expose a complete ACL contract"
+    elif not _posix_descriptor_xattr_api_supported():
+        reason = "this Linux runtime lacks descriptor-bound extended-metadata APIs"
+    elif not _linux_has_effective_cap_sys_admin():
+        reason = (
+            "the process lacks effective CAP_SYS_ADMIN and cannot prove visibility "
+            "of hidden trusted or security metadata"
+        )
+    else:
+        reason = "the process cannot prove complete extended-metadata visibility"
+    raise OutputPolicyError(f"{reason}; refusing --force replacement of {out}")
+
+
+def _read_posix_extended_attributes_once(
+    descriptor: int,
+    out: Path,
+) -> tuple[tuple[str, bytes], ...]:
+    try:
+        names = tuple(sorted(os.listxattr(descriptor)))
+    except OSError as exc:
+        unsupported = {errno.ENOTSUP, getattr(errno, "EOPNOTSUPP", errno.ENOTSUP)}
+        if exc.errno in unsupported:
+            raise OutputPolicyError(
+                "the output filesystem cannot enumerate extended metadata for "
+                f"{out}; replacement was refused"
+            ) from exc
+        raise OutputPolicyError(
+            f"cannot inspect existing output extended metadata for {out}: {exc}"
+        ) from exc
+
+    copyable_system_attributes = {"system.posix_acl_access"}
+    for name in names:
+        if (
+            name.startswith(("security.", "trusted."))
+            or (name.startswith("system.") and name not in copyable_system_attributes)
+        ):
+            raise OutputPolicyError(
+                "cannot safely preserve existing output security policy attribute "
+                f"{name!r} for {out}; replacement was refused"
+            )
+
+    attributes: list[tuple[str, bytes]] = []
+    for name in names:
+        try:
+            attributes.append((name, os.getxattr(descriptor, name)))
+        except OSError as exc:
+            raise OutputPolicyError(
+                f"cannot read existing output extended metadata {name!r} for {out}: {exc}"
+            ) from exc
+    return tuple(attributes)
+
+
+def _snapshot_posix_extended_attributes(
+    descriptor: int,
+    out: Path,
+) -> tuple[tuple[str, bytes], ...]:
+    _require_posix_replacement_metadata_contract(out)
+    first = _read_posix_extended_attributes_once(descriptor, out)
+    second = _read_posix_extended_attributes_once(descriptor, out)
+    if first != second:
+        raise OutputPolicyError(
+            f"existing output extended metadata changed while inspecting {out}; replacement was refused"
+        )
+    return first
+
+
+def _prove_linux_privileged_xattr_visibility(descriptor: int, out: Path) -> None:
+    """Verify that the target filesystem exposes the privileged namespace."""
+
+    probe_name = f"trusted.seedance-visibility-{secrets.token_hex(8)}"
+    probe_value = b"descriptor-bound"
+    created = False
+    failure: str | None = None
+    try:
+        os.setxattr(descriptor, probe_name, probe_value)
+        created = True
+        names = os.listxattr(descriptor)
+        value = os.getxattr(descriptor, probe_name)
+        if probe_name not in names or value != probe_value:
+            failure = "the privileged extended-metadata namespace is not fully visible"
+    except OSError as exc:
+        failure = f"the privileged extended-metadata namespace cannot be audited: {exc}"
+    finally:
+        if created:
+            try:
+                os.removexattr(descriptor, probe_name)
+            except OSError as exc:
+                raise OutputPolicyError(
+                    "cannot remove the temporary extended-metadata visibility probe "
+                    f"for {out}; replacement was refused: {exc}"
+                ) from exc
+    if failure is not None:
+        raise OutputPolicyError(f"{failure} for {out}; replacement was refused")
+
+
+def _prepare_posix_replacement_metadata(
+    stage: OutputStage,
+    out: Path,
+) -> PosixReplacementSnapshot:
+    """Copy auditable POSIX metadata and retain the source inode for recheck."""
 
     if stage.target_directory_descriptor is None:
         raise OutputPolicyError("output directory handle is unavailable")
+    existing_descriptor = -1
     try:
-        existing = os.stat(
+        existing_descriptor = os.open(
             out.name,
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0),
             dir_fd=stage.target_directory_descriptor,
-            follow_symlinks=False,
         )
+        existing = os.fstat(existing_descriptor)
         staged = os.fstat(stage.descriptor)
         if not stat.S_ISREG(existing.st_mode):
             raise OutputPolicyError(
                 f"--force only replaces a regular output file: {out}"
             )
+        extended_attributes = _snapshot_posix_extended_attributes(
+            existing_descriptor,
+            out,
+        )
+        _prove_linux_privileged_xattr_visibility(stage.descriptor, out)
         if (
             hasattr(os, "fchown")
             and (staged.st_uid != existing.st_uid or staged.st_gid != existing.st_gid)
         ):
             os.fchown(stage.descriptor, existing.st_uid, existing.st_gid)
         os.fchmod(stage.descriptor, stat.S_IMODE(existing.st_mode))
+
+        for name, value in extended_attributes:
+            try:
+                os.setxattr(stage.descriptor, name, value)
+            except OSError as exc:
+                raise OutputPolicyError(
+                    f"cannot preserve existing output extended metadata {name!r} for {out}: {exc}"
+                ) from exc
+
+        copied_attributes = _snapshot_posix_extended_attributes(stage.descriptor, out)
+        copied = os.fstat(stage.descriptor)
+        if (
+            copied_attributes != extended_attributes
+            or copied.st_uid != existing.st_uid
+            or copied.st_gid != existing.st_gid
+            or stat.S_IMODE(copied.st_mode) != stat.S_IMODE(existing.st_mode)
+        ):
+            raise OutputPolicyError(
+                f"existing output permissions or extended metadata could not be preserved for {out}"
+            )
         os.fsync(stage.descriptor)
+        return PosixReplacementSnapshot(
+            descriptor=existing_descriptor,
+            identity=_identity(existing),
+            uid=existing.st_uid,
+            gid=existing.st_gid,
+            mode=stat.S_IMODE(existing.st_mode),
+            extended_attributes=extended_attributes,
+        )
     except OutputPolicyError:
+        if existing_descriptor >= 0:
+            try:
+                os.close(existing_descriptor)
+            except OSError:
+                pass
         raise
     except OSError as exc:
+        if existing_descriptor >= 0:
+            try:
+                os.close(existing_descriptor)
+            except OSError:
+                pass
         raise OutputPolicyError(
-            f"cannot preserve existing output permissions for {out}: {exc}"
+            f"cannot preserve existing output permissions or extended metadata for {out}: {exc}"
         ) from exc
+
+
+def _verify_posix_replacement_metadata(
+    snapshot: PosixReplacementSnapshot,
+    stage: OutputStage,
+    out: Path,
+) -> None:
+    if stage.target_directory_descriptor is None:
+        raise OutputPolicyError("output directory handle is unavailable")
+    try:
+        opened = os.fstat(snapshot.descriptor)
+        named = os.stat(
+            out.name,
+            dir_fd=stage.target_directory_descriptor,
+            follow_symlinks=False,
+        )
+    except OSError as exc:
+        raise OutputPolicyError(
+            f"cannot re-verify existing output metadata for {out}: {exc}"
+        ) from exc
+    if (
+        not stat.S_ISREG(opened.st_mode)
+        or _identity(opened) != snapshot.identity
+        or _identity(named) != snapshot.identity
+        or opened.st_uid != snapshot.uid
+        or opened.st_gid != snapshot.gid
+        or stat.S_IMODE(opened.st_mode) != snapshot.mode
+        or _snapshot_posix_extended_attributes(snapshot.descriptor, out)
+        != snapshot.extended_attributes
+    ):
+        raise OutputPolicyError(
+            f"existing output permissions or extended metadata changed before publication: {out}"
+        )
 
 
 def _write_output_stage(stage: OutputStage, content: bytes) -> None:
@@ -769,7 +1053,13 @@ def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> N
                 # The exclusive handle prevents the source name from being
                 # swapped; hard-link creation is an atomic no-replace claim on
                 # the destination. Cleanup then deletes only the staging link.
-                os.link(stage.path, out)
+                # Python's ordinary Win32 path spelling can still hit MAX_PATH
+                # even when both filename components are valid. The owned
+                # stage and final target therefore use extended-length paths.
+                os.link(
+                    _win32_extended_path(stage.path),
+                    _win32_extended_path(out),
+                )
             except FileExistsError as exc:
                 raise OutputPolicyError(
                     f"output appeared during extraction and was preserved: {out}"
@@ -794,8 +1084,12 @@ def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> N
     _verify_posix_target_directory(stage, out)
 
     if force:
-        _preserve_posix_replacement_permissions(stage, out)
+        replacement = _prepare_posix_replacement_metadata(stage, out)
         if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
+            try:
+                os.close(replacement.descriptor)
+            except OSError:
+                pass
             raise OutputPolicyError("POSIX publication handles are unavailable")
         publish_name = f"publish-{secrets.token_hex(16)}{out.suffix or '.img'}"
         try:
@@ -807,6 +1101,7 @@ def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> N
                 publish_name,
                 stage.directory_descriptor,
             )
+            _verify_posix_replacement_metadata(replacement, stage, out)
             os.replace(
                 publish_name,
                 out.name,
@@ -827,6 +1122,13 @@ def _publish_output(stage: OutputStage, clip: Path, out: Path, force: bool) -> N
             if isinstance(exc, OutputPolicyError):
                 raise
             raise OutputPolicyError(f"could not atomically replace output {out}: {exc}") from exc
+        finally:
+            try:
+                os.close(replacement.descriptor)
+            except OSError as exc:
+                sys.stderr.write(
+                    f"warning: could not close replaced output metadata handle: {exc}\n"
+                )
         stage.published = True
         return
 
@@ -986,6 +1288,11 @@ def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) 
     if out.suffix.lower() not in _OUTPUT_CODECS:
         supported = ", ".join(sorted(_OUTPUT_CODECS))
         raise OutputPolicyError(f"unsupported output image suffix {out.suffix!r}; use one of: {supported}")
+    if force and os.name == "posix":
+        # Common unprivileged Linux callers cannot see trusted.* metadata.
+        # Refuse that known-impossible replacement before paying decode cost;
+        # descriptor-bound source and filesystem checks still run at publish.
+        _require_posix_replacement_metadata_contract(out)
     png_frame = render_frame_png(ffmpeg, clip, first)
     content = _encode_frame_for_output(ffmpeg, png_frame, out)
     stage = _create_output_stage(out)
@@ -1083,7 +1390,10 @@ def main() -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="atomically replace an existing regular output file after extraction succeeds",
+        help=(
+            "atomically replace an existing regular output only when its metadata policy "
+            "can be preserved (Windows or capability-audited Linux; other POSIX refuses)"
+        ),
     )
     parser.add_argument("--emit-record", action="store_true", help="print the observation-record skeleton")
     parser.add_argument("--self-test", action="store_true", help="offline wiring check, no ffmpeg or media")
