@@ -2,17 +2,39 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
-from lineage_contract import (
-    analyze_lineage,
-    build_take_review_indexes,
-    bound_validation_diagnostics,
-    load_project_document,
-    TakeReviewIndex,
-    validate_take_reconciliation,
-)
-from strict_json import bound_diagnostics
+if __package__:
+    from .lineage_contract import (
+        analyze_lineage,
+        build_take_review_indexes,
+        bound_validation_diagnostics,
+        load_project_document,
+        TakeReviewIndex,
+        validate_take_reconciliation,
+    )
+    from .strict_json import (
+        bound_diagnostics,
+        diagnostic_path,
+        diagnostic_text,
+        validate_repo_input_path,
+    )
+else:
+    from lineage_contract import (
+        analyze_lineage,
+        build_take_review_indexes,
+        bound_validation_diagnostics,
+        load_project_document,
+        TakeReviewIndex,
+        validate_take_reconciliation,
+    )
+    from strict_json import (
+        bound_diagnostics,
+        diagnostic_path,
+        diagnostic_text,
+        validate_repo_input_path,
+    )
 
 
 IMMUTABLE_KEYS = [
@@ -105,14 +127,39 @@ def main() -> int:
     root = Path(args.repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
-    paths = (
-        sorted((root / "examples").rglob("*project-state*.json"))
-        if (root / "examples").exists()
+    examples = root / "examples"
+    if os.path.lexists(examples):
+        try:
+            examples = validate_repo_input_path(root, examples)
+        except ValueError as exc:
+            errors.append(f"examples: {exc}")
+            examples = None
+    else:
+        examples = None
+    candidates = (
+        sorted(examples.rglob("*project-state*.json"))
+        if examples is not None
         else []
     )
+    paths: list[Path] = []
+    for path in candidates:
+        try:
+            paths.append(validate_repo_input_path(root, path))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            errors.append(
+                f"{diagnostic_path(path.relative_to(root))}: "
+                f"invalid project state: {exc}"
+            )
     review_indexes = build_take_review_indexes(paths)
     for path in paths:
-        e, w = validate(path, root, review_indexes[path.resolve().parent])
+        try:
+            e, w = validate(path, root, review_indexes[path.resolve().parent])
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            errors.append(
+                f"{diagnostic_path(path.relative_to(root))}: "
+                f"invalid project state: {exc}"
+            )
+            continue
         errors.extend(e)
         warnings.extend(w)
     warnings = bound_diagnostics(warnings, "additional continuity warnings omitted")
@@ -120,15 +167,15 @@ def main() -> int:
     if warnings:
         print("Continuity warnings:")
         for warning in warnings:
-            print(f"- {warning}")
+            print(diagnostic_text(f"- {warning}"))
         print()
     if errors or (args.strict and warnings):
         print("Continuity errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         if args.strict:
             for warning in warnings:
-                print(f"- {warning}")
+                print(diagnostic_text(f"- {warning}"))
         return 1
     print("Continuity chain check passed.")
     return 0

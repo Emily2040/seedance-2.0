@@ -43,6 +43,29 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Callable, Mapping
 
+if __package__:
+    from .strict_json import (
+        MAX_JSON_BYTES,
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        loads_json,
+        loads_json_bytes,
+        read_repo_text,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        MAX_JSON_BYTES,
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        loads_json,
+        loads_json_bytes,
+        read_repo_text,
+        validate_repo_input_path,
+    )
+
 
 # Capture the exact module code object that Python is executing.  Later, the
 # frozen evaluator source is compiled with the same filename and optimization
@@ -53,6 +76,7 @@ _EXECUTED_EVALUATOR_PATH = Path(__file__).resolve(strict=True)
 _EXECUTED_EVALUATOR_SOURCE_SHA256 = "0e34d3f1e32920b8a9220e9be082040457a0df6f2abf63e5272cb90ab9c6e3d1"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+API_URL = ANTHROPIC_API_URL
 ANTHROPIC_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-sonnet-4-6"
 MINIMAX_MODELS = (
@@ -315,17 +339,9 @@ def _validate_json_strings(value: object) -> None:
 
 
 def strict_json_loads(text: str) -> object:
-    """Decode standards-compliant JSON and reject ambiguous object keys."""
-    try:
-        value = json.loads(
-            text,
-            parse_constant=_reject_json_constant,
-            object_pairs_hook=_reject_duplicate_json_keys,
-        )
-        _validate_json_strings(value)
-    except RecursionError:
-        raise ValueError("JSON nesting exceeds the supported depth") from None
-    return value
+    """Decode through the repository-wide hardened strict JSON contract."""
+
+    return loads_json(text)
 
 
 def _safe_exception_detail(
@@ -2034,11 +2050,9 @@ def _call_api_unredacted(
     req.add_header("content-type", "application/json")
     raw_body = _read_api_response(req, api_key)
     try:
-        body = strict_json_loads(raw_body.decode("utf-8"))
+        body = loads_json_bytes(raw_body, expected_type=dict)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise ProviderResponseError("model API returned invalid JSON") from exc
-    if not isinstance(body, dict):
-        raise ProviderResponseError("model API response must be a JSON object")
 
     _validate_provider_legacy_fields(provider, body)
 

@@ -2,12 +2,31 @@
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
+
+if __package__:
+    from .strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        load_jsonl,
+        read_repo_text,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        load_jsonl,
+        read_repo_text,
+        validate_repo_input_path,
+    )
 
 EXPECTED_SKILLS = [
     "seedance-antislop", "seedance-audio", "seedance-camera", "seedance-characters", "seedance-continuation",
@@ -226,12 +245,12 @@ def _line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
-def _heading_anchors(path: Path) -> set[str]:
+def _heading_anchors(path: Path, root: Path) -> set[str]:
     """Return the deterministic Markdown heading anchors this validator supports."""
 
     anchors: set[str] = set()
     seen: dict[str, int] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in read_repo_text(root, path).splitlines():
         match = re.match(r"^#{1,6}\s+(.+?)\s*#*\s*$", line)
         if not match:
             continue
@@ -273,11 +292,12 @@ def active_runtime_markdown_paths(root: Path) -> tuple[Path, ...]:
     """
 
     manifest = root / INSTALL_PAYLOAD_MANIFEST
-    if not manifest.is_file():
+    if not os.path.lexists(manifest):
         return ()
+    manifest = validate_repo_input_path(root, manifest)
 
     active: list[Path] = []
-    for raw_line in manifest.read_text(encoding="utf-8").splitlines():
+    for raw_line in read_repo_text(root, manifest).splitlines():
         relative = raw_line.strip()
         if not relative or relative.startswith("#"):
             continue
@@ -460,7 +480,8 @@ def validate_portable_routes(
     against the canonical repository-relative target.
     """
 
-    text = path.read_text(encoding="utf-8")
+    path = validate_repo_input_path(root, path)
+    text = read_repo_text(root, path)
     root = root.resolve()
     rel = path.relative_to(root).as_posix()
 
@@ -615,7 +636,7 @@ def validate_portable_routes(
         if not exact_path.is_file():
             errors.append(f"{rel}:{line}: route target is not a file: {target}")
             continue
-        if fragment and fragment not in _heading_anchors(exact_path):
+        if fragment and fragment not in _heading_anchors(exact_path, root):
             errors.append(
                 f"{rel}:{line}: route fragment does not resolve in {target}: #{fragment}"
             )
@@ -691,7 +712,12 @@ def metadata_value(frontmatter: str, key: str) -> str | None:
 
 def validate_skill(path: Path, root: Path, errors: list[str], warnings: list[str]) -> None:
     rel = path.relative_to(root).as_posix()
-    text = path.read_text(encoding="utf-8")
+    try:
+        path = validate_repo_input_path(root, path)
+        text = read_repo_text(root, path)
+    except (OSError, ValueError) as exc:
+        errors.append(f"{rel}: {diagnostic_text(exc)}")
+        return
     try:
         frontmatter, body = split_frontmatter(text)
     except Exception as exc:
@@ -738,9 +764,18 @@ def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
 
+    valid_required_paths: set[str] = set()
     for rel in REQUIRED_FILES + REQUIRED_REFERENCES:
-        if not (root / rel).exists():
+        path = root / rel
+        if not os.path.lexists(path):
             errors.append(f"missing required file: {rel}")
+            continue
+        try:
+            validate_repo_input_path(root, path)
+        except (OSError, ValueError) as exc:
+            errors.append(f"{diagnostic_path(rel)}: {diagnostic_text(exc)}")
+            continue
+        valid_required_paths.add(rel)
 
     skill_root = root / "skills"
     dirs = sorted(path.name for path in skill_root.glob("seedance-*") if path.is_dir()) if skill_root.exists() else []
@@ -751,10 +786,11 @@ def main() -> int:
     if extra:
         warnings.append("extra skill dirs: " + ", ".join(extra))
 
-    validate_skill(root / "SKILL.md", root, errors, warnings)
+    if "SKILL.md" in valid_required_paths:
+        validate_skill(root / "SKILL.md", root, errors, warnings)
     for name in EXPECTED_SKILLS:
         path = root / "skills" / name / "SKILL.md"
-        if path.exists():
+        if os.path.lexists(path):
             validate_skill(path, root, errors, warnings)
 
     for path in active_runtime_markdown_paths(root):
@@ -796,9 +832,9 @@ def main() -> int:
             errors.append(f"compiled Python cache must not be committed: {rel}")
 
     eval_path = root / "evals" / "evals.json"
-    if eval_path.exists():
+    if os.path.lexists(eval_path):
         try:
-            data = json.loads(eval_path.read_text(encoding="utf-8"))
+            data = load_json(eval_path, expected_type=dict, root=root)
             cases = data.get("cases", [])
             if len(cases) < 16:
                 errors.append("evals/evals.json must contain at least 16 cases")
@@ -824,20 +860,24 @@ def main() -> int:
     "scripts/extract_last_frame.py",
     ]:
         path = root / rel
-        if path.exists():
-            line_count = len(path.read_text(encoding="utf-8").splitlines())
+        if os.path.lexists(path):
+            try:
+                line_count = len(read_repo_text(root, path).splitlines())
+            except (OSError, ValueError) as exc:
+                errors.append(f"{rel}: {diagnostic_text(exc)}")
+                continue
             if line_count < 20:
                 errors.append(f"{rel}: script appears collapsed or incomplete ({line_count} lines)")
 
     installer = root / "scripts" / "install_codex_skill.py"
-    if installer.exists():
-        installer_text = installer.read_text(encoding="utf-8")
+    if os.path.lexists(installer):
+        installer_text = read_repo_text(root, installer)
         if re.search(r"IGNORE_NAMES\s*=\s*{[^}]*[\"']docs[\"']", installer_text, re.S):
             errors.append("scripts/install_codex_skill.py must include docs/ because README links native zh/ja/ko guides")
 
     openai_yaml = root / "agents" / "openai.yaml"
-    if openai_yaml.exists():
-        yaml_text = openai_yaml.read_text(encoding="utf-8")
+    if os.path.lexists(openai_yaml):
+        yaml_text = read_repo_text(root, openai_yaml)
         for required in [
             'display_name: "Seedance 2.0 Skill OS"',
             'short_description: "Professional Seedance video prompting"',
@@ -848,8 +888,8 @@ def main() -> int:
                 errors.append(f"agents/openai.yaml missing `{required}`")
 
     disclosure = root / "references" / "progressive-disclosure.md"
-    if disclosure.exists():
-        disclosure_text = disclosure.read_text(encoding="utf-8")
+    if os.path.lexists(disclosure):
+        disclosure_text = read_repo_text(root, disclosure)
         for needed in ("directing-engine.md", "directing-engine-genre-library.md"):
             if needed not in disclosure_text:
                 errors.append(f"progressive-disclosure.md must document the heavy reference {needed}")
@@ -857,13 +897,13 @@ def main() -> int:
     if warnings:
         print("WARNINGS:")
         for warning in warnings:
-            print(f"- {warning}")
+            print(diagnostic_text(f"- {warning}"))
         print()
 
     if errors:
         print("ERRORS:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
 
     print(f"Validated root plus {len(EXPECTED_SKILLS)} sub-skills and required v{EXPECTED_VERSION} files.")

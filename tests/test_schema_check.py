@@ -457,6 +457,21 @@ class ExecutionTests(unittest.TestCase):
             errors = schema_check.check(repo)
             self.assertTrue(any("field_no_example_has" in e for e in errors), errors)
 
+    def test_boolean_schema_and_non_object_instance_are_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._copy_repo(tmp)
+            schema_name = "accept-anything.schema.json"
+            instance_name = "examples/standalone-clip/array-instance.json"
+            (repo / "schemas" / schema_name).write_text("true", encoding="utf-8")
+            (repo / instance_name).write_text("[1, 2, 3]", encoding="utf-8")
+
+            manifest_path = repo / "validation/schema-instances.json"
+            manifest = json.loads(manifest_path.read_text("utf-8"))
+            manifest["instances"][schema_name] = [instance_name]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            self.assertEqual(schema_check.check(repo), [])
+
     def test_undeclared_schema_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = self._copy_repo(tmp)

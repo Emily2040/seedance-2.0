@@ -17,9 +17,14 @@ label-over-value fields. No viewfinder chrome, no gradients, no second hue.
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import sys
 from pathlib import Path
+
+if __package__:
+    from .strict_json import diagnostic_path, diagnostic_text, load_json, read_repo_text
+else:
+    from strict_json import diagnostic_path, diagnostic_text, load_json, read_repo_text
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -68,7 +73,7 @@ FIELDS = [
 
 
 def glyphs() -> dict[str, dict]:
-    return json.loads(OUTLINES.read_text(encoding="utf-8"))["glyphs"]
+    return load_json(OUTLINES, expected_type=dict, root=ROOT)["glyphs"]
 
 
 def build(theme: str) -> str:
@@ -145,12 +150,30 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="verify committed files match the source")
     args = parser.parse_args()
 
+    try:
+        built_targets = targets()
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(diagnostic_text(f"Cannot build masthead from repository inputs: {exc}"))
+        return 1
+
     drift: list[str] = []
-    for path, content in targets().items():
+    for path, content in built_targets.items():
         if args.check:
-            current = path.read_text(encoding="utf-8") if path.exists() else ""
+            try:
+                current = (
+                    read_repo_text(root=ROOT, path=path)
+                    if os.path.lexists(path)
+                    else ""
+                )
+            except ValueError as exc:
+                print(
+                    diagnostic_text(
+                        f"Cannot inspect {diagnostic_path(path.relative_to(ROOT))}: {exc}"
+                    )
+                )
+                return 1
             if current != content:
-                drift.append(path.relative_to(ROOT).as_posix())
+                drift.append(diagnostic_path(path.relative_to(ROOT)))
         else:
             path.write_text(content, encoding="utf-8")
 
@@ -158,7 +181,7 @@ def main() -> int:
         if drift:
             print("Masthead is out of date; re-run scripts/build_hero.py:")
             for name in drift:
-                print(f"- {name}")
+                print(diagnostic_text(f"- {name}"))
             return 1
         print("Masthead check passed: committed SVGs match the generator.")
         return 0

@@ -46,6 +46,19 @@ from functools import lru_cache
 from typing import NamedTuple
 from pathlib import Path
 
+if __package__:
+    from .strict_json import (
+        diagnostic_text,
+        load_json,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        diagnostic_text,
+        load_json,
+        validate_repo_input_path,
+    )
+
 # ---------------------------------------------------------------- vocabularies
 
 # references/anti-slop-lexicon.md - the six slop classes.
@@ -5805,7 +5818,16 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    corpus = json.loads(Path(args.corpus).read_text(encoding="utf-8"))
+    try:
+        root = Path.cwd().resolve(strict=True)
+        corpus_path = Path(args.corpus)
+        if not corpus_path.is_absolute():
+            corpus_path = root / corpus_path
+        corpus_path = validate_repo_input_path(root, corpus_path)
+        corpus = load_json(corpus_path, expected_type=list, root=root)
+    except (OSError, ValueError, TypeError) as exc:
+        print(f"Prompt architecture corpus error: {diagnostic_text(exc)}")
+        return 1
     results = [score_prompt(r) for r in corpus]
     if args.out:
         Path(args.out).write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")

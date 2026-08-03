@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import unicodedata
 from decimal import Decimal
@@ -11,28 +12,62 @@ from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 
-from behavior_contract_check import (
-    creative_specificity_errors,
-    utility_prompt_relevance_errors,
-)
-
-from lineage_contract import (
-    ACCEPTED_PARENT_STATUSES,
-    analyze_lineage,
-    build_take_review_indexes,
-    bound_validation_diagnostics,
-    classify_parent_id,
-    json_integer,
-    has_usable_observed_end_state,
-    is_take_review_path,
-    load_bounded_take_review,
-    load_project_document,
-    TakeReviewIndex,
-    validate_take_review_record,
-    validate_take_reconciliation,
-)
-from strict_json import bound_diagnostics
-from strict_json import load as load_strict_json
+if __package__:
+    from .behavior_contract_check import (
+        creative_specificity_errors,
+        utility_prompt_relevance_errors,
+    )
+    from .lineage_contract import (
+        ACCEPTED_PARENT_STATUSES,
+        analyze_lineage,
+        build_take_review_indexes,
+        bound_validation_diagnostics,
+        classify_parent_id,
+        json_integer,
+        has_usable_observed_end_state,
+        is_take_review_path,
+        load_bounded_take_review,
+        load_project_document,
+        TakeReviewIndex,
+        validate_take_review_record,
+        validate_take_reconciliation,
+    )
+    from .strict_json import (
+        bound_diagnostics,
+        diagnostic_path,
+        diagnostic_text,
+        load_json as load_strict_json,
+        read_repo_text,
+        validate_repo_input_path,
+    )
+else:
+    from behavior_contract_check import (
+        creative_specificity_errors,
+        utility_prompt_relevance_errors,
+    )
+    from lineage_contract import (
+        ACCEPTED_PARENT_STATUSES,
+        analyze_lineage,
+        build_take_review_indexes,
+        bound_validation_diagnostics,
+        classify_parent_id,
+        json_integer,
+        has_usable_observed_end_state,
+        is_take_review_path,
+        load_bounded_take_review,
+        load_project_document,
+        TakeReviewIndex,
+        validate_take_review_record,
+        validate_take_reconciliation,
+    )
+    from strict_json import (
+        bound_diagnostics,
+        diagnostic_path,
+        diagnostic_text,
+        load_json as load_strict_json,
+        read_repo_text,
+        validate_repo_input_path,
+    )
 
 
 REQUIRED_PROJECT_FIELDS = {
@@ -141,8 +176,8 @@ AUTHORING_LABEL_ALIASES = {
 }
 
 
-def load_json(path: Path) -> object:
-    return load_strict_json(path)
+def load_json(path: Path, root: Path | None = None) -> object:
+    return load_strict_json(path, root=root)
 
 
 def is_string_enum(value: object, allowed: set[str]) -> bool:
@@ -159,7 +194,7 @@ def load_protected_provenance_ledger(
     path = root / PROVENANCE_LEDGER_RELATIVE_PATH
     label = PROVENANCE_LEDGER_RELATIVE_PATH.as_posix()
     try:
-        ledger = load_json(path)
+        ledger = load_json(path, root)
     except Exception as exc:
         errors.append(f"{label}: missing or invalid protected provenance ledger: {exc}")
         return None
@@ -2076,10 +2111,15 @@ def looks_like_clip_contract(path: Path, obj: object | None = None) -> bool:
 
 
 def sequence_paths(root: Path) -> list[Path]:
+    examples = root / "examples"
+    if not os.path.lexists(examples):
+        return []
+    examples = validate_repo_input_path(root, examples)
     paths = []
-    for path in (root / "examples").rglob("*.json") if (root / "examples").exists() else []:
+    for path in examples.rglob("*.json"):
+        path = validate_repo_input_path(root, path)
         try:
-            obj = load_json(path)
+            obj = load_json(path, root)
         except Exception:
             obj = None
         if looks_like_project_state(path, obj):
@@ -2751,7 +2791,11 @@ def main() -> int:
         if ledger_path.exists()
         else {}
     )
-    paths = sequence_paths(root)
+    try:
+        paths = sequence_paths(root)
+    except (OSError, ValueError) as exc:
+        errors.append(f"examples: invalid repository input: {diagnostic_text(exc)}")
+        paths = []
     if not paths:
         errors.append("missing project-state examples")
     review_indexes = build_take_review_indexes(paths)
@@ -2766,7 +2810,7 @@ def main() -> int:
             )
         )
         try:
-            project = load_json(path)
+            project = load_json(path, root)
         except Exception:
             continue
         if isinstance(project, dict) and isinstance(project.get("project_id"), str):
@@ -2803,7 +2847,11 @@ def main() -> int:
             # diagnostics and must never be re-read by the generic JSON path.
             continue
         try:
-            obj = load_bounded_take_review(path) if is_take_review else load_json(path)
+            obj = (
+                load_bounded_take_review(path)
+                if is_take_review
+                else load_json(path, root)
+            )
         except Exception as exc:
             errors.append(f"{rel}: invalid JSON: {exc}")
             continue
@@ -2889,7 +2937,7 @@ def main() -> int:
 
     for schema in (root / "schemas").glob("*.schema.json") if (root / "schemas").exists() else []:
         try:
-            load_json(schema)
+            load_json(schema, root)
         except Exception as exc:
             errors.append(f"{schema.relative_to(root).as_posix()}: invalid JSON: {exc}")
 
