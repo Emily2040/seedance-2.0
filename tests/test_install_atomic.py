@@ -2437,6 +2437,159 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 )
             )
 
+    def test_atomic_copy_fsyncs_its_parent_only_after_rename(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (
+                repo_root,
+                _skills_dir,
+                stage,
+                transaction,
+                transaction_raw,
+                source,
+                destination,
+            ) = self.make_atomic_copy_fixture(Path(tmp), transaction_digit="6")
+            original_replace = installer.os.replace
+            events: list[str] = []
+
+            def observed_replace(source_path, destination_path) -> None:
+                self.assertEqual(Path(destination_path), destination)
+                self.assertFalse(destination.exists())
+                events.append("rename")
+                original_replace(source_path, destination_path)
+
+            def observed_parent_fsync(path: Path) -> None:
+                self.assertEqual(Path(path), destination.parent)
+                self.assertEqual(destination.read_bytes(), source.read_bytes())
+                events.append("parent-fsync")
+
+            with (
+                mock.patch.object(installer.os, "replace", observed_replace),
+                mock.patch.object(installer, "_fsync_directory", observed_parent_fsync),
+            ):
+                installer._copy_payload_file_atomic(
+                    source,
+                    destination,
+                    repo_root=repo_root,
+                    stage=stage,
+                    transaction=transaction,
+                    transaction_raw=transaction_raw,
+                )
+
+            self.assertEqual(events, ["rename", "parent-fsync"])
+
+    def test_atomic_copy_parent_fsync_failure_leaves_only_complete_final_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (
+                repo_root,
+                skills_dir,
+                stage,
+                transaction,
+                transaction_raw,
+                source,
+                destination,
+            ) = self.make_atomic_copy_fixture(Path(tmp), transaction_digit="7")
+            expected = source.read_bytes()
+
+            with (
+                mock.patch.object(
+                    installer,
+                    "_fsync_directory",
+                    side_effect=OSError("injected payload parent fsync failure"),
+                ),
+                self.assertRaisesRegex(OSError, "parent fsync failure"),
+            ):
+                installer._copy_payload_file_atomic(
+                    source,
+                    destination,
+                    repo_root=repo_root,
+                    stage=stage,
+                    transaction=transaction,
+                    transaction_raw=transaction_raw,
+                )
+
+            self.assertEqual(destination.read_bytes(), expected)
+            relative = source.relative_to(repo_root).as_posix()
+            temp_relative = installer._copy_temp_relative(
+                relative,
+                transaction_raw,
+                installer._copy_temp_component_budget(stage),
+            )
+            self.assertFalse(stage.joinpath(*temp_relative.split("/")).exists())
+            snapshot = installer._inspect_owned_stage(
+                stage, transaction, transaction_raw, require_complete=False
+            )
+            expected_metadata = transaction["payload_manifest"][relative]
+            self.assertEqual(
+                {
+                    "size": snapshot.entries[relative]["size"],
+                    "sha256": snapshot.entries[relative]["sha256"],
+                },
+                expected_metadata,
+            )
+
+            installer.recover_interrupted_transaction(
+                skills_dir, skills_dir / installer.SKILL_NAME
+            )
+            self.assertFalse(stage.exists())
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    @unittest.skipIf(os.name == "nt", "descriptor-relative ancestor race is POSIX-only")
+    def test_permission_repair_never_traverses_a_swapped_ancestor(self) -> None:
+        for replacement_kind in ("symlink", "directory"):
+            with (
+                self.subTest(replacement=replacement_kind),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                base = Path(tmp)
+                managed = base / "managed"
+                original_child = managed / "a" / "b"
+                original_child.mkdir(parents=True)
+                attacker = base / "attacker"
+                attacker_child = attacker / "b"
+                attacker_child.mkdir(parents=True)
+                os.chmod(managed / "a", 0o500)
+                os.chmod(original_child, 0o500)
+                os.chmod(attacker_child, 0o500)
+                snapshot = installer._capture_path_snapshot(managed)
+                stashed = base / "captured-a"
+                original_open = installer.os.open
+                swapped = False
+
+                def swap_before_descendant_open(
+                    path, flags, mode=0o777, *, dir_fd=None
+                ):
+                    nonlocal swapped
+                    if path == "b" and dir_fd is not None and not swapped:
+                        (managed / "a").rename(stashed)
+                        if replacement_kind == "symlink":
+                            (managed / "a").symlink_to(
+                                attacker, target_is_directory=True
+                            )
+                        else:
+                            attacker.rename(managed / "a")
+                        swapped = True
+                    if dir_fd is None:
+                        return original_open(path, flags, mode)
+                    return original_open(path, flags, mode, dir_fd=dir_fd)
+
+                with (
+                    mock.patch.object(
+                        installer.os, "open", swap_before_descendant_open
+                    ),
+                    self.assertRaises(RuntimeError),
+                ):
+                    installer._ensure_snapshot_directories_owner_writable(
+                        managed, snapshot
+                    )
+
+                self.assertTrue(swapped)
+                exposed_child = (
+                    attacker_child
+                    if replacement_kind == "symlink"
+                    else managed / "a" / "b"
+                )
+                self.assertEqual(stat.S_IMODE(exposed_child.stat().st_mode), 0o500)
+
     def test_fourteen_byte_copy_temp_derivation_is_bounded_and_recoverable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

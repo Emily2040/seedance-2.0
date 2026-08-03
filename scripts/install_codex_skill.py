@@ -49,8 +49,6 @@ COPY_TEMP_MAX_BASENAME_BYTES = (
     len(COPY_TEMP_COMPACT_PREFIX) + COPY_TEMP_MAX_TOKEN_CHARS
 )
 RUNTIME_DEPENDENCY_PREFIXES = ((b"[ref:", "ref"), (b"[skill:", "skill"))
-PRIVATE_DELETE_MARKER = "deletion-authority.json"
-PRIVATE_DELETE_FORMAT_VERSION = 1
 _UNCLASSIFIED_DESTINATION = object()
 
 # Kept out of the installed payload because they are development-only and
@@ -3156,18 +3154,6 @@ def _remove_private_delete_workspace(
     else:
         path.rmdir()
     _fsync_directory(path.parent)
-
-
-def _remove_terminal_private_delete_workspace(path: Path) -> None:
-    """Recover the exact empty workspace left after its journal was removed."""
-    info = path.lstat()
-    identity = _object_identity(info)
-    with _opened_private_delete_workspace(path, identity) as workspace:
-        if any(workspace.path.iterdir()):
-            raise RuntimeError(
-                "private deletion workspace has no trusted journal; preserving it"
-            )
-    _remove_private_delete_workspace(path, identity)
 
 
 def _remove_terminal_private_delete_workspace(path: Path) -> None:
