@@ -74,7 +74,7 @@ When a ladder is complete:
 
 1. Update the Japanese and/or Korean row of the dialogue-capacity table in [audio-guide](audio-guide.md): replace "not separately measured" with the measured range, the unit, the surface, and the date — e.g. `~10-14 morae on <surface>, 2026-XX [field]`.
 2. Keep the claim label `[field]` — four takes per rung on one surface is field observation, not a guarantee, and the note column should still say "test per surface".
-3. Record the session in `references/source-registry.md` per its methodology, so the freshness check knows when the number ages out.
+3. Record the session in the [source registry](source-registry.md) per its methodology, so the freshness check knows when the number ages out.
 4. If the measured number contradicts the current tier ordering (for example Korean beats English), do not resolve it silently: flag it in the table note. Surprising results are the ones worth keeping visible.
 
 One session on one surface fills the cell for that surface only. A second surface gets its own measurement, not an inherited number.

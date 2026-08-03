@@ -144,6 +144,38 @@ class PortableRouteValidationTests(unittest.TestCase):
                 errors,
             )
 
+    def test_nested_record_writeback_route_instruction_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "references/sync-budget-protocol.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "3. Record the session in `references/source-registry.md` per its methodology.\n"
+                "When complete, record the result in `references/source-registry.md`.\n",
+                encoding="utf-8",
+            )
+
+            errors = route_errors(source, root, require_routes=False)
+            self.assertEqual(
+                sum("is code text, not a Markdown link" in error for error in errors),
+                2,
+                errors,
+            )
+
+    def test_record_nouns_and_descriptions_are_not_route_directives(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "references/source.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "The session record is `references/source-registry.md`. "
+                "The package records `references/source-registry.md` in its manifest. "
+                "A generated record named `references/source-registry.md` is test data.\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(route_errors(source, root, require_routes=False), [])
+
     def test_descriptive_code_paths_do_not_become_route_false_positives(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

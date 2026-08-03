@@ -175,6 +175,11 @@ UNLINKED_ROUTE_DIRECTIVE_RE = re.compile(
     r"\b(?:load|read|open|consult|follow|see|use|check|review|route\s+to)\b",
     re.IGNORECASE,
 )
+UNLINKED_ROUTE_RECORD_DIRECTIVE_RE = re.compile(
+    r"(?:^\s*(?:(?:[-*+]|\d+[.)])\s+)?(?:please\s+|always\s+|never\s+)?|"
+    r"\b(?:please|then|must|should|shall)\s+|[,;:]\s*)record\b",
+    re.IGNORECASE,
+)
 ROUTE_SEGMENT_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")
 ROUTE_ANCHOR_RE = re.compile(r"[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?")
 INSTALL_PAYLOAD_MANIFEST = PurePosixPath("validation/install-payload.txt")
@@ -350,7 +355,11 @@ def _unlinked_route_instructions(
             text[: match.start()],
         ):
             sentence_start = boundary.end()
-        if UNLINKED_ROUTE_DIRECTIVE_RE.search(text[sentence_start : match.start()]):
+        directive_prefix = text[sentence_start : match.start()]
+        if (
+            UNLINKED_ROUTE_DIRECTIVE_RE.search(directive_prefix)
+            or UNLINKED_ROUTE_RECORD_DIRECTIVE_RE.search(directive_prefix)
+        ):
             matches.append(match)
     return tuple(matches)
 
