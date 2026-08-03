@@ -38,10 +38,17 @@ Installs are staged and validated, and concurrent installers sharing one
 destination are serialized. Add `--force` only when replacing a complete
 existing install. Automatic retry applies only when every authority record
 required by the phase reached exists and validates: an exact empty stage before
-provenance, an exact partial stage after complete provenance, exact torn prefixes
-of expected stage markers, and externally journaled deletion workspaces can be
-recovered. The exact empty terminal workspace left after journal removal is also
-recoverable. Malformed or swapped records, unexpected bytes, an unmarked
+provenance; after complete provenance, exact final payload files plus the one
+transaction-derived in-progress copy sibling; exact torn prefixes of expected
+stage markers; and externally journaled deletion workspaces can be recovered.
+Payload bytes are synced and digest-checked under that sibling name before an
+atomic rename, so an expected final stage pathname is absent or complete, never
+partially written. Its basename is bounded for the staging filesystem, including
+POSIX `NAME_MAX=14`; a shortened transaction/path digest is accepted only when
+it is unique within the authenticated payload namespace. The exact empty
+terminal workspace left after journal removal is also recoverable. A truncated
+expected final file, an unbound temp-like file, malformed or swapped records,
+unexpected bytes, an unmarked
 quarantine, and a nonempty unjournaled deletion workspace are preserved fail
 closed. Windows handles exclude writable/deletion sharing through the consuming
 action. On POSIX, a mode-`0700` workspace excludes other OS accounts, but

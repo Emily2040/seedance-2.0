@@ -352,14 +352,24 @@ sharing that destination are serialized. Add `--force` only to replace a
 complete existing install. Automatic retry is limited to states for which every
 authority record required by the phase reached is present, has flushed file
 contents, and still validates. This installer does not claim POSIX containing-
-directory durability for those record publications. Recoverable states include
-an exact empty stage before provenance publication, an
-exact partial stage only after complete provenance publication, an exact torn
-prefix of the installer's expected provenance or completion record, and a
+directory durability for those record publications. Each payload file is first
+written under a transaction-derived sibling name, bounded by the recorded size,
+synced, checked against the recorded digest, and only then atomically published
+at its final stage pathname. A crash therefore leaves that final pathname either
+absent or complete, never truncated. The sibling basename is bounded by the
+staging filesystem's component limit (including POSIX `NAME_MAX=14`); shortened
+names retain a transaction-and-path digest, and any namespace collision makes
+staging fail closed before payload copying begins. Recoverable states include an
+exact empty stage before provenance publication; after complete provenance
+publication, source-identical final payload files plus the one exact transaction-
+bound in-progress sibling; an exact torn prefix of the installer's expected
+provenance or completion record; and a
 deletion workspace bound by its external transaction journal (plus the exact
 empty terminal workspace left if that journal was already removed). Malformed,
 swapped, or otherwise
-untrusted records and late or unexpected bytes are preserved for inspection.
+untrusted records and late or unexpected bytes are preserved for inspection. A
+truncated file at an expected final payload pathname and an unbound temp-like
+file are likewise never claimed for automatic cleanup.
 So are the deliberately fail-closed hard-death windows after a quarantine is
 renamed but before its authority marker is published, or after a private
 deletion workspace is created but before its external journal is published.

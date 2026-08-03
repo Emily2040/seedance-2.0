@@ -38,6 +38,11 @@ PRIVATE_DELETE_ENTRY = "authorized-object"
 PRIVATE_DELETE_PREFIX = ".seedance-delete-"
 PRIVATE_DELETE_MARKER = "deletion-authority.json"
 PRIVATE_DELETE_FORMAT_VERSION = 1
+COPY_TEMP_PREFIX = ".seedance-copy-"
+COPY_TEMP_SUFFIX = ".partial"
+COPY_TEMP_COMPACT_PREFIX = ".c"
+COPY_TEMP_MIN_TOKEN_CHARS = 12
+WINDOWS_COMPONENT_NAME_MAX = 255
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -749,6 +754,249 @@ def _validate_payload_manifest(value: object) -> dict[str, dict[str, object]]:
     return validated
 
 
+def _directory_component_name_max(path: Path) -> int:
+    """Return the byte limit for names created in one staging filesystem.
+
+    Copy temporaries use ASCII-only names, so the Win32 component limit can be
+    expressed directly in bytes.  POSIX is queried through an opened directory
+    so a final-component link is never followed while choosing the recovery
+    name.
+    """
+
+    before = path.lstat()
+    if _is_reparse_stat(before) or not stat.S_ISDIR(before.st_mode):
+        raise RuntimeError("copy staging root is not a non-link directory")
+    if os.name == "nt":
+        return WINDOWS_COMPONENT_NAME_MAX
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            _is_reparse_stat(opened)
+            or not stat.S_ISDIR(opened.st_mode)
+            or _object_identity(opened) != _object_identity(before)
+        ):
+            raise RuntimeError("copy staging root changed while determining NAME_MAX")
+        try:
+            name_max = int(os.fpathconf(descriptor, "PC_NAME_MAX"))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("cannot determine the copy staging component limit") from exc
+    finally:
+        os.close(descriptor)
+    after = path.lstat()
+    if (
+        _is_reparse_stat(after)
+        or not stat.S_ISDIR(after.st_mode)
+        or _object_identity(after) != _object_identity(before)
+    ):
+        raise RuntimeError("copy staging root changed while determining NAME_MAX")
+    if name_max <= 0:
+        raise RuntimeError("copy staging filesystem reported an invalid NAME_MAX")
+    return name_max
+
+
+def _copy_temp_relative(
+    relative: str, transaction_raw: bytes, component_name_max: int
+) -> str:
+    """Return the transaction-bound temporary pathname for one payload file."""
+
+    return _copy_temp_relative_for_digest(
+        relative,
+        hashlib.sha256(transaction_raw).hexdigest(),
+        component_name_max,
+    )
+
+
+def _copy_temp_relative_for_digest(
+    relative: str, transaction_digest: str, component_name_max: int
+) -> str:
+    if not _safe_relative_path(relative):
+        raise ValueError("copy target path is unsafe")
+    if not _is_sha256(transaction_digest):
+        raise ValueError("copy transaction digest is invalid")
+    if type(component_name_max) is not int or component_name_max <= 0:
+        raise ValueError("copy component name limit is invalid")
+    token = _canonical_sha256(
+        {
+            "path": relative,
+            "transaction_record_sha256": transaction_digest,
+        }
+    )
+    parent, separator, _ = relative.rpartition("/")
+    preferred = f"{COPY_TEMP_PREFIX}{token}{COPY_TEMP_SUFFIX}"
+    if len(os.fsencode(preferred)) <= component_name_max:
+        basename = preferred
+    else:
+        available = component_name_max - len(os.fsencode(COPY_TEMP_COMPACT_PREFIX))
+        if available < COPY_TEMP_MIN_TOKEN_CHARS:
+            raise RuntimeError(
+                "copy staging filesystem component limit is too small for a "
+                "transaction-bound temporary name"
+            )
+        basename = COPY_TEMP_COMPACT_PREFIX + token[: min(available, len(token))]
+    if len(os.fsencode(basename)) > component_name_max:
+        raise RuntimeError("derived copy temporary name exceeds the filesystem limit")
+    return f"{parent}/{basename}" if separator else basename
+
+
+def _expected_copy_temps(
+    transaction: Mapping[str, object],
+    transaction_raw: bytes,
+    component_name_max: int,
+) -> dict[str, str]:
+    """Map every authenticated partial-copy pathname to its final payload path."""
+
+    manifest = transaction.get("payload_manifest")
+    directories = transaction.get("payload_directories")
+    if not isinstance(manifest, dict) or not isinstance(directories, list):
+        raise ValueError("transaction copy authority is incomplete")
+    occupied = set(manifest) | set(directories) | {PROVENANCE_MARKER, COMPLETION_MARKER}
+    mapping: dict[str, str] = {}
+    transaction_digest = hashlib.sha256(transaction_raw).hexdigest()
+    for relative in manifest:
+        temp_relative = _copy_temp_relative_for_digest(
+            relative, transaction_digest, component_name_max
+        )
+        if temp_relative in occupied or temp_relative in mapping:
+            raise RuntimeError("payload collides with an internal copy pathname")
+        mapping[temp_relative] = relative
+    return mapping
+
+
+def _write_payload_chunk(descriptor: int, chunk: bytes) -> None:
+    """Write all bytes or fail without treating a zero-length write as progress."""
+
+    offset = 0
+    while offset < len(chunk):
+        written = os.write(descriptor, chunk[offset:])
+        if written <= 0:
+            raise OSError("payload copy made no write progress")
+        offset += written
+
+
+def _copy_payload_file_atomic(
+    source: str | os.PathLike[str],
+    destination: str | os.PathLike[str],
+    *,
+    repo_root: Path,
+    stage: Path,
+    transaction: Mapping[str, object],
+    transaction_raw: bytes,
+    transaction_digest: str | None = None,
+    component_name_max: int | None = None,
+) -> str:
+    """Copy one manifest file without ever exposing a partial final pathname.
+
+    Bytes are bounded by the authenticated manifest and written to a deterministic
+    transaction-owned sibling.  Only a fully synced, digest-matching temporary
+    file is atomically published at the pathname that can later become live.
+    """
+
+    source_path = Path(os.path.abspath(source))
+    destination_path = Path(os.path.abspath(destination))
+    absolute_root = Path(os.path.abspath(repo_root))
+    absolute_stage = Path(os.path.abspath(stage))
+    try:
+        relative = source_path.relative_to(absolute_root).as_posix()
+    except ValueError as exc:
+        raise RuntimeError("copy source escaped the payload root") from exc
+    expected_destination = absolute_stage.joinpath(*relative.split("/"))
+    if destination_path != expected_destination:
+        raise RuntimeError("copy destination does not match its manifest pathname")
+
+    manifest = transaction.get("payload_manifest")
+    if not isinstance(manifest, dict) or relative not in manifest:
+        raise RuntimeError("copy source is absent from the transaction manifest")
+    expected = manifest[relative]
+    if not isinstance(expected, dict):
+        raise RuntimeError("copy manifest metadata is invalid")
+    expected_size = expected.get("size")
+    expected_digest = expected.get("sha256")
+    if type(expected_size) is not int or expected_size < 0 or not _is_sha256(expected_digest):
+        raise RuntimeError("copy manifest metadata is invalid")
+
+    authenticated_digest = hashlib.sha256(transaction_raw).hexdigest()
+    if transaction_digest is None:
+        transaction_digest = authenticated_digest
+    elif transaction_digest != authenticated_digest:
+        raise RuntimeError("copy transaction digest does not match its persisted record")
+    if component_name_max is None:
+        component_name_max = _directory_component_name_max(absolute_stage)
+    temp_relative = _copy_temp_relative_for_digest(
+        relative, transaction_digest, component_name_max
+    )
+    temp_path = absolute_stage.joinpath(*temp_relative.split("/"))
+    if temp_path.parent != destination_path.parent:
+        raise RuntimeError("copy temporary path is not beside its final pathname")
+    if _path_exists(temp_path) or _path_exists(destination_path):
+        raise RuntimeError("copy target or transaction temporary path already exists")
+
+    before = source_path.lstat()
+    if (
+        _is_reparse_stat(before)
+        or stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISREG(before.st_mode)
+    ):
+        raise RuntimeError(f"refusing non-regular copy source: {_bounded_diagnostic(source_path)}")
+    source_descriptor = _open_regular_read_descriptor(source_path)
+    try:
+        opened = os.fstat(source_descriptor)
+        if _stat_identity(opened) != _stat_identity(before):
+            raise RuntimeError(f"copy source changed while opening: {_bounded_diagnostic(source_path)}")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        temp_descriptor = os.open(temp_path, flags, stat.S_IMODE(opened.st_mode))
+        digest = hashlib.sha256()
+        copied = 0
+        try:
+            while copied < expected_size:
+                chunk = os.read(
+                    source_descriptor, min(1024 * 1024, expected_size - copied)
+                )
+                if not chunk:
+                    raise RuntimeError("copy source ended before its manifest size")
+                _write_payload_chunk(temp_descriptor, chunk)
+                digest.update(chunk)
+                copied += len(chunk)
+            if os.read(source_descriptor, 1):
+                raise RuntimeError("copy source exceeds its manifest size")
+            if hasattr(os, "fchmod"):
+                os.fchmod(temp_descriptor, stat.S_IMODE(opened.st_mode))
+            os.fsync(temp_descriptor)
+        finally:
+            os.close(temp_descriptor)
+        after_open = os.fstat(source_descriptor)
+    finally:
+        os.close(source_descriptor)
+
+    after_path = source_path.lstat()
+    if (
+        _stat_identity(after_open) != _stat_identity(opened)
+        or _stat_identity(after_path) != _stat_identity(opened)
+        or _is_reparse_stat(after_path)
+    ):
+        raise RuntimeError(f"copy source changed while reading: {_bounded_diagnostic(source_path)}")
+    if copied != expected_size or digest.hexdigest() != expected_digest:
+        raise RuntimeError("copied bytes differ from the transaction manifest")
+    temp_metadata = _regular_file_metadata(temp_path)
+    if (
+        temp_metadata["size"] != expected_size
+        or temp_metadata["sha256"] != expected_digest
+    ):
+        raise RuntimeError("synced copy temporary file differs from the transaction manifest")
+
+    os.replace(temp_path, destination_path)
+    published = _regular_file_metadata(destination_path)
+    if published["size"] != expected_size or published["sha256"] != expected_digest:
+        raise RuntimeError("atomically published payload file differs from its manifest")
+    return str(destination_path)
+
+
 def _completion_record(destination: Path) -> tuple[dict[str, object], bytes]:
     record, raw = _read_json_record(destination / COMPLETION_MARKER)
     expected_keys = {
@@ -1413,7 +1661,12 @@ def _inspect_owned_stage(
     expected_manifest = transaction["payload_manifest"]
     assert isinstance(expected_manifest, dict)
     expected_directories = set(transaction["payload_directories"])
+    component_name_max = _directory_component_name_max(path)
+    expected_copy_temps = _expected_copy_temps(
+        transaction, transaction_raw, component_name_max
+    )
     present_payload: set[str] = set()
+    present_copy_temps: set[str] = set()
     completion_present = False
     completion_observed = False
     for relative, metadata in snapshot.entries.items():
@@ -1455,6 +1708,19 @@ def _inspect_owned_stage(
             if _content_metadata(metadata) != _metadata_for_bytes(completion_raw):
                 raise RuntimeError("owned stage completion changed during inspection")
             continue
+        copy_target = expected_copy_temps.get(relative)
+        if copy_target is not None:
+            expected = expected_manifest[copy_target]
+            if require_complete:
+                raise RuntimeError("complete stage still contains an in-progress copy")
+            if copy_target in snapshot.entries:
+                raise RuntimeError(
+                    "stage contains both a copy temporary file and its final pathname"
+                )
+            if metadata.get("size", -1) > expected["size"]:
+                raise RuntimeError("stage copy temporary file exceeds its manifest bound")
+            present_copy_temps.add(relative)
+            continue
         expected = expected_manifest.get(relative)
         if expected is None:
             raise RuntimeError(
@@ -1467,6 +1733,10 @@ def _inspect_owned_stage(
                 f"{_bounded_diagnostic(relative, 180)}"
             )
         present_payload.add(relative)
+    if len(present_copy_temps) > 1:
+        raise RuntimeError("stage contains more than one in-progress payload copy")
+    if completion_observed and present_copy_temps:
+        raise RuntimeError("stage completion publication began before copying finished")
     if require_complete:
         if present_payload != set(expected_manifest) or not completion_present:
             raise RuntimeError("owned stage is not a complete source payload")
@@ -3209,10 +3479,30 @@ def stage_validated_install(
             stage / PROVENANCE_MARKER,
             _provenance_record(transaction, transaction_raw),
         )
+        transaction_digest = hashlib.sha256(transaction_raw).hexdigest()
+        component_name_max = _directory_component_name_max(stage)
+        # Derive the complete namespace before copying.  Truncation on a small
+        # NAME_MAX filesystem is safe only if every sibling remains unique and
+        # disjoint from authenticated payload/marker paths.
+        _expected_copy_temps(transaction, transaction_raw, component_name_max)
+
+        def atomic_copy(source: str, destination: str) -> str:
+            return _copy_payload_file_atomic(
+                source,
+                destination,
+                repo_root=repo_root,
+                stage=stage,
+                transaction=transaction,
+                transaction_raw=transaction_raw,
+                transaction_digest=transaction_digest,
+                component_name_max=component_name_max,
+            )
+
         shutil.copytree(
             repo_root,
             stage,
             ignore=ignore_runtime_noise,
+            copy_function=atomic_copy,
             dirs_exist_ok=True,
         )
         copied_manifest = payload_manifest(stage)

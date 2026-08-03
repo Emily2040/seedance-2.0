@@ -88,10 +88,11 @@ PAUSE_DURING_COPY = textwrap.dedent(
 
     original_copytree = installer.shutil.copytree
     copied = 0
+    active_copy = None
 
     def paused_copy(source, destination, *args, **kwargs):
         global copied
-        result = installer.shutil.copy2(source, destination, *args, **kwargs)
+        result = active_copy(source, destination, *args, **kwargs)
         copied += 1
         if copied == 2:
             ready.touch()
@@ -110,6 +111,9 @@ PAUSE_DURING_COPY = textwrap.dedent(
         # Python 3.11 recursively forwards copy_function positionally, while
         # newer runtimes may use keyword arguments. Mirror shutil.copytree's
         # public signature so the pause hook is injected exactly once on both.
+        global active_copy
+        if active_copy is None:
+            active_copy = copy_function or installer.shutil.copy2
         return original_copytree(
             source,
             destination,
@@ -124,6 +128,42 @@ PAUSE_DURING_COPY = textwrap.dedent(
     sys.argv = ["install_codex_skill.py", "--dest", str(skills_dir)]
     if force:
         sys.argv.append("--force")
+    raise SystemExit(installer.main())
+    """
+)
+
+
+PAUSE_DURING_ATOMIC_WRITE = textwrap.dedent(
+    """
+    import os
+    import sys
+    import time
+    from pathlib import Path
+
+    scripts_dir = Path(sys.argv[1])
+    skills_dir = Path(sys.argv[2])
+    ready = Path(sys.argv[3])
+
+    sys.path.insert(0, str(scripts_dir))
+    import install_codex_skill as installer
+
+    original_write = installer._write_payload_chunk
+    paused = False
+
+    def pause_after_partial_write(descriptor, chunk):
+        global paused
+        if not paused:
+            paused = True
+            prefix = chunk[:max(1, len(chunk) // 2)]
+            written = os.write(descriptor, prefix)
+            if written != len(prefix):
+                raise RuntimeError("controlled partial write was itself partial")
+            ready.touch()
+            time.sleep(120)
+        return original_write(descriptor, chunk)
+
+    installer._write_payload_chunk = pause_after_partial_write
+    sys.argv = ["install_codex_skill.py", "--dest", str(skills_dir)]
     raise SystemExit(installer.main())
     """
 )
@@ -407,6 +447,51 @@ class AtomicInstallRegressionTests(unittest.TestCase):
         finally:
             sys.argv = original_argv
         return result, output.getvalue()
+
+    def make_atomic_copy_fixture(
+        self, root: Path, *, transaction_digit: str = "a"
+    ) -> tuple[Path, Path, Path, dict[str, object], bytes, Path, Path]:
+        repo_root = root / "payload-source"
+        source = repo_root / "nested" / "payload.bin"
+        source.parent.mkdir(parents=True)
+        source.write_bytes((b"bounded atomic payload\n" * 1024) + b"end")
+        relative = source.relative_to(repo_root).as_posix()
+        source_metadata = installer._regular_file_metadata(source)
+        manifest = {
+            relative: {
+                "size": source_metadata["size"],
+                "sha256": source_metadata["sha256"],
+            }
+        }
+        skills_dir = root / "skills"
+        skills_dir.mkdir()
+        transaction_id = transaction_digit * 32
+        transaction = installer._transaction_record(
+            f"{installer.STAGE_PREFIX}123-{transaction_id}",
+            f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+            transaction_id,
+            manifest,
+            None,
+        )
+        transaction_raw = installer._write_json_exclusive(
+            skills_dir / installer.TRANSACTION_NAME, transaction
+        )
+        stage = skills_dir / str(transaction["stage_name"])
+        destination = stage.joinpath(*relative.split("/"))
+        destination.parent.mkdir(parents=True)
+        installer._write_json_exclusive(
+            stage / installer.PROVENANCE_MARKER,
+            installer._provenance_record(transaction, transaction_raw),
+        )
+        return (
+            repo_root,
+            skills_dir,
+            stage,
+            transaction,
+            transaction_raw,
+            source,
+            destination,
+        )
 
     def test_valid_live_plus_untrusted_reserved_backup_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1641,6 +1726,294 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertEqual((stage / "SKILL.md").read_bytes(), first)
             self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
 
+    def test_atomic_copy_faults_never_publish_a_partial_final_path(self) -> None:
+        fault_names = ("open", "write", "fsync", "rename")
+        for index, fault_name in enumerate(fault_names):
+            with self.subTest(fault=fault_name), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (
+                    repo_root,
+                    skills_dir,
+                    stage,
+                    transaction,
+                    transaction_raw,
+                    source,
+                    destination,
+                ) = self.make_atomic_copy_fixture(
+                    root, transaction_digit="abcdef0123456789"[index]
+                )
+                relative = source.relative_to(repo_root).as_posix()
+                component_name_max = installer._directory_component_name_max(stage)
+                temp_relative = installer._copy_temp_relative(
+                    relative, transaction_raw, component_name_max
+                )
+                temp_path = stage.joinpath(*temp_relative.split("/"))
+                expected_size = int(transaction["payload_manifest"][relative]["size"])
+
+                if fault_name == "open":
+                    original_open = installer.os.open
+
+                    def fail_temp_open(path, flags, mode=0o777, *, dir_fd=None):
+                        if Path(path) == temp_path:
+                            raise OSError("injected temp open failure")
+                        if dir_fd is None:
+                            return original_open(path, flags, mode)
+                        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+                    patcher = mock.patch.object(installer.os, "open", fail_temp_open)
+                elif fault_name == "write":
+                    def fail_after_partial_write(descriptor: int, chunk: bytes) -> None:
+                        written = installer.os.write(descriptor, chunk[:17])
+                        self.assertEqual(written, 17)
+                        raise OSError("injected payload write failure")
+
+                    patcher = mock.patch.object(
+                        installer, "_write_payload_chunk", fail_after_partial_write
+                    )
+                elif fault_name == "fsync":
+                    patcher = mock.patch.object(
+                        installer.os,
+                        "fsync",
+                        side_effect=OSError("injected payload fsync failure"),
+                    )
+                else:
+                    patcher = mock.patch.object(
+                        installer.os,
+                        "replace",
+                        side_effect=OSError("injected atomic rename failure"),
+                    )
+
+                with patcher, self.assertRaises(OSError):
+                    installer._copy_payload_file_atomic(
+                        source,
+                        destination,
+                        repo_root=repo_root,
+                        stage=stage,
+                        transaction=transaction,
+                        transaction_raw=transaction_raw,
+                    )
+
+                self.assertFalse(destination.exists())
+                if fault_name == "open":
+                    self.assertFalse(temp_path.exists())
+                else:
+                    self.assertTrue(temp_path.is_file())
+                    self.assertLessEqual(temp_path.stat().st_size, expected_size)
+                    if fault_name == "write":
+                        self.assertGreater(temp_path.stat().st_size, 0)
+                        self.assertLess(temp_path.stat().st_size, expected_size)
+                snapshot = installer._inspect_owned_stage(
+                    stage, transaction, transaction_raw, require_complete=False
+                )
+                self.assertEqual(snapshot.root_type, "dir")
+
+                installer.recover_interrupted_transaction(
+                    skills_dir, skills_dir / installer.SKILL_NAME
+                )
+                self.assertFalse(stage.exists())
+                self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    def test_low_name_max_copy_temp_is_bounded_and_recoverable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (
+                repo_root,
+                skills_dir,
+                stage,
+                transaction,
+                transaction_raw,
+                source,
+                destination,
+            ) = self.make_atomic_copy_fixture(root, transaction_digit="d")
+            relative = source.relative_to(repo_root).as_posix()
+            temp_relative = installer._copy_temp_relative(
+                relative, transaction_raw, 14
+            )
+            temp_path = stage.joinpath(*temp_relative.split("/"))
+            self.assertEqual(len(os.fsencode(temp_path.name)), 14)
+            self.assertTrue(temp_path.name.startswith(installer.COPY_TEMP_COMPACT_PREFIX))
+
+            def fail_after_partial_write(descriptor: int, chunk: bytes) -> None:
+                written = installer.os.write(descriptor, chunk[:19])
+                self.assertEqual(written, 19)
+                raise OSError("injected low-NAME_MAX write failure")
+
+            with (
+                mock.patch.object(
+                    installer, "_directory_component_name_max", return_value=14
+                ),
+                mock.patch.object(
+                    installer, "_write_payload_chunk", fail_after_partial_write
+                ),
+                self.assertRaises(OSError),
+            ):
+                installer._copy_payload_file_atomic(
+                    source,
+                    destination,
+                    repo_root=repo_root,
+                    stage=stage,
+                    transaction=transaction,
+                    transaction_raw=transaction_raw,
+                )
+
+            self.assertFalse(destination.exists())
+            self.assertEqual(temp_path.stat().st_size, 19)
+            with mock.patch.object(
+                installer, "_directory_component_name_max", return_value=14
+            ):
+                snapshot = installer._inspect_owned_stage(
+                    stage, transaction, transaction_raw, require_complete=False
+                )
+                self.assertIn(temp_relative, snapshot.entries)
+                installer.recover_interrupted_transaction(
+                    skills_dir, skills_dir / installer.SKILL_NAME
+                )
+            self.assertFalse(stage.exists())
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    def test_copy_temp_namespace_collision_fails_before_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo_root = root / "payload-source"
+            (repo_root / "nested").mkdir(parents=True)
+            first = repo_root / "nested" / "first.bin"
+            second = repo_root / "nested" / "second.bin"
+            first.write_bytes(b"first")
+            second.write_bytes(b"second")
+            manifest = installer.payload_manifest(repo_root)
+            transaction_id = "c" * 32
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                manifest,
+                None,
+            )
+            raw = installer._json_record_bytes(transaction)
+            with (
+                mock.patch.object(
+                    installer, "_canonical_sha256", return_value="a" * 64
+                ),
+                self.assertRaisesRegex(RuntimeError, "collides"),
+            ):
+                installer._expected_copy_temps(transaction, raw, 14)
+
+    def test_recovery_refuses_multiple_bound_copy_temporaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo_root = root / "payload-source"
+            (repo_root / "nested").mkdir(parents=True)
+            (repo_root / "nested" / "first.bin").write_bytes(b"first payload")
+            (repo_root / "nested" / "second.bin").write_bytes(b"second payload")
+            manifest = installer.payload_manifest(repo_root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            transaction_id = "9" * 32
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                manifest,
+                None,
+            )
+            transaction_raw = installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            stage = skills_dir / str(transaction["stage_name"])
+            (stage / "nested").mkdir(parents=True)
+            installer._write_json_exclusive(
+                stage / installer.PROVENANCE_MARKER,
+                installer._provenance_record(transaction, transaction_raw),
+            )
+            expected_temps = installer._expected_copy_temps(
+                transaction, transaction_raw, 14
+            )
+            self.assertEqual(len(expected_temps), 2)
+            for relative in expected_temps:
+                stage.joinpath(*relative.split("/")).write_bytes(b"partial")
+
+            with (
+                mock.patch.object(
+                    installer, "_directory_component_name_max", return_value=14
+                ),
+                self.assertRaisesRegex(RuntimeError, "more than one"),
+            ):
+                installer.recover_interrupted_transaction(
+                    skills_dir, skills_dir / installer.SKILL_NAME
+                )
+            self.assertTrue(stage.exists())
+            self.assertTrue((skills_dir / installer.TRANSACTION_NAME).exists())
+            for relative in expected_temps:
+                self.assertEqual(
+                    stage.joinpath(*relative.split("/")).read_bytes(), b"partial"
+                )
+
+    def test_copy_rejects_digest_not_bound_to_transaction_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (
+                repo_root,
+                _skills_dir,
+                stage,
+                transaction,
+                transaction_raw,
+                source,
+                destination,
+            ) = self.make_atomic_copy_fixture(Path(tmp), transaction_digit="b")
+            with self.assertRaisesRegex(RuntimeError, "persisted record"):
+                installer._copy_payload_file_atomic(
+                    source,
+                    destination,
+                    repo_root=repo_root,
+                    stage=stage,
+                    transaction=transaction,
+                    transaction_raw=transaction_raw,
+                    transaction_digest="0" * 64,
+                    component_name_max=14,
+                )
+            self.assertFalse(destination.exists())
+            self.assertEqual(
+                list(destination.parent.glob(f"{installer.COPY_TEMP_COMPACT_PREFIX}*")),
+                [],
+            )
+
+    def test_recovery_refuses_unbound_temp_or_truncated_final_payload(self) -> None:
+        for artifact_kind in ("unbound-temp", "truncated-final"):
+            with self.subTest(artifact=artifact_kind), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (
+                    repo_root,
+                    skills_dir,
+                    stage,
+                    transaction,
+                    transaction_raw,
+                    source,
+                    destination,
+                ) = self.make_atomic_copy_fixture(root, transaction_digit="e")
+                del repo_root, transaction, transaction_raw, source
+                if artifact_kind == "unbound-temp":
+                    artifact = stage / (
+                        f"{installer.COPY_TEMP_PREFIX}not-transaction-bound"
+                        f"{installer.COPY_TEMP_SUFFIX}"
+                    )
+                    artifact.write_bytes(b"user bytes")
+                else:
+                    artifact = destination
+                    artifact.write_bytes(b"truncated expected pathname")
+
+                with self.assertRaises(RuntimeError):
+                    installer.recover_interrupted_transaction(
+                        skills_dir, skills_dir / installer.SKILL_NAME
+                    )
+
+                self.assertEqual(
+                    artifact.read_bytes(),
+                    b"user bytes"
+                    if artifact_kind == "unbound-temp"
+                    else b"truncated expected pathname",
+                )
+                self.assertTrue(stage.exists())
+                self.assertTrue((skills_dir / installer.TRANSACTION_NAME).exists())
+
     def test_retry_recovers_exact_torn_completion_publication(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
@@ -1700,6 +2073,43 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertEqual(retry.returncode, 0, retry.stdout + retry.stderr)
             self.assert_completed(destination)
             self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
+    def test_kill_during_atomic_write_recovers_only_the_bound_temp_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            ready = root / "atomic-write-paused"
+            process = self.start_controlled_installer(
+                PAUSE_DURING_ATOMIC_WRITE, skills_dir, ready
+            )
+            self.terminate_at_pause(process, ready)
+
+            transaction, transaction_raw = installer._load_transaction(skills_dir)
+            stage = skills_dir / str(transaction["stage_name"])
+            expected_temps = installer._expected_copy_temps(
+                transaction,
+                transaction_raw,
+                installer._directory_component_name_max(stage),
+            )
+            snapshot = installer._inspect_owned_stage(
+                stage, transaction, transaction_raw, require_complete=False
+            )
+            present_temps = set(snapshot.entries) & set(expected_temps)
+            self.assertEqual(len(present_temps), 1)
+            temp_relative = present_temps.pop()
+            target_relative = expected_temps[temp_relative]
+            temp_size = int(snapshot.entries[temp_relative]["size"])
+            expected_size = int(transaction["payload_manifest"][target_relative]["size"])
+            self.assertGreater(temp_size, 0)
+            self.assertLessEqual(temp_size, expected_size)
+            self.assertFalse(stage.joinpath(*target_relative.split("/")).exists())
+            self.assertFalse((skills_dir / installer.SKILL_NAME).exists())
+
+            retry = self.run_installer(skills_dir)
+            self.assertEqual(retry.returncode, 0, retry.stdout + retry.stderr)
+            self.assert_completed(skills_dir / installer.SKILL_NAME)
+            self.assertFalse(stage.exists())
 
     def test_interrupted_force_stage_preserves_the_live_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
