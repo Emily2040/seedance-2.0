@@ -112,6 +112,240 @@ class InstallPayloadTests(unittest.TestCase):
                 directory,
             )
 
+    def test_public_staging_api_recomputes_policy_and_refuses_unknown_without_force(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            destination = skills_dir / installer.SKILL_NAME
+            destination.mkdir(parents=True)
+            sentinel = destination / "user-data.txt"
+            sentinel.write_text("preserve\n", encoding="utf-8")
+            contract = installer.load_payload_contract(source)
+
+            with self.assertRaisesRegex(RuntimeError, "requires an explicit force"):
+                installer.stage_validated_install(source, skills_dir, contract)
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
+    def test_transaction_persists_the_recomputed_replacement_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            contract = installer.load_payload_contract(source)
+
+            stage = installer.stage_validated_install(source, skills_dir, contract)
+            record, _ = installer._load_transaction(skills_dir)
+
+            self.assertEqual(record["replacement_state"], "missing")
+            self.assertIs(record["force"], False)
+            installer.promote_staged_install(
+                stage, skills_dir / installer.SKILL_NAME, skills_dir, contract
+            )
+
+    def test_public_transaction_entrypoints_reject_redirected_destinations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            other_skills = root / "other-skills"
+            other_skills.mkdir()
+            redirected = other_skills / installer.SKILL_NAME
+            contract = installer.load_payload_contract(source)
+            stage = installer.stage_validated_install(source, skills_dir, contract)
+
+            with self.assertRaisesRegex(ValueError, "inside the skills directory"):
+                installer.promote_staged_install(
+                    stage,
+                    redirected,
+                    skills_dir,
+                    contract,
+                )
+            with self.assertRaisesRegex(ValueError, "inside the skills directory"):
+                installer.recover_interrupted_transaction(skills_dir, redirected)
+
+            self.assertTrue(stage.is_dir())
+            self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
+            self.assertFalse(redirected.exists())
+            installer.recover_interrupted_transaction(
+                skills_dir,
+                skills_dir / installer.SKILL_NAME,
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX portable-mode contract")
+    def test_source_permission_drift_is_normalized_not_propagated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            contract = installer.load_payload_contract(source)
+            for directory in [source, *(path for path in source.rglob("*") if path.is_dir())]:
+                directory.chmod(0o777)
+            for file_path in (path for path in source.rglob("*") if path.is_file()):
+                file_path.chmod(0o777)
+
+            stage = installer.stage_validated_install(source, skills_dir, contract)
+            self.assertEqual(
+                stat.S_IMODE(stage.lstat().st_mode),
+                installer.PORTABLE_DIRECTORY_MODE,
+            )
+            for candidate in stage.rglob("*"):
+                expected = (
+                    installer.PORTABLE_DIRECTORY_MODE
+                    if candidate.is_dir()
+                    else installer.PORTABLE_FILE_MODE
+                )
+                self.assertEqual(stat.S_IMODE(candidate.lstat().st_mode), expected)
+
+            destination = skills_dir / installer.SKILL_NAME
+            installer.promote_staged_install(stage, destination, skills_dir, contract)
+            for candidate in [destination, *destination.rglob("*")]:
+                expected = (
+                    installer.PORTABLE_DIRECTORY_MODE
+                    if candidate.is_dir()
+                    else installer.PORTABLE_FILE_MODE
+                )
+                self.assertEqual(stat.S_IMODE(candidate.lstat().st_mode), expected)
+
+    @unittest.skipUnless(
+        os.name != "nt" and hasattr(os, "setxattr"),
+        "POSIX extended-attribute policy",
+    )
+    def test_source_root_directory_and_file_xattrs_fail_before_transaction(self) -> None:
+        for target_kind in ("root", "directory", "file"):
+            with self.subTest(target_kind=target_kind), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = self.fixture_source(root)
+                skills_dir = root / "skills"
+                skills_dir.mkdir()
+                target = {
+                    "root": source,
+                    "directory": source / "scripts",
+                    "file": source / "SKILL.md",
+                }[target_kind]
+                try:
+                    os.setxattr(target, "user.seedance-source-test", b"unsupported")
+                except OSError as exc:
+                    self.skipTest(f"temporary filesystem does not support xattrs: {exc}")
+
+                with self.assertRaisesRegex(RuntimeError, "not representable"):
+                    contract = installer.load_payload_contract(source)
+                    installer.stage_validated_install(source, skills_dir, contract)
+
+                self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+                self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows named-stream policy")
+    def test_source_directory_and_file_streams_fail_before_transaction(self) -> None:
+        for target_kind in ("root", "directory", "file"):
+            with self.subTest(target_kind=target_kind), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = self.fixture_source(root)
+                skills_dir = root / "skills"
+                skills_dir.mkdir()
+                target = {
+                    "root": source,
+                    "directory": source / "scripts",
+                    "file": source / "SKILL.md",
+                }[target_kind]
+                Path(f"{target}:seedance-source-test").write_bytes(b"unsupported")
+
+                with self.assertRaisesRegex(RuntimeError, "not representable"):
+                    contract = installer.load_payload_contract(source)
+                    installer.stage_validated_install(source, skills_dir, contract)
+
+                self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+                self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
+    def test_transaction_validator_rejects_no_force_unknown_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            destination = skills_dir / installer.SKILL_NAME
+            destination.mkdir(parents=True)
+            sentinel = destination / "user-data.txt"
+            sentinel.write_text("preserve\n", encoding="utf-8")
+            contract = installer.load_payload_contract(source)
+            snapshot = installer._capture_path_snapshot(destination)
+            transaction_id = "a" * 32
+            record = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                contract.file_manifest(),
+                snapshot,
+                "unknown",
+                False,
+            )
+
+            with self.assertRaisesRegex(ValueError, "does not authorize"):
+                installer._validate_transaction_before_publication(record)
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    @unittest.skipUnless(os.name == "nt", "Windows legal-name round-trip")
+    def test_unserializable_windows_live_name_is_refused_before_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            destination = skills_dir / installer.SKILL_NAME
+            destination.mkdir(parents=True)
+            sentinel = destination / "keep\u200b.txt"
+            sentinel.write_text("preserve\n", encoding="utf-8")
+            contract = installer.load_payload_contract(source)
+
+            with self.assertRaisesRegex(ValueError, "unsafe path"):
+                installer.stage_validated_install(
+                    source, skills_dir, contract, force=True
+                )
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
+    @unittest.skipIf(os.name == "nt", "POSIX filename round-trip cases")
+    def test_unserializable_posix_live_names_are_refused_before_artifacts(self) -> None:
+        cases = (
+            ("casefold", ("Case.txt", "case.txt")),
+            ("nfd", ("e\u0301.txt",)),
+            ("colon", ("keep:note.txt",)),
+            ("control", ("keep\x01note.txt",)),
+        )
+        for label, names in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = self.fixture_source(root)
+                skills_dir = root / "skills"
+                destination = skills_dir / installer.SKILL_NAME
+                destination.mkdir(parents=True)
+                sentinels = [destination / name for name in names]
+                for sentinel in sentinels:
+                    sentinel.write_text("preserve\n", encoding="utf-8")
+                contract = installer.load_payload_contract(source)
+
+                with self.assertRaisesRegex(ValueError, "unsafe|case-ambiguous"):
+                    installer.stage_validated_install(
+                        source, skills_dir, contract, force=True
+                    )
+
+                for sentinel in sentinels:
+                    self.assertEqual(
+                        sentinel.read_text(encoding="utf-8"), "preserve\n"
+                    )
+                self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+                self.assertEqual(
+                    list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), []
+                )
+
     @unittest.skipIf(os.name == "nt", "POSIX directory mode contract")
     def test_read_only_source_directories_are_writable_in_stage_and_live(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -168,15 +402,13 @@ class InstallPayloadTests(unittest.TestCase):
                 directory.chmod(0o555)
             try:
                 replacement = installer.stage_validated_install(
-                    source, skills_dir, contract
+                    source, skills_dir, contract, force=True
                 )
                 installer.promote_staged_install(
                     replacement,
                     destination,
                     skills_dir,
                     contract,
-                    replacement_state="complete",
-                    force=True,
                 )
 
                 self.assertTrue(installer.validate_completed_install(destination)[0])
@@ -257,6 +489,27 @@ class InstallPayloadTests(unittest.TestCase):
             os.rmdir(link)
         else:
             link.unlink()
+
+    def test_public_staging_rejects_a_linked_skills_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            contract = installer.load_payload_contract(source)
+            real_skills = root / "real-skills"
+            real_skills.mkdir()
+            linked_skills = root / "linked-skills"
+            self.directory_link_or_skip(linked_skills, real_skills)
+            try:
+                with self.assertRaisesRegex(ValueError, "linked or reparse"):
+                    installer.stage_validated_install(
+                        source,
+                        linked_skills,
+                        contract,
+                    )
+            finally:
+                self.remove_directory_link(linked_skills)
+
+            self.assertEqual(list(real_skills.iterdir()), [])
 
     def test_development_only_tools_are_not_installed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -351,10 +604,12 @@ class InstallPayloadTests(unittest.TestCase):
 
             original_load_contract = installer._load_payload_contract_once
             mutated = False
+            contract_loads = 0
 
             def mutate_before_post_copy_snapshot(repo_root: Path):
-                nonlocal mutated
-                if not mutated:
+                nonlocal contract_loads, mutated
+                contract_loads += 1
+                if contract_loads == 2:
                     (source / "SKILL.md").write_text(
                         "changed payload B\n",
                         encoding="utf-8",
@@ -368,7 +623,9 @@ class InstallPayloadTests(unittest.TestCase):
                 mutate_before_post_copy_snapshot,
             ):
                 with self.assertRaisesRegex(RuntimeError, "source payload changed"):
-                    installer.stage_validated_install(source, skills_dir, contract)
+                    installer.stage_validated_install(
+                        source, skills_dir, contract, force=True
+                    )
 
             self.assertTrue(mutated, "the regression must mutate a declared source file")
             self.assertTrue(installer.validate_completed_install(destination)[0])
@@ -377,6 +634,52 @@ class InstallPayloadTests(unittest.TestCase):
                 "old live install survives\n",
             )
             self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
+    def test_late_source_directory_fork_aborts_without_stranding_transaction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            contract = installer.load_payload_contract(source)
+            original_copy = installer._copy_payload_file_atomic
+            injected = False
+
+            def copy_then_inject(source_path: str, destination_path: str, **kwargs):
+                nonlocal injected
+                result = original_copy(source_path, destination_path, **kwargs)
+                if not injected:
+                    target = source / "scripts"
+                    if os.name == "nt":
+                        Path(f"{target}:late-source-policy").write_bytes(b"unsupported")
+                    elif hasattr(os, "setxattr"):
+                        try:
+                            os.setxattr(
+                                target,
+                                "user.seedance-late-source-policy",
+                                b"unsupported",
+                            )
+                        except OSError as exc:
+                            self.skipTest(
+                                f"temporary filesystem does not support xattrs: {exc}"
+                            )
+                    else:
+                        self.skipTest("source metadata forks are unavailable")
+                    injected = True
+                return result
+
+            with mock.patch.object(
+                installer,
+                "_copy_payload_file_atomic",
+                copy_then_inject,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "not representable"):
+                    installer.stage_validated_install(source, skills_dir, contract)
+
+            self.assertTrue(injected)
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+            self.assertFalse((skills_dir / installer.SKILL_NAME).exists())
 
     def test_atomic_manifest_replacement_during_capture_preserves_live_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -511,7 +814,7 @@ class InstallPayloadTests(unittest.TestCase):
                 current_contract,
             )
             self.assertEqual(state, "unknown")
-            self.assertIn("different source payload contract", reason)
+            self.assertIn("different source payload", reason)
 
     def test_damaged_managed_install_with_unowned_file_requires_force(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -557,7 +860,6 @@ class InstallPayloadTests(unittest.TestCase):
                     destination,
                     skills_dir,
                     contract,
-                    replacement_state=state,
                 )
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "must survive\n")
             self.assertEqual(
@@ -647,7 +949,9 @@ class InstallPayloadTests(unittest.TestCase):
                     inject_stage_junction,
                 ):
                     with self.assertRaisesRegex(RuntimeError, "staging recovery refused"):
-                        installer.stage_validated_install(source, skills_dir, contract)
+                        installer.stage_validated_install(
+                            source, skills_dir, contract, force=True
+                        )
                 self.assertTrue(installer.validate_completed_install(destination)[0])
                 self.assertEqual(sentinel.read_text(encoding="utf-8"), "old live tree\n")
             finally:

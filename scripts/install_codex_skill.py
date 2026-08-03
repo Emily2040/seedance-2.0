@@ -7,7 +7,6 @@ import fnmatch
 import hashlib
 import json
 import os
-import shutil
 import stat
 import sys
 import time
@@ -30,7 +29,7 @@ PROVENANCE_MARKER = f".{SKILL_NAME}.install-provenance.json"
 QUARANTINE_MARKER = f".{SKILL_NAME}.install-quarantine.json"
 QUARANTINE_PREFIX = f".{SKILL_NAME}.install-quarantine-"
 TRANSACTION_DONE_PREFIX = f".{SKILL_NAME}.install-transaction-done-"
-TRANSACTION_FORMAT_VERSION = 2
+TRANSACTION_FORMAT_VERSION = 3
 LOCK_TIMEOUT_SECONDS = 300.0
 MAX_RECORD_BYTES = 8 * 1024 * 1024
 MAX_MANIFEST_ENTRIES = 50_000
@@ -49,7 +48,9 @@ COPY_TEMP_MAX_BASENAME_BYTES = (
     len(COPY_TEMP_COMPACT_PREFIX) + COPY_TEMP_MAX_TOKEN_CHARS
 )
 RUNTIME_DEPENDENCY_PREFIXES = ((b"[ref:", "ref"), (b"[skill:", "skill"))
-_UNCLASSIFIED_DESTINATION = object()
+REPLACEMENT_STATES = frozenset({"missing", "complete", "incomplete", "unknown"})
+PORTABLE_DIRECTORY_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+PORTABLE_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -605,7 +606,11 @@ def _source_file_snapshot(
 ) -> FileSnapshot:
     path = _assert_regular_relative_path(root, relative, "declared payload path")
     before = path.lstat()
-    metadata = _regular_file_metadata(path, chunk_consumer=chunk_consumer)
+    metadata = _regular_file_metadata(
+        path,
+        chunk_consumer=chunk_consumer,
+        reject_unmanaged_forks=True,
+    )
     after = path.lstat()
     if _stat_identity(before) != _stat_identity(after):
         raise RuntimeError(f"declared payload path changed while captured: {relative}")
@@ -843,6 +848,87 @@ def _implied_payload_directories(declared: tuple[str, ...]) -> set[str]:
         for index in range(1, len(parts) + 1):
             directories.add("/".join(parts[:index]))
     return directories
+
+
+def _assert_supported_source_directory(path: Path, label: str) -> None:
+    """Reject source-directory metadata that the portable install omits."""
+
+    before = path.lstat()
+    if (
+        _is_reparse_stat(before)
+        or stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISDIR(before.st_mode)
+    ):
+        raise RuntimeError(f"{label} is not a stable directory: {_bounded_diagnostic(path)}")
+    _assert_no_unmanaged_forks(path)
+    after = path.lstat()
+    if _stat_identity(after) != _stat_identity(before):
+        raise RuntimeError(f"{label} changed while inspected: {_bounded_diagnostic(path)}")
+    _assert_no_unmanaged_forks(path)
+
+
+def _assert_supported_source_metadata(
+    repo_root: Path,
+    declared: tuple[str, ...],
+) -> None:
+    """Preflight every copied file/directory before publishing authority."""
+
+    root = _absolute_lexical(repo_root)
+    _assert_existing_components_no_links(root, "source payload root")
+    _assert_supported_source_directory(root, "source payload root")
+    for relative in sorted(
+        _implied_payload_directories(declared),
+        key=lambda value: (value.count("/"), value),
+    ):
+        directory = root.joinpath(*relative.split("/"))
+        _assert_supported_source_directory(
+            directory,
+            f"declared payload directory {relative}",
+        )
+    for relative in declared:
+        path = _assert_regular_relative_path(root, relative, "declared payload path")
+        _assert_no_unmanaged_forks(path)
+
+
+def _set_portable_mode(path: Path, mode: int) -> None:
+    """Apply an exact, deterministic POSIX mode; Windows uses ACLs instead."""
+
+    if os.name == "nt":
+        return
+    path.chmod(mode, follow_symlinks=False)
+    if stat.S_IMODE(path.lstat().st_mode) != mode:
+        raise RuntimeError(
+            f"portable install mode did not persist: {_bounded_diagnostic(path, 220)}"
+        )
+
+
+def _copy_declared_payload(
+    repo_root: Path,
+    stage: Path,
+    declared: tuple[str, ...],
+    copy_file: Callable[[str, str], str],
+) -> None:
+    """Copy only declared paths without inheriting source metadata."""
+
+    root = _absolute_lexical(repo_root)
+    for relative in sorted(
+        _implied_payload_directories(declared),
+        key=lambda value: (value.count("/"), value),
+    ):
+        source_directory = root.joinpath(*relative.split("/"))
+        _assert_supported_source_directory(
+            source_directory,
+            f"declared payload directory {relative}",
+        )
+        destination_directory = stage.joinpath(*relative.split("/"))
+        destination_directory.mkdir(mode=PORTABLE_DIRECTORY_MODE)
+        _set_portable_mode(destination_directory, PORTABLE_DIRECTORY_MODE)
+        _fsync_directory(destination_directory)
+        _fsync_directory(destination_directory.parent)
+    for relative in declared:
+        source = root.joinpath(*relative.split("/"))
+        destination = stage.joinpath(*relative.split("/"))
+        copy_file(str(source), str(destination))
 
 
 def payload_allowlist_filter(repo_root: Path, declared: tuple[str, ...]):
@@ -1396,6 +1482,8 @@ def _write_json_exclusive(path: Path, record: Mapping[str, object]) -> bytes:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
     descriptor = os.open(path, flags, 0o600)
     try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, PORTABLE_FILE_MODE)
         offset = 0
         while offset < len(raw):
             offset += os.write(descriptor, raw[offset:])
@@ -1694,7 +1782,7 @@ def _copy_payload_file_atomic(
         if _stat_identity(opened) != _stat_identity(before):
             raise RuntimeError(f"copy source changed while opening: {_bounded_diagnostic(source_path)}")
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
-        temp_descriptor = os.open(temp_path, flags, stat.S_IMODE(opened.st_mode))
+        temp_descriptor = os.open(temp_path, flags, PORTABLE_FILE_MODE)
         digest = hashlib.sha256()
         copied = 0
         try:
@@ -1710,7 +1798,7 @@ def _copy_payload_file_atomic(
             if os.read(source_descriptor, 1):
                 raise RuntimeError("copy source exceeds its manifest size")
             if hasattr(os, "fchmod"):
-                os.fchmod(temp_descriptor, stat.S_IMODE(opened.st_mode))
+                os.fchmod(temp_descriptor, PORTABLE_FILE_MODE)
             os.fsync(temp_descriptor)
         finally:
             os.close(temp_descriptor)
@@ -1739,6 +1827,11 @@ def _copy_payload_file_atomic(
     published = _regular_file_metadata(destination_path)
     if published["size"] != expected_size or published["sha256"] != expected_digest:
         raise RuntimeError("atomically published payload file differs from its manifest")
+    if (
+        os.name != "nt"
+        and stat.S_IMODE(destination_path.lstat().st_mode) != PORTABLE_FILE_MODE
+    ):
+        raise RuntimeError("atomically published payload file has a non-portable mode")
     return str(destination_path)
 
 
@@ -2314,17 +2407,54 @@ def _transaction_path(skills_dir: Path) -> Path:
     return skills_dir / TRANSACTION_NAME
 
 
+def _canonical_install_paths(
+    skills_dir: Path,
+    destination: Path,
+) -> tuple[Path, Path]:
+    """Validate and canonicalize the one public installation destination."""
+
+    assert_safe_destination(destination, skills_dir)
+    absolute_skills_dir = _absolute_lexical(skills_dir)
+    absolute_destination = _absolute_lexical(destination)
+    expected_destination = absolute_skills_dir / SKILL_NAME
+    if absolute_destination != expected_destination:
+        raise RuntimeError("destination does not match the canonical skill pathname")
+    return absolute_skills_dir, absolute_destination
+
+
+def _bound_transaction_destination(
+    skills_dir: Path,
+    destination: Path,
+    transaction: Mapping[str, object],
+) -> tuple[Path, Path]:
+    """Require transaction authority and mutation to name the same child."""
+
+    absolute_skills_dir, absolute_destination = _canonical_install_paths(
+        skills_dir,
+        destination,
+    )
+    destination_name = transaction.get("destination_name")
+    if not isinstance(destination_name, str) or destination_name != SKILL_NAME:
+        raise RuntimeError("transaction destination authority is invalid")
+    if absolute_destination != absolute_skills_dir / destination_name:
+        raise RuntimeError("destination does not match the active transaction")
+    return absolute_skills_dir, absolute_destination
+
+
 def _transaction_record(
     stage_name: str,
     quarantine_name: str,
     transaction_id: str,
     expected_manifest: dict[str, dict[str, object]],
     old_snapshot: PathSnapshot | None,
+    replacement_state: str = "missing",
+    force: bool = False,
 ) -> dict[str, object]:
     record: dict[str, object] = {
         "backup_name": BACKUP_NAME,
         "destination_name": SKILL_NAME,
         "format_version": TRANSACTION_FORMAT_VERSION,
+        "force": force,
         "had_destination": old_snapshot is not None,
         "old_entry_count": len(old_snapshot.entries) if old_snapshot else 0,
         "old_root_identity": list(old_snapshot.root_identity) if old_snapshot else None,
@@ -2336,6 +2466,7 @@ def _transaction_record(
         "payload_manifest": expected_manifest,
         "payload_manifest_sha256": _manifest_sha256(expected_manifest),
         "quarantine_name": quarantine_name,
+        "replacement_state": replacement_state,
         "skill_name": SKILL_NAME,
         "stage_name": stage_name,
         "transaction_id": transaction_id,
@@ -2350,6 +2481,7 @@ def _validate_transaction_record(
         "backup_name",
         "destination_name",
         "format_version",
+        "force",
         "had_destination",
         "old_entry_count",
         "old_root_identity",
@@ -2362,6 +2494,7 @@ def _validate_transaction_record(
         "payload_manifest_sha256",
         "quarantine_name",
         "record_sha256",
+        "replacement_state",
         "skill_name",
         "stage_name",
         "transaction_id",
@@ -2413,7 +2546,11 @@ def _validate_transaction_record(
     if type(had_destination) is not bool:
         raise ValueError("transaction destination flag is invalid")
     old_root_type = record.get("old_root_type")
-    if old_root_type not in {"missing", "file", "dir"}:
+    if not isinstance(old_root_type, str) or old_root_type not in {
+        "missing",
+        "file",
+        "dir",
+    }:
         raise ValueError("transaction old-root type is invalid")
     old_entries = _validate_tree_entries(
         record.get("old_tree_entries"), "dir" if old_root_type == "missing" else old_root_type
@@ -2449,6 +2586,19 @@ def _validate_transaction_record(
         or old_count != 0
     ):
         raise ValueError("fresh transaction contains an old-tree identity")
+    replacement_state = record.get("replacement_state")
+    force = record.get("force")
+    if (
+        not isinstance(replacement_state, str)
+        or replacement_state not in REPLACEMENT_STATES
+    ):
+        raise ValueError("transaction replacement state is invalid")
+    if type(force) is not bool:
+        raise ValueError("transaction force flag is invalid")
+    if (replacement_state == "missing") != (not had_destination):
+        raise ValueError("transaction replacement state disagrees with its old tree")
+    if not force and replacement_state not in {"missing", "incomplete"}:
+        raise ValueError("transaction does not authorize this no-force replacement")
     record["payload_manifest"] = manifest
     record["old_tree_entries"] = old_entries
     record["old_root_identity"] = old_root_identity
@@ -2458,6 +2608,30 @@ def _validate_transaction_record(
 def _load_transaction(skills_dir: Path) -> tuple[dict[str, object], bytes]:
     record, raw = _read_json_record(_transaction_path(skills_dir))
     return _validate_transaction_record(record, raw)
+
+
+def _validate_transaction_before_publication(
+    record: dict[str, object],
+) -> bytes:
+    """Prove that the exact record to be published is readable by recovery."""
+    raw = _json_record_bytes(record)
+    if not raw or len(raw) > MAX_RECORD_BYTES:
+        raise ValueError("transaction metadata is outside the safe size limit")
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=_reject_nonfinite,
+        )
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError(
+            f"transaction cannot be serialized as strict JSON: "
+            f"{_bounded_diagnostic(exc, 240)}"
+        ) from exc
+    if not isinstance(value, dict):
+        raise ValueError("transaction root must be an object")
+    _validate_transaction_record(value, raw)
+    return raw
 
 
 @contextmanager
@@ -2573,6 +2747,43 @@ def _bound_metadata_for_bytes(path: Path, raw: bytes) -> dict[str, object]:
     return metadata
 
 
+def _assert_portable_snapshot_modes(path: Path, snapshot: PathSnapshot) -> None:
+    """Bind every staged mode to the installer's deterministic policy."""
+
+    if os.name == "nt":
+        return
+    root_info = path.lstat()
+    if (
+        _is_reparse_stat(root_info)
+        or not stat.S_ISDIR(root_info.st_mode)
+        or _object_identity(root_info) != snapshot.root_identity
+        or stat.S_IMODE(root_info.st_mode) != PORTABLE_DIRECTORY_MODE
+    ):
+        raise RuntimeError("owned stage root has a non-portable mode or changed identity")
+    for relative, metadata in snapshot.entries.items():
+        candidate = path.joinpath(*relative.split("/"))
+        info = candidate.lstat()
+        if (
+            _is_reparse_stat(info)
+            or _object_identity(info)
+            != (int(metadata["device"]), int(metadata["inode"]))
+        ):
+            raise RuntimeError(
+                f"owned stage entry changed while checking portable mode: "
+                f"{_bounded_diagnostic(relative, 180)}"
+            )
+        expected_mode = (
+            PORTABLE_DIRECTORY_MODE
+            if metadata.get("type") == "dir"
+            else PORTABLE_FILE_MODE
+        )
+        if stat.S_IMODE(info.st_mode) != expected_mode:
+            raise RuntimeError(
+                f"owned stage entry has a non-portable mode: "
+                f"{_bounded_diagnostic(relative, 180)}"
+            )
+
+
 def _inspect_owned_stage(
     path: Path,
     transaction: Mapping[str, object],
@@ -2583,6 +2794,7 @@ def _inspect_owned_stage(
     snapshot = _capture_path_snapshot(path)
     if snapshot.root_type != "dir":
         raise RuntimeError("owned stage is not a directory")
+    _assert_portable_snapshot_modes(path, snapshot)
     provenance_path = path / PROVENANCE_MARKER
     expected_provenance_raw = _json_record_bytes(
         _provenance_record(transaction, transaction_raw)
@@ -2867,6 +3079,7 @@ def _validate_quarantine_record(
     if set(record) != expected_keys:
         raise ValueError("quarantine marker has unexpected or missing fields")
     _validate_record_digest(record)
+    purpose = record.get("purpose")
     if (
         type(record.get("format_version")) is not int
         or record["format_version"] != TRANSACTION_FORMAT_VERSION
@@ -2874,11 +3087,12 @@ def _validate_quarantine_record(
         or record.get("transaction_id") != transaction["transaction_id"]
         or record.get("transaction_record_sha256")
         != hashlib.sha256(transaction_raw).hexdigest()
-        or record.get("purpose") not in {"backup", "stage"}
+        or not isinstance(purpose, str)
+        or purpose not in {"backup", "stage"}
     ):
         raise ValueError("quarantine marker does not match the active transaction")
     root_type = record.get("authorized_root_type")
-    if root_type not in {"file", "dir"}:
+    if not isinstance(root_type, str) or root_type not in {"file", "dir"}:
         raise ValueError("quarantine marker root type is invalid")
     entries = _validate_tree_entries(record.get("authorized_entries"), root_type)
     root_identity = _validate_root_identity(record.get("authorized_root_identity"))
@@ -3042,7 +3256,7 @@ def _validate_private_delete_record(
     ):
         raise ValueError("private deletion journal does not match the active transaction")
     purpose = record.get("purpose")
-    if purpose not in {"backup", "stage"}:
+    if not isinstance(purpose, str) or purpose not in {"backup", "stage"}:
         raise ValueError("private deletion journal purpose is invalid")
     expected_workspace, _ = _private_delete_paths(Path("."), transaction)
     if record.get("workspace_name") != expected_workspace.name:
@@ -3055,7 +3269,7 @@ def _validate_private_delete_record(
     ):
         raise ValueError("private deletion journal workspace identity is invalid")
     root_type = record.get("authorized_root_type")
-    if root_type not in {"file", "dir"}:
+    if not isinstance(root_type, str) or root_type not in {"file", "dir"}:
         raise ValueError("private deletion journal root type is invalid")
     root_identity_value = record.get("authorized_root_identity")
     if (
@@ -4018,6 +4232,7 @@ def _cleanup_stages(skills_dir: Path) -> None:
 
 def recover_interrupted_transaction(skills_dir: Path, destination: Path) -> None:
     """Recover only artifacts proven by one exact, immutable transaction."""
+    skills_dir, destination = _canonical_install_paths(skills_dir, destination)
     backup = skills_dir / BACKUP_NAME
     transaction_path = _transaction_path(skills_dir)
     stages = _reserved_stages(skills_dir)
@@ -4076,6 +4291,11 @@ def _recover_interrupted_transaction_bound(
     quarantines: list[Path],
     private_artifacts: list[Path],
 ) -> None:
+    skills_dir, destination = _bound_transaction_destination(
+        skills_dir,
+        destination,
+        transaction,
+    )
     backup = skills_dir / BACKUP_NAME
     transaction_path = _transaction_path(skills_dir)
     expected_stage = skills_dir / str(transaction["stage_name"])
@@ -4285,11 +4505,10 @@ def promote_staged_install(
     destination: Path,
     skills_dir: Path,
     expected_contract: PayloadContract | None = None,
-    *,
-    replacement_state: str | None = None,
-    force: bool = False,
 ) -> None:
     """Promote a validated stage and restore the old install on any failure."""
+    skills_dir, destination = _canonical_install_paths(skills_dir, destination)
+    stage = _absolute_lexical(stage)
     with _bound_transaction(skills_dir) as (
         transaction,
         transaction_raw,
@@ -4303,8 +4522,6 @@ def promote_staged_install(
             transaction_raw,
             transaction_binding,
             expected_contract,
-            replacement_state,
-            force,
         )
 
 
@@ -4316,21 +4533,21 @@ def _promote_staged_install_bound(
     transaction_raw: bytes,
     transaction_binding: BoundJsonRecord,
     expected_contract: PayloadContract | None,
-    replacement_state: str | None,
-    force: bool,
 ) -> None:
+    skills_dir, destination = _bound_transaction_destination(
+        skills_dir,
+        destination,
+        transaction,
+    )
+    stage = _absolute_lexical(stage)
     backup = skills_dir / BACKUP_NAME
     if expected_contract is not None:
         if not isinstance(expected_contract, PayloadContract):
             raise TypeError("promotion contract has an unsupported type")
         if transaction["payload_manifest"] != expected_contract.file_manifest():
             raise RuntimeError("stage transaction names a different payload contract")
-    if replacement_state is not None and replacement_state not in {
-        "missing", "complete", "incomplete", "unknown"
-    }:
-        raise ValueError("replacement state is invalid")
-    if type(force) is not bool:
-        raise TypeError("force flag must be boolean")
+    # _validate_transaction_record has already proved that the persisted
+    # classification, old snapshot, and force policy authorize replacement.
     if stage != skills_dir / str(transaction["stage_name"]):
         raise RuntimeError("stage path does not match the active transaction")
     if _path_exists(backup):
@@ -4446,13 +4663,24 @@ def stage_validated_install(
     repo_root: Path,
     skills_dir: Path,
     contract: PayloadContract,
-    expected_destination: PathSnapshot | None | object = _UNCLASSIFIED_DESTINATION,
+    *,
+    force: bool = False,
 ) -> Path:
     if not isinstance(contract, PayloadContract):
         raise TypeError("staging requires a frozen payload contract")
+    if type(force) is not bool:
+        raise TypeError("force flag must be boolean")
+    repo_root = _absolute_lexical(repo_root)
+    skills_dir, destination = _canonical_install_paths(
+        skills_dir,
+        skills_dir / SKILL_NAME,
+    )
+    current_contract = _load_payload_contract_once(repo_root)
+    if current_contract != contract:
+        raise RuntimeError("source payload changed before transaction publication")
+    _assert_supported_source_metadata(repo_root, contract.declared)
     expected_manifest = contract.file_manifest()
     expected_manifest = _validate_payload_manifest(dict(sorted(expected_manifest.items())))
-    destination = skills_dir / SKILL_NAME
     if _path_exists(_transaction_path(skills_dir)) or _path_exists(skills_dir / BACKUP_NAME):
         raise RuntimeError("reserved installer artifacts were not recovered before staging")
     if _reserved_stages(skills_dir):
@@ -4466,13 +4694,23 @@ def stage_validated_install(
     quarantine = skills_dir / f"{QUARANTINE_PREFIX}{transaction_id}"
     if _path_exists(stage) or _path_exists(quarantine):
         raise RuntimeError("random transaction artifact name already exists")
-    old_snapshot = (
+    classification = _classify_existing_install_bound(destination, contract)
+    replacement_state = classification.state
+    old_snapshot = classification.snapshot
+    if replacement_state not in REPLACEMENT_STATES:
+        raise RuntimeError("destination classification is invalid")
+    if replacement_state != "missing" and old_snapshot is None:
+        raise RuntimeError(
+            "destination cannot be bound safely enough for replacement"
+        )
+    if not force and replacement_state not in {"missing", "incomplete"}:
+        raise RuntimeError(
+            f"{replacement_state} destination requires an explicit force replacement"
+        )
+    current_snapshot = (
         _capture_path_snapshot(destination) if _path_exists(destination) else None
     )
-    if (
-        expected_destination is not _UNCLASSIFIED_DESTINATION
-        and old_snapshot != expected_destination
-    ):
+    if current_snapshot != old_snapshot:
         raise RuntimeError(
             "destination changed after its replacement policy was decided; "
             "preserving the current path"
@@ -4483,12 +4721,18 @@ def stage_validated_install(
         transaction_id,
         expected_manifest,
         old_snapshot,
+        replacement_state,
+        force,
     )
+    expected_transaction_raw = _validate_transaction_before_publication(transaction)
     transaction_raw = _write_json_exclusive(
         _transaction_path(skills_dir), transaction
     )
+    if transaction_raw != expected_transaction_raw:
+        raise RuntimeError("published transaction differs from its validated bytes")
     try:
-        stage.mkdir(mode=0o700)
+        stage.mkdir(mode=PORTABLE_DIRECTORY_MODE)
+        _set_portable_mode(stage, PORTABLE_DIRECTORY_MODE)
         _fsync_directory(stage)
         _fsync_directory(skills_dir)
         _write_json_exclusive(
@@ -4514,12 +4758,11 @@ def stage_validated_install(
                 component_name_max=component_name_max,
             )
 
-        shutil.copytree(
+        _copy_declared_payload(
             repo_root,
             stage,
-            ignore=payload_allowlist_filter(repo_root, contract.declared),
-            copy_function=atomic_copy,
-            dirs_exist_ok=True,
+            contract.declared,
+            atomic_copy,
         )
         staged = _inspect_owned_stage(
             stage, transaction, transaction_raw, require_complete=False
@@ -4534,6 +4777,7 @@ def stage_validated_install(
         source_after_copy = _load_payload_contract_once(repo_root)
         if source_after_copy != contract:
             raise RuntimeError("source payload changed while it was being copied; retry the install")
+        _assert_supported_source_metadata(repo_root, contract.declared)
         _ensure_snapshot_directories_owner_writable(stage, staged)
         _assert_snapshot_equal(
             _inspect_owned_stage(
@@ -4568,7 +4812,13 @@ def assert_safe_destination(destination: Path, skills_dir: Path) -> None:
     _assert_existing_components_no_links(absolute_skills_dir, "skills directory")
     if _path_exists(absolute_destination):
         _assert_existing_components_no_links(absolute_destination, "destination")
-        _capture_path_snapshot(absolute_destination)
+        try:
+            _capture_path_snapshot(absolute_destination)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise RuntimeError(
+                "destination cannot be inspected safely: "
+                f"{_bounded_diagnostic(exc, 280)}"
+            ) from exc
 
 
 def assert_safe_preflight(destination: Path, skills_dir: Path, repo_root: Path) -> None:
@@ -4590,7 +4840,8 @@ def assert_safe_preflight(destination: Path, skills_dir: Path, repo_root: Path) 
     if absolute_skills_dir == absolute_repo_root or absolute_repo_root in absolute_skills_dir.parents:
         raise ValueError(
             f"destination is inside the source repository ({absolute_repo_root}).\n"
-            f"Copying it into itself would recurse until the path length fails.\n"
+            f"Installing there would mutate the source tree while its payload is being "
+            f"authenticated.\n"
             f"To install into another project, run this script from that project "
             f"by absolute path:\n"
             f"    python {absolute_repo_root / 'scripts' / 'install_codex_skill.py'} "
@@ -4601,19 +4852,19 @@ def assert_safe_preflight(destination: Path, skills_dir: Path, repo_root: Path) 
 def assert_destination_outside_source(destination: Path, repo_root: Path) -> None:
     """Refuse to copy the repository into a directory inside itself.
 
-    shutil.copytree walks the source tree, and the destination is created before
-    the walk reaches it, so an in-tree destination copies itself into itself:
-    .claude/skills/seedance-20/.claude/skills/seedance-20/... until the path
-    length fails, after hundreds of directories. `--dest .claude/skills` run
-    from this repository's own root is the way into it, and installing the
-    repository into itself is never what someone meant.
+    The payload copier authenticates the source before and after staging. An
+    in-tree destination would mutate that authority domain during the same
+    transaction. `--dest .claude/skills` run from this repository's own root is
+    the way into it, and installing the repository into itself is never what
+    someone meant.
     """
     absolute_destination = _absolute_lexical(destination)
     root = _absolute_lexical(repo_root)
     if absolute_destination == root or root in absolute_destination.parents:
         raise ValueError(
             f"destination is inside the source repository ({root}).\n"
-            f"Copying it into itself would recurse until the path length fails.\n"
+            f"Installing there would mutate the source tree while its payload is being "
+            f"authenticated.\n"
             f"To install into another project, run this script from that project "
             f"by absolute path:\n"
             f"    python {root / 'scripts' / 'install_codex_skill.py'} --dest .claude/skills"
@@ -4640,7 +4891,7 @@ def main() -> int:
     try:
         _load_payload_contract_once(repo_root)
         assert_safe_preflight(destination, skills_dir, repo_root)
-    except (OSError, RuntimeError, UnicodeError, ValueError) as exc:
+    except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as exc:
         print(f"Refusing to install: {_bounded_diagnostic(exc)}")
         return 1
 
@@ -4691,17 +4942,15 @@ def main() -> int:
                 repo_root,
                 skills_dir,
                 contract,
-                classification.snapshot,
+                force=args.force,
             )
             promote_staged_install(
                 stage,
                 destination,
                 skills_dir,
                 contract,
-                replacement_state=state,
-                force=args.force,
             )
-    except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
+    except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as exc:
         print(f"Installation failed: {_bounded_diagnostic(exc)}", file=sys.stderr)
         return 1
 
