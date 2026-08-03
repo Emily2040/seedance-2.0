@@ -335,6 +335,19 @@ class AdversarialMutationTests(unittest.TestCase):
         self.assertGreaterEqual(traced[0], 3.0, traced)
         self.assertLess(drifted[0], 3.0, drifted)
 
+    def test_semantic_trace_contracts_do_not_rescue_the_wrong_target(self) -> None:
+        wrong_edit_layer = stress.score_brief_traceability(
+            "Fix lighting in an otherwise good clip.",
+            "Preserve the existing clip exactly. Change only the dialogue layer.",
+        )
+        wrong_transition_subject = stress.score_brief_traceability(
+            "Move from one known product state to another.",
+            "@Image1 is the first frame and @Image2 is the final visual target. "
+            "Use a continuous transition to reveal a painted portrait.",
+        )
+        self.assertLess(wrong_edit_layer[0], 3.0, wrong_edit_layer)
+        self.assertLess(wrong_transition_subject[0], 3.0, wrong_transition_subject)
+
     def test_sequencing_cues_separate_phases_but_while_creates_conflicts(self) -> None:
         safe = " ".join([
             "Camera stays locked off, then pushes in.",
@@ -655,6 +668,7 @@ class FairnessTests(unittest.TestCase):
 class ShippedExampleTests(unittest.TestCase):
     def test_every_golden_prompt_clears_the_release_bar(self) -> None:
         scores = []
+        new_dimensions = ("brief_traceability", "coherence", "repetition")
         for path in sorted(GOLDEN.glob("*.md")):
             mode = GOLDEN_MODES.get(path.stem)
             self.assertIsNotNone(mode, f"{path.stem} needs a mode in GOLDEN_MODES")
@@ -664,6 +678,12 @@ class ShippedExampleTests(unittest.TestCase):
             )
             scores.append(result["overall"])
             self.assertGreaterEqual(result["overall"], 3.0, f"{path.stem}: {result['dims']}")
+            for dimension in new_dimensions:
+                self.assertGreaterEqual(
+                    result["dims"][dimension]["score"],
+                    3.0,
+                    f"{path.stem} {dimension}: {result['dims'][dimension]}",
+                )
         self.assertGreaterEqual(statistics.mean(scores), 3.5)
 
 

@@ -217,6 +217,52 @@ TOKEN_ALIASES = {
     "us": "use",
 }
 
+# A terse production brief may express the same contract as its prompt without
+# sharing exact words. Extract only paired, bounded decisions; generic craft
+# vocabulary still cannot establish traceability on its own.
+COUNT_WORDS = {
+    word: number
+    for number, word in enumerate(
+        "one two three four five six seven eight nine ten eleven twelve".split(),
+        start=1,
+    )
+}
+COUNTED_SHOT_REQUEST = re.compile(
+    r"\b(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+"
+    r"(?:cuts?|shots?|panels?)\b",
+    re.I,
+)
+NUMBERED_SHOT_MARKER = re.compile(r"\b(?:shot|cut|panel)\s*(?P<count>\d+)\b", re.I)
+ANIMATION_CONTRACT = re.compile(
+    r"\b(?:2d|two[- ]dimensional|animat\w*|storyboards?|animation boards?)\b",
+    re.I,
+)
+FROM_TO_CONTRACT = re.compile(r"\bfrom\b[^.!?]{0,100}\bto\b", re.I)
+START_ENDPOINT = re.compile(
+    r"\b(?:first frame|initial state|start(?:ing)? state)\b",
+    re.I,
+)
+END_ENDPOINT = re.compile(
+    r"\b(?:final (?:frame|visual target|state)|last frame|end(?:ing)? state|endpoint)\b",
+    re.I,
+)
+TRANSITION_CONTRACT = re.compile(
+    r"\b(?:move|state|transition|transform\w*|morph\w*)\b",
+    re.I,
+)
+LIGHTING_EDIT_CONTRACT = re.compile(
+    r"\b(?:fix|change|adjust|correct|modify|relight|re-light)\b[^.!?]{0,60}"
+    r"\b(?:light|lighting|exposure|grade)\b",
+    re.I,
+)
+SOURCE_PRESERVATION_CONTRACT = re.compile(
+    r"\botherwise\s+(?:good|approved|acceptable|correct|finished)\b|"
+    r"\b(?:keep|preserve|leave)\b[^.!?]{0,80}"
+    r"\b(?:rest|everything|other|unchanged|same|existing)\b|"
+    r"\bchange\s+only\b|\bonly\s+the\s+(?:light|lighting|exposure|grade)\b",
+    re.I,
+)
+
 DIRECT_SEQUENCE_BRIDGE = re.compile(
     r"^\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*(?:and\s+)?"
     r"(?:(?:then|next|finally|followed by)|(?:before|after))\s+"
@@ -420,21 +466,69 @@ def trace_terms(text: str) -> frozenset[str]:
     })
 
 
+def shot_count_contract(text: str) -> int | None:
+    match = COUNTED_SHOT_REQUEST.search(text)
+    if match:
+        token = match.group("count").lower()
+        return int(token) if token.isdigit() else COUNT_WORDS[token]
+    markers = {int(match.group("count")) for match in NUMBERED_SHOT_MARKER.finditer(text)}
+    if markers:
+        highest = max(markers)
+        if set(range(1, highest + 1)).issubset(markers):
+            return highest
+    return None
+
+
+def production_trace_contracts(text: str) -> frozenset[str]:
+    contracts: set[str] = set()
+    if ANIMATION_CONTRACT.search(text):
+        contracts.add("animation medium")
+    if shot_count := shot_count_contract(text):
+        contracts.add(f"{shot_count}-part shot structure")
+    has_endpoint_transition = (
+        FROM_TO_CONTRACT.search(text)
+        or (START_ENDPOINT.search(text) and END_ENDPOINT.search(text))
+    )
+    if has_endpoint_transition and TRANSITION_CONTRACT.search(text):
+        contracts.add("first-to-final state transition")
+    if LIGHTING_EDIT_CONTRACT.search(text):
+        contracts.add("lighting-only edit target")
+    if SOURCE_PRESERVATION_CONTRACT.search(text):
+        contracts.add("preserve otherwise accepted source")
+    return frozenset(contracts)
+
+
+def semantic_trace_anchors(brief: str, prompt: str) -> tuple[str, ...]:
+    """Return paired production contracts expressed with different wording."""
+    return tuple(sorted(
+        production_trace_contracts(brief) & production_trace_contracts(prompt)
+    ))
+
+
 def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
     """Require brief-specific material, not shared production vocabulary."""
     brief_terms = trace_terms(brief)
     prompt_terms = trace_terms(prompt)
-    if not brief_terms:
-        return 0.0, "brief has no usable non-generic material to trace"
     matched = sorted(brief_terms & prompt_terms)
-    if len(matched) >= 2:
-        return 4.0, f"brief-specific terms carried through: {', '.join(matched)}"
-    if len(matched) == 1 and len(brief_terms) <= 3:
-        return 3.0, f"one brief-specific anchor carried through: {matched[0]}"
-    if matched:
+    semantic = semantic_trace_anchors(brief, prompt)
+    evidence_count = len(matched) + len(semantic)
+    if not brief_terms and not semantic:
+        return 0.0, "brief has no usable non-generic material to trace"
+    if evidence_count >= 2:
+        parts = []
+        if matched:
+            parts.append(f"terms: {', '.join(matched)}")
+        if semantic:
+            parts.append(f"contracts: {', '.join(semantic)}")
+        return 4.0, f"brief trace carried through ({'; '.join(parts)})"
+    if len(matched) == 1 and not semantic and len(brief_terms) <= 3:
+        anchor = matched[0] if matched else semantic[0]
+        return 3.0, f"one brief-specific anchor carried through: {anchor}"
+    if evidence_count:
         missing = sorted(brief_terms - prompt_terms)
+        anchor = matched[0] if matched else semantic[0]
         return 2.0, (
-            f"only one of {len(brief_terms)} brief-specific terms survives: {matched[0]}; "
+            f"only one brief-specific anchor survives: {anchor}; "
             f"missing: {', '.join(missing[:5])}"
         )
     return 0.0, f"no brief-specific material survives; expected one of: {', '.join(sorted(brief_terms)[:6])}"
