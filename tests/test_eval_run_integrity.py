@@ -1197,7 +1197,7 @@ class InputContractTests(unittest.TestCase):
                         code = eval_run.main()
                     self.assertEqual(code, expected_code)
                     self.assertIn(expected_message, output.getvalue())
-                    self.assertIn("supported depth", output.getvalue())
+                    self.assertIn("maximum JSON nesting depth", output.getvalue())
                     self.assertNotIn("Traceback", output.getvalue())
 
     def test_self_test_rejects_malformed_case_collections_without_tracebacks(self) -> None:

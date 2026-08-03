@@ -2959,7 +2959,9 @@ class AtomicInstallRegressionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
             skills_dir.mkdir()
-            manifest = installer.payload_manifest(ROOT)
+            contract = installer.load_payload_contract(ROOT)
+            plan = installer.build_install_payload_plan(ROOT, contract)
+            manifest = plan.installed_contract.file_manifest()
             transaction_id = "8" * 32
             transaction = installer._transaction_record(
                 f"{installer.STAGE_PREFIX}123-{transaction_id}",
@@ -2977,11 +2979,11 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 stage / installer.PROVENANCE_MARKER,
                 installer._provenance_record(transaction, transaction_raw),
             )
-            shutil.copytree(
+            installer._copy_declared_payload(
                 ROOT,
                 stage,
-                ignore=installer.ignore_runtime_noise,
-                dirs_exist_ok=True,
+                contract.declared,
+                installer.payload_copy_function(ROOT, plan),
             )
             expected_raw = installer._json_record_bytes(
                 installer._completion_marker_record(manifest)

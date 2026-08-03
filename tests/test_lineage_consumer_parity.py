@@ -25,6 +25,7 @@ from lineage_contract import (  # noqa: E402
     analyze_lineage,
     json_integer,
 )
+from strict_json import MAX_JSON_BYTES  # noqa: E402
 
 
 class LineageConsumerParityTests(unittest.TestCase):
@@ -120,10 +121,10 @@ class LineageConsumerParityTests(unittest.TestCase):
         malformed = (
             ("{", "invalid JSON:"),
             ("[]", "project state must be an object"),
-            ('{"clips":[{"sequence_index":NaN}]}', "non-JSON numeric constant 'NaN'"),
+            ('{"clips":[{"sequence_index":NaN}]}', "non-finite number is not permitted: NaN"),
             (
                 '{"clips":' + "[" * 1100 + "0" + "]" * 1100 + "}",
-                "JSON nesting exceeds the supported parser depth",
+                "maximum JSON nesting depth",
             ),
         )
         for raw, expected in malformed:
@@ -302,7 +303,27 @@ class LineageConsumerParityTests(unittest.TestCase):
         self.assertLessEqual(max(map(len, errors)), MAX_ERROR_CHARS)
         self.assertLessEqual(sum(map(len, errors)), MAX_TOTAL_DIAGNOSTIC_CHARS)
 
-        project_errors, continuity_errors = self.validate_data({"clips": clips})
+        consumer_count = 10_000
+        consumer_clips = []
+        for index in range(consumer_count):
+            consumer_clips.append(
+                {
+                    "clip_id": f"clip_{index}",
+                    "parent_clip_id": (
+                        f"clip_{index - 1}"
+                        if index
+                        else f"clip_{consumer_count - 1}"
+                    ),
+                    "sequence_index": index + 1,
+                    "status": "planned",
+                }
+            )
+        consumer_data = {"clips": consumer_clips}
+        self.assertLess(
+            len(json.dumps(consumer_data).encode("utf-8")),
+            MAX_JSON_BYTES,
+        )
+        project_errors, continuity_errors = self.validate_data(consumer_data)
         for consumer_errors in (project_errors, continuity_errors):
             self.assertTrue(
                 any("clip lineage cycle:" in error for error in consumer_errors),

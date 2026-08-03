@@ -72,6 +72,20 @@ def commit_fixture(repo: Path, commit_date: date) -> None:
 
 
 class FreshnessClassificationTests(unittest.TestCase):
+    def test_checked_in_stamp_accepts_crlf_without_polluting_the_date(self) -> None:
+        errors: list[str] = []
+
+        self.assertEqual(
+            checker.checked_in_last_verified(
+                f"last_verified: {VERIFIED.isoformat()}\r\n",
+                "source-registry.md",
+                VERIFIED,
+                errors,
+            ),
+            VERIFIED,
+        )
+        self.assertEqual(errors, [])
+
     def test_fresh_registry_is_silent(self) -> None:
         for age in (0, 1, checker.STALE_WARN_DAYS):
             with self.subTest(age=age):

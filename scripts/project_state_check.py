@@ -194,7 +194,7 @@ def load_protected_provenance_ledger(
     path = root / PROVENANCE_LEDGER_RELATIVE_PATH
     label = PROVENANCE_LEDGER_RELATIVE_PATH.as_posix()
     try:
-        ledger = load_json(path, root)
+        ledger = load_json(path, root=root)
     except Exception as exc:
         errors.append(f"{label}: missing or invalid protected provenance ledger: {exc}")
         return None
@@ -2125,7 +2125,7 @@ def sequence_paths(root: Path) -> list[Path]:
             # file identity.
             continue
         try:
-            obj = load_json(path, root)
+            obj = load_json(path, root=root)
         except Exception:
             obj = None
         if looks_like_project_state(path, obj):
@@ -2823,7 +2823,7 @@ def main() -> int:
             )
         )
         try:
-            project = load_json(path, root)
+            project = load_json(path, root=root)
         except Exception:
             continue
         if isinstance(project, dict) and isinstance(project.get("project_id"), str):
@@ -2863,7 +2863,7 @@ def main() -> int:
             obj = (
                 load_bounded_take_review(path)
                 if is_take_review
-                else load_json(path, root)
+                else load_json(path, root=root)
             )
         except Exception as exc:
             errors.append(f"{rel}: invalid JSON: {exc}")
@@ -2950,7 +2950,7 @@ def main() -> int:
 
     for schema in (root / "schemas").glob("*.schema.json") if (root / "schemas").exists() else []:
         try:
-            load_json(schema, root)
+            load_json(schema, root=root)
         except Exception as exc:
             errors.append(f"{schema.relative_to(root).as_posix()}: invalid JSON: {exc}")
 
@@ -2958,9 +2958,9 @@ def main() -> int:
     if errors:
         print("Project state errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
-    print(f"Project state check passed: {len(paths)} project states.")
+    print(diagnostic_text(f"Project state check passed: {len(paths)} project states."))
     return 0
 
 

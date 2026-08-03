@@ -25,6 +25,7 @@ from strict_json import (  # noqa: E402
     MAX_DIAGNOSTIC_CHARS,
     MAX_DIAGNOSTIC_COUNT,
     MAX_DIAGNOSTIC_TOTAL_CHARS,
+    MAX_JSON_BYTES,
 )
 
 
@@ -645,9 +646,10 @@ class TakeReconciliationTests(unittest.TestCase):
     def test_history_attack_diagnostics_are_bounded(self) -> None:
         project = self.project()
         project["take_history"] = [
-            {"clip_id": [], "take_id": {}, "verdict": ["x" * 10000]}
+            {"clip_id": [], "take_id": {}, "verdict": ["x" * 256]}
             for _ in range(lineage_contract.MAX_TAKE_HISTORY_ITEMS + 100)
         ]
+        self.assertLess(len(json.dumps(project).encode("utf-8")), MAX_JSON_BYTES)
         project_errors, continuity_errors = self.validate(project, [])
         for errors in (project_errors, continuity_errors):
             self.assertTrue(errors)

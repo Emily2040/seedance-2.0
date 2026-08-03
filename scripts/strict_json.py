@@ -26,7 +26,7 @@ import math
 import os
 import re
 import stat
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from types import UnionType
 from typing import Any, get_args
@@ -163,6 +163,19 @@ def _parse_finite_float(token: str) -> float:
     except (OverflowError, ValueError):
         raise _NumberParseFailure(token) from None
     if not math.isfinite(value):
+        raise _NonFiniteNumber(token)
+    return value
+
+
+def _parse_finite_decimal(token: str) -> Decimal:
+    """Preserve an exact finite token for lineage-sensitive consumers."""
+
+    try:
+        value = Decimal(token)
+        float_value = float(token)
+    except (InvalidOperation, OverflowError, ValueError):
+        raise _NumberParseFailure(token) from None
+    if not value.is_finite() or not math.isfinite(float_value):
         raise _NonFiniteNumber(token)
     return value
 
@@ -611,7 +624,12 @@ def _decode_utf8(data: bytes) -> str:
     return text
 
 
-def loads_json(text: str, *, expected_type: ExpectedType | None = None) -> Any:
+def loads_json(
+    text: str,
+    *,
+    expected_type: ExpectedType | None = None,
+    _exact_numbers: bool = False,
+) -> Any:
     """Decode one bounded strict JSON value from text.
 
     Type checks use exact JSON result types. Pass ``(int, float)`` or
@@ -631,7 +649,9 @@ def loads_json(text: str, *, expected_type: ExpectedType | None = None) -> Any:
             text,
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_constant,
-            parse_float=_parse_finite_float,
+            parse_float=(
+                _parse_finite_decimal if _exact_numbers else _parse_finite_float
+            ),
             parse_int=_parse_bounded_int,
         )
     except json.JSONDecodeError as exc:
@@ -686,14 +706,23 @@ def loads_json(text: str, *, expected_type: ExpectedType | None = None) -> Any:
     return value
 
 
-def loads_json_bytes(data: bytes, *, expected_type: ExpectedType | None = None) -> Any:
+def loads_json_bytes(
+    data: bytes,
+    *,
+    expected_type: ExpectedType | None = None,
+    _exact_numbers: bool = False,
+) -> Any:
     """Decode bounded strict UTF-8 bytes containing one JSON value."""
 
     if len(data) > MAX_JSON_BYTES:
         raise StrictJSONError(
             f"JSON input exceeds {MAX_JSON_BYTES} bytes", line=1, column=1
         )
-    return loads_json(_decode_utf8(data), expected_type=expected_type)
+    return loads_json(
+        _decode_utf8(data),
+        expected_type=expected_type,
+        _exact_numbers=_exact_numbers,
+    )
 
 
 def load_json(
@@ -701,11 +730,14 @@ def load_json(
     *,
     expected_type: ExpectedType | None = None,
     root: Path | None = None,
+    _exact_numbers: bool = False,
 ) -> Any:
     """Read a path as bounded strict UTF-8 JSON."""
 
     return loads_json_bytes(
-        _read_bounded(path, "JSON input", root=root), expected_type=expected_type
+        _read_bounded(path, "JSON input", root=root),
+        expected_type=expected_type,
+        _exact_numbers=_exact_numbers,
     )
 
 
@@ -822,11 +854,11 @@ def bound_diagnostics(messages: list[str], omission: str) -> list[str]:
 
 
 def loads(text: str) -> Any:
-    return loads_json(text)
+    return loads_json(text, _exact_numbers=True)
 
 
 def load(path: Path) -> Any:
-    return load_json(path)
+    return load_json(path, _exact_numbers=True)
 
 
 def json_integer(value: object) -> int | float | Decimal | None:

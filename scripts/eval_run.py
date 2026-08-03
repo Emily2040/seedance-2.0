@@ -72,8 +72,13 @@ else:
 # level and must produce the same module code object.  Comparing only
 # ``__file__`` bytes would miss a stale or substituted bytecode import.
 _EXECUTED_EVALUATOR_CODE = sys._getframe().f_code
-_EXECUTED_EVALUATOR_PATH = Path(__file__).resolve(strict=True)
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "363e2eb47b7ac5deb67b6726fb5064f7c0f03bfcb12e370fd7346d6cfa42e487"
+try:
+    _EXECUTED_EVALUATOR_PATH: Path | None = Path(__file__).resolve(strict=True)
+except OSError:
+    # Zip imports are valid for packaging/discovery. A real harness run still
+    # fails closed when it binds execution to a frozen regular source file.
+    _EXECUTED_EVALUATOR_PATH = None
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "cf7b88200878df18d590f102721312ff5ecb739e4fe0a9ba0cc0e8992108e029"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -472,15 +477,18 @@ def _resolve_confined_file(root: Path, relative: str) -> Path:
         resolved = unresolved.resolve(strict=True)
     except (OSError, RuntimeError) as exc:
         raise HarnessError(f"required source does not resolve: {relative}") from exc
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise HarnessError(f"source escapes the repository: {relative}") from exc
     # The manifest names concrete files. Symbolic links and directory junctions
     # are not data sources because their physical target can cross role boundaries.
     unresolved_absolute = Path(os.path.abspath(unresolved))
     if os.path.normcase(str(unresolved_absolute)) != os.path.normcase(str(resolved)):
-        raise HarnessError(f"source path contains a symbolic or reparse alias: {relative}")
+        raise HarnessError(
+            "source path contains a symbolic link, junction, or reparse point: "
+            f"{relative}"
+        )
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise HarnessError(f"source escapes the repository: {relative}") from exc
     return resolved
 
 
@@ -535,6 +543,8 @@ def _freeze_file(root: Path, relative: str, role: str) -> FrozenFile:
 
 def _verify_evaluator_execution_identity(source: FrozenFile) -> None:
     """Bind the evaluator source in the snapshot to the code Python executed."""
+    if _EXECUTED_EVALUATOR_PATH is None:
+        raise HarnessError("executed evaluator is not a regular filesystem file")
     try:
         same_file = source.path.samefile(_EXECUTED_EVALUATOR_PATH)
     except OSError as exc:
@@ -610,7 +620,8 @@ def _scoped_repository_files(root: Path) -> set[str]:
                     str(resolved_directory)
                 ):
                     raise HarnessError(
-                        f"source boundary contains a symbolic or reparse alias: {directory}"
+                        "source boundary contains a symbolic link, junction, or "
+                        f"reparse point: {directory}"
                     )
                 candidates = directory.rglob("*")
         except OSError as exc:
@@ -622,7 +633,8 @@ def _scoped_repository_files(root: Path) -> set[str]:
                     str(resolved_candidate)
                 ):
                     raise HarnessError(
-                        f"source boundary contains a symbolic or reparse alias: {candidate}"
+                        "source boundary contains a symbolic link, junction, or "
+                        f"reparse point: {candidate}"
                     )
                 is_file = candidate.is_file()
             except OSError as exc:
@@ -2479,7 +2491,7 @@ def self_test(
         verify_snapshot_unchanged(snapshot)
     except (HarnessError, OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         print("eval_run self-test FAILED:")
-        print(f"- {exc}")
+        print(diagnostic_text(f"- {exc}"))
         return 1
     seq = sum(1 for case in cases if is_sequence_case(case))
     fixture_count = sum(1 for source in snapshot.files.values() if source.role == "fixture")
@@ -3161,7 +3173,7 @@ def print_assessment(report: dict) -> int:
     if report["integrity_errors"]:
         print("\nIntegrity errors:")
         for error in report["integrity_errors"]:
-            print(f"  - {error}")
+            print(diagnostic_text(f"  - {error}"))
     if report["failed_verdicts"]:
         print("\nFailed verdicts:", ", ".join(report["failed_verdicts"]))
     if report["harness_errors"]:
@@ -4577,9 +4589,9 @@ def _write_bootstrap_failure_ledger(
             ),
         )
     except CommittedCleanupError as exc:
-        print(f"Ledger committed, but recovery cleanup failed: {exc}")
+        print(diagnostic_text(f"Ledger committed, but recovery cleanup failed: {exc}"))
     except (HarnessError, OSError) as exc:
-        print(f"Ledger write failed; existing artifact preserved: {exc}")
+        print(diagnostic_text(f"Ledger write failed; existing artifact preserved: {exc}"))
 
 
 def main() -> int:
@@ -4712,13 +4724,13 @@ def main() -> int:
             )
         except CaseRunError as exc:
             source_paths = list(exc.sources)
-            print(f"[{cid}] evaluation error: {exc}")
+            print(diagnostic_text(f"[{cid}] evaluation error: {exc}"))
             verdict = harness_error_result(f"evaluation error: {exc}")
         except (ProviderResponseError, TimeoutError) as exc:
-            print(f"[{cid}] discovery transport error: {exc}")
+            print(diagnostic_text(f"[{cid}] discovery transport error: {exc}"))
             verdict = harness_error_result(f"discovery transport error: {exc}")
         except HarnessError as exc:
-            print(f"[{cid}] discovery error: {exc}")
+            print(diagnostic_text(f"[{cid}] discovery error: {exc}"))
             verdict = failed_verdict(case, f"discovery error: {exc}")
             verdict = normalize_verdict(case, verdict)
         else:
@@ -4789,10 +4801,10 @@ def main() -> int:
                 snapshot=snapshot,
             )
         except CommittedCleanupError as exc:
-            print(f"Ledger committed, but recovery cleanup failed: {exc}")
+            print(diagnostic_text(f"Ledger committed, but recovery cleanup failed: {exc}"))
             return 2
         except (HarnessError, OSError) as exc:
-            print(f"Ledger write failed; existing artifact preserved: {exc}")
+            print(diagnostic_text(f"Ledger write failed; existing artifact preserved: {exc}"))
             return 2
     return 2 if snapshot_error is not None else exit_code
 

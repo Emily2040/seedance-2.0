@@ -583,6 +583,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                 release_rows.append(
                     {
                         "id": case["id"],
+                        "status": "scored",
                         "score": 4 if sequence else 3,
                         "pass": True,
                         "sequence": sequence,
@@ -625,7 +626,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             self.assertIn("archive=23", text)
             self.assertIn("evaluator=4", text)
             self.assertIn("fixture=1", text)
-            self.assertIn("responder=88", text)
+            self.assertIn("responder=89", text)
             self.assertIn("root=1", text)
 
             mismatched_repository = dict(repository_manifest)

@@ -72,7 +72,12 @@ def load_json(
     *,
     expected_type: type[Any] | tuple[type[Any], ...] | None = None,
 ) -> Any:
-    return strict_load_json(path, expected_type=expected_type, root=root)
+    return strict_load_json(
+        path,
+        expected_type=expected_type,
+        root=root,
+        _exact_numbers=True,
+    )
 
 
 def pointer(error: Any) -> str:

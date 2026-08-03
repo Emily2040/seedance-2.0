@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -185,30 +186,21 @@ class StrictInventoryTests(unittest.TestCase):
 
 class StrictBehaviorTests(unittest.TestCase):
     def test_continuity_strict_promotes_transient_warning_to_failure(self) -> None:
-        project_state = {
-            "clips": [
-                {
-                    "clip_id": "clip-01",
-                    "sequence_index": 1,
-                    "status": "accepted",
-                    "observed_end_state": {"pose": "standing"},
-                },
-                {
-                    "clip_id": "clip-02",
-                    "sequence_index": 2,
-                    "parent_clip_id": "clip-01",
-                    "status": "planned",
-                    "planned_start_state": {"pose": "seated"},
-                },
-            ]
-        }
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             examples = root / "examples"
             examples.mkdir()
-            (examples / "warning-project-state.json").write_text(
-                json.dumps(project_state), encoding="utf-8"
+            fixture = examples / "sequence-airport-arrival"
+            shutil.copytree(
+                ROOT / "examples" / "sequence-airport-arrival",
+                fixture,
             )
+            state_path = fixture / "project-state.json"
+            project_state = json.loads(state_path.read_text(encoding="utf-8"))
+            project_state["clips"][1]["planned_start_state"]["character"][
+                "pose"
+            ] = "seated"
+            state_path.write_text(json.dumps(project_state), encoding="utf-8")
             normal = run_script("continuity_chain_check.py", str(root))
             strict = run_script("continuity_chain_check.py", str(root), "--strict")
 
@@ -252,7 +244,7 @@ Avoid empty quality words.
             if record["arm"] == "skill_formula":
                 record["prompt"] = "cinematic masterpiece"
 
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(dir=ROOT) as temporary:
             path = Path(temporary) / "failing-corpus.json"
             path.write_text(json.dumps(corpus), encoding="utf-8")
             normal = run_script("prompt_architecture_stress.py", str(path))

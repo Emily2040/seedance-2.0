@@ -27,7 +27,13 @@ else:
 
 REQUIRED_LABELS = ["confirmed", "volatile", "field-observed", "unverified", "internal"]
 REQUIRED_OFFICIAL_MARKERS = ["seed.bytedance.com", "volcengine.com", "arxiv.org", "runwayml.com"]
-LAST_VERIFIED_FIELD = re.compile(r"^last_verified:[ \t]*(.*?)[ \t]*$", re.M)
+# Match one logical metadata line on both LF and CRLF checkouts.  ``$`` in
+# multiline mode stops before ``\n`` but not before the preceding ``\r``;
+# excluding line terminators from the value keeps the parsed date independent
+# of Git's working-tree newline conversion.
+LAST_VERIFIED_FIELD = re.compile(
+    r"^last_verified:[ \t]*([^\r\n]*?)[ \t]*\r?$", re.M
+)
 
 # Wall-clock staleness thresholds for references/source-registry.md.
 STALE_WARN_DAYS = 14

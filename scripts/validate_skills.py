@@ -251,7 +251,7 @@ def _heading_anchors(path: Path, root: Path) -> set[str]:
 
     anchors: set[str] = set()
     seen: dict[str, int] = {}
-    for line in read_repo_text(root, path).splitlines():
+    for line in read_repo_text(root=root, path=path).splitlines():
         match = re.match(r"^#{1,6}\s+(.+?)\s*#*\s*$", line)
         if not match:
             continue
@@ -298,7 +298,7 @@ def active_runtime_markdown_paths(root: Path) -> tuple[Path, ...]:
     manifest = validate_repo_input_path(root, manifest)
 
     active: list[Path] = []
-    for raw_line in read_repo_text(root, manifest).splitlines():
+    for raw_line in read_repo_text(root=root, path=manifest).splitlines():
         relative = raw_line.strip()
         if not relative or relative.startswith("#"):
             continue
@@ -482,7 +482,7 @@ def validate_portable_routes(
     """
 
     path = validate_repo_input_path(root, path)
-    text = read_repo_text(root, path)
+    text = read_repo_text(root=root, path=path)
     root = root.resolve()
     rel = path.relative_to(root).as_posix()
 
@@ -715,7 +715,7 @@ def validate_skill(path: Path, root: Path, errors: list[str], warnings: list[str
     rel = path.relative_to(root).as_posix()
     try:
         path = validate_repo_input_path(root, path)
-        text = read_repo_text(root, path)
+        text = read_repo_text(root=root, path=path)
     except (OSError, ValueError) as exc:
         errors.append(f"{rel}: {diagnostic_text(exc)}")
         return
@@ -777,6 +777,25 @@ def main() -> int:
             continue
         valid_required_paths.add(rel)
 
+    structured_inputs: dict[str, object] = {}
+    for rel in REQUIRED_FILES:
+        if rel not in valid_required_paths:
+            continue
+        path = root / rel
+        try:
+            if path.suffix == ".json":
+                structured_inputs[rel] = load_json(path, root=root)
+            elif path.suffix == ".jsonl":
+                structured_inputs[rel] = load_jsonl(
+                    path,
+                    expected_type=dict,
+                    root=root,
+                )
+        except (OSError, UnicodeError, ValueError) as exc:
+            errors.append(
+                f"{diagnostic_path(rel)} parse error: {diagnostic_text(exc)}"
+            )
+
     skill_root = root / "skills"
     dirs = sorted(path.name for path in skill_root.glob("seedance-*") if path.is_dir()) if skill_root.exists() else []
     missing = sorted(set(EXPECTED_SKILLS) - set(dirs))
@@ -831,15 +850,11 @@ def main() -> int:
         if not rel.startswith(".seedance_backups/") and is_committed(rel):
             errors.append(f"compiled Python cache must not be committed: {rel}")
 
-    eval_path = root / "evals" / "evals.json"
-    if os.path.lexists(eval_path):
-        try:
-            data = load_json(eval_path, expected_type=dict, root=root)
-            cases = data.get("cases", [])
-            if len(cases) < 16:
-                errors.append("evals/evals.json must contain at least 16 cases")
-        except Exception as exc:
-            errors.append(f"evals/evals.json parse error: {exc}")
+    data = structured_inputs.get("evals/evals.json")
+    if isinstance(data, dict):
+        cases = data.get("cases", [])
+        if not isinstance(cases, list) or len(cases) < 16:
+            errors.append("evals/evals.json must contain at least 16 cases")
 
     for rel in [
         "scripts/validate_skills.py",
@@ -862,7 +877,7 @@ def main() -> int:
         path = root / rel
         if os.path.lexists(path):
             try:
-                line_count = len(read_repo_text(root, path).splitlines())
+                line_count = len(read_repo_text(root=root, path=path).splitlines())
             except (OSError, ValueError) as exc:
                 errors.append(f"{rel}: {diagnostic_text(exc)}")
                 continue
@@ -871,13 +886,13 @@ def main() -> int:
 
     installer = root / "scripts" / "install_codex_skill.py"
     if os.path.lexists(installer):
-        installer_text = read_repo_text(root, installer)
+        installer_text = read_repo_text(root=root, path=installer)
         if re.search(r"IGNORE_NAMES\s*=\s*{[^}]*[\"']docs[\"']", installer_text, re.S):
             errors.append("scripts/install_codex_skill.py must include docs/ because README links native zh/ja/ko guides")
 
     openai_yaml = root / "agents" / "openai.yaml"
     if os.path.lexists(openai_yaml):
-        yaml_text = read_repo_text(root, openai_yaml)
+        yaml_text = read_repo_text(root=root, path=openai_yaml)
         for required in [
             'display_name: "Seedance 2.0 Skill OS"',
             'short_description: "Professional Seedance video prompting"',
@@ -889,7 +904,7 @@ def main() -> int:
 
     disclosure = root / "references" / "progressive-disclosure.md"
     if os.path.lexists(disclosure):
-        disclosure_text = read_repo_text(root, disclosure)
+        disclosure_text = read_repo_text(root=root, path=disclosure)
         for needed in ("directing-engine.md", "directing-engine-genre-library.md"):
             if needed not in disclosure_text:
                 errors.append(f"progressive-disclosure.md must document the heavy reference {needed}")
@@ -906,7 +921,12 @@ def main() -> int:
             print(diagnostic_text(f"- {error}"))
         return 1
 
-    print(f"Validated root plus {len(EXPECTED_SKILLS)} sub-skills and required v{EXPECTED_VERSION} files.")
+    print(
+        diagnostic_text(
+            f"Validated root plus {len(EXPECTED_SKILLS)} sub-skills and "
+            f"required v{EXPECTED_VERSION} files."
+        )
+    )
     return 0
 
 

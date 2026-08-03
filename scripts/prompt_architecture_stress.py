@@ -5847,7 +5847,7 @@ def main() -> int:
         for d in dim_names:
             vals = [x["dims"][d]["score"] for x in rs if d in x["dims"]]
             row += f"{statistics.mean(vals):>13.2f}" if vals else f"{'-':>13}"
-        print(row)
+        print(diagnostic_text(row))
 
     print("\nRelease gate (every case and applicable dimension >= 3; arm average >= 3.5;")
     print("no cross-case duplicate/near-duplicate prompts for materially different briefs)")
@@ -5861,7 +5861,7 @@ def main() -> int:
         findings = gate_findings[arm]
         verdict = "PASS" if not findings else "FAIL"
         suffix = f"  findings={len(findings)}" if findings else ""
-        print(f"  {arm:<22} avg={avg:.2f}  {verdict}{suffix}")
+        print(diagnostic_text(f"  {arm:<22} avg={avg:.2f}  {verdict}{suffix}"))
 
     print("\nPer-mode overall (skill_formula arm)")
     modes: dict[str, list[float]] = {}
@@ -5869,13 +5869,23 @@ def main() -> int:
         if r["arm"] == "skill_formula":
             modes.setdefault(r["mode"], []).append(r["overall"])
     for m in sorted(modes, key=lambda m: statistics.mean(modes[m])):
-        print(f"  {m:<8} n={len(modes[m]):<3} {statistics.mean(modes[m]):.2f}")
+        print(
+            diagnostic_text(
+                f"  {m:<8} n={len(modes[m]):<3} "
+                f"{statistics.mean(modes[m]):.2f}"
+            )
+        )
 
     worst = sorted((r for r in results if r["arm"] == "skill_formula"), key=lambda r: r["overall"])[:8]
     print("\nWeakest skill-formula prompts")
     for r in worst:
         bad = [f"{k}={v['score']} ({v['note']})" for k, v in r["dims"].items() if v["score"] < 3]
-        print(f"  {r['id']:<8} {r['overall']:.2f}  {r['brief'][:44]:<44} {'; '.join(bad)[:90]}")
+        print(
+            diagnostic_text(
+                f"  {r['id']:<8} {r['overall']:.2f}  "
+                f"{r['brief'][:44]:<44} {'; '.join(bad)[:90]}"
+            )
+        )
 
     if args.strict:
         strict_findings = gate_findings.get(
@@ -5885,7 +5895,7 @@ def main() -> int:
         if strict_findings:
             print("\nskill_formula strict gate failed:")
             for finding in strict_findings:
-                print(f"- {finding}")
+                print(diagnostic_text(f"- {finding}"))
             print(f"\n{BOUNDARY}")
             return 1
         doctrine = [r for r in results if r["arm"] == "skill_formula"]
