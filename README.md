@@ -484,11 +484,24 @@ Before either offline or live evaluation starts, the harness resolves every eval
 input through [`evals/source-manifest.json`](evals/source-manifest.json), rejects
 unclassified files, symlinks/reparse aliases, hard-link aliases, and digest
 drift, then freezes the verified UTF-8 bytes for the whole run. The root router,
-rubric, eval suite, fixture data, planner catalog, responder context, judge, and
-ledger therefore share one immutable source view. State fixtures are strict JSON
-objects under `evals/fixtures/`; models receive the data but never the fixture
-path. A post-run identity and SHA-256 check refuses release evidence if any input
-changed after the snapshot.
+rubric, eval suite, fixture data, evaluator harness, planner catalog, responder
+context, judge, and ledger therefore share one immutable source view. State
+fixtures are strict JSON objects under `evals/fixtures/`; models receive the data
+but never the fixture path. The judge receives the rubric, case prompt, expected
+output, checks, and candidate response, but never expected route labels or
+selected source paths. The harness also compiles the frozen evaluator source and
+requires it to equal the module code object Python actually executed, with the
+same physical `scripts/eval_run.py` path. Every recheck derives path, role, and
+digest metadata again from the frozen manifest so a constructed snapshot cannot
+reclassify responder files as evaluator-only inputs. A post-run check plus checks
+immediately before and after the atomic ledger replace refuse release evidence
+if any input changed after the snapshot; a failed post-replace check restores the
+prior ledger or removes the newly written one. Existing ledger permission modes
+are bound before the copy and preserved on both replacement and rollback; a new
+POSIX ledger remains owner-only, while the Windows read-only attribute is retained
+without modifying linked inputs. Bootstrap failure ledgers also
+refuse direct, hard-link, symlink, or source-boundary aliases of repository
+inputs before writing.
 
 Blind discovery is scored, not merely recorded: after the planner returns, its
 selected skill paths must exactly match the hidden
@@ -496,6 +509,11 @@ selected skill paths must exactly match the hidden
 or non-responder selections fail before response generation. Generated ledger
 rows bind every selected responder path to its frozen SHA-256 digest; fabricated,
 non-canonical, missing, or mismatched provenance cannot produce a release pass.
+The ledger also records one canonical SHA-256 over the complete frozen
+path/role/hash map, including `SKILL.md`, fixtures, evaluator files, and the
+source manifest itself, plus per-role file counts. Release assessment accepts
+that provenance only from the verified `FrozenRepository`; caller-supplied
+digest maps cannot stand in for the evaluated checkout.
 The canonical eval-suite and rubric digests are pinned so a structurally valid
 but semantically gutted replacement also fails closed.
 

@@ -27,7 +27,9 @@ labels, reference answers, archived material, or evaluator/rubric files. The
 responder then receives the root instructions plus only the selected sources;
 after selection, the harness compares selected skill paths with the hidden route
 oracle and fails wrong, missing, extra, duplicate, or unknown routes. The judge
-alone receives the rubric and case checks. Legacy cases use the
+alone receives the rubric, case prompt, expected output, checks, and candidate
+response; it never receives the hidden route oracle or selected source paths.
+Legacy cases use the
 rubric's 0-3 scale (release: every case >= 2, average >= 2.6); sequence cases use
 the 0-4 scale (release: critical cases at 4, no dimension below 3, average >=
 3.5).
@@ -41,6 +43,16 @@ record provider, region, responder and judge models, selected-versus-total scope
 and each selected responder path plus its frozen SHA-256 digest. Discovery
 failure remains distinct from a valid root-only selection. Focused `--id` or
 `--limit` runs are not release-eligible and cannot replace this canonical ledger.
+Each generated ledger also records one canonical SHA-256 over the complete
+frozen path/role/hash map, including the root skill, fixtures, evaluator harness,
+and `evals/source-manifest.json` itself, together with per-role file counts. The
+release path accepts that map only from the verified frozen snapshot, binds the
+frozen evaluator to the module code object Python actually executed, and
+re-derives snapshot roles from the frozen manifest on every verification. It
+checks immediately before and after the atomic ledger replace, restoring the
+prior ledger (or removing the new one) if the post-replace check detects a race.
+Bootstrap failure reporting refuses ledger destinations that overwrite or alias
+repository inputs.
 
 Issue #29 remains a separate dependency: `failure_mode`,
 `expected_state_delta`, `expected_prompt_architecture`, and

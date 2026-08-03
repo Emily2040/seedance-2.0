@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import io
 import hashlib
+import importlib.util
 import json
 import os
+import shutil
+import stat
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -18,15 +22,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import eval_run  # noqa: E402
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 EXACT_RUBRIC = (
     "Score 0 to 3. Sequence scale 0-4.\n\nDimensions: "
     + ", ".join(eval_run.SEQUENCE_DIMENSIONS)
     + ".\n"
 )
+_RELEASE_SNAPSHOT: eval_run.FrozenRepository | None = None
 
 
 def write_source_manifest(root: Path) -> None:
-    paths = {"SKILL.md", "evals/evals.json", "references/eval-rubric.md"}
+    for evaluator_path in eval_run.EVALUATOR_HARNESS_PATHS:
+        path = root / evaluator_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_text("# frozen test evaluator harness\n", encoding="utf-8")
+    paths = {
+        "SKILL.md",
+        "evals/evals.json",
+        "references/eval-rubric.md",
+        *eval_run.EVALUATOR_HARNESS_PATHS,
+    }
     for directory in (root / "skills", root / "references", root / "evals" / "fixtures"):
         if directory.exists():
             paths.update(
@@ -39,7 +55,11 @@ def write_source_manifest(root: Path) -> None:
         path = root / relative
         if relative == "SKILL.md":
             role = "root"
-        elif relative in {"evals/evals.json", "references/eval-rubric.md"}:
+        elif relative in {
+            "evals/evals.json",
+            "references/eval-rubric.md",
+            *eval_run.EVALUATOR_HARNESS_PATHS,
+        }:
             role = "evaluator"
         elif relative.startswith("evals/fixtures/"):
             role = "fixture"
@@ -58,6 +78,13 @@ def write_source_manifest(root: Path) -> None:
         json.dumps({"version": 1, "sources": entries}, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def release_snapshot() -> eval_run.FrozenRepository:
+    global _RELEASE_SNAPSHOT
+    if _RELEASE_SNAPSHOT is None:
+        _RELEASE_SNAPSHOT = eval_run.freeze_repository(REPO_ROOT)
+    return _RELEASE_SNAPSHOT
 
 
 def result_row(
@@ -97,6 +124,21 @@ def case_metadata(
     if sequence:
         case["expected_sequence_relation"] = "standalone"
     return eval_run.build_expected_case_metadata([case])
+
+
+def frozen_release_rows() -> list[dict]:
+    rows: list[dict] = []
+    for case in eval_run.load_cases(release_snapshot()):
+        sequence = eval_run.is_sequence_case(case)
+        rows.append(
+            result_row(
+                case["id"],
+                score=4 if sequence else 3,
+                sequence=sequence,
+                critical=case.get("critical", False),
+            )
+        )
+    return rows
 
 
 def valid_verdict(assertions: tuple[str, ...] = ("works",), score: int = 3) -> dict:
@@ -196,19 +238,157 @@ class AggregateIntegrityTests(unittest.TestCase):
         self.assertEqual(report["scope"], "UNSCOPED")
         self.assertEqual(report["release_verdict"], "NOT ELIGIBLE")
 
-    def test_explicit_one_case_canonical_universe_can_pass(self) -> None:
+    def test_caller_subset_cannot_replace_frozen_release_universe(self) -> None:
         report = eval_run.assess_run(
             [result_row()],
             expected_cases=case_metadata(),
             total_expected=1,
             release_eligible=True,
-            source_manifest={},
+            snapshot=release_snapshot(),
         )
 
         self.assertEqual(report["scope"], "COMPLETE")
+        self.assertEqual(report["selected_count"], 126)
+        self.assertEqual(report["total_expected"], 126)
+        self.assertEqual(report["run_verdict"], "FAIL")
+        self.assertEqual(report["release_verdict"], "FAIL")
+        self.assertEqual(report["exit_code"], 1)
+        self.assertIn(
+            "expected_cases do not match frozen evals/evals.json",
+            report["integrity_errors"],
+        )
+        self.assertIn(
+            "total_expected does not match frozen evals/evals.json",
+            report["integrity_errors"],
+        )
+        self.assertEqual(
+            sum(report["repository_role_counts"].values()),
+            report["repository_file_count"],
+        )
+
+    def test_release_ids_metadata_and_count_are_derived_from_frozen_evals(self) -> None:
+        report = eval_run.assess_run(
+            frozen_release_rows(),
+            release_eligible=True,
+            snapshot=release_snapshot(),
+        )
+
+        self.assertEqual(report["scope"], "COMPLETE")
+        self.assertEqual(report["selected_count"], 126)
+        self.assertEqual(report["total_expected"], 126)
         self.assertEqual(report["run_verdict"], "PASS")
         self.assertEqual(report["release_verdict"], "PASS")
-        self.assertEqual(report["exit_code"], 0)
+        self.assertEqual(report["integrity_errors"], [])
+
+    def test_release_recomputes_canonical_bindings_instead_of_trusting_flags(
+        self,
+    ) -> None:
+        canonical_with_false_flags = replace(
+            release_snapshot(),
+            canonical_contract_bound=False,
+            evaluator_execution_bound=False,
+        )
+        canonical_report = eval_run.assess_run(
+            frozen_release_rows(),
+            release_eligible=True,
+            snapshot=canonical_with_false_flags,
+        )
+        self.assertEqual(canonical_report["release_verdict"], "PASS")
+        self.assertEqual(canonical_report["integrity_errors"], [])
+
+        mutations = {
+            "evals/evals.json": '{"cases":[{"id":"forged"}]}\n',
+            "references/eval-rubric.md": EXACT_RUBRIC + "FORGED RUBRIC\n",
+        }
+        for target, replacement_text in mutations.items():
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "scripts").mkdir(parents=True)
+                (root / "evals").mkdir()
+                (root / "references").mkdir()
+                (root / "SKILL.md").write_text(
+                    "# release binding regression\n", encoding="utf-8"
+                )
+                shutil.copy2(
+                    REPO_ROOT / "scripts" / "eval_run.py",
+                    root / "scripts" / "eval_run.py",
+                )
+                shutil.copy2(
+                    REPO_ROOT / "evals" / "evals.json",
+                    root / "evals" / "evals.json",
+                )
+                shutil.copy2(
+                    REPO_ROOT / "references" / "eval-rubric.md",
+                    root / "references" / "eval-rubric.md",
+                )
+                (root / target).write_text(replacement_text, encoding="utf-8")
+                write_source_manifest(root)
+
+                module_name = "forged_eval_run_" + target.replace("/", "_").replace(
+                    ".", "_"
+                )
+                spec = importlib.util.spec_from_file_location(
+                    module_name, root / "scripts" / "eval_run.py"
+                )
+                self.assertIsNotNone(spec)
+                self.assertIsNotNone(spec.loader)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                try:
+                    spec.loader.exec_module(module)
+                    with self.assertRaisesRegex(
+                        module.HarnessError,
+                        "canonical evaluation contract changed",
+                    ):
+                        module.freeze_repository(root)
+                    unbound = module.freeze_repository(
+                        root,
+                        enforce_canonical_contract=False,
+                        enforce_evaluator_identity=True,
+                    )
+                    forged = replace(
+                        unbound,
+                        canonical_contract_bound=True,
+                        evaluator_execution_bound=True,
+                    )
+                    rows = []
+                    for case in module.load_cases(forged):
+                        sequence = module.is_sequence_case(case)
+                        rows.append(
+                            {
+                                "id": case["id"],
+                                "score": 4 if sequence else 3,
+                                "pass": True,
+                                "sequence": sequence,
+                                "critical": case.get("critical", False),
+                                "notes": "caller-forged release universe",
+                                "sources": [],
+                                "dimension_scores": (
+                                    [
+                                        {"dimension": dimension, "score": 4}
+                                        for dimension in module.SEQUENCE_DIMENSIONS
+                                    ]
+                                    if sequence
+                                    else []
+                                ),
+                            }
+                        )
+                    report = module.assess_run(
+                        rows,
+                        release_eligible=True,
+                        snapshot=forged,
+                    )
+                finally:
+                    sys.modules.pop(module_name, None)
+
+                self.assertNotEqual(report["release_verdict"], "PASS")
+                self.assertTrue(
+                    any(
+                        f"canonical evaluation contract changed: {target}" in error
+                        for error in report["integrity_errors"]
+                    ),
+                    report,
+                )
 
     def test_release_eligibility_requires_an_exact_boolean(self) -> None:
         for release_eligible in ("false", 1, None):
@@ -433,12 +613,13 @@ class JudgeIntegrityTests(unittest.TestCase):
             "anthropic", "global_en", None
         )
         api_key = "private-http-key"
+        response_stream = io.BytesIO(b"provider failure")
         error = eval_run.urllib.error.HTTPError(
             endpoint,
             503,
             f"provider unavailable; X-Api-Key: {api_key}",
             {},
-            None,
+            response_stream,
         )
         with mock.patch.object(
             eval_run.urllib.request, "urlopen", side_effect=error
@@ -454,6 +635,7 @@ class JudgeIntegrityTests(unittest.TestCase):
         self.assertIn("provider unavailable", message)
         self.assertIn("[REDACTED]", message)
         self.assertNotIn(api_key, message)
+        self.assertTrue(response_stream.closed)
 
     def test_provider_envelopes_reject_duplicate_keys_and_nonstandard_constants(self) -> None:
         invalid_bodies = {
@@ -1477,6 +1659,17 @@ class LedgerIntegrityTests(unittest.TestCase):
         call = mock.Mock(return_value=(verdict, []))
         judge = mock.Mock()
         real_freeze = eval_run.freeze_repository
+
+        def release_like_freeze(root: Path) -> eval_run.FrozenRepository:
+            frozen = real_freeze(root, enforce_canonical_contract=False)
+            return eval_run.FrozenRepository(
+                root=frozen.root,
+                files=frozen.files,
+                manifest=frozen.manifest,
+                canonical_contract_bound=True,
+                evaluator_execution_bound=True,
+            )
+
         with (
             mock.patch.object(sys, "argv", argv),
             mock.patch.dict(
@@ -1487,10 +1680,10 @@ class LedgerIntegrityTests(unittest.TestCase):
             mock.patch.object(
                 eval_run,
                 "freeze_repository",
-                side_effect=lambda root: real_freeze(
-                    root, enforce_canonical_contract=False
-                ),
+                side_effect=release_like_freeze,
             ),
+            mock.patch.object(eval_run, "_verify_canonical_evaluation_contract"),
+            mock.patch.object(eval_run, "_verify_evaluator_execution_identity"),
             mock.patch.object(eval_run, "run_case", call),
             redirect_stdout(output),
         ):
@@ -1724,7 +1917,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     expected_cases=case_metadata(),
                     total_expected=1,
                     release_eligible=True,
-                    source_manifest={},
+                    snapshot=release_snapshot(),
                 )
 
             self.assertEqual(
@@ -1732,10 +1925,448 @@ class LedgerIntegrityTests(unittest.TestCase):
             )
             self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
 
+    def test_atomic_overwrite_preserves_destination_permissions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+            if os.name == "posix":
+                os.chmod(path, 0o644)
+            elif os.name == "nt":
+                os.chmod(path, stat.S_IREAD)
+
+            try:
+                eval_run._atomic_write_text(path, "new evidence\n")
+
+                self.assertEqual(path.read_text(encoding="utf-8"), "new evidence\n")
+                if os.name == "posix":
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644)
+                elif os.name == "nt":
+                    self.assertTrue(
+                        eval_run._windows_status_is_read_only(path.stat())
+                    )
+            finally:
+                if os.name == "nt" and path.exists():
+                    os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+
+    def test_atomic_rollback_preserves_content_and_destination_permissions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+            if os.name == "posix":
+                os.chmod(path, 0o644)
+            elif os.name == "nt":
+                os.chmod(path, stat.S_IREAD)
+            observed_backup_modes: list[int] = []
+
+            def reject_replacement() -> None:
+                if os.name == "posix":
+                    backups = list(path.parent.glob(".ledger.md.*.rollback"))
+                    self.assertEqual(len(backups), 1)
+                    observed_backup_modes.append(
+                        stat.S_IMODE(backups[0].stat().st_mode)
+                    )
+                raise eval_run.HarnessError("post-replace check failed")
+
+            try:
+                with self.assertRaisesRegex(
+                    eval_run.HarnessError, "post-replace check failed"
+                ):
+                    eval_run._atomic_write_text(
+                        path,
+                        "new evidence\n",
+                        after_replace=reject_replacement,
+                    )
+
+                self.assertEqual(path.read_text(encoding="utf-8"), "old evidence\n")
+                if os.name == "posix":
+                    self.assertEqual(observed_backup_modes, [0o644])
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644)
+                elif os.name == "nt":
+                    self.assertTrue(
+                        eval_run._windows_status_is_read_only(path.stat())
+                    )
+                self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
+                self.assertEqual(
+                    list(path.parent.glob(".ledger.md.*.rollback")), []
+                )
+            finally:
+                if os.name == "nt" and path.exists():
+                    os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+
+    def test_atomic_new_ledger_uses_secure_non_inherited_permissions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+
+            eval_run._atomic_write_text(path, "new evidence\n")
+
+            if os.name == "posix":
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            elif os.name == "nt":
+                self.assertFalse(eval_run._windows_status_is_read_only(path.stat()))
+
+    def test_atomic_write_rejects_destination_permission_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+            if os.name == "posix":
+                os.chmod(path, 0o644)
+            elif os.name == "nt":
+                os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+
+            def mutate_permissions() -> None:
+                if os.name == "posix":
+                    os.chmod(path, 0o600)
+                elif os.name == "nt":
+                    os.chmod(path, stat.S_IREAD)
+
+            try:
+                with self.assertRaisesRegex(
+                    eval_run.HarnessError, "permission mode|read-only attribute"
+                ):
+                    eval_run._atomic_write_text(
+                        path,
+                        "new evidence\n",
+                        before_replace=mutate_permissions,
+                    )
+
+                self.assertEqual(path.read_text(encoding="utf-8"), "old evidence\n")
+            finally:
+                if os.name == "nt" and path.exists():
+                    os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+
+    @unittest.skipUnless(os.name == "nt", "Windows read-only attribute regression")
+    def test_atomic_write_never_clears_a_read_only_hardlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source.md"
+            destination = Path(tmp) / "ledger.md"
+            source.write_text("shared evidence\n", encoding="utf-8")
+            os.link(source, destination)
+            os.chmod(source, stat.S_IREAD)
+
+            try:
+                with self.assertRaisesRegex(
+                    eval_run.HarnessError, "hard links"
+                ):
+                    eval_run._atomic_write_text(destination, "new evidence\n")
+
+                self.assertTrue(source.samefile(destination))
+                self.assertEqual(source.read_text(encoding="utf-8"), "shared evidence\n")
+                self.assertTrue(eval_run._windows_status_is_read_only(source.stat()))
+            finally:
+                os.chmod(source, stat.S_IREAD | stat.S_IWRITE)
+
+    def test_atomic_write_rejects_any_hardlink_before_creating_temp_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source.md"
+            destination = Path(tmp) / "ledger.md"
+            source.write_text("shared evidence\n", encoding="utf-8")
+            os.link(source, destination)
+
+            with (
+                mock.patch.object(eval_run.tempfile, "mkstemp") as mkstemp,
+                self.assertRaisesRegex(eval_run.HarnessError, "hard links"),
+            ):
+                eval_run._atomic_write_text(destination, "new evidence\n")
+
+            mkstemp.assert_not_called()
+            self.assertTrue(source.samefile(destination))
+            self.assertEqual(source.read_text(encoding="utf-8"), "shared evidence\n")
+
+    @unittest.skipUnless(os.name == "nt", "Windows ADS regression")
+    def test_windows_alternate_stream_fails_before_temp_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+            Path(str(path) + ":audit").write_text("hidden evidence", encoding="utf-8")
+
+            with (
+                mock.patch.object(eval_run.tempfile, "mkstemp") as mkstemp,
+                self.assertRaisesRegex(
+                    eval_run.HarnessError, "alternate data streams"
+                ),
+            ):
+                eval_run._atomic_write_text(path, "new evidence\n")
+
+            mkstemp.assert_not_called()
+            self.assertEqual(path.read_text(encoding="utf-8"), "old evidence\n")
+
+    @unittest.skipUnless(os.name == "nt", "Windows attribute regression")
+    def test_windows_unsupported_attributes_fail_before_temp_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+            original_attributes = path.stat().st_file_attributes
+            eval_run._set_windows_attributes(
+                path,
+                original_attributes | 0x2,  # FILE_ATTRIBUTE_HIDDEN
+                "test ledger",
+            )
+            try:
+                with (
+                    mock.patch.object(eval_run.tempfile, "mkstemp") as mkstemp,
+                    self.assertRaisesRegex(
+                        eval_run.HarnessError, "unsupported Windows file attributes"
+                    ),
+                ):
+                    eval_run._atomic_write_text(path, "new evidence\n")
+                mkstemp.assert_not_called()
+                self.assertEqual(path.read_text(encoding="utf-8"), "old evidence\n")
+            finally:
+                eval_run._set_windows_attributes(
+                    path, original_attributes, "test ledger"
+                )
+
+    @unittest.skipUnless(os.name == "nt", "Windows owner and DACL regression")
+    def test_windows_owner_or_dacl_mismatch_fails_before_destination_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+            real_descriptor = eval_run._windows_security_descriptor
+
+            def mismatched_descriptor(candidate: Path, label: str) -> bytes:
+                descriptor = real_descriptor(candidate, label)
+                return descriptor if candidate == path else descriptor + b"mismatch"
+
+            with (
+                mock.patch.object(
+                    eval_run,
+                    "_windows_security_descriptor",
+                    side_effect=mismatched_descriptor,
+                ),
+                self.assertRaisesRegex(eval_run.HarnessError, "owner or DACL"),
+            ):
+                eval_run._atomic_write_text(path, "new evidence\n")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "old evidence\n")
+            self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
+
+    def test_temporary_bytes_are_hash_bound_before_replace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+
+            def tamper_with_temporary() -> None:
+                temporary = next(path.parent.glob(".ledger.md.*.tmp"))
+                status = temporary.stat()
+                temporary.write_bytes(b"X" * status.st_size)
+                os.utime(
+                    temporary,
+                    ns=(status.st_atime_ns, status.st_mtime_ns),
+                )
+
+            with self.assertRaisesRegex(
+                eval_run.HarnessError, "temporary ledger bytes changed"
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    "new evidence\n",
+                    before_replace=tamper_with_temporary,
+                )
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "old evidence\n")
+
+    def test_private_temporary_hardlink_is_rejected_before_destination_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            alias = Path(tmp) / "temporary-alias.md"
+            real_apply = eval_run._apply_ledger_permissions
+
+            def hardlink_temporary(
+                candidate: Path,
+                expected: eval_run.LedgerDestinationState,
+                label: str,
+            ) -> None:
+                real_apply(candidate, expected, label)
+                if label == "temporary ledger":
+                    os.link(candidate, alias)
+
+            try:
+                with (
+                    mock.patch.object(
+                        eval_run,
+                        "_apply_ledger_permissions",
+                        side_effect=hardlink_temporary,
+                    ),
+                    self.assertRaisesRegex(
+                        eval_run.HarnessError,
+                        "temporary ledger must not have hard links",
+                    ),
+                ):
+                    eval_run._atomic_write_text(path, "new evidence\n")
+
+                self.assertFalse(path.exists())
+            finally:
+                alias.unlink(missing_ok=True)
+
+    def test_tampered_rollback_bytes_are_detected_and_retained(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+
+            def tamper_then_reject() -> None:
+                backup = next(path.parent.glob(".ledger.md.*.rollback"))
+                status = backup.stat()
+                backup.write_bytes(b"X" * status.st_size)
+                os.utime(backup, ns=(status.st_atime_ns, status.st_mtime_ns))
+                raise eval_run.HarnessError("post-check failed")
+
+            with self.assertRaisesRegex(
+                eval_run.HarnessError, "recovery retained"
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    "new evidence\n",
+                    after_replace=tamper_then_reject,
+                )
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "new evidence\n")
+            backups = list(path.parent.glob(".ledger.md.*.rollback"))
+            self.assertEqual(len(backups), 1)
+
+    def test_recovery_survives_until_restored_metadata_is_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+            real_verify = eval_run._verify_ledger_status
+
+            def reject_restored_metadata(
+                status: os.stat_result,
+                expected: eval_run.LedgerDestinationState,
+                label: str,
+                *,
+                bind_identity: bool,
+            ) -> None:
+                real_verify(
+                    status,
+                    expected,
+                    label,
+                    bind_identity=bind_identity,
+                )
+                if label == "restored ledger":
+                    raise eval_run.HarnessError("restored metadata unverified")
+
+            with (
+                mock.patch.object(
+                    eval_run,
+                    "_verify_ledger_status",
+                    side_effect=reject_restored_metadata,
+                ),
+                self.assertRaisesRegex(eval_run.HarnessError, "recovery retained"),
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    "new evidence\n",
+                    after_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("post-check failed")
+                    ),
+                )
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "old evidence\n")
+            self.assertEqual(
+                len(list(path.parent.glob(".ledger.md.*.rollback"))), 1
+            )
+
+    def test_failed_post_check_never_leaves_a_new_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+
+            with (
+                mock.patch.object(
+                    eval_run.Path,
+                    "unlink",
+                    side_effect=OSError("unlink blocked"),
+                ),
+                self.assertRaisesRegex(eval_run.HarnessError, "post-check failed"),
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    "new evidence\n",
+                    after_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("post-check failed")
+                    ),
+                )
+
+            self.assertFalse(path.exists())
+            for artifact in path.parent.glob(".ledger.md.*.tmp"):
+                artifact.unlink()
+
+    def test_tampered_new_destination_is_quarantined_after_post_check_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+
+            def tamper_then_reject() -> None:
+                status = path.stat()
+                path.write_bytes(b"X" * status.st_size)
+                os.utime(path, ns=(status.st_atime_ns, status.st_mtime_ns))
+                raise eval_run.HarnessError("post-check failed")
+
+            with self.assertRaisesRegex(eval_run.HarnessError, "post-check failed"):
+                eval_run._atomic_write_text(
+                    path,
+                    "new evidence\n",
+                    after_replace=tamper_then_reject,
+                )
+
+            self.assertFalse(path.exists())
+            self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
+
+    def test_verified_commit_reports_cleanup_failure_as_committed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+
+            with (
+                mock.patch.object(
+                    eval_run,
+                    "_unlink_bound_atomic_artifact",
+                    side_effect=OSError("cleanup failed"),
+                ),
+                self.assertRaisesRegex(
+                    eval_run.CommittedCleanupError, "commit verified"
+                ),
+            ):
+                eval_run._atomic_write_text(path, "new evidence\n")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "new evidence\n")
+            self.assertEqual(
+                len(list(path.parent.glob(".ledger.md.*.rollback"))), 1
+            )
+
+    def test_oversized_rollback_source_fails_before_temp_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            with path.open("wb") as handle:
+                handle.truncate(eval_run.MAX_LEDGER_ARTIFACT_BYTES + 1)
+
+            with (
+                mock.patch.object(eval_run.tempfile, "mkstemp") as mkstemp,
+                self.assertRaisesRegex(eval_run.HarnessError, "exceeds"),
+            ):
+                eval_run._atomic_write_text(path, "new evidence\n")
+
+            mkstemp.assert_not_called()
+            self.assertEqual(
+                path.stat().st_size,
+                eval_run.MAX_LEDGER_ARTIFACT_BYTES + 1,
+            )
+
+    def test_parent_directory_is_fsynced_for_recovery_commit_and_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
+
+            with mock.patch.object(eval_run, "_fsync_parent_directory") as fsync_parent:
+                eval_run._atomic_write_text(path, "new evidence\n")
+
+            self.assertGreaterEqual(fsync_parent.call_count, 3)
+            self.assertTrue(
+                all(call.args == (path,) or call.args[0].parent == path.parent for call in fsync_parent.call_args_list)
+            )
+
     def test_ledger_records_provider_models_scope_and_release_verdict(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ledger.md"
-            rows = [result_row()]
+            rows = frozen_release_rows()
 
             with redirect_stdout(io.StringIO()):
                 eval_run.write_ledger(
@@ -1746,10 +2377,8 @@ class LedgerIntegrityTests(unittest.TestCase):
                     "minimax",
                     "cn_zh",
                     judge_model="MiniMax-M2.5",
-                    expected_cases=case_metadata(),
-                    total_expected=1,
                     release_eligible=True,
-                    source_manifest={},
+                    snapshot=release_snapshot(),
                 )
 
             text = path.read_text(encoding="utf-8")

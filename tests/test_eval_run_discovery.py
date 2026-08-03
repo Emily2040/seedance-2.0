@@ -10,7 +10,9 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
 from pathlib import Path
+from types import MappingProxyType
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -36,7 +38,15 @@ def write_manifest(
     role_overrides: dict[str, str] | None = None,
 ) -> None:
     overrides = role_overrides or {}
-    paths = {"SKILL.md", "evals/evals.json", "references/eval-rubric.md"}
+    for evaluator_path in eval_run.EVALUATOR_HARNESS_PATHS:
+        if not (root / evaluator_path).exists():
+            write(root, evaluator_path, "# frozen test evaluator harness\n")
+    paths = {
+        "SKILL.md",
+        "evals/evals.json",
+        "references/eval-rubric.md",
+        *eval_run.EVALUATOR_HARNESS_PATHS,
+    }
     for directory in (root / "skills", root / "references", root / "evals" / "fixtures"):
         if directory.exists():
             paths.update(
@@ -48,7 +58,11 @@ def write_manifest(
     for relative in sorted(paths):
         if relative == "SKILL.md":
             role = "root"
-        elif relative in {"evals/evals.json", "references/eval-rubric.md"}:
+        elif relative in {
+            "evals/evals.json",
+            "references/eval-rubric.md",
+            *eval_run.EVALUATOR_HARNESS_PATHS,
+        }:
             role = "evaluator"
         elif relative.startswith("evals/fixtures/"):
             role = "fixture"
@@ -219,6 +233,13 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                 self.assertNotIn(judge_only, planner)
                 self.assertNotIn(judge_only, responder)
                 self.assertIn(judge_only, judge)
+            for blinded_label in (
+                "expected_skills",
+                "sources_selected_without_expected_labels",
+                "skills/actual-route/SKILL.md",
+                "references/actual-reference.md",
+            ):
+                self.assertNotIn(blinded_label, judge)
             for field in (
                 "skills_expected_to_activate",
                 "state_fixture",
@@ -516,18 +537,18 @@ class DiscoveryBoundaryTests(unittest.TestCase):
 
     def test_provenance_is_bound_to_frozen_paths_and_digests(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            make_root(root)
-            snapshot = self.snapshot(root)
+            snapshot = eval_run.freeze_repository(REPO_ROOT)
             paths = [
-                "skills/actual-route/SKILL.md",
-                "references/actual-reference.md",
+                "skills/seedance-prompt/SKILL.md",
+                "references/prompt-compiler.md",
             ]
             provenance = eval_run.source_provenance(snapshot, paths)
-            manifest = {
+            responder_manifest = {
                 path: source.sha256
                 for path, source in eval_run.source_catalog(snapshot).items()
             }
+            repository_manifest = eval_run.frozen_repository_manifest(snapshot)
+            repository_roles = eval_run.frozen_repository_roles(snapshot)
             row = {
                 "id": "one",
                 "score": 3,
@@ -538,7 +559,9 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                 "dimension_scores": [],
                 "sources": provenance,
             }
-            self.assertEqual(eval_run._row_integrity_errors(row, 0, manifest), [])
+            self.assertEqual(
+                eval_run._row_integrity_errors(row, 0, responder_manifest), []
+            )
 
             invalid = (
                 [{"path": "references/../eval-rubric.md", "sha256": "0" * 64}],
@@ -549,29 +572,95 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             for sources in invalid:
                 with self.subTest(sources=sources):
                     errors = eval_run._row_integrity_errors(
-                        {**row, "sources": sources}, 0, manifest
+                        {**row, "sources": sources}, 0, responder_manifest
                     )
                     self.assertTrue(errors)
 
-            ledger = root / "ledger.md"
+            release_rows = []
+            for index, case in enumerate(eval_run.load_cases(snapshot)):
+                sequence = eval_run.is_sequence_case(case)
+                release_rows.append(
+                    {
+                        "id": case["id"],
+                        "score": 4 if sequence else 3,
+                        "pass": True,
+                        "sequence": sequence,
+                        "critical": case.get("critical", False),
+                        "notes": "ok",
+                        "dimension_scores": (
+                            [
+                                {"dimension": dimension, "score": 4}
+                                for dimension in eval_run.SEQUENCE_DIMENSIONS
+                            ]
+                            if sequence
+                            else []
+                        ),
+                        "sources": provenance if index == 0 else [],
+                    }
+                )
+
+            ledger = Path(tmp) / "ledger.md"
             report = eval_run.write_ledger(
                 ledger,
-                [row],
+                release_rows,
                 "model",
                 "2026-08-01",
                 "anthropic",
                 "global_en",
-                expected_cases={"one": {"sequence": False, "critical": False}},
-                total_expected=1,
                 release_eligible=True,
-                source_manifest=manifest,
+                snapshot=snapshot,
             )
             text = ledger.read_text(encoding="utf-8")
             self.assertEqual(report["release_verdict"], "PASS")
+            self.assertEqual(
+                report["repository_sha256"],
+                eval_run.frozen_repository_sha256(
+                    repository_manifest, repository_roles
+                ),
+            )
             self.assertIn(provenance[0]["sha256"], text)
-            self.assertIn("skills/actual-route/SKILL.md@", text)
+            self.assertIn("skills/seedance-prompt/SKILL.md@", text)
+            self.assertIn("Frozen repository provenance: **BOUND**", text)
+            self.assertIn("archive=23", text)
+            self.assertIn("evaluator=4", text)
+            self.assertIn("fixture=1", text)
+            self.assertIn("responder=88", text)
+            self.assertIn("root=1", text)
+
+            mismatched_repository = dict(repository_manifest)
+            mismatched_repository[paths[0]] = "0" * 64
+            mismatched = eval_run.assess_run(
+                [row],
+                expected_cases={"one": {"sequence": False, "critical": False}},
+                total_expected=1,
+                release_eligible=True,
+                repository_manifest=mismatched_repository,
+                repository_roles=repository_roles,
+                snapshot=snapshot,
+            )
+            self.assertEqual(mismatched["release_verdict"], "FAIL")
+            self.assertTrue(
+                any(
+                    "cannot be combined" in error
+                    for error in mismatched["integrity_errors"]
+                )
+            )
 
     def test_release_assessment_cannot_omit_the_frozen_manifest(self) -> None:
+        incomplete_manifest = {
+            eval_run.SOURCE_MANIFEST_PATH: "0" * 64,
+            "SKILL.md": "0" * 64,
+            "evals/evals.json": "0" * 64,
+            "references/eval-rubric.md": "0" * 64,
+            "scripts/eval_run.py": "0" * 64,
+        }
+        incomplete_roles = {
+            eval_run.SOURCE_MANIFEST_PATH: "evaluator",
+            "SKILL.md": "root",
+            "evals/evals.json": "evaluator",
+            "references/eval-rubric.md": "evaluator",
+            "scripts/eval_run.py": "evaluator",
+        }
         row = {
             "id": "one",
             "score": 3,
@@ -580,23 +669,363 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             "critical": False,
             "notes": "forged",
             "dimension_scores": [],
-            "sources": [
-                {"path": "references/never-existed.md", "sha256": "0" * 64}
-            ],
+            "sources": [],
         }
         report = eval_run.assess_run(
             [row],
             expected_cases={"one": {"sequence": False, "critical": False}},
             total_expected=1,
             release_eligible=True,
+            source_manifest={},
+            repository_manifest=incomplete_manifest,
+            repository_roles=incomplete_roles,
         )
         self.assertEqual(report["release_verdict"], "FAIL")
+        self.assertIsNone(report["repository_sha256"])
         self.assertTrue(
             any(
-                "frozen responder source manifest" in error
+                "verified complete frozen repository snapshot" in error
                 for error in report["integrity_errors"]
             )
         )
+
+    def test_mixed_type_repository_roles_fail_without_a_traceback(self) -> None:
+        manifest = {
+            eval_run.SOURCE_MANIFEST_PATH: "0" * 64,
+            "SKILL.md": "0" * 64,
+            "evals/evals.json": "0" * 64,
+            "references/eval-rubric.md": "0" * 64,
+            "scripts/eval_run.py": "0" * 64,
+        }
+        roles: dict[object, str] = {
+            eval_run.SOURCE_MANIFEST_PATH: "evaluator",
+            "SKILL.md": "root",
+            "evals/evals.json": "evaluator",
+            "references/eval-rubric.md": "evaluator",
+            "scripts/eval_run.py": "evaluator",
+            1: "evaluator",
+            "extra.md": "evaluator",
+        }
+        report = eval_run.assess_run(
+            [
+                {
+                    "id": "one",
+                    "score": 3,
+                    "pass": True,
+                    "sequence": False,
+                    "critical": False,
+                    "notes": "forged",
+                    "dimension_scores": [],
+                    "sources": [],
+                }
+            ],
+            expected_cases={"one": {"sequence": False, "critical": False}},
+            total_expected=1,
+            release_eligible=True,
+            source_manifest={},
+            repository_manifest=manifest,
+            repository_roles=roles,  # type: ignore[arg-type]
+        )
+        self.assertEqual(report["release_verdict"], "FAIL")
+        self.assertTrue(
+            any("non-string path" in error for error in report["integrity_errors"])
+        )
+        self.assertTrue(
+            any("unexpected paths: extra.md" in error for error in report["integrity_errors"])
+        )
+
+    def test_constructed_snapshot_cannot_reassign_manifest_roles(self) -> None:
+        snapshot = eval_run.freeze_repository(REPO_ROOT)
+        files = dict(snapshot.files)
+        target = "references/prompt-compiler.md"
+        files[target] = replace(files[target], role="evaluator")
+        forged = replace(snapshot, files=MappingProxyType(files))
+        report = eval_run.assess_run(
+            [
+                {
+                    "id": "one",
+                    "score": 3,
+                    "pass": True,
+                    "sequence": False,
+                    "critical": False,
+                    "notes": "forged",
+                    "dimension_scores": [],
+                    "sources": [],
+                }
+            ],
+            expected_cases={"one": {"sequence": False, "critical": False}},
+            total_expected=1,
+            release_eligible=True,
+            snapshot=forged,
+        )
+
+        self.assertEqual(report["release_verdict"], "FAIL")
+        self.assertIsNone(report["repository_sha256"])
+        self.assertTrue(
+            any(
+                "role or manifest metadata changed" in error
+                for error in report["integrity_errors"]
+            )
+        )
+
+    def test_constructed_snapshot_mixed_metadata_types_fail_cleanly(self) -> None:
+        snapshot = eval_run.freeze_repository(REPO_ROOT)
+        target = "references/prompt-compiler.md"
+        mutations: list[dict[object, eval_run.FrozenFile]] = []
+
+        non_string_path: dict[object, eval_run.FrozenFile] = dict(snapshot.files)
+        non_string_path[1] = non_string_path[target]
+        mutations.append(non_string_path)
+
+        non_string_role: dict[object, eval_run.FrozenFile] = dict(snapshot.files)
+        non_string_role[target] = replace(
+            non_string_role[target],
+            role=["evaluator"],  # type: ignore[arg-type]
+        )
+        mutations.append(non_string_role)
+
+        for files in mutations:
+            with self.subTest(files=files):
+                forged = replace(snapshot, files=MappingProxyType(files))
+                report = eval_run.assess_run(
+                    [],
+                    expected_cases={},
+                    total_expected=0,
+                    release_eligible=True,
+                    snapshot=forged,
+                )
+                self.assertEqual(report["release_verdict"], "FAIL")
+                self.assertIsNone(report["repository_sha256"])
+                self.assertTrue(
+                    any(
+                        "frozen repository" in error
+                        or "role or manifest metadata" in error
+                        for error in report["integrity_errors"]
+                    )
+                )
+
+    def test_frozen_evaluator_matches_the_code_object_python_executed(self) -> None:
+        snapshot = eval_run.freeze_repository(REPO_ROOT)
+        evaluator = snapshot.require("scripts/eval_run.py", "evaluator")
+        eval_run._verify_evaluator_execution_identity(evaluator)
+
+        substituted_code = compile(
+            "SUBSTITUTED = True\n",
+            eval_run._EXECUTED_EVALUATOR_CODE.co_filename,
+            "exec",
+        )
+        with (
+            mock.patch.object(
+                eval_run, "_EXECUTED_EVALUATOR_CODE", substituted_code
+            ),
+            self.assertRaisesRegex(eval_run.HarnessError, "executed evaluator code"),
+        ):
+            eval_run._verify_evaluator_execution_identity(evaluator)
+
+        with (
+            mock.patch.object(
+                eval_run, "_EXECUTED_EVALUATOR_SOURCE_SHA256", "0" * 64
+            ),
+            self.assertRaisesRegex(eval_run.HarnessError, "source digest"),
+        ):
+            eval_run._verify_evaluator_execution_identity(evaluator)
+
+        with (
+            mock.patch.object(
+                eval_run, "_EXECUTED_EVALUATOR_PATH", REPO_ROOT / "README.md"
+            ),
+            self.assertRaisesRegex(eval_run.HarnessError, "executed evaluator path"),
+        ):
+            eval_run._verify_evaluator_execution_identity(evaluator)
+
+    def test_ledger_rechecks_snapshot_after_assessment_before_replace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            snapshot = self.snapshot(root)
+            ledger = root / "ledger.md"
+            target = root / "SKILL.md"
+            real_command_lines = eval_run._regeneration_command_lines
+
+            def mutate_during_render(argv: list[str] | None) -> list[str]:
+                target.write_text("MUTATED-AFTER-ASSESSMENT", encoding="utf-8")
+                return real_command_lines(argv)
+
+            with (
+                mock.patch.object(
+                    eval_run,
+                    "_regeneration_command_lines",
+                    side_effect=mutate_during_render,
+                ),
+                self.assertRaisesRegex(eval_run.HarnessError, "changed after snapshot"),
+            ):
+                eval_run.write_ledger(
+                    ledger,
+                    [
+                        {
+                            "id": "one",
+                            "score": 3,
+                            "pass": True,
+                            "sequence": False,
+                            "critical": False,
+                            "notes": "ok",
+                            "dimension_scores": [],
+                            "sources": [],
+                        }
+                    ],
+                    "model",
+                    "2026-08-01",
+                    "anthropic",
+                    "global_en",
+                    expected_cases={
+                        "one": {"sequence": False, "critical": False}
+                    },
+                    total_expected=1,
+                    release_eligible=False,
+                    snapshot=snapshot,
+                )
+            self.assertFalse(ledger.exists())
+            self.assertEqual(list(root.glob(".ledger.md.*.tmp")), [])
+
+    def test_ledger_rechecks_snapshot_after_replace_and_rolls_back(self) -> None:
+        for relative in ("SKILL.md", "evals/fixtures/state.json"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                make_root(root)
+                snapshot = self.snapshot(root)
+                ledger = root / "ledger.md"
+                ledger.write_text("STALE LEDGER\n", encoding="utf-8")
+                target = root / relative
+                real_replace = eval_run.os.replace
+                replace_count = 0
+
+                def mutate_during_replace(source: Path, destination: Path) -> None:
+                    nonlocal replace_count
+                    if replace_count == 0:
+                        target.write_text("MUTATED-DURING-REPLACE", encoding="utf-8")
+                    replace_count += 1
+                    real_replace(source, destination)
+
+                with (
+                    mock.patch.object(
+                        eval_run.os,
+                        "replace",
+                        side_effect=mutate_during_replace,
+                    ),
+                    self.assertRaisesRegex(
+                        eval_run.HarnessError, "changed after snapshot"
+                    ),
+                ):
+                    eval_run.write_ledger(
+                        ledger,
+                        [
+                            {
+                                "id": "one",
+                                "score": 3,
+                                "pass": True,
+                                "sequence": False,
+                                "critical": False,
+                                "notes": "ok",
+                                "dimension_scores": [],
+                                "sources": [],
+                            }
+                        ],
+                        "model",
+                        "2026-08-01",
+                        "anthropic",
+                        "global_en",
+                        expected_cases={
+                            "one": {"sequence": False, "critical": False}
+                        },
+                        total_expected=1,
+                        release_eligible=False,
+                        snapshot=snapshot,
+                    )
+
+                self.assertEqual(
+                    ledger.read_text(encoding="utf-8"), "STALE LEDGER\n"
+                )
+                self.assertEqual(list(root.glob(".ledger.md.*.tmp")), [])
+                self.assertEqual(list(root.glob(".ledger.md.*.rollback")), [])
+
+    def test_ledger_destination_cannot_overwrite_a_frozen_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            snapshot = self.snapshot(root)
+            target = root / "SKILL.md"
+            original = target.read_text(encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                eval_run.HarnessError, "would overwrite frozen input"
+            ):
+                eval_run.write_ledger(
+                    target,
+                    [],
+                    "model",
+                    "2026-08-01",
+                    "anthropic",
+                    "global_en",
+                    release_eligible=False,
+                    snapshot=snapshot,
+                )
+
+            self.assertEqual(target.read_text(encoding="utf-8"), original)
+
+    def test_repository_provenance_binds_root_fixture_evaluator_and_manifest(self) -> None:
+        for relative in (
+            "SKILL.md",
+            "evals/fixtures/state.json",
+            "scripts/eval_run.py",
+            "references/eval-rubric.md",
+        ):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                make_root(root)
+                baseline = self.snapshot(root)
+                baseline_digest = eval_run.frozen_repository_sha256(
+                    eval_run.frozen_repository_manifest(baseline),
+                    eval_run.frozen_repository_roles(baseline),
+                )
+                target = root / relative
+                target.write_text(
+                    target.read_text(encoding="utf-8") + "\nchanged",
+                    encoding="utf-8",
+                )
+                write_manifest(
+                    root,
+                    role_overrides={"references/private-rubric.md": "evaluator"},
+                )
+                changed = self.snapshot(root)
+                self.assertNotEqual(
+                    baseline_digest,
+                    eval_run.frozen_repository_sha256(
+                        eval_run.frozen_repository_manifest(changed),
+                        eval_run.frozen_repository_roles(changed),
+                    ),
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_root(root)
+            baseline = self.snapshot(root)
+            baseline_digest = eval_run.frozen_repository_sha256(
+                eval_run.frozen_repository_manifest(baseline),
+                eval_run.frozen_repository_roles(baseline),
+            )
+            manifest_path = root / eval_run.SOURCE_MANIFEST_PATH
+            manifest_path.write_text(
+                manifest_path.read_text(encoding="utf-8") + "\n",
+                encoding="utf-8",
+            )
+            changed = self.snapshot(root)
+            self.assertNotEqual(
+                baseline_digest,
+                eval_run.frozen_repository_sha256(
+                    eval_run.frozen_repository_manifest(changed),
+                    eval_run.frozen_repository_roles(changed),
+                ),
+            )
 
     def test_filesystem_bootstrap_failure_replaces_stale_ledger_atomically(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -635,6 +1064,40 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             self.assertNotIn("\n# FORGED RELEASE PASS\n", text)
             self.assertNotIn("Traceback", output.getvalue())
 
+    def test_bootstrap_failure_cannot_overwrite_or_alias_repository_input(self) -> None:
+        for use_alias in (False, True):
+            with self.subTest(use_alias=use_alias), tempfile.TemporaryDirectory() as tmp:
+                parent = Path(tmp)
+                root = parent / "repo"
+                root.mkdir()
+                skill = root / "SKILL.md"
+                original = "# valuable root input\n"
+                skill.write_text(original, encoding="utf-8")
+                ledger = skill
+                if use_alias:
+                    ledger = parent / "ledger-alias.md"
+                    os.link(skill, ledger)
+                output = io.StringIO()
+                with (
+                    mock.patch.object(
+                        sys,
+                        "argv",
+                        [
+                            "eval_run.py",
+                            str(root),
+                            "--ledger",
+                            str(ledger),
+                        ],
+                    ),
+                    redirect_stdout(output),
+                ):
+                    code = eval_run.main()
+
+                self.assertEqual(code, 2)
+                self.assertEqual(skill.read_text(encoding="utf-8"), original)
+                self.assertEqual(ledger.read_text(encoding="utf-8"), original)
+                self.assertIn("existing artifact preserved", output.getvalue())
+
     def test_missing_repository_replaces_an_absolute_stale_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             parent = Path(tmp)
@@ -669,7 +1132,14 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             root = Path(tmp)
             case = base_case()
             make_root(root, case)
-            snapshot = self.snapshot(root)
+            frozen = self.snapshot(root)
+            snapshot = eval_run.FrozenRepository(
+                root=frozen.root,
+                files=frozen.files,
+                manifest=frozen.manifest,
+                canonical_contract_bound=True,
+                evaluator_execution_bound=True,
+            )
             verdict = sequence_verdict(case)
             ledger = root / "evals" / "eval-run-ledger.md"
             output = io.StringIO()
@@ -695,6 +1165,12 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                 ),
                 mock.patch.object(
                     eval_run, "freeze_repository", return_value=snapshot
+                ),
+                mock.patch.object(
+                    eval_run, "_verify_canonical_evaluation_contract"
+                ),
+                mock.patch.object(
+                    eval_run, "_verify_evaluator_execution_identity"
                 ),
                 mock.patch.object(
                     eval_run,

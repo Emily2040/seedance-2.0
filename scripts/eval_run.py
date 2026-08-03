@@ -41,7 +41,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
-from typing import Mapping
+from typing import Callable, Mapping
+
+
+# Capture the exact module code object that Python is executing.  Later, the
+# frozen evaluator source is compiled with the same filename and optimization
+# level and must produce the same module code object.  Comparing only
+# ``__file__`` bytes would miss a stale or substituted bytecode import.
+_EXECUTED_EVALUATOR_CODE = sys._getframe().f_code
+_EXECUTED_EVALUATOR_PATH = Path(__file__).resolve(strict=True)
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "0e34d3f1e32920b8a9220e9be082040457a0df6f2abf63e5272cb90ab9c6e3d1"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
@@ -62,6 +71,7 @@ MINIMAX_ANTHROPIC_BASE_URLS = {
 }
 MAX_SOURCE_FILES = 24
 SOURCE_MANIFEST_PATH = "evals/source-manifest.json"
+EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py"})
 FIXTURE_ROOT = "evals/fixtures"
 SOURCE_ROLES = {"root", "responder", "evaluator", "fixture", "archive"}
 EXPECTED_EVALS_SHA256 = "729057eb7b64c2d77638f0b94e62a1885eb00d7b8533e26165bad71dadb129ea"
@@ -148,6 +158,8 @@ MAX_FROZEN_SOURCE_BYTES = 1_000_000
 MAX_FROZEN_REPOSITORY_BYTES = 20_000_000
 MAX_SOURCE_MANIFEST_ENTRIES = 10_000
 MAX_RESPONDER_CONTEXT_CHARACTERS = 2_000_000
+MAX_LEDGER_ARTIFACT_BYTES = 20_000_000
+WINDOWS_SAFE_LEDGER_ATTRIBUTES = 0x1 | 0x20 | 0x80  # read-only, archive, normal
 
 
 @dataclass(frozen=True)
@@ -189,6 +201,10 @@ class HarnessError(RuntimeError):
     """The run cannot continue without compromising its evidence boundary."""
 
 
+class CommittedCleanupError(HarnessError):
+    """The ledger commit verified, but obsolete recovery cleanup failed."""
+
+
 class ProviderResponseError(HarnessError):
     """A successful HTTP response did not contain usable model evidence."""
 
@@ -218,6 +234,8 @@ class FrozenRepository:
     root: Path
     files: Mapping[str, FrozenFile]
     manifest: FrozenFile
+    canonical_contract_bound: bool
+    evaluator_execution_bound: bool
 
     def require(self, relative: str, role: str | None = None) -> FrozenFile:
         source = self.files.get(relative)
@@ -228,6 +246,23 @@ class FrozenRepository:
                 f"source has role {source.role!r}, expected {role!r}: {relative}"
             )
         return source
+
+
+@dataclass(frozen=True)
+class LedgerDestinationState:
+    """Bound identity plus the permissions an atomic ledger must retain."""
+
+    signature: tuple[int, int, int, int] | None
+    link_count: int
+    sha256: str | None
+    posix_mode: int | None
+    windows_read_only: bool | None
+    windows_attributes: int | None
+    windows_security_descriptor: bytes | None
+
+    @property
+    def existed(self) -> bool:
+        return self.signature is not None
 
 
 def _reject_json_constant(value: str) -> None:
@@ -326,7 +361,13 @@ def _read_api_response(
     try:
         manager = urllib.request.urlopen(request, timeout=120)
     except Exception as exc:
-        raise _transport_failure("open", exc, api_key) from None
+        failure = _transport_failure("open", exc, api_key)
+        if isinstance(exc, urllib.error.HTTPError):
+            try:
+                exc.close()
+            except Exception:
+                pass
+        raise failure from None
     try:
         response = manager.__enter__()
     except Exception as exc:
@@ -453,9 +494,73 @@ def _freeze_file(root: Path, relative: str, role: str) -> FrozenFile:
     )
 
 
+def _verify_evaluator_execution_identity(source: FrozenFile) -> None:
+    """Bind the evaluator source in the snapshot to the code Python executed."""
+    try:
+        same_file = source.path.samefile(_EXECUTED_EVALUATOR_PATH)
+    except OSError as exc:
+        raise HarnessError("cannot verify the executed evaluator file identity") from exc
+    if not same_file:
+        raise HarnessError(
+            "executed evaluator path does not match the frozen evaluator: "
+            f"{_EXECUTED_EVALUATOR_PATH} != {source.path}"
+        )
+    digest_declaration = re.compile(
+        r'^_EXECUTED_EVALUATOR_SOURCE_SHA256 = "[0-9a-f]{64}"$',
+        re.MULTILINE,
+    )
+    if len(digest_declaration.findall(source.text)) != 1:
+        raise HarnessError(
+            "frozen evaluator must contain exactly one source self-digest"
+        )
+    normalized_source = digest_declaration.sub(
+        '_EXECUTED_EVALUATOR_SOURCE_SHA256 = "' + "0" * 64 + '"',
+        source.text,
+    )
+    frozen_source_sha256 = hashlib.sha256(
+        normalized_source.encode("utf-8")
+    ).hexdigest()
+    if frozen_source_sha256 != _EXECUTED_EVALUATOR_SOURCE_SHA256:
+        raise HarnessError(
+            "executed evaluator source digest does not match frozen scripts/eval_run.py"
+        )
+    try:
+        frozen_code = compile(
+            source.text,
+            _EXECUTED_EVALUATOR_CODE.co_filename,
+            "exec",
+            dont_inherit=True,
+            optimize=sys.flags.optimize,
+        )
+    except (SyntaxError, ValueError, TypeError) as exc:
+        raise HarnessError("frozen evaluator source cannot be compiled") from exc
+    if frozen_code != _EXECUTED_EVALUATOR_CODE:
+        raise HarnessError(
+            "executed evaluator code does not match frozen scripts/eval_run.py"
+        )
+
+
+def _verify_canonical_evaluation_contract(snapshot: FrozenRepository) -> None:
+    """Recompute the pinned eval and rubric bindings from frozen source bytes."""
+    pinned = {
+        "evals/evals.json": EXPECTED_EVALS_SHA256,
+        "references/eval-rubric.md": EXPECTED_RUBRIC_SHA256,
+    }
+    for relative, expected_digest in pinned.items():
+        source = snapshot.require(relative, "evaluator")
+        frozen_digest = hashlib.sha256(source.text.encode("utf-8")).hexdigest()
+        if source.sha256 != frozen_digest or frozen_digest != expected_digest:
+            raise HarnessError(f"canonical evaluation contract changed: {relative}")
+
+
 def _scoped_repository_files(root: Path) -> set[str]:
     """Enumerate every file whose source role must be explicitly declared."""
-    observed = {"SKILL.md", "evals/evals.json", "references/eval-rubric.md"}
+    observed = {
+        "SKILL.md",
+        "evals/evals.json",
+        "references/eval-rubric.md",
+        *EVALUATOR_HARNESS_PATHS,
+    }
     for directory in (root / "skills", root / "references", root / FIXTURE_ROOT):
         try:
             if not directory.exists():
@@ -502,7 +607,11 @@ def _validate_role_path(relative: str, role: str) -> None:
         if role != "root":
             raise HarnessError("SKILL.md must have the explicit root role")
         return
-    if relative == "evals/evals.json" or relative == "references/eval-rubric.md":
+    if (
+        relative == "evals/evals.json"
+        or relative == "references/eval-rubric.md"
+        or relative in EVALUATOR_HARNESS_PATHS
+    ):
         if role != "evaluator":
             raise HarnessError(f"{relative} must have the explicit evaluator role")
         return
@@ -532,8 +641,15 @@ def freeze_repository(
     root: Path,
     *,
     enforce_canonical_contract: bool = True,
+    enforce_evaluator_identity: bool | None = None,
 ) -> FrozenRepository:
     """Resolve, read, hash, and identity-check the full eval source set once."""
+    if type(enforce_canonical_contract) is not bool:
+        raise HarnessError("enforce_canonical_contract must be a boolean")
+    if enforce_evaluator_identity is None:
+        enforce_evaluator_identity = enforce_canonical_contract
+    if type(enforce_evaluator_identity) is not bool:
+        raise HarnessError("enforce_evaluator_identity must be a boolean")
     try:
         resolved_root = root.resolve(strict=True)
     except OSError as exc:
@@ -628,23 +744,88 @@ def freeze_repository(
         physical_paths.append((relative, source.path))
         frozen[relative] = source
 
-    if enforce_canonical_contract:
-        pinned = {
-            "evals/evals.json": EXPECTED_EVALS_SHA256,
-            "references/eval-rubric.md": EXPECTED_RUBRIC_SHA256,
-        }
-        for relative, digest in pinned.items():
-            if frozen[relative].sha256 != digest:
-                raise HarnessError(f"canonical evaluation contract changed: {relative}")
-    return FrozenRepository(
+    snapshot = FrozenRepository(
         root=resolved_root,
         files=MappingProxyType(frozen),
         manifest=manifest_file,
+        canonical_contract_bound=enforce_canonical_contract,
+        evaluator_execution_bound=enforce_evaluator_identity,
     )
+    if enforce_canonical_contract:
+        _verify_canonical_evaluation_contract(snapshot)
+    if enforce_evaluator_identity:
+        _verify_evaluator_execution_identity(
+            snapshot.require("scripts/eval_run.py", "evaluator")
+        )
+    return snapshot
 
 
 def verify_snapshot_unchanged(snapshot: FrozenRepository) -> None:
-    """Refuse evidence if any frozen path changed after the initial snapshot."""
+    """Re-freeze every byte and rebind all metadata to the frozen manifest."""
+    if type(snapshot) is not FrozenRepository:
+        raise HarnessError("snapshot must be an exact FrozenRepository")
+    if not isinstance(snapshot.root, Path):
+        raise HarnessError("frozen repository root must be a Path")
+    if not isinstance(snapshot.files, Mapping):
+        raise HarnessError("frozen repository files must be a mapping")
+    if type(snapshot.manifest) is not FrozenFile:
+        raise HarnessError("frozen repository manifest must be a FrozenFile")
+    if type(snapshot.canonical_contract_bound) is not bool:
+        raise HarnessError("frozen canonical contract flag must be a boolean")
+    if type(snapshot.evaluator_execution_bound) is not bool:
+        raise HarnessError("frozen evaluator identity flag must be a boolean")
+    for relative, source in snapshot.files.items():
+        _canonical_relative_path(relative, "frozen repository path")
+        if type(source) is not FrozenFile:
+            raise HarnessError(f"frozen repository entry is not a FrozenFile: {relative}")
+    try:
+        manifest_data = strict_json_loads(snapshot.manifest.text)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HarnessError("frozen source manifest metadata is not strict JSON") from exc
+    if (
+        not isinstance(manifest_data, dict)
+        or set(manifest_data) != {"version", "sources"}
+        or type(manifest_data["version"]) is not int
+        or manifest_data["version"] != 1
+        or not isinstance(manifest_data["sources"], list)
+    ):
+        raise HarnessError("frozen source manifest metadata is invalid")
+    if (
+        not manifest_data["sources"]
+        or len(manifest_data["sources"]) > MAX_SOURCE_MANIFEST_ENTRIES
+    ):
+        raise HarnessError("frozen source manifest source count is invalid")
+
+    declared: dict[str, tuple[str, str]] = {}
+    portable_aliases: dict[tuple[str, ...], str] = {}
+    for index, entry in enumerate(manifest_data["sources"]):
+        label = f"frozen source manifest entry {index + 1}"
+        if not isinstance(entry, dict) or set(entry) != {"path", "role", "sha256"}:
+            raise HarnessError(
+                f"{label} must contain only path, role, and sha256"
+            )
+        relative = _canonical_relative_path(entry["path"], f"{label} path")
+        role = entry["role"]
+        digest = entry["sha256"]
+        if not isinstance(role, str) or role not in SOURCE_ROLES:
+            raise HarnessError(f"{label} has an unknown role")
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise HarnessError(f"{label} has an invalid SHA-256")
+        if relative in declared:
+            raise HarnessError(
+                f"frozen source manifest contains a duplicate path: {relative}"
+            )
+        portable_key = tuple(part.casefold() for part in relative.split("/"))
+        prior_alias = portable_aliases.get(portable_key)
+        if prior_alias is not None:
+            raise HarnessError(
+                "frozen source manifest contains paths that alias on portable "
+                f"filesystems: {prior_alias}, {relative}"
+            )
+        _validate_role_path(relative, role)
+        declared[relative] = (role, digest)
+        portable_aliases[portable_key] = relative
+
     current_paths = _scoped_repository_files(snapshot.root)
     frozen_paths = set(snapshot.files)
     added = sorted(current_paths - frozen_paths)
@@ -656,16 +837,32 @@ def verify_snapshot_unchanged(snapshot: FrozenRepository) -> None:
         if removed:
             details.append("removed " + ", ".join(removed))
         raise HarnessError("scoped source set changed after snapshot: " + "; ".join(details))
+    if set(declared) != frozen_paths:
+        raise HarnessError("frozen source manifest does not match snapshot paths")
+    if (
+        snapshot.manifest.relative != SOURCE_MANIFEST_PATH
+        or snapshot.manifest.role != "evaluator"
+        or snapshot.manifest.sha256
+        != hashlib.sha256(snapshot.manifest.text.encode("utf-8")).hexdigest()
+    ):
+        raise HarnessError("frozen source manifest metadata changed after snapshot")
+    for relative, source in snapshot.files.items():
+        role, digest = declared[relative]
+        if (
+            source.relative != relative
+            or source.role != role
+            or source.sha256 != digest
+        ):
+            raise HarnessError(
+                f"source role or manifest metadata changed after snapshot: {relative}"
+            )
+
     for source in (snapshot.manifest, *snapshot.files.values()):
         try:
             current = _freeze_file(snapshot.root, source.relative, source.role)
         except HarnessError as exc:
             raise HarnessError(f"source changed after snapshot: {source.relative}") from exc
-        if (
-            current.path != source.path
-            or current.signature != source.signature
-            or current.sha256 != source.sha256
-        ):
+        if current != source:
             raise HarnessError(f"source bytes changed after snapshot: {source.relative}")
 
 
@@ -838,6 +1035,52 @@ def source_catalog(snapshot: FrozenRepository) -> dict[str, FrozenFile]:
         for relative, source in snapshot.files.items()
         if source.role == "responder"
     }
+
+
+def frozen_repository_manifest(snapshot: FrozenRepository) -> dict[str, str]:
+    """Bind evidence to every frozen input, including the manifest itself."""
+    return {
+        snapshot.manifest.relative: snapshot.manifest.sha256,
+        **{
+            relative: source.sha256
+            for relative, source in snapshot.files.items()
+        },
+    }
+
+
+def frozen_repository_roles(snapshot: FrozenRepository) -> dict[str, str]:
+    """Return the role of every frozen path, including the manifest itself."""
+    return {
+        snapshot.manifest.relative: snapshot.manifest.role,
+        **{
+            relative: source.role
+            for relative, source in snapshot.files.items()
+        },
+    }
+
+
+def frozen_repository_role_counts(source_roles: Mapping[str, str]) -> dict[str, int]:
+    """Return deterministic role cardinalities for the complete snapshot."""
+    return {
+        role: sum(1 for candidate in source_roles.values() if candidate == role)
+        for role in sorted(SOURCE_ROLES)
+    }
+
+
+def frozen_repository_sha256(
+    source_manifest: Mapping[str, str],
+    source_roles: Mapping[str, str],
+) -> str:
+    """Hash one canonical path/role/digest serialization of the snapshot."""
+    canonical = json.dumps(
+        sorted(
+            (path, source_roles[path], digest)
+            for path, digest in source_manifest.items()
+        ),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(b"seedance-eval-frozen-repository-v1\0" + canonical).hexdigest()
 
 
 def _state_fixture_data(snapshot: FrozenRepository, case: dict) -> dict | None:
@@ -1720,7 +1963,6 @@ def judge(
     rubric: str,
     provider: ProviderConfig,
     endpoint: str,
-    sources: list[str] | None = None,
 ) -> dict:
     scale = "0-4" if is_sequence_case(case) else "0-3"
     checks = expected_judge_checks(case)
@@ -1746,8 +1988,6 @@ def judge(
         "case_prompt": case["prompt"],
         "expected_output": case.get("expected_output"),
         "checks": checks,
-        "expected_skills": case.get("skills_expected_to_activate", []),
-        "sources_selected_without_expected_labels": sources or [],
         "candidate_response": response,
     }
     user = (
@@ -1834,7 +2074,6 @@ def run_case(
             rubric,
             provider,
             endpoint,
-            sources,
         )
     except (HarnessError, TimeoutError) as exc:
         raise CaseRunError(f"judge error: {exc}", sources) from exc
@@ -2209,14 +2448,17 @@ def assess_run(
     release_eligible: bool = True,
     total_expected: int | None = None,
     source_manifest: Mapping[str, str] | None = None,
+    repository_manifest: Mapping[str, str] | None = None,
+    repository_roles: Mapping[str, str] | None = None,
+    snapshot: FrozenRepository | None = None,
 ) -> dict:
     """Validate completeness and calculate a release verdict without printing.
 
-    A release PASS requires both an explicit ``total_expected`` and canonical
-    ``expected_cases`` metadata. IDs alone can prove identity coverage, but not
-    whether a result row forged its sequence or critical classification.
-    ``source_manifest`` is trusted run metadata derived from the frozen
-    repository snapshot; untrusted result rows are checked against it.
+    A release PASS derives its IDs, case metadata, and count from canonical
+    ``evals/evals.json`` bytes in a verified ``FrozenRepository``. Optional
+    caller-supplied universe values are consistency assertions only; they can
+    invalidate a run but can never narrow or replace the frozen universe.
+    Caller-supplied provenance maps likewise cannot mint a BOUND release ledger.
     """
     integrity_errors: list[str] = []
     if type(release_eligible) is not bool:
@@ -2225,29 +2467,194 @@ def assess_run(
     if not scored:
         integrity_errors.append("no scored results were produced")
 
-    provenance_contract_required = (
-        release_eligible is True
-        and expected_cases is not None
-        and total_expected is not None
-    )
-    if provenance_contract_required and source_manifest is None:
+    release_requested = release_eligible is True
+    provenance_contract_required = release_requested
+    snapshot_verified = False
+    if snapshot is not None and not isinstance(snapshot, FrozenRepository):
+        integrity_errors.append("snapshot must be a FrozenRepository")
+        snapshot = None
+    if snapshot is not None:
+        if any(
+            value is not None
+            for value in (source_manifest, repository_manifest, repository_roles)
+        ):
+            integrity_errors.append(
+                "caller-supplied provenance maps cannot be combined with a frozen snapshot"
+            )
+        try:
+            verify_snapshot_unchanged(snapshot)
+            # Release proof is derived from the frozen bytes every time.  The
+            # dataclass flags record how freeze_repository was invoked; callers
+            # can construct or replace them, so they are never attestations.
+            if release_requested or snapshot.canonical_contract_bound:
+                _verify_canonical_evaluation_contract(snapshot)
+            if release_requested or snapshot.evaluator_execution_bound:
+                _verify_evaluator_execution_identity(
+                    snapshot.require("scripts/eval_run.py", "evaluator")
+                )
+        except HarnessError as exc:
+            integrity_errors.append(f"frozen repository verification failed: {exc}")
+        else:
+            snapshot_verified = True
+            source_manifest = {
+                path: source.sha256
+                for path, source in source_catalog(snapshot).items()
+            }
+            repository_manifest = frozen_repository_manifest(snapshot)
+            repository_roles = frozen_repository_roles(snapshot)
+    elif provenance_contract_required:
         integrity_errors.append(
-            "a frozen responder source manifest is required for release assessment"
+            "a verified complete frozen repository snapshot is required for release assessment"
         )
+
+    # A release universe is data, not a caller preference.  Once the frozen
+    # canonical snapshot is verified, derive IDs, descriptors, and count only
+    # from its eval bytes.  Optional caller values are consistency assertions;
+    # they can invalidate a run but can never narrow or replace the universe.
+    if (
+        release_requested
+        and snapshot_verified
+        and snapshot is not None
+    ):
+        try:
+            frozen_cases = load_cases(snapshot)
+            frozen_expected_cases = build_expected_case_metadata(frozen_cases)
+            frozen_expected_ids = list(frozen_expected_cases)
+        except (HarnessError, ValueError, json.JSONDecodeError) as exc:
+            integrity_errors.append(
+                f"frozen release case universe is invalid: {_safe_exception_detail(exc, '')}"
+            )
+            release_eligible = False
+        else:
+            if expected_cases is not None:
+                try:
+                    caller_expected_cases = dict(expected_cases)
+                except (TypeError, ValueError):
+                    caller_expected_cases = None
+                if caller_expected_cases != frozen_expected_cases:
+                    integrity_errors.append(
+                        "expected_cases do not match frozen evals/evals.json"
+                    )
+            if expected_ids is not None and expected_ids != frozen_expected_ids:
+                integrity_errors.append(
+                    "expected_ids do not match frozen evals/evals.json"
+                )
+            if total_expected is not None and total_expected != len(frozen_cases):
+                integrity_errors.append(
+                    "total_expected does not match frozen evals/evals.json"
+                )
+            expected_cases = frozen_expected_cases
+            expected_ids = frozen_expected_ids
+            total_expected = len(frozen_cases)
     validated_source_manifest: Mapping[str, str] | None
     if source_manifest is not None and not isinstance(source_manifest, Mapping):
         integrity_errors.append("source_manifest must be a path-to-digest map")
         validated_source_manifest = {}
     else:
-        validated_source_manifest = source_manifest
+        validated_source_manifest = dict(source_manifest) if source_manifest is not None else None
     if validated_source_manifest is not None:
         for path, digest in validated_source_manifest.items():
+            if not isinstance(path, str):
+                integrity_errors.append(f"source manifest has a non-string path: {path!r}")
+                continue
             try:
                 _canonical_relative_path(path, "source manifest path")
             except HarnessError as exc:
                 integrity_errors.append(str(exc))
             if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
                 integrity_errors.append(f"source manifest has invalid digest: {path}")
+
+    validated_repository_manifest: Mapping[str, str] | None
+    repository_manifest_valid = snapshot_verified
+    if repository_manifest is not None and not isinstance(repository_manifest, Mapping):
+        integrity_errors.append("repository_manifest must be a complete path-to-digest map")
+        validated_repository_manifest = {}
+        repository_manifest_valid = False
+    else:
+        validated_repository_manifest = (
+            dict(repository_manifest) if repository_manifest is not None else None
+        )
+    if validated_repository_manifest is not None:
+        for path, digest in validated_repository_manifest.items():
+            if not isinstance(path, str):
+                integrity_errors.append(
+                    f"repository manifest has a non-string path: {path!r}"
+                )
+                repository_manifest_valid = False
+                continue
+            try:
+                _canonical_relative_path(path, "repository manifest path")
+            except HarnessError as exc:
+                integrity_errors.append(str(exc))
+                repository_manifest_valid = False
+            if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+                integrity_errors.append(f"repository manifest has invalid digest: {path}")
+                repository_manifest_valid = False
+
+    validated_repository_roles: Mapping[str, str] | None
+    if repository_roles is not None and not isinstance(repository_roles, Mapping):
+        integrity_errors.append("repository_roles must be a complete path-to-role map")
+        validated_repository_roles = {}
+        repository_manifest_valid = False
+    else:
+        validated_repository_roles = (
+            dict(repository_roles) if repository_roles is not None else None
+        )
+    if validated_repository_roles is not None:
+        for path, role in validated_repository_roles.items():
+            if not isinstance(path, str):
+                integrity_errors.append(
+                    f"repository roles has a non-string path: {path!r}"
+                )
+                repository_manifest_valid = False
+                continue
+            if not isinstance(role, str) or role not in SOURCE_ROLES:
+                integrity_errors.append(f"repository roles has an invalid role: {path}")
+                repository_manifest_valid = False
+                continue
+            try:
+                _canonical_relative_path(path, "repository roles path")
+                _validate_role_path(path, role)
+            except HarnessError as exc:
+                integrity_errors.append(str(exc))
+                repository_manifest_valid = False
+        if validated_repository_manifest is not None:
+            missing_roles = sorted(
+                path
+                for path in validated_repository_manifest
+                if isinstance(path, str) and path not in validated_repository_roles
+            )
+            unexpected_roles = sorted(
+                path
+                for path in validated_repository_roles
+                if isinstance(path, str) and path not in validated_repository_manifest
+            )
+            if missing_roles:
+                integrity_errors.append(
+                    "repository roles are incomplete; missing " + ", ".join(missing_roles)
+                )
+                repository_manifest_valid = False
+            if unexpected_roles:
+                integrity_errors.append(
+                    "repository roles contain unexpected paths: "
+                    + ", ".join(unexpected_roles)
+                )
+                repository_manifest_valid = False
+    if (
+        validated_source_manifest is not None
+        and validated_repository_manifest is not None
+        and validated_repository_roles is not None
+    ):
+        expected_responder_manifest = {
+            path: digest
+            for path, digest in validated_repository_manifest.items()
+            if validated_repository_roles.get(path) == "responder"
+        }
+        if dict(validated_source_manifest) != expected_responder_manifest:
+            integrity_errors.append(
+                "responder manifest does not exactly match responder-role repository paths"
+            )
+            repository_manifest_valid = False
 
     for index, row in enumerate(scored):
         integrity_errors.extend(
@@ -2430,6 +2837,23 @@ def assess_run(
     release_verdict = (
         "NOT ELIGIBLE" if not release_eligible else ("PASS" if run_pass else "FAIL")
     )
+    repository_sha256 = (
+        frozen_repository_sha256(
+            validated_repository_manifest,
+            validated_repository_roles,
+        )
+        if (
+            validated_repository_manifest is not None
+            and validated_repository_roles is not None
+            and repository_manifest_valid
+        )
+        else None
+    )
+    repository_role_counts = (
+        frozen_repository_role_counts(validated_repository_roles)
+        if repository_sha256 is not None and validated_repository_roles is not None
+        else None
+    )
     return {
         "scope": (
             "UNSCOPED"
@@ -2439,6 +2863,13 @@ def assess_run(
         "selected_count": selected_count,
         "total_expected": total_expected,
         "completed_count": len(scored),
+        "repository_file_count": (
+            len(validated_repository_manifest)
+            if validated_repository_manifest is not None and repository_manifest_valid
+            else None
+        ),
+        "repository_sha256": repository_sha256,
+        "repository_role_counts": repository_role_counts,
         "integrity_errors": integrity_errors,
         "failed_verdicts": failed_verdicts,
         "legacy_count": len(legacy),
@@ -2502,6 +2933,9 @@ def aggregate(
     release_eligible: bool = True,
     total_expected: int | None = None,
     source_manifest: Mapping[str, str] | None = None,
+    repository_manifest: Mapping[str, str] | None = None,
+    repository_roles: Mapping[str, str] | None = None,
+    snapshot: FrozenRepository | None = None,
 ) -> int:
     return print_assessment(
         assess_run(
@@ -2511,39 +2945,985 @@ def aggregate(
             release_eligible=release_eligible,
             total_expected=total_expected,
             source_manifest=source_manifest,
+            repository_manifest=repository_manifest,
+            repository_roles=repository_roles,
+            snapshot=snapshot,
         )
     )
 
 
-def _atomic_write_text(path: Path, text: str) -> None:
-    """Replace a ledger only after its complete contents are safely written."""
+def _validate_ledger_destination(path: Path, snapshot: FrozenRepository) -> None:
+    """Never let an evidence output replace one of the inputs it attests."""
+    try:
+        destination = path.resolve(strict=False)
+    except OSError as exc:
+        raise HarnessError("cannot resolve the ledger destination") from exc
+    for source in (snapshot.manifest, *snapshot.files.values()):
+        if os.path.normcase(str(destination)) == os.path.normcase(str(source.path)):
+            raise HarnessError(
+                f"ledger destination would overwrite frozen input: {source.relative}"
+            )
+        if path.exists():
+            try:
+                if path.samefile(source.path):
+                    raise HarnessError(
+                        "ledger destination aliases frozen input: "
+                        f"{source.relative}"
+                    )
+            except OSError as exc:
+                raise HarnessError("cannot verify the ledger destination identity") from exc
+
+
+def _validate_bootstrap_ledger_destination(path: Path, root: Path) -> None:
+    """Protect repository inputs even when the manifest cannot be frozen."""
+    try:
+        resolved_root = root.resolve(strict=True)
+        destination = path.resolve(strict=False)
+    except OSError as exc:
+        raise HarnessError("cannot resolve the bootstrap ledger destination") from exc
+
+    for boundary in (
+        resolved_root / "skills",
+        resolved_root / "references",
+        resolved_root / FIXTURE_ROOT,
+    ):
+        try:
+            destination.relative_to(boundary.resolve(strict=False))
+        except ValueError:
+            pass
+        except OSError as exc:
+            raise HarnessError("cannot resolve a protected source boundary") from exc
+        else:
+            raise HarnessError(
+                f"bootstrap ledger destination is inside a source boundary: {path}"
+            )
+
+    protected_relatives = _scoped_repository_files(resolved_root) | {
+        SOURCE_MANIFEST_PATH
+    }
+    for relative in sorted(protected_relatives):
+        protected = resolved_root.joinpath(*relative.split("/"))
+        try:
+            protected_resolved = protected.resolve(strict=False)
+        except OSError as exc:
+            raise HarnessError("cannot resolve a protected repository input") from exc
+        if os.path.normcase(str(destination)) == os.path.normcase(
+            str(protected_resolved)
+        ):
+            raise HarnessError(
+                f"bootstrap ledger destination would overwrite repository input: {relative}"
+            )
+        if path.exists() and protected.exists():
+            try:
+                if path.samefile(protected):
+                    raise HarnessError(
+                        "bootstrap ledger destination aliases repository input: "
+                        f"{relative}"
+                    )
+            except OSError as exc:
+                raise HarnessError(
+                    "cannot verify the bootstrap ledger destination identity"
+                ) from exc
+
+
+def _ledger_status_signature(status: os.stat_result) -> tuple[int, int, int, int]:
+    return status.st_dev, status.st_ino, status.st_size, status.st_mtime_ns
+
+
+def _windows_status_is_read_only(status: os.stat_result) -> bool:
+    attributes = getattr(status, "st_file_attributes", None)
+    read_only_flag = getattr(stat, "FILE_ATTRIBUTE_READONLY", 0x1)
+    if attributes is not None:
+        return bool(attributes & read_only_flag)
+    return not bool(status.st_mode & stat.S_IWRITE)
+
+
+def _windows_ledger_streams(path: Path, label: str) -> tuple[str, ...]:
+    """Enumerate every Windows data stream or fail when that is unsupported."""
+    if os.name != "nt":
+        return ()
+    import ctypes
+    from ctypes import wintypes
+
+    class Win32FindStreamData(ctypes.Structure):
+        _fields_ = [
+            ("stream_size", ctypes.c_longlong),
+            ("stream_name", wintypes.WCHAR * 296),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    find_first = kernel32.FindFirstStreamW
+    find_first.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(Win32FindStreamData),
+        wintypes.DWORD,
+    ]
+    find_first.restype = wintypes.HANDLE
+    find_next = kernel32.FindNextStreamW
+    find_next.argtypes = [wintypes.HANDLE, ctypes.POINTER(Win32FindStreamData)]
+    find_next.restype = wintypes.BOOL
+    find_close = kernel32.FindClose
+    find_close.argtypes = [wintypes.HANDLE]
+    find_close.restype = wintypes.BOOL
+
+    data = Win32FindStreamData()
+    handle = find_first(str(path), 0, ctypes.byref(data), 0)
+    invalid_handle = ctypes.c_void_p(-1).value
+    if handle == invalid_handle:
+        error = ctypes.get_last_error()
+        # An empty regular file can report no streams. Other failures mean the
+        # filesystem cannot prove the absence of alternate data.
+        if error == 38:  # ERROR_HANDLE_EOF
+            return ()
+        raise HarnessError(
+            f"cannot enumerate {label} alternate data streams (Windows error {error})"
+        )
+    streams: list[str] = []
+    try:
+        streams.append(data.stream_name)
+        while find_next(handle, ctypes.byref(data)):
+            streams.append(data.stream_name)
+        error = ctypes.get_last_error()
+        if error != 38:  # ERROR_HANDLE_EOF
+            raise HarnessError(
+                f"cannot enumerate {label} alternate data streams "
+                f"(Windows error {error})"
+            )
+    finally:
+        find_close(handle)
+    return tuple(streams)
+
+
+def _windows_security_descriptor(path: Path, label: str) -> bytes:
+    """Capture owner, primary group, and DACL as one self-relative descriptor."""
+    if os.name != "nt":
+        return b""
+    import ctypes
+    from ctypes import wintypes
+
+    security_information = 0x1 | 0x2 | 0x4  # owner, group, DACL
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    get_file_security = advapi32.GetFileSecurityW
+    get_file_security.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    get_file_security.restype = wintypes.BOOL
+    required = wintypes.DWORD()
+    get_file_security(
+        str(path), security_information, None, 0, ctypes.byref(required)
+    )
+    if required.value == 0:
+        error = ctypes.get_last_error()
+        raise HarnessError(
+            f"cannot capture {label} owner and DACL (Windows error {error})"
+        )
+    buffer = ctypes.create_string_buffer(required.value)
+    if not get_file_security(
+        str(path),
+        security_information,
+        buffer,
+        required.value,
+        ctypes.byref(required),
+    ):
+        error = ctypes.get_last_error()
+        raise HarnessError(
+            f"cannot capture {label} owner and DACL (Windows error {error})"
+        )
+    return bytes(buffer.raw[: required.value])
+
+
+def _capture_windows_ledger_metadata(
+    path: Path,
+    status: os.stat_result,
+    label: str,
+) -> tuple[int, bytes]:
+    """Capture only Windows metadata this transaction can prove and preserve."""
+    attributes = getattr(status, "st_file_attributes", None)
+    if type(attributes) is not int:
+        raise HarnessError(f"cannot capture {label} Windows file attributes")
+    unsupported = attributes & ~WINDOWS_SAFE_LEDGER_ATTRIBUTES
+    if unsupported or (
+        attributes & 0x80 and attributes != 0x80  # NORMAL must stand alone
+    ):
+        raise HarnessError(
+            f"{label} has unsupported Windows file attributes: 0x{attributes:08x}"
+        )
+    streams = _windows_ledger_streams(path, label)
+    named_streams = [stream for stream in streams if stream != "::$DATA"]
+    if named_streams:
+        raise HarnessError(
+            f"{label} has unsupported alternate data streams: "
+            + ", ".join(named_streams)
+        )
+    return attributes, _windows_security_descriptor(path, label)
+
+
+def _set_windows_attributes(path: Path, attributes: int, label: str) -> None:
+    if os.name != "nt":
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    setter = kernel32.SetFileAttributesW
+    setter.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
+    setter.restype = wintypes.BOOL
+    if not setter(str(path), attributes):
+        error = ctypes.get_last_error()
+        raise HarnessError(
+            f"cannot restore {label} Windows attributes (Windows error {error})"
+        )
+
+
+def _verify_windows_ledger_metadata(
+    path: Path,
+    status: os.stat_result,
+    expected: LedgerDestinationState,
+    label: str,
+) -> None:
+    if os.name != "nt":
+        return
+    attributes, descriptor = _capture_windows_ledger_metadata(path, status, label)
+    if (
+        expected.windows_attributes is not None
+        and attributes != expected.windows_attributes
+    ):
+        raise HarnessError(f"{label} Windows file attributes changed")
+    if (
+        expected.windows_security_descriptor is not None
+        and descriptor != expected.windows_security_descriptor
+    ):
+        raise HarnessError(f"{label} owner or DACL cannot be preserved exactly")
+
+
+def _hash_bound_atomic_artifact(
+    path: Path,
+    signature: tuple[int, int, int, int],
+    link_count: int,
+    label: str,
+) -> str:
+    """Hash exactly the identity- and size-bound bytes of one regular file."""
+    size = signature[2]
+    if size > MAX_LEDGER_ARTIFACT_BYTES:
+        raise HarnessError(
+            f"{label} exceeds {MAX_LEDGER_ARTIFACT_BYTES} bytes"
+        )
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            before = os.fstat(handle.fileno())
+            if (
+                _ledger_status_signature(before) != signature
+                or before.st_nlink != link_count
+            ):
+                raise HarnessError(f"{label} changed during atomic ledger write")
+            remaining = size
+            while remaining:
+                chunk = handle.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise HarnessError(f"{label} became shorter while hashing")
+                digest.update(chunk)
+                remaining -= len(chunk)
+            if handle.read(1):
+                raise HarnessError(f"{label} grew while hashing")
+            after = os.fstat(handle.fileno())
+    except OSError as exc:
+        raise HarnessError(f"cannot hash {label}") from exc
+    if (
+        _ledger_status_signature(after) != signature
+        or after.st_nlink != link_count
+    ):
+        raise HarnessError(f"{label} changed during atomic ledger write")
+    current = _ledger_destination_status(path, label)
+    if (
+        _ledger_status_signature(current) != signature
+        or current.st_nlink != link_count
+    ):
+        raise HarnessError(f"{label} changed during atomic ledger write")
+    return digest.hexdigest()
+
+
+def _copy_exact_ledger_bytes(
+    source: object,
+    destination: object,
+    size: int,
+    label: str,
+) -> None:
+    """Copy a frozen byte count with a loop bounded by the ledger size cap."""
+    if not 0 <= size <= MAX_LEDGER_ARTIFACT_BYTES:
+        raise HarnessError(f"{label} has an unsupported size")
+    remaining = size
+    while remaining:
+        chunk = source.read(min(1024 * 1024, remaining))
+        if not chunk:
+            raise HarnessError(f"{label} became shorter while copying")
+        destination.write(chunk)
+        remaining -= len(chunk)
+    if source.read(1):
+        raise HarnessError(f"{label} grew while copying")
+
+
+def _fsync_parent_directory(path: Path) -> None:
+    """Durably publish same-directory replace and cleanup operations on POSIX."""
+    if os.name != "posix":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(path.parent, flags)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError as exc:
+        raise HarnessError(f"cannot fsync ledger parent directory: {path.parent}") from exc
+
+
+def _ledger_destination_status(path: Path, label: str) -> os.stat_result:
+    try:
+        status = path.lstat()
+    except OSError as exc:
+        raise HarnessError(f"cannot stat {label}: {path}") from exc
+    if stat.S_ISLNK(status.st_mode):
+        raise HarnessError(f"{label} must not be a symbolic link: {path}")
+    if not stat.S_ISREG(status.st_mode):
+        raise HarnessError(f"{label} is not a regular file: {path}")
+    return status
+
+
+def _snapshot_ledger_destination(path: Path) -> LedgerDestinationState:
+    """Bind the old artifact and choose secure permissions for a new one."""
+    try:
+        status = path.lstat()
+    except FileNotFoundError:
+        return LedgerDestinationState(
+            signature=None,
+            link_count=0,
+            sha256=None,
+            posix_mode=(stat.S_IRUSR | stat.S_IWUSR) if os.name == "posix" else None,
+            windows_read_only=False if os.name == "nt" else None,
+            windows_attributes=None,
+            windows_security_descriptor=None,
+        )
+    except OSError as exc:
+        raise HarnessError(f"cannot stat ledger destination: {path}") from exc
+
+    if stat.S_ISLNK(status.st_mode):
+        raise HarnessError(f"ledger destination must not be a symbolic link: {path}")
+    if not stat.S_ISREG(status.st_mode):
+        raise HarnessError(f"ledger destination is not a regular file: {path}")
+    if status.st_nlink != 1:
+        raise HarnessError(
+            "ledger destination must not have hard links; exact link semantics "
+            "cannot be preserved"
+        )
+    signature = _ledger_status_signature(status)
+    if signature[2] > MAX_LEDGER_ARTIFACT_BYTES:
+        raise HarnessError(
+            f"ledger destination exceeds {MAX_LEDGER_ARTIFACT_BYTES} bytes"
+        )
+    windows_attributes: int | None = None
+    windows_security_descriptor: bytes | None = None
+    if os.name == "nt":
+        (
+            windows_attributes,
+            windows_security_descriptor,
+        ) = _capture_windows_ledger_metadata(path, status, "ledger destination")
+    digest = _hash_bound_atomic_artifact(
+        path,
+        signature,
+        status.st_nlink,
+        "ledger destination",
+    )
+    return LedgerDestinationState(
+        signature=signature,
+        link_count=status.st_nlink,
+        sha256=digest,
+        posix_mode=stat.S_IMODE(status.st_mode) if os.name == "posix" else None,
+        windows_read_only=(
+            _windows_status_is_read_only(status) if os.name == "nt" else None
+        ),
+        windows_attributes=windows_attributes,
+        windows_security_descriptor=windows_security_descriptor,
+    )
+
+
+def _verify_ledger_status(
+    status: os.stat_result,
+    expected: LedgerDestinationState,
+    label: str,
+    *,
+    bind_identity: bool,
+) -> None:
+    if not stat.S_ISREG(status.st_mode):
+        raise HarnessError(f"{label} is not a regular file")
+    if bind_identity:
+        if (
+            expected.signature is None
+            or _ledger_status_signature(status) != expected.signature
+            or status.st_nlink != expected.link_count
+        ):
+            raise HarnessError(f"{label} changed during atomic ledger write")
+    if (
+        expected.posix_mode is not None
+        and stat.S_IMODE(status.st_mode) != expected.posix_mode
+    ):
+        raise HarnessError(f"{label} permission mode changed during atomic ledger write")
+    if (
+        expected.windows_read_only is not None
+        and _windows_status_is_read_only(status) != expected.windows_read_only
+    ):
+        raise HarnessError(
+            f"{label} read-only attribute changed during atomic ledger write"
+        )
+
+
+def _verify_original_ledger_destination(
+    path: Path, expected: LedgerDestinationState
+) -> None:
+    if not expected.existed:
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise HarnessError("cannot recheck the ledger destination") from exc
+        raise HarnessError("ledger destination appeared during atomic ledger write")
+    status = _ledger_destination_status(path, "ledger destination")
+    _verify_ledger_status(
+        status,
+        expected,
+        "ledger destination",
+        bind_identity=True,
+    )
+    _verify_windows_ledger_metadata(
+        path,
+        status,
+        expected,
+        "ledger destination",
+    )
+    if expected.sha256 is None or expected.signature is None:
+        raise HarnessError("ledger destination byte identity was not captured")
+    if (
+        _hash_bound_atomic_artifact(
+            path,
+            expected.signature,
+            expected.link_count,
+            "ledger destination",
+        )
+        != expected.sha256
+    ):
+        raise HarnessError("ledger destination bytes changed during atomic write")
+
+
+def _verify_atomic_artifact_identity(
+    path: Path,
+    signature: tuple[int, int, int, int],
+    link_count: int,
+    sha256: str,
+    label: str,
+) -> os.stat_result:
+    if link_count != 1:
+        raise HarnessError(f"{label} must not have hard links")
+    status = _ledger_destination_status(path, label)
+    if (
+        _ledger_status_signature(status) != signature
+        or status.st_nlink != link_count
+    ):
+        raise HarnessError(f"{label} changed during atomic ledger write")
+    if _hash_bound_atomic_artifact(path, signature, link_count, label) != sha256:
+        raise HarnessError(f"{label} bytes changed during atomic ledger write")
+    return status
+
+
+def _set_windows_read_only(path: Path, read_only: bool, label: str) -> None:
+    if os.name != "nt":
+        return
+    mode = stat.S_IREAD if read_only else stat.S_IREAD | stat.S_IWRITE
+    try:
+        os.chmod(path, mode)
+        status = _ledger_destination_status(path, label)
+    except OSError as exc:
+        raise HarnessError(f"cannot update {label} read-only attribute") from exc
+    if _windows_status_is_read_only(status) != read_only:
+        raise HarnessError(f"could not verify {label} read-only attribute")
+
+
+def _apply_ledger_permissions(
+    path: Path, expected: LedgerDestinationState, label: str
+) -> None:
+    try:
+        if expected.posix_mode is not None:
+            os.chmod(path, expected.posix_mode, follow_symlinks=False)
+        if expected.windows_attributes is not None:
+            _set_windows_attributes(path, expected.windows_attributes, label)
+        elif expected.windows_read_only is not None:
+            _set_windows_read_only(path, expected.windows_read_only, label)
+        status = _ledger_destination_status(path, label)
+    except OSError as exc:
+        raise HarnessError(f"cannot apply {label} permissions") from exc
+    _verify_ledger_status(status, expected, label, bind_identity=False)
+    _verify_windows_ledger_metadata(path, status, expected, label)
+
+
+def _best_effort_unlink_atomic_artifact(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+        return
+    except OSError:
+        pass
+    if os.name != "nt":
+        return
+    try:
+        status = path.lstat()
+        if (
+            stat.S_ISREG(status.st_mode)
+            and not stat.S_ISLNK(status.st_mode)
+            and status.st_nlink == 1
+            and _windows_status_is_read_only(status)
+        ):
+            os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+            path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _unlink_bound_atomic_artifact(
+    path: Path,
+    signature: tuple[int, int, int, int],
+    link_count: int,
+    sha256: str,
+    label: str,
+) -> None:
+    """Delete only the verified private recovery artifact named by the caller."""
+    status = _verify_atomic_artifact_identity(
+        path,
+        signature,
+        link_count,
+        sha256,
+        label,
+    )
+    if os.name == "nt" and _windows_status_is_read_only(status):
+        _set_windows_read_only(path, False, label)
+        _verify_atomic_artifact_identity(
+            path,
+            signature,
+            link_count,
+            sha256,
+            label,
+        )
+    path.unlink()
+    _fsync_parent_directory(path)
+
+
+def _atomic_write_text(
+    path: Path,
+    text: str,
+    *,
+    before_replace: Callable[[], None] | None = None,
+    after_replace: Callable[[], None] | None = None,
+) -> None:
+    """Replace a ledger with byte-bound recovery and durable directory commits."""
+    if not isinstance(text, str):
+        raise HarnessError("ledger text must be a string")
+    try:
+        payload = text.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise HarnessError("ledger text is not valid UTF-8") from exc
+    if len(payload) > MAX_LEDGER_ARTIFACT_BYTES:
+        raise HarnessError(
+            f"ledger text exceeds {MAX_LEDGER_ARTIFACT_BYTES} bytes"
+        )
+    payload_sha256 = hashlib.sha256(payload).hexdigest()
     path.parent.mkdir(parents=True, exist_ok=True)
+    destination_state = _snapshot_ledger_destination(path)
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent,
         prefix=f".{path.name}.",
         suffix=".tmp",
-        text=True,
+        text=False,
     )
     temporary = Path(temporary_name)
-    try:
-        handle = os.fdopen(descriptor, "w", encoding="utf-8", newline="\n")
-        descriptor = -1  # ownership transferred to handle
-        with handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    except BaseException:
-        if descriptor != -1:
+    temporary_signature: tuple[int, int, int, int] | None = None
+    temporary_link_count = 0
+    backup: Path | None = None
+    backup_descriptor = -1
+    backup_signature: tuple[int, int, int, int] | None = None
+    backup_link_count = 0
+    restore: Path | None = None
+    restore_descriptor = -1
+    replaced = False
+    commit_verified = False
+
+    def verify_replacement() -> None:
+        if temporary_signature is None:
+            raise HarnessError("temporary ledger identity was not captured")
+        status = _verify_atomic_artifact_identity(
+            path,
+            temporary_signature,
+            temporary_link_count,
+            payload_sha256,
+            "replacement ledger",
+        )
+        _verify_ledger_status(
+            status,
+            destination_state,
+            "replacement ledger",
+            bind_identity=False,
+        )
+        _verify_windows_ledger_metadata(
+            path,
+            status,
+            destination_state,
+            "replacement ledger",
+        )
+
+    def close_pending_descriptors() -> None:
+        nonlocal descriptor, backup_descriptor, restore_descriptor
+        for value in (descriptor, backup_descriptor, restore_descriptor):
+            if value == -1:
+                continue
             try:
-                os.close(descriptor)
+                os.close(value)
             except OSError:
                 pass
+        descriptor = -1
+        backup_descriptor = -1
+        restore_descriptor = -1
+
+    def rollback_existing_destination() -> None:
+        nonlocal backup, restore, restore_descriptor, replaced
+        if (
+            backup is None
+            or backup_signature is None
+            or destination_state.signature is None
+            or destination_state.sha256 is None
+        ):
+            raise HarnessError("verified rollback ledger is unavailable")
+        backup_status = _verify_atomic_artifact_identity(
+            backup,
+            backup_signature,
+            backup_link_count,
+            destination_state.sha256,
+            "rollback ledger",
+        )
+        _verify_ledger_status(
+            backup_status,
+            destination_state,
+            "rollback ledger",
+            bind_identity=False,
+        )
+        _verify_windows_ledger_metadata(
+            backup,
+            backup_status,
+            destination_state,
+            "rollback ledger",
+        )
+
+        restore_descriptor, restore_name = tempfile.mkstemp(
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".restore",
+        )
+        restore = Path(restore_name)
+        with backup.open("rb") as source, os.fdopen(
+            restore_descriptor, "wb"
+        ) as destination:
+            restore_descriptor = -1
+            _copy_exact_ledger_bytes(
+                source,
+                destination,
+                destination_state.signature[2],
+                "rollback ledger",
+            )
+            destination.flush()
+            os.fsync(destination.fileno())
+        _apply_ledger_permissions(restore, destination_state, "restore ledger")
+        restore_status = _ledger_destination_status(restore, "restore ledger")
+        restore_signature = _ledger_status_signature(restore_status)
+        restore_link_count = restore_status.st_nlink
+        _verify_atomic_artifact_identity(
+            restore,
+            restore_signature,
+            restore_link_count,
+            destination_state.sha256,
+            "restore ledger",
+        )
+
+        # Do not alter an attacker-substituted replacement while rolling back.
+        verify_replacement()
+        if destination_state.windows_read_only:
+            _set_windows_read_only(path, False, "replacement ledger")
+        os.replace(restore, path)
+        restore = None
+        replaced = False
+        _fsync_parent_directory(path)
+        restored_status = _ledger_destination_status(path, "restored ledger")
+        _verify_ledger_status(
+            restored_status,
+            destination_state,
+            "restored ledger",
+            bind_identity=False,
+        )
+        _verify_windows_ledger_metadata(
+            path,
+            restored_status,
+            destination_state,
+            "restored ledger",
+        )
+        restored_signature = _ledger_status_signature(restored_status)
+        if (
+            _hash_bound_atomic_artifact(
+                path,
+                restored_signature,
+                restored_status.st_nlink,
+                "restored ledger",
+            )
+            != destination_state.sha256
+        ):
+            raise HarnessError("restored ledger bytes do not match recovery")
+
+        # The original recovery remains independently addressable until every
+        # byte and metadata check above has passed.
         try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
+            _unlink_bound_atomic_artifact(
+                backup,
+                backup_signature,
+                backup_link_count,
+                destination_state.sha256,
+                "rollback ledger",
+            )
+        except (HarnessError, OSError):
+            return
+        backup = None
+
+    def remove_unverified_new_destination() -> None:
+        nonlocal replaced
+        try:
+            os.replace(path, temporary)
+            replaced = False
+            _fsync_parent_directory(path)
+        except FileNotFoundError:
+            replaced = False
+        except BaseException as move_error:
+            try:
+                path.unlink()
+                replaced = False
+                _fsync_parent_directory(path)
+            except BaseException as unlink_error:
+                raise HarnessError(
+                    "unverified new ledger could not be removed after post-check failure"
+                ) from unlink_error
+            if path.exists():
+                raise HarnessError(
+                    "unverified new ledger still exists after cleanup"
+                ) from move_error
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise HarnessError("cannot verify removal of unverified new ledger") from exc
+        raise HarnessError("unverified new ledger still exists after cleanup")
+
+    try:
+        handle = os.fdopen(descriptor, "wb")
+        descriptor = -1  # ownership transferred to handle
+        with handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        _apply_ledger_permissions(temporary, destination_state, "temporary ledger")
+        temporary_status = _ledger_destination_status(temporary, "temporary ledger")
+        temporary_signature = _ledger_status_signature(temporary_status)
+        temporary_link_count = temporary_status.st_nlink
+        _verify_atomic_artifact_identity(
+            temporary,
+            temporary_signature,
+            temporary_link_count,
+            payload_sha256,
+            "temporary ledger",
+        )
+        if destination_state.existed:
+            if destination_state.signature is None or destination_state.sha256 is None:
+                raise HarnessError("ledger destination recovery identity is incomplete")
+            backup_descriptor, backup_name = tempfile.mkstemp(
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".rollback",
+            )
+            backup = Path(backup_name)
+            with path.open("rb") as source, os.fdopen(
+                backup_descriptor, "wb"
+            ) as destination:
+                backup_descriptor = -1
+                _verify_ledger_status(
+                    os.fstat(source.fileno()),
+                    destination_state,
+                    "open ledger destination",
+                    bind_identity=True,
+                )
+                _copy_exact_ledger_bytes(
+                    source,
+                    destination,
+                    destination_state.signature[2],
+                    "ledger destination",
+                )
+                destination.flush()
+                os.fsync(destination.fileno())
+                _verify_ledger_status(
+                    os.fstat(source.fileno()),
+                    destination_state,
+                    "open ledger destination",
+                    bind_identity=True,
+                )
+            _apply_ledger_permissions(
+                backup, destination_state, "rollback ledger"
+            )
+            backup_status = _ledger_destination_status(backup, "rollback ledger")
+            backup_signature = _ledger_status_signature(backup_status)
+            backup_link_count = backup_status.st_nlink
+            _verify_atomic_artifact_identity(
+                backup,
+                backup_signature,
+                backup_link_count,
+                destination_state.sha256,
+                "rollback ledger",
+            )
+            _fsync_parent_directory(backup)
+        if before_replace is not None:
+            before_replace()
+        _verify_original_ledger_destination(path, destination_state)
+        if temporary_signature is None:
+            raise HarnessError("temporary ledger identity was not captured")
+        temporary_status = _verify_atomic_artifact_identity(
+            temporary,
+            temporary_signature,
+            temporary_link_count,
+            payload_sha256,
+            "temporary ledger",
+        )
+        _verify_ledger_status(
+            temporary_status,
+            destination_state,
+            "temporary ledger",
+            bind_identity=False,
+        )
+        _verify_windows_ledger_metadata(
+            temporary,
+            temporary_status,
+            destination_state,
+            "temporary ledger",
+        )
+        if backup is not None:
+            if backup_signature is None or destination_state.sha256 is None:
+                raise HarnessError("rollback ledger identity was not captured")
+            _verify_atomic_artifact_identity(
+                backup,
+                backup_signature,
+                backup_link_count,
+                destination_state.sha256,
+                "rollback ledger",
+            )
+        destination_made_writable = False
+        try:
+            if destination_state.windows_read_only:
+                if destination_state.link_count != 1:
+                    raise HarnessError(
+                        "refusing to clear the read-only attribute on a linked ledger "
+                        "destination"
+                    )
+                destination_made_writable = True
+                _set_windows_read_only(path, False, "ledger destination")
+            os.replace(temporary, path)
+            replaced = True
+            _fsync_parent_directory(path)
+        except BaseException:
+            if destination_made_writable:
+                try:
+                    if destination_state.windows_attributes is None:
+                        raise HarnessError(
+                            "ledger destination Windows attributes were not captured"
+                        )
+                    _set_windows_attributes(
+                        path,
+                        destination_state.windows_attributes,
+                        "ledger destination",
+                    )
+                except BaseException as restore_error:
+                    raise HarnessError(
+                        "ledger replace failed and its Windows attributes could not be restored"
+                    ) from restore_error
+            raise
+        verify_replacement()
+        if after_replace is not None:
+            after_replace()
+        verify_replacement()
+        commit_verified = True
+        if backup is not None:
+            try:
+                if backup_signature is None or destination_state.sha256 is None:
+                    raise HarnessError("rollback ledger identity was not captured")
+                _verify_atomic_artifact_identity(
+                    backup,
+                    backup_signature,
+                    backup_link_count,
+                    destination_state.sha256,
+                    "rollback ledger",
+                )
+                _unlink_bound_atomic_artifact(
+                    backup,
+                    backup_signature,
+                    backup_link_count,
+                    destination_state.sha256,
+                    "rollback ledger",
+                )
+            except BaseException as cleanup_error:
+                try:
+                    backup.lstat()
+                except FileNotFoundError:
+                    recovery_state = (
+                        f"recovery path was removed but cleanup durability is "
+                        f"unverified: {backup}"
+                    )
+                except OSError:
+                    recovery_state = f"recovery state is unknown: {backup}"
+                else:
+                    recovery_state = f"recovery cleanup target remains at {backup}"
+                raise CommittedCleanupError(
+                    "ledger commit verified, but rollback cleanup failed; "
+                    f"committed ledger: {path}; {recovery_state}"
+                ) from cleanup_error
+            backup = None
+    except BaseException as original_error:
+        close_pending_descriptors()
+        if replaced and not commit_verified:
+            try:
+                if destination_state.existed:
+                    rollback_existing_destination()
+                else:
+                    remove_unverified_new_destination()
+            except BaseException as rollback_error:
+                if restore is not None:
+                    _best_effort_unlink_atomic_artifact(restore)
+                if destination_state.existed and backup is not None:
+                    raise HarnessError(
+                        "ledger post-check failed and rollback could not be verified; "
+                        f"recovery retained at {backup}"
+                    ) from rollback_error
+                raise HarnessError(
+                    "ledger post-check failed and unverified destination cleanup failed"
+                ) from rollback_error
+        _best_effort_unlink_atomic_artifact(temporary)
+        if restore is not None:
+            _best_effort_unlink_atomic_artifact(restore)
+        if backup is not None and not commit_verified:
+            _best_effort_unlink_atomic_artifact(backup)
+        raise original_error
 
 
 def _ledger_row_sort_key(indexed_row: tuple[int, object]) -> tuple[int, str, int]:
@@ -2737,7 +4117,16 @@ def write_ledger(
     total_expected: int | None = None,
     release_eligible: bool = False,
     source_manifest: Mapping[str, str] | None = None,
+    repository_manifest: Mapping[str, str] | None = None,
+    repository_roles: Mapping[str, str] | None = None,
+    snapshot: FrozenRepository | None = None,
+    _destination_guard: Callable[[], None] | None = None,
 ) -> dict:
+    release_attestation_required = release_eligible is True
+    if isinstance(snapshot, FrozenRepository):
+        _validate_ledger_destination(path, snapshot)
+    if _destination_guard is not None:
+        _destination_guard()
     report = assess_run(
         scored,
         expected_ids=expected_ids,
@@ -2745,6 +4134,9 @@ def write_ledger(
         total_expected=total_expected,
         release_eligible=release_eligible,
         source_manifest=source_manifest,
+        repository_manifest=repository_manifest,
+        repository_roles=repository_roles,
+        snapshot=snapshot,
     )
     judge_model = judge_model or model
     safe_stamp = _safe_markdown_text(stamp, limit=120)
@@ -2766,6 +4158,12 @@ def write_ledger(
             f"{report['total_expected']} release cases selected; "
             f"{report['completed_count']} results recorded."
         )
+    role_counts = report["repository_role_counts"]
+    role_summary = (
+        ", ".join(f"{role}={count}" for role, count in role_counts.items())
+        if role_counts is not None
+        else ""
+    )
     lines = [
         "# Eval Run Ledger",
         "",
@@ -2775,6 +4173,13 @@ def write_ledger(
         scope_line,
         f"Run verdict: **{report['run_verdict']}**. Release verdict: "
         f"**{report['release_verdict']}**.",
+        (
+            "Frozen repository provenance: **BOUND** — "
+            f"{report['repository_file_count']} files ({role_summary}), canonical SHA-256 "
+            f"`{report['repository_sha256']}`."
+            if report["repository_sha256"] is not None
+            else "Frozen repository provenance: **UNAVAILABLE**."
+        ),
         "This is the evidence layer for the rubric in `references/eval-rubric.md`; the deterministic",
         "CI validators check shape; this checks output quality.",
         "",
@@ -2796,7 +4201,36 @@ def write_ledger(
     )
     for index, row in sorted(enumerate(scored), key=_ledger_row_sort_key):
         lines.append(_render_ledger_row(index, row))
-    _atomic_write_text(path, "\n".join(lines) + "\n")
+    def final_bound_check() -> None:
+        if isinstance(snapshot, FrozenRepository):
+            _validate_ledger_destination(path, snapshot)
+        if _destination_guard is not None:
+            _destination_guard()
+        if report["repository_sha256"] is not None:
+            if snapshot is None:
+                raise HarnessError("frozen snapshot disappeared before ledger commit")
+            verify_snapshot_unchanged(snapshot)
+            if release_attestation_required or snapshot.canonical_contract_bound:
+                _verify_canonical_evaluation_contract(snapshot)
+            if release_attestation_required or snapshot.evaluator_execution_bound:
+                _verify_evaluator_execution_identity(
+                    snapshot.require("scripts/eval_run.py", "evaluator")
+                )
+
+    needs_final_bound_check = (
+        report["repository_sha256"] is not None or _destination_guard is not None
+    )
+
+    _atomic_write_text(
+        path,
+        "\n".join(lines) + "\n",
+        before_replace=(
+            final_bound_check if needs_final_bound_check else None
+        ),
+        after_replace=(
+            final_bound_check if needs_final_bound_check else None
+        ),
+    )
     print(f"\nLedger written to {path}")
     return report
 
@@ -2805,6 +4239,8 @@ def _write_bootstrap_failure_ledger(
     path: Path | None,
     args: argparse.Namespace,
     message: str,
+    *,
+    root: Path | None = None,
 ) -> None:
     if path is None:
         return
@@ -2819,6 +4255,8 @@ def _write_bootstrap_failure_ledger(
         "sources": None,
     }
     try:
+        if root is not None:
+            _validate_bootstrap_ledger_destination(path, root)
         write_ledger(
             path,
             [row],
@@ -2828,8 +4266,15 @@ def _write_bootstrap_failure_ledger(
             args.region,
             judge_model=args.judge_model or args.model or "unresolved",
             release_eligible=False,
+            _destination_guard=(
+                (lambda: _validate_bootstrap_ledger_destination(path, root))
+                if root is not None
+                else None
+            ),
         )
-    except OSError as exc:
+    except CommittedCleanupError as exc:
+        print(f"Ledger committed, but recovery cleanup failed: {exc}")
+    except (HarnessError, OSError) as exc:
         print(f"Ledger write failed; existing artifact preserved: {exc}")
 
 
@@ -2896,6 +4341,7 @@ def main() -> int:
             ledger_path,
             args,
             f"evaluation input failure: {detail}",
+            root=root,
         )
         return 2
 
@@ -3009,15 +4455,12 @@ def main() -> int:
                 else []
             )
 
-    responder_manifest = {
-        path: source.sha256 for path, source in source_catalog(snapshot).items()
-    }
     report = assess_run(
         scored,
         expected_cases=selected_case_metadata,
         release_eligible=release_eligible,
         total_expected=len(all_cases),
-        source_manifest=responder_manifest,
+        snapshot=snapshot,
     )
     exit_code = print_assessment(report)
     if ledger_path is not None:
@@ -3033,9 +4476,12 @@ def main() -> int:
                 expected_cases=selected_case_metadata,
                 total_expected=len(all_cases),
                 release_eligible=release_eligible,
-                source_manifest=responder_manifest,
+                snapshot=snapshot,
             )
-        except OSError as exc:
+        except CommittedCleanupError as exc:
+            print(f"Ledger committed, but recovery cleanup failed: {exc}")
+            return 2
+        except (HarnessError, OSError) as exc:
             print(f"Ledger write failed; existing artifact preserved: {exc}")
             return 2
     return 2 if snapshot_error is not None else exit_code

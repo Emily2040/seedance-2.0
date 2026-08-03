@@ -437,6 +437,11 @@
       "sha256": "14848ee01e91a4935a66ab83ac6370e5ec3a9a9fd6468a9281ce70998401675f"
     },
     {
+      "path": "scripts/eval_run.py",
+      "role": "evaluator",
+      "sha256": "7cb05314e1aae9b7725ef2d7a933262d50ab8e01364a7bec95842e4dd9ee5ee9"
+    },
+    {
       "path": "skills/seedance-antislop/SKILL.md",
       "role": "responder",
       "sha256": "3f65b39b4130670e7a6ab542ddfbea21d4ee38186369c803b4cfe4d691971a9a"
