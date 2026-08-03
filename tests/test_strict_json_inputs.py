@@ -809,7 +809,18 @@ class NetworkBoundaryTests(unittest.TestCase):
 
             def read(self, size: int) -> bytes:
                 self.read_sizes.append(size)
-                return b'{"content":[]}'
+                return json.dumps(
+                    {
+                        "id": "msg_test",
+                        "type": "message",
+                        "role": "assistant",
+                        "model": "model",
+                        "content": [],
+                        "stop_reason": "end_turn",
+                        "stop_sequence": None,
+                        "usage": {"input_tokens": 1, "output_tokens": 0},
+                    }
+                ).encode("utf-8")
 
         response = FakeResponse()
         with mock.patch.object(
@@ -817,7 +828,17 @@ class NetworkBoundaryTests(unittest.TestCase):
             "urlopen",
             return_value=response,
         ):
-            self.assertEqual(eval_run.call_api("system", "user", "model", "key"), "")
+            self.assertEqual(
+                eval_run.call_api(
+                    "system",
+                    "user",
+                    "model",
+                    "key",
+                    eval_run.PROVIDER_CONFIGS["anthropic"],
+                    eval_run.ANTHROPIC_API_URL,
+                ),
+                "",
+            )
         self.assertEqual(response.read_sizes, [MAX_JSON_BYTES + 1])
 
 
