@@ -73,7 +73,7 @@ else:
 # ``__file__`` bytes would miss a stale or substituted bytecode import.
 _EXECUTED_EVALUATOR_CODE = sys._getframe().f_code
 _EXECUTED_EVALUATOR_PATH = Path(__file__).resolve(strict=True)
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "0e34d3f1e32920b8a9220e9be082040457a0df6f2abf63e5272cb90ab9c6e3d1"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "e06780cd96e440702ad86e14e06bc7fd4d5052a11cf3ae23c2d9602f5964bb08"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
