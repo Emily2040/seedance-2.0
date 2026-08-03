@@ -10,6 +10,7 @@ from lineage_contract import (
     bound_validation_diagnostics,
     classify_parent_id,
     json_integer,
+    load_bounded_take_review,
     load_project_document,
     TakeReviewIndex,
     validate_take_review_record,
@@ -233,8 +234,15 @@ def main() -> int:
 
     for path in sorted((root / "examples").rglob("*.json")) if (root / "examples").exists() else []:
         rel = path.relative_to(root).as_posix()
+        is_take_review = "take-review" in path.name or path.name == "take-review.json"
+        if is_take_review and path.parent.resolve() in review_indexes:
+            # The directory index already loaded and validated this candidate
+            # through the stable, bounded authority reader. Invalid, excluded,
+            # oversized, and over-budget candidates are represented by its
+            # diagnostics and must never be re-read by the generic JSON path.
+            continue
         try:
-            obj = load_json(path)
+            obj = load_bounded_take_review(path) if is_take_review else load_json(path)
         except Exception as exc:
             errors.append(f"{rel}: invalid JSON: {exc}")
             continue
@@ -257,7 +265,7 @@ def main() -> int:
                 errors.append(f"{rel}: felt_intent must be a non-empty one-line string")
             if set(obj.get("this_clip_only", [])) & set(obj.get("reserved_for_later", [])):
                 errors.append(f"{rel}: current and reserved beats overlap")
-        if "take-review" in path.name or path.name == "take-review.json":
+        if is_take_review:
             errors.extend(validate_take_review_record(obj, rel))
 
     for schema in (root / "schemas").glob("*.schema.json") if (root / "schemas").exists() else []:
