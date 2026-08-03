@@ -13,24 +13,65 @@ CI gate:
 
 ```bash
 export ANTHROPIC_API_KEY=...
-python scripts/eval_run.py --run --ledger evals/eval-run-ledger.md --stamp <ISO-date>
+python scripts/eval_run.py --ledger evals/eval-run-ledger.md --stamp <ISO-date>
+
+export MINIMAX_API_KEY=...
+python scripts/eval_run.py --provider minimax --region global_en \
+  --ledger evals/eval-run-ledger.md --stamp <ISO-date>
 ```
 
-The harness, for each case, builds a responder context from the real skill content
-(root `SKILL.md` plus the case's expected sub-skills and any `state_fixture`),
-gets a response to the case prompt, then has a judge model score that response
-against the case's own assertions. Legacy cases use the rubric's 0-3 scale
-(release: every case >= 2, average >= 2.6); sequence cases use the 0-4 scale
-(release: critical cases at 4, no dimension below 3, average >= 3.5).
+For each case, a blind discovery phase receives the complete root `SKILL.md`, a
+catalog of responder-role files, and the user request plus project state as
+untrusted JSON data. It never receives expected routes, assertions, failure
+labels, reference answers, archived material, or evaluator/rubric files. The
+responder then receives the root instructions plus only the selected sources;
+after selection, the harness compares selected skill paths with the hidden route
+oracle and fails wrong, missing, extra, duplicate, or unknown routes. The judge
+alone receives the rubric, case prompt, expected output, checks, and candidate
+response; it never receives the hidden route oracle or selected source paths.
+Legacy cases use the
+rubric's 0-3 scale (release: every case >= 2, average >= 2.6); sequence cases use
+the 0-4 scale (release: critical cases at 4, no dimension below 3, average >=
+3.5).
+
+Every input is explicitly classified and hashed in `evals/source-manifest.json`,
+resolved through one containment and physical-identity boundary, read once into
+an immutable snapshot, and reverified before evidence is written. JSON state
+fixtures live only under `evals/fixtures/`; their repository paths are not sent
+to models. The canonical eval and rubric digests are pinned. Generated ledgers
+record provider, region, responder and judge models, selected-versus-total scope,
+and each selected responder path plus its frozen SHA-256 digest. Discovery
+failure remains distinct from a valid root-only selection. Focused `--id` or
+`--limit` runs are not release-eligible and cannot replace this canonical ledger.
+Each generated ledger also records one canonical SHA-256 over the complete
+frozen path/role/hash map, including the root skill, fixtures, evaluator harness,
+and `evals/source-manifest.json` itself, together with per-role file counts. The
+release path accepts that map only from the verified frozen snapshot, binds the
+frozen evaluator to the module code object Python actually executed, and
+re-derives snapshot roles from the frozen manifest on every verification. It
+checks immediately before and after the atomic ledger replace, restoring the
+prior ledger (or removing the new one) if the post-replace check detects a race.
+Bootstrap failure reporting refuses ledger destinations that overwrite or alias
+repository inputs.
+
+Issue #29 remains a separate dependency: `failure_mode`,
+`expected_state_delta`, `expected_prompt_architecture`, and
+`expected_sequence_relation` are prompt-inert here and are not claimed as
+independently scored criteria by this discovery change.
+
+Release assessment binds every result to canonical per-case `sequence` and
+`critical` metadata derived from `evals/evals.json`. Case IDs or a result count
+alone cannot establish a release universe or prove that a row used the correct
+rubric scale.
 
 The offline wiring is checked in CI via `python scripts/eval_run.py --self-test`.
 
 ## Latest scored run
 
-_Not yet scored live in this environment (no `ANTHROPIC_API_KEY` available offline)._
+_Not yet scored live in this environment (no live provider credential is available offline)._
 Run the command above to populate the table below; the harness overwrites this
 file with per-case scores and a pass/fail verdict against the rubric thresholds.
 
-| id | scale | score | pass | notes |
-|---|---|---|---|---|
-| _pending_ | — | — | — | run `eval_run.py --run --ledger` to populate |
+| id | scale | dimension scores | frozen sources (path@sha256) | score | pass | notes |
+|---|---|---|---|---|---|---|
+| _pending_ | — | — | — | — | — | run `eval_run.py --ledger` to populate |

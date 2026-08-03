@@ -481,22 +481,40 @@ class ExecutionTests(unittest.TestCase):
 class DependencyTests(unittest.TestCase):
     def test_missing_dependency_fails_rather_than_skipping(self) -> None:
         """A silent skip would let CI report success while validating nothing."""
-        env = {
+        environment = {
             "PYTHONPATH": "",
+            "PATH": "/usr/bin:/bin",
             "PYTHONDONTWRITEBYTECODE": "1",
         }
-        for name in ("PATH", "SystemRoot", "WINDIR", "TEMP", "TMP"):
-            if name in os.environ:
-                env[name] = os.environ[name]
+        if os.name == "nt":
+            environment["PATH"] = str(Path(sys.executable).parent)
+            for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP"):
+                if name in os.environ:
+                    environment[name] = os.environ[name]
         result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/schema_check.py"), str(ROOT)],
+            [
+                sys.executable,
+                "-S",
+                str(ROOT / "scripts/schema_check.py"),
+                str(ROOT),
+            ],
             capture_output=True,
             text=True,
-            env=env,
+            env=environment,
         )
-        self.assertIn(result.returncode, (0, 2), result.stdout + result.stderr)
-        if result.returncode == 2:
-            self.assertIn("requires jsonschema", result.stderr)
+        expected = (
+            "schema check requires jsonschema.\n"
+            "  python -m pip install --require-hashes --requirement "
+            "requirements-validation.lock\n"
+            "The lock covers CPython 3.11-3.13 on Linux, macOS, and Windows. "
+            "On a platform\n"
+            "it does not cover, install jsonschema>=4.26 by any means you trust "
+            "and re-run;\n"
+            "this checker needs the library, not that particular lock file.\n"
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, expected)
 
 
 if __name__ == "__main__":

@@ -47,6 +47,16 @@ Nothing yet.
 - Recomposed the masthead and made the README's first screen obey the Call Sheet law it already declared. The wordmark grew to own its band of the canvas alone (104 → 126), the tagline now seats on the Skill OS band so its second baseline registers with the amber baseline — one shared datum across the page — and the eyebrow dropped "AI FILMMAKING" for `INTENT BEFORE FRAMES`, because an eyebrow that could open a competitor's page is filler. Both themes re-verified by rendered screenshot.
 - Removed the template costume from the README's opening: the centered `<div>` (the system says "centre nothing"), the five shields.io badges (the most ubiquitous element on GitHub, three of them baking counts the system forbids in vector assets), the H1 and bold tagline that repeated the masthead word-for-word within one screen, and the release-notes paragraph that duplicated `CHANGELOG.md`. Version, license, and date are now one quiet typographic line; the page opens on a left spine like every asset it ships.
 - Codified the front-page law in `frontend-design-system` as four new README rules — same spine as the assets, no badge chrome, the masthead speaks once, release prose lives in the changelog — so the next contributor inherits the reasoning, not just the layout.
+- Reworked the live evaluator into blind source discovery, response, and judge
+  phases. Expected route labels and rubric material no longer select responder
+  context; hidden expected routes are compared only after selection, and wrong,
+  missing, extra, duplicate, or unknown routes fail before response generation.
+- Added an explicit SHA-256 source-role manifest and one immutable per-run source
+  snapshot. Eval inputs now fail closed on unclassified files, aliases, digest
+  drift, fixture-path leakage, post-snapshot mutation, and fabricated ledger
+  provenance. Canonical eval/rubric digests prevent semantic contract gutting.
+- Kept issue #29's material judge-criteria fields separate and prompt-inert;
+  discovery hardening does not claim to score those fields.
 - Split capability claims in `capability-map` into four separately-verified layers — model capability, surface access, request syntax, and returned adherence — because a single "supported" cell conflated things that fail for different reasons.
 - Stopped the wall-clock freshness gate from failing unrelated pull requests. `source_registry_check.py` now warns past 14 days and errors past 30 only under the new `--enforce-freshness` flag, which the release checklist and the scheduled job pass. The drift check between two checked-in dates stays fatal, since it cannot be triggered by the calendar alone.
 - Hardened the validation workflow: actions pinned to commit SHAs, `permissions: contents: read`, a cancel-in-progress concurrency group, and no committed bytecode.

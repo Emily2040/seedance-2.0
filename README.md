@@ -529,12 +529,87 @@ The scheduled job never edits the registry. Re-stamping `last_verified` without
 actually re-reading the upstream sources would record a verification that never
 happened, so refreshing it is deliberately a human step.
 
-To prove the package is also *good*, run the model-in-the-loop harness, which sends each eval case through the real skill content and scores the response against the case's assertions using [`eval-rubric.md`](references/eval-rubric.md):
+To prove the package is also *good*, run the model-in-the-loop harness. Its
+discovery phase sees the root router and a safe catalog, not the expected route
+labels; the responder receives only the sources it selected, and the judge then
+scores the answer against [`eval-rubric.md`](references/eval-rubric.md):
 
 ```bash
-export ANTHROPIC_API_KEY=...   # required for a live scored pass
-python scripts/eval_run.py --run --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+export ANTHROPIC_API_KEY=...
+python scripts/eval_run.py --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+
+# The harness defaults to the current documented MiniMax-M3. The endpoint also
+# accepts the documented MiniMax-M2.7, M2.5, M2.1, M2 and highspeed variants.
+export MINIMAX_API_KEY=...
+python scripts/eval_run.py --provider minimax --region global_en \
+  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 \
+  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
 ```
+
+The harness uses `Authorization: Bearer <API_KEY>` as documented by both the
+[global](https://platform.minimax.io/docs/api-reference/text-chat-anthropic) and
+[CN](https://platform.minimaxi.com/docs/api-reference/text-chat-anthropic)
+Anthropic-compatible Messages endpoints. Those provider contracts were checked
+directly on 2026-08-01: both list the same eight supported models and the common
+successful-response fields (`id`, `type`, `role`, `model`, `content`,
+`stop_reason`, and `usage`), without requiring either `base_resp` or
+`stop_sequence`. Anthropic's own response contract is validated separately,
+including its required `stop_sequence` field.
+
+Successful bodies are validated fail-closed: documented optional usage,
+citation, thinking, and tool-call structures are type-checked with unknown
+fields rejected, while optional MiniMax legacy `base_resp`/`stop_sequence`
+fields cannot contradict an otherwise successful response. M2.x thinking
+blocks are accepted only in their documented shape; unrequested tool calls and
+Anthropic/M3 thinking are rejected as non-final evidence. Transport errors name
+the failed open, context-entry, or read phase and redact API keys before console
+or ledger output. Generated ledger commands are emitted separately for POSIX
+shells and PowerShell, and are omitted when metadata is not safe to round-trip.
+
+Before either offline or live evaluation starts, the harness resolves every eval
+input through [`evals/source-manifest.json`](evals/source-manifest.json), rejects
+unclassified files, symlinks/reparse aliases, hard-link aliases, and digest
+drift, then freezes the verified UTF-8 bytes for the whole run. The root router,
+rubric, eval suite, fixture data, evaluator harness, planner catalog, responder
+context, judge, and ledger therefore share one immutable source view. State
+fixtures are strict JSON objects under `evals/fixtures/`; models receive the data
+but never the fixture path. The judge receives the rubric, case prompt, expected
+output, checks, and candidate response, but never expected route labels or
+selected source paths. The harness also compiles the frozen evaluator source and
+requires it to equal the module code object Python actually executed, with the
+same physical `scripts/eval_run.py` path. Every recheck derives path, role, and
+digest metadata again from the frozen manifest so a constructed snapshot cannot
+reclassify responder files as evaluator-only inputs. A post-run check plus checks
+immediately before and after the atomic ledger replace refuse release evidence
+if any input changed after the snapshot; a failed post-replace check restores the
+prior ledger or removes the newly written one. Existing ledger permission modes
+are bound before the copy and preserved on both replacement and rollback; a new
+POSIX ledger remains owner-only, while the Windows read-only attribute is retained
+without modifying linked inputs. Bootstrap failure ledgers also
+refuse direct, hard-link, symlink, or source-boundary aliases of repository
+inputs before writing.
+
+Blind discovery is scored, not merely recorded: after the planner returns, its
+selected skill paths must exactly match the hidden
+`skills_expected_to_activate` oracle. Missing, wrong, extra, duplicate, unknown,
+or non-responder selections fail before response generation. Generated ledger
+rows bind every selected responder path to its frozen SHA-256 digest; fabricated,
+non-canonical, missing, or mismatched provenance cannot produce a release pass.
+The ledger also records one canonical SHA-256 over the complete frozen
+path/role/hash map, including `SKILL.md`, fixtures, evaluator files, and the
+source manifest itself, plus per-role file counts. Release assessment accepts
+that provenance only from the verified `FrozenRepository`; caller-supplied
+digest maps cannot stand in for the evaluated checkout.
+The canonical eval-suite and rubric digests are pinned so a structurally valid
+but semantically gutted replacement also fails closed.
+
+The material-criteria work tracked separately in
+[#29](https://github.com/Emily2040/seedance-2.0/issues/29) is intentionally not
+absorbed here. `failure_mode`, `expected_state_delta`,
+`expected_prompt_architecture`, and `expected_sequence_relation` remain
+prompt-inert in discovery, response, and judge calls; this snapshot makes no
+claim that those fields are independently scored.
 
 This is the quality gate, not a shape gate, so it lives outside offline CI; the latest scored run is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
 

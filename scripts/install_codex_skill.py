@@ -70,10 +70,10 @@ WINDOWS_PORTABLE_COMPONENT_LIMIT = 255
 WINDOWS_MAX_PID_DIGITS = 10
 
 # Kept out of the installed payload because they are development-only and
-# network-capable. eval_run.py contacts a model provider and reads
-# ANTHROPIC_API_KEY; nothing in skills/ or references/ invokes it, so an
-# install has no use for it and shipping it would put a credential-reading
-# script inside every agent that loads this skill. eval-runs/ holds its output.
+# network-capable. eval_run.py contacts a selected model provider and reads
+# its API key; nothing in skills/ or references/ invokes it, so an install has
+# no use for it and shipping it would put a credential-reading script inside
+# every agent that loads this skill. eval-runs/ holds its output.
 # tests/test_install_payload.py enforces this.
 DEV_ONLY_NAMES = {
     "eval_run.py",
