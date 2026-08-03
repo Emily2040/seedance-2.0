@@ -14,6 +14,7 @@ import unicodedata
 import uuid
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterator, Mapping, TextIO
 
@@ -539,35 +540,603 @@ def _assert_existing_components_no_links(path: Path, label: str) -> None:
             )
 
 
-def _assert_regular_relative_path(root: Path, relative: str, label: str) -> Path:
+def _win32_close_handle(handle: int) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    close_handle = ctypes.WinDLL("kernel32", use_last_error=True).CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    close_handle(wintypes.HANDLE(handle))
+
+
+def _win32_assert_noreparse_handle(
+    handle: int,
+    path: Path,
+    label: str,
+    *,
+    directory: bool,
+    diagnostic: str,
+) -> tuple[int, int]:
+    import ctypes
+    from ctypes import wintypes
+
+    class ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [
+            ("dwFileAttributes", wintypes.DWORD),
+            ("ftCreationTime", wintypes.FILETIME),
+            ("ftLastAccessTime", wintypes.FILETIME),
+            ("ftLastWriteTime", wintypes.FILETIME),
+            ("dwVolumeSerialNumber", wintypes.DWORD),
+            ("nFileSizeHigh", wintypes.DWORD),
+            ("nFileSizeLow", wintypes.DWORD),
+            ("nNumberOfLinks", wintypes.DWORD),
+            ("nFileIndexHigh", wintypes.DWORD),
+            ("nFileIndexLow", wintypes.DWORD),
+        ]
+
+    get_information = ctypes.WinDLL(
+        "kernel32",
+        use_last_error=True,
+    ).GetFileInformationByHandle
+    get_information.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(ByHandleFileInformation),
+    ]
+    get_information.restype = wintypes.BOOL
+    information = ByHandleFileInformation()
+    if not get_information(handle, ctypes.byref(information)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    if information.dwFileAttributes & 0x00000400:
+        raise ValueError(
+            f"{label} contains a linked or reparse component: "
+            f"{_bounded_diagnostic(diagnostic, 220)}"
+        )
+    is_directory = bool(information.dwFileAttributes & 0x00000010)
+    if is_directory != directory:
+        kind = "directory" if directory else "regular file"
+        raise ValueError(f"{label} component is not a {kind}: {_bounded_diagnostic(path, 220)}")
+    return (
+        int(information.dwVolumeSerialNumber),
+        int((information.nFileIndexHigh << 32) | information.nFileIndexLow),
+    )
+
+
+def _win32_open_noreparse_handle(
+    path: Path,
+    label: str,
+    *,
+    directory: bool,
+    diagnostic: str | None = None,
+) -> int:
+    """Open and lock one current Windows path occupant against replacement."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    handle = create_file(
+        str(path),
+        (
+            0  # query-only; traversal uses the identity-checked fallback below
+            if directory
+            else 0x80000000  # GENERIC_READ
+        ),
+        0x00000001,  # share read only; deny data writes and replacement
+        None,
+        3,  # OPEN_EXISTING
+        0x00200000
+        | (0x02000000 if directory else 0x08000000),  # OPEN_REPARSE_POINT + mode
+        None,
+    )
+    invalid = ctypes.c_void_p(-1).value
+    if handle == invalid:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    try:
+        _win32_assert_noreparse_handle(
+            int(handle),
+            path,
+            label,
+            directory=directory,
+            diagnostic=diagnostic or str(path),
+        )
+        return int(handle)
+    except Exception:
+        _win32_close_handle(int(handle))
+        raise
+
+
+def _win32_open_directory_component(
+    path: Path,
+    label: str,
+    diagnostic: str | None = None,
+) -> int:
+    return _win32_open_noreparse_handle(
+        path,
+        label,
+        directory=True,
+        diagnostic=diagnostic,
+    )
+
+
+@lru_cache(maxsize=1)
+def _win32_nt_open_bindings() -> tuple[object, ...]:
+    import ctypes
+    from ctypes import wintypes
+
+    class UnicodeString(ctypes.Structure):
+        _fields_ = [
+            ("Length", wintypes.USHORT),
+            ("MaximumLength", wintypes.USHORT),
+            ("Buffer", wintypes.LPWSTR),
+        ]
+
+    class ObjectAttributes(ctypes.Structure):
+        _fields_ = [
+            ("Length", wintypes.ULONG),
+            ("RootDirectory", wintypes.HANDLE),
+            ("ObjectName", ctypes.POINTER(UnicodeString)),
+            ("Attributes", wintypes.ULONG),
+            ("SecurityDescriptor", wintypes.LPVOID),
+            ("SecurityQualityOfService", wintypes.LPVOID),
+        ]
+
+    class IoStatusBlock(ctypes.Structure):
+        _fields_ = [
+            ("Status", wintypes.LPVOID),
+            ("Information", ctypes.c_size_t),
+        ]
+
+    ntdll = ctypes.WinDLL("ntdll", use_last_error=True)
+    nt_create_file = ntdll.NtCreateFile
+    nt_create_file.argtypes = [
+        ctypes.POINTER(wintypes.HANDLE),
+        wintypes.DWORD,
+        ctypes.POINTER(ObjectAttributes),
+        ctypes.POINTER(IoStatusBlock),
+        wintypes.LPVOID,
+        wintypes.ULONG,
+        wintypes.ULONG,
+        wintypes.ULONG,
+        wintypes.ULONG,
+        wintypes.LPVOID,
+        wintypes.ULONG,
+    ]
+    nt_create_file.restype = wintypes.LONG
+    rtl_status_to_dos_error = ntdll.RtlNtStatusToDosError
+    rtl_status_to_dos_error.argtypes = [wintypes.LONG]
+    rtl_status_to_dos_error.restype = wintypes.ULONG
+    return (
+        ctypes,
+        wintypes,
+        UnicodeString,
+        ObjectAttributes,
+        IoStatusBlock,
+        nt_create_file,
+        rtl_status_to_dos_error,
+    )
+
+
+def _win32_open_relative_noreparse_handle(
+    parent_handle: int,
+    name: str,
+    path: Path,
+    label: str,
+    *,
+    directory: bool,
+    diagnostic: str,
+) -> int:
+    """Open one name relative to a bound directory, without reparsing it."""
+    (
+        ctypes,
+        wintypes,
+        unicode_string_type,
+        object_attributes_type,
+        io_status_block_type,
+        nt_create_file,
+        rtl_status_to_dos_error,
+    ) = _win32_nt_open_bindings()
+    name_buffer = ctypes.create_unicode_buffer(name)
+    encoded_name = name.encode("utf-16-le")
+    unicode_name = unicode_string_type(
+        len(encoded_name),
+        len(encoded_name) + 2,
+        ctypes.cast(name_buffer, wintypes.LPWSTR),
+    )
+    attributes = object_attributes_type(
+        ctypes.sizeof(object_attributes_type),
+        wintypes.HANDLE(parent_handle),
+        ctypes.pointer(unicode_name),
+        0x00000040,  # OBJ_CASE_INSENSITIVE
+        None,
+        None,
+    )
+    io_status = io_status_block_type()
+    handle = wintypes.HANDLE()
+    desired_access = (
+        0x00000020 | 0x00000080 | 0x00100000  # traverse, attributes, synchronize
+        if directory
+        else 0x00000001 | 0x00000080 | 0x00100000  # data, attributes, synchronize
+    )
+    create_options = (
+        0x00200000  # FILE_OPEN_REPARSE_POINT
+        | 0x00000020  # FILE_SYNCHRONOUS_IO_NONALERT
+        | (0x00000001 if directory else 0x00000040)  # directory / non-directory
+    )
+    status = nt_create_file(
+        ctypes.byref(handle),
+        desired_access,
+        ctypes.byref(attributes),
+        ctypes.byref(io_status),
+        None,
+        0,
+        0x00000001,  # FILE_SHARE_READ
+        1,  # FILE_OPEN
+        create_options,
+        None,
+        0,
+    )
+    if status < 0:
+        error = int(rtl_status_to_dos_error(status))
+        if error != 5:  # ERROR_ACCESS_DENIED
+            raise ctypes.WinError(error)
+
+        # Native handle-relative opens can be denied by a sandbox/profile ACL
+        # even when the same file is readable through Win32.  Every ancestor
+        # handle remains open without FILE_SHARE_DELETE, so verify that the
+        # current full-path parent is still that exact object before using the
+        # no-reparse Win32 fallback for this one child.
+        expected_parent = _win32_assert_noreparse_handle(
+            parent_handle,
+            path.parent,
+            label,
+            directory=True,
+            diagnostic=diagnostic,
+        )
+        current_parent = _win32_open_noreparse_handle(
+            path.parent,
+            label,
+            directory=True,
+            diagnostic=diagnostic,
+        )
+        try:
+            actual_parent = _win32_assert_noreparse_handle(
+                current_parent,
+                path.parent,
+                label,
+                directory=True,
+                diagnostic=diagnostic,
+            )
+            if actual_parent != expected_parent:
+                raise RuntimeError(
+                    f"{label} component changed while it was being opened: "
+                    f"{_bounded_diagnostic(path.parent, 220)}"
+                )
+            return _win32_open_noreparse_handle(
+                path,
+                label,
+                directory=directory,
+                diagnostic=diagnostic,
+            )
+        finally:
+            _win32_close_handle(current_parent)
+    opened_handle = int(handle.value)
+    try:
+        _win32_assert_noreparse_handle(
+            opened_handle,
+            path,
+            label,
+            directory=directory,
+            diagnostic=diagnostic,
+        )
+        return opened_handle
+    except Exception:
+        _win32_close_handle(opened_handle)
+        raise
+
+
+def _win32_open_relative_directory_component(
+    parent_handle: int,
+    name: str,
+    path: Path,
+    label: str,
+    diagnostic: str,
+) -> int:
+    return _win32_open_relative_noreparse_handle(
+        parent_handle,
+        name,
+        path,
+        label,
+        directory=True,
+        diagnostic=diagnostic,
+    )
+
+
+def _win32_open_regular_descriptor(
+    parent_handle: int,
+    name: str,
+    path: Path,
+    label: str,
+    diagnostic: str,
+) -> int:
+    import msvcrt
+
+    handle = _win32_open_relative_noreparse_handle(
+        parent_handle,
+        name,
+        path,
+        label,
+        directory=False,
+        diagnostic=diagnostic,
+    )
+    try:
+        return msvcrt.open_osfhandle(
+            handle,
+            os.O_RDONLY | getattr(os, "O_BINARY", 0),
+        )
+    except Exception:
+        _win32_close_handle(handle)
+        raise
+
+
+def _posix_open_directory_component(
+    parent_descriptor: int,
+    name: str,
+    path: Path,
+    label: str,
+    diagnostic: str,
+) -> int:
+    try:
+        before = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        raise FileNotFoundError(f"{label} file is missing: {_bounded_diagnostic(path, 220)}") from exc
+    if _is_reparse_stat(before) or stat.S_ISLNK(before.st_mode):
+        raise ValueError(
+            f"{label} contains a linked or reparse component: "
+            f"{_bounded_diagnostic(diagnostic, 180)} "
+            f"(component: {_bounded_diagnostic(path, 220)})"
+        )
+    if not stat.S_ISDIR(before.st_mode):
+        raise ValueError(f"{label} component is not a directory: {_bounded_diagnostic(path, 220)}")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    try:
+        descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+    except OSError as exc:
+        try:
+            current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except OSError:
+            raise RuntimeError(
+                f"{label} component changed while it was being opened: "
+                f"{_bounded_diagnostic(path, 220)}"
+            ) from exc
+        if _is_reparse_stat(current) or stat.S_ISLNK(current.st_mode):
+            raise ValueError(
+                f"{label} contains a linked or reparse component: "
+                f"{_bounded_diagnostic(diagnostic, 180)} "
+                f"(component: {_bounded_diagnostic(path, 220)})"
+            ) from exc
+        if (
+            not stat.S_ISDIR(current.st_mode)
+            or _object_identity(current) != _object_identity(before)
+        ):
+            raise RuntimeError(
+                f"{label} component changed while it was being opened: "
+                f"{_bounded_diagnostic(path, 220)}"
+            ) from exc
+        raise
+    try:
+        opened = os.fstat(descriptor)
+        named = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        if (
+            _is_reparse_stat(opened)
+            or not stat.S_ISDIR(opened.st_mode)
+            or _object_identity(opened) != _object_identity(before)
+            or _object_identity(named) != _object_identity(opened)
+        ):
+            raise RuntimeError(
+                f"{label} component changed while it was being opened: "
+                f"{_bounded_diagnostic(path, 220)}"
+            )
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+@contextmanager
+def _bound_relative_parent(
+    root: Path,
+    relative: str,
+    label: str,
+) -> Iterator[tuple[Path, int | None]]:
+    """Traverse bound parents and retain the immediate parent for the file open."""
+    absolute_root = _absolute_lexical(root)
+    parts = relative.split("/")
+    path = absolute_root.joinpath(*parts)
+    parent_parts = (*absolute_root.parts[1:], *parts[:-1])
+
+    if os.name == "nt":
+        # The sandbox account may read the supplied root but lack permission to
+        # open an owner-profile ancestor such as C:\Users\<owner>.  Bind the
+        # supplied payload root directly; opening it with
+        # FILE_FLAG_OPEN_REPARSE_POINT binds and validates the root itself,
+        # while every fallback below compares its current full-path identity
+        # with this retained root handle.
+        current = absolute_root
+        handles: list[int] = []
+        try:
+            try:
+                handle = _win32_open_directory_component(current, label, relative)
+                handles.append(handle)
+                for part in parts[:-1]:
+                    current /= part
+                    child = _win32_open_relative_directory_component(
+                        handle,
+                        part,
+                        current,
+                        label,
+                        relative,
+                    )
+                    handle = child
+                    handles.append(handle)
+            except (FileNotFoundError, NotADirectoryError) as exc:
+                raise FileNotFoundError(f"{label} file is missing: {relative}") from exc
+            yield path, handle
+        finally:
+            for opened_handle in reversed(handles):
+                _win32_close_handle(opened_handle)
+        return
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    descriptor = os.open(absolute_root.anchor, flags)
+    current = Path(absolute_root.anchor)
+    try:
+        for part in parent_parts:
+            current /= part
+            child = _posix_open_directory_component(
+                descriptor,
+                part,
+                current,
+                label,
+                relative,
+            )
+            parent_descriptor = descriptor
+            descriptor = child
+            os.close(parent_descriptor)
+        yield path, descriptor
+    finally:
+        os.close(descriptor)
+
+
+def _relative_file_stat(path: Path, parent_descriptor: int | None) -> os.stat_result:
+    assert os.name != "nt"
+    assert parent_descriptor is not None
+    return os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+
+
+@contextmanager
+def _open_bound_regular_relative(
+    root: Path,
+    relative: str,
+    label: str,
+) -> Iterator[tuple[Path, int, os.stat_result]]:
+    """Open a regular file through bound, non-link parent components."""
     if not _safe_relative_path(relative):
         raise ValueError(
             f"{label} has an unsafe path: {_bounded_diagnostic(repr(relative), 180)}"
         )
-    absolute_root = _absolute_lexical(root)
-    _assert_existing_components_no_links(absolute_root, f"{label} root")
-    root_info = absolute_root.lstat()
-    if not stat.S_ISDIR(root_info.st_mode):
-        raise ValueError(f"{label} root is not a directory")
-
-    current = absolute_root
-    parts = relative.split("/")
-    for index, part in enumerate(parts):
-        current /= part
+    with _bound_relative_parent(root, relative, label) as (path, parent_descriptor):
+        descriptor = -1
+        before: os.stat_result | None = None
         try:
-            info = current.lstat()
+            if os.name == "nt":
+                assert parent_descriptor is not None
+                descriptor = _win32_open_regular_descriptor(
+                    parent_descriptor,
+                    path.name,
+                    path,
+                    label,
+                    relative,
+                )
+            else:
+                assert parent_descriptor is not None
+                before = _relative_file_stat(path, parent_descriptor)
+                if _is_reparse_stat(before) or stat.S_ISLNK(before.st_mode):
+                    raise ValueError(
+                        f"{label} contains a linked or reparse component: "
+                        f"{_bounded_diagnostic(relative, 180)}"
+                    )
+                if not stat.S_ISREG(before.st_mode):
+                    raise ValueError(f"{label} is not a regular file: {relative}")
+                flags = (
+                    os.O_RDONLY
+                    | getattr(os, "O_BINARY", 0)
+                    | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_CLOEXEC", 0)
+                )
+                try:
+                    descriptor = os.open(path.name, flags, dir_fd=parent_descriptor)
+                except OSError as exc:
+                    current = _relative_file_stat(path, parent_descriptor)
+                    if _is_reparse_stat(current) or stat.S_ISLNK(current.st_mode):
+                        raise ValueError(
+                            f"{label} contains a linked or reparse component: "
+                            f"{_bounded_diagnostic(relative, 180)}"
+                        ) from exc
+                    if (
+                        not stat.S_ISREG(current.st_mode)
+                        or _object_identity(current) != _object_identity(before)
+                    ):
+                        raise RuntimeError(
+                            f"{label} changed while it was being opened: {relative}"
+                        ) from exc
+                    raise
+
+            opened = os.fstat(descriptor)
+            named = (
+                None
+                if os.name == "nt"
+                else _relative_file_stat(path, parent_descriptor)
+            )
+            if (
+                _is_reparse_stat(opened)
+                or not stat.S_ISREG(opened.st_mode)
+                or (
+                    before is not None
+                    and _stat_identity(opened) != _stat_identity(before)
+                )
+                or (
+                    named is not None
+                    and _stat_identity(named) != _stat_identity(opened)
+                )
+            ):
+                raise RuntimeError(f"{label} changed while it was being opened: {relative}")
+            yield path, descriptor, opened
+            after_open = os.fstat(descriptor)
+            after_named = (
+                None
+                if os.name == "nt"
+                else _relative_file_stat(path, parent_descriptor)
+            )
+            if (
+                _stat_identity(after_open) != _stat_identity(opened)
+                or _is_reparse_stat(after_open)
+                or (
+                    after_named is not None
+                    and (
+                        _stat_identity(after_named) != _stat_identity(opened)
+                        or _is_reparse_stat(after_named)
+                        or after_named.st_ctime_ns != opened.st_ctime_ns
+                    )
+                )
+            ):
+                raise RuntimeError(f"{label} changed while it was being read: {relative}")
         except (FileNotFoundError, NotADirectoryError) as exc:
             raise FileNotFoundError(f"{label} file is missing: {relative}") from exc
-        if _is_reparse_stat(info) or stat.S_ISLNK(info.st_mode):
-            raise ValueError(
-                f"{label} contains a linked or reparse component: "
-                f"{_bounded_diagnostic(relative, 180)}"
-            )
-        if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
-            raise ValueError(f"{label} component is not a directory: {relative}")
-        if index == len(parts) - 1 and not stat.S_ISREG(info.st_mode):
-            raise ValueError(f"{label} is not a regular file: {relative}")
-    return current
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
 
 
 def _read_stable_regular_bytes(
@@ -578,26 +1147,22 @@ def _read_stable_regular_bytes(
     max_bytes: int,
 ) -> tuple[FileSnapshot, bytes]:
     """Read one bounded file from one descriptor and reject any path swap."""
-    path = _assert_regular_relative_path(root, relative, label)
-    before = path.lstat()
-    if before.st_nlink != 1:
-        raise ValueError(f"{label} is hard-linked: {relative}")
-    if before.st_size < 0 or before.st_size > max_bytes:
-        raise ValueError(f"{label} exceeds {max_bytes} bytes: {relative}")
-    descriptor = _open_regular_read_descriptor(path)
-    try:
+    with _open_bound_regular_relative(root, relative, label) as (
+        _path,
+        descriptor,
+        opened,
+    ):
+        if opened.st_nlink != 1:
+            raise ValueError(f"{label} is hard-linked: {relative}")
+        if opened.st_size < 0 or opened.st_size > max_bytes:
+            raise ValueError(f"{label} exceeds {max_bytes} bytes: {relative}")
         with _locked_record_descriptor(
             descriptor,
             max_bytes + 1,
             exclusive=False,
         ):
-            opened = os.fstat(descriptor)
-            if (
-                _is_reparse_stat(opened)
-                or not stat.S_ISREG(opened.st_mode)
-                or opened.st_nlink != 1
-                or _stat_identity(opened) != _stat_identity(before)
-            ):
+            locked = os.fstat(descriptor)
+            if _stat_identity(locked) != _stat_identity(opened):
                 raise RuntimeError(
                     f"{label} changed while it was being opened: {relative}"
                 )
@@ -627,23 +1192,11 @@ def _read_stable_regular_bytes(
             ):
                 raise RuntimeError(f"{label} content changed while it was being read: {relative}")
             after_open = os.fstat(descriptor)
-            after_path = path.lstat()
             if (
                 _stat_identity(after_open) != _stat_identity(opened)
-                or _stat_identity(after_path) != _stat_identity(opened)
-                or _is_reparse_stat(after_path)
-                or after_path.st_nlink != 1
+                or _is_reparse_stat(after_open)
             ):
                 raise RuntimeError(f"{label} changed while it was being read: {relative}")
-    finally:
-        os.close(descriptor)
-    final_path = path.lstat()
-    if (
-        _stat_identity(final_path) != _stat_identity(opened)
-        or _is_reparse_stat(final_path)
-        or final_path.st_nlink != 1
-    ):
-        raise RuntimeError(f"{label} changed while it was being read: {relative}")
     if len(raw) != opened.st_size:
         raise RuntimeError(f"{label} changed size while it was being read: {relative}")
     digest = hashlib.sha256(raw).hexdigest()
@@ -659,22 +1212,64 @@ def _source_file_snapshot(
     *,
     chunk_consumer: Callable[[bytes], None] | None = None,
 ) -> FileSnapshot:
-    path = _assert_regular_relative_path(root, relative, "declared payload path")
-    before = path.lstat()
-    metadata = _regular_file_metadata(
-        path,
-        chunk_consumer=chunk_consumer,
-        reject_unmanaged_forks=True,
-    )
-    after = path.lstat()
-    if _stat_identity(before) != _stat_identity(after):
-        raise RuntimeError(f"declared payload path changed while captured: {relative}")
-    return FileSnapshot(
+    with _open_bound_regular_relative(
+        root,
         relative,
-        _stat_identity(after),
-        int(metadata["size"]),
-        str(metadata["sha256"]),
-    )
+        "declared payload path",
+    ) as (_path, descriptor, opened):
+        if opened.st_nlink != 1:
+            raise RuntimeError(f"declared payload path is hard-linked: {relative}")
+        with _locked_record_descriptor(
+            descriptor,
+            max(opened.st_size, 1) + 1,
+            exclusive=False,
+        ):
+            locked = os.fstat(descriptor)
+            if _stat_identity(locked) != _stat_identity(opened):
+                raise RuntimeError(
+                    f"declared payload path changed while opening: {relative}"
+                )
+            # Final #138 rejects alternate streams/xattrs because its
+            # transaction manifest cannot represent them.  Keep that check
+            # while #147 binds the file open to its already-opened parents.
+            _assert_no_unmanaged_forks(_path)
+
+            def capture(*, consume: bool) -> tuple[bytes, int]:
+                digest = hashlib.sha256()
+                total = 0
+                while True:
+                    chunk = os.read(descriptor, 1024 * 1024)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    if consume and chunk_consumer is not None:
+                        chunk_consumer(chunk)
+                    total += len(chunk)
+                return digest.digest(), total
+
+            first_digest, total = capture(consume=True)
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            repeated_digest, repeated_total = capture(consume=False)
+            if repeated_digest != first_digest or repeated_total != total:
+                raise RuntimeError(
+                    f"declared payload path content changed while captured: {relative}"
+                )
+            after_open = os.fstat(descriptor)
+            if (
+                _stat_identity(after_open) != _stat_identity(opened)
+                or _is_reparse_stat(after_open)
+            ):
+                raise RuntimeError(
+                    f"declared payload path changed while captured: {relative}"
+                )
+        if total != opened.st_size:
+            raise RuntimeError(f"declared payload path changed size: {relative}")
+        return FileSnapshot(
+            relative,
+            _stat_identity(opened),
+            total,
+            first_digest.hex(),
+        )
 
 
 class _RuntimeDependencyClosureScanner:
@@ -956,8 +1551,25 @@ def _assert_supported_source_metadata(
             f"declared payload directory {relative}",
         )
     for relative in declared:
-        path = _assert_regular_relative_path(root, relative, "declared payload path")
-        _assert_no_unmanaged_forks(path)
+        with _open_bound_regular_relative(
+            root,
+            relative,
+            "declared payload path",
+        ) as (path, descriptor, opened):
+            if opened.st_nlink != 1:
+                raise RuntimeError(
+                    f"declared payload path is hard-linked: {relative}"
+                )
+            with _locked_record_descriptor(
+                descriptor,
+                max(opened.st_size, 1) + 1,
+                exclusive=False,
+            ):
+                if _stat_identity(os.fstat(descriptor)) != _stat_identity(opened):
+                    raise RuntimeError(
+                        f"declared payload path changed while opening: {relative}"
+                    )
+                _assert_no_unmanaged_forks(path)
 
 
 def _set_portable_mode(path: Path, mode: int) -> None:
