@@ -55,6 +55,7 @@ MAX_INSTALL_FILE_BYTES = 64 * 1024 * 1024
 MAX_INSTALL_PAYLOAD_BYTES = 256 * 1024 * 1024
 MAX_INSTALLED_README_BYTES = 4 * 1024 * 1024
 INSTALLED_PAYLOAD_FILE_MODE = 0o644
+INSTALLED_PAYLOAD_DIRECTORY_MODE = 0o755
 REPOSITORY_URL = "https://github.com/Emily2040/seedance-2.0"
 ARCHIVE_ONLY_PATHS = frozenset({"references/migrated"})
 INSTALLED_README_PATH = "README.md"
@@ -1835,7 +1836,7 @@ def _copy_payload_file_atomic(
         if _stat_identity(opened) != _stat_identity(before):
             raise RuntimeError(f"copy source changed while opening: {_bounded_diagnostic(source_path)}")
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
-        temp_descriptor = os.open(temp_path, flags, PORTABLE_FILE_MODE)
+        temp_descriptor = os.open(temp_path, flags, INSTALLED_PAYLOAD_FILE_MODE)
         digest = hashlib.sha256()
         copied = 0
         try:
@@ -1856,7 +1857,7 @@ def _copy_payload_file_atomic(
             if output_bytes is not None:
                 _write_payload_chunk(temp_descriptor, output_bytes)
             if hasattr(os, "fchmod"):
-                os.fchmod(temp_descriptor, PORTABLE_FILE_MODE)
+                os.fchmod(temp_descriptor, INSTALLED_PAYLOAD_FILE_MODE)
             os.fsync(temp_descriptor)
         finally:
             os.close(temp_descriptor)
@@ -1885,7 +1886,8 @@ def _copy_payload_file_atomic(
         raise RuntimeError("atomically published payload file differs from its manifest")
     if (
         os.name != "nt"
-        and stat.S_IMODE(destination_path.lstat().st_mode) != PORTABLE_FILE_MODE
+        and stat.S_IMODE(destination_path.lstat().st_mode)
+        != INSTALLED_PAYLOAD_FILE_MODE
     ):
         raise RuntimeError("atomically published payload file has a non-portable mode")
     return str(destination_path)
@@ -1991,12 +1993,11 @@ def rewrite_installed_readme_text(text: str) -> str:
         text,
         README_VALIDATION_START,
         README_VALIDATION_END,
-        "Offline validators remain in the installed runtime under `scripts/`, "
-        "including [`validate_skills.py`](scripts/validate_skills.py), "
-        "[`content_audit.py`](scripts/content_audit.py), and "
-        "[`design_audit.py`](scripts/design_audit.py), together with the shipped "
-        "schema and contract checks. The test suite and the credential-reading "
-        "live evaluator `eval_run.py` are source-only. "
+        "This installed directory is a runtime payload, not a release-validation "
+        "workspace. Repository validators intentionally depend on source-only "
+        "tests, evaluator and workflow files, and gallery assets that are not "
+        "shipped here. Do not use scripts from the installed directory as proof "
+        "that the repository release suite passed. "
         f"[Run the full release suite from a source checkout]({REPOSITORY_URL}#validation).",
         "validation",
     )
@@ -2138,6 +2139,108 @@ def payload_copy_function(repo_root: Path, plan: InstallPayloadPlan):
         return str(destination_path)
 
     return copy_payload_file
+
+
+def _open_bound_payload_directory(
+    root_descriptor: int,
+    relative: str,
+    snapshot: PathSnapshot,
+) -> int:
+    """Open one captured payload directory without following a swapped component."""
+
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory:
+        raise RuntimeError("safe payload directory mode normalization is unavailable")
+    flags = os.O_RDONLY | no_follow | directory | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.dup(root_descriptor)
+    walked: list[str] = []
+    try:
+        for component in PurePosixPath(relative).parts:
+            opened = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = opened
+            walked.append(component)
+            current = "/".join(walked)
+            expected = snapshot.entries.get(current)
+            info = os.fstat(descriptor)
+            if (
+                expected is None
+                or expected.get("type") != "dir"
+                or _is_reparse_stat(info)
+                or not stat.S_ISDIR(info.st_mode)
+                or _object_identity(info)
+                != (int(expected["device"]), int(expected["inode"]))
+            ):
+                raise RuntimeError(
+                    "payload directory changed before mode normalization: "
+                    f"{_bounded_diagnostic(current, 180)}"
+                )
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _normalize_installed_directory_modes(
+    path: Path,
+    snapshot: PathSnapshot,
+) -> None:
+    """Make the complete runtime tree traversable through bound directories."""
+
+    if os.name == "nt":
+        return
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory:
+        raise RuntimeError("safe payload directory mode normalization is unavailable")
+    flags = os.O_RDONLY | no_follow | directory | getattr(os, "O_CLOEXEC", 0)
+    root_descriptor = os.open(path, flags)
+    try:
+        root_info = os.fstat(root_descriptor)
+        if (
+            _is_reparse_stat(root_info)
+            or not stat.S_ISDIR(root_info.st_mode)
+            or _object_identity(root_info) != snapshot.root_identity
+        ):
+            raise RuntimeError("payload root changed before mode normalization")
+        directories = sorted(
+            (
+                relative
+                for relative, metadata in snapshot.entries.items()
+                if metadata.get("type") == "dir"
+            ),
+            key=lambda relative: (relative.count("/"), relative),
+        )
+        for relative in directories:
+            descriptor = _open_bound_payload_directory(
+                root_descriptor, relative, snapshot
+            )
+            try:
+                os.fchmod(descriptor, INSTALLED_PAYLOAD_DIRECTORY_MODE)
+                _fsync_directory_descriptor(descriptor)
+                if (
+                    stat.S_IMODE(os.fstat(descriptor).st_mode)
+                    != INSTALLED_PAYLOAD_DIRECTORY_MODE
+                ):
+                    raise RuntimeError(
+                        "payload directory mode was not normalized: "
+                        f"{_bounded_diagnostic(relative, 180)}"
+                    )
+            finally:
+                os.close(descriptor)
+        os.fchmod(root_descriptor, INSTALLED_PAYLOAD_DIRECTORY_MODE)
+        _fsync_directory_descriptor(root_descriptor)
+        if (
+            stat.S_IMODE(os.fstat(root_descriptor).st_mode)
+            != INSTALLED_PAYLOAD_DIRECTORY_MODE
+        ):
+            raise RuntimeError("payload root mode was not normalized")
+    finally:
+        os.close(root_descriptor)
+    _assert_snapshot_equal(
+        _capture_path_snapshot(path), snapshot, "mode-normalized payload"
+    )
 
 
 def load_payload_manifest(repo_root: Path) -> frozenset[str]:
@@ -2999,7 +3102,11 @@ def _bound_metadata_for_bytes(path: Path, raw: bytes) -> dict[str, object]:
     return metadata
 
 
-def _assert_portable_snapshot_modes(path: Path, snapshot: PathSnapshot) -> None:
+def _assert_portable_snapshot_modes(
+    path: Path,
+    snapshot: PathSnapshot,
+    directory_mode: int,
+) -> None:
     """Bind every staged mode to the installer's deterministic policy."""
 
     if os.name == "nt":
@@ -3009,7 +3116,7 @@ def _assert_portable_snapshot_modes(path: Path, snapshot: PathSnapshot) -> None:
         _is_reparse_stat(root_info)
         or not stat.S_ISDIR(root_info.st_mode)
         or _object_identity(root_info) != snapshot.root_identity
-        or stat.S_IMODE(root_info.st_mode) != PORTABLE_DIRECTORY_MODE
+        or stat.S_IMODE(root_info.st_mode) != directory_mode
     ):
         raise RuntimeError("owned stage root has a non-portable mode or changed identity")
     for relative, metadata in snapshot.entries.items():
@@ -3025,9 +3132,13 @@ def _assert_portable_snapshot_modes(path: Path, snapshot: PathSnapshot) -> None:
                 f"{_bounded_diagnostic(relative, 180)}"
             )
         expected_mode = (
-            PORTABLE_DIRECTORY_MODE
+            directory_mode
             if metadata.get("type") == "dir"
-            else PORTABLE_FILE_MODE
+            else (
+                PORTABLE_FILE_MODE
+                if relative in {PROVENANCE_MARKER, COMPLETION_MARKER}
+                else INSTALLED_PAYLOAD_FILE_MODE
+            )
         )
         if stat.S_IMODE(info.st_mode) != expected_mode:
             raise RuntimeError(
@@ -3043,12 +3154,19 @@ def _inspect_owned_stage(
     *,
     require_complete: bool,
     require_portable_modes: bool = True,
+    directory_mode: int | None = None,
 ) -> PathSnapshot:
     snapshot = _capture_path_snapshot(path)
     if snapshot.root_type != "dir":
         raise RuntimeError("owned stage is not a directory")
     if require_portable_modes:
-        _assert_portable_snapshot_modes(path, snapshot)
+        if directory_mode is None:
+            directory_mode = (
+                INSTALLED_PAYLOAD_DIRECTORY_MODE
+                if require_complete
+                else PORTABLE_DIRECTORY_MODE
+            )
+        _assert_portable_snapshot_modes(path, snapshot, directory_mode)
     provenance_path = path / PROVENANCE_MARKER
     expected_provenance_raw = _json_record_bytes(
         _provenance_record(transaction, transaction_raw)
@@ -5013,6 +5131,9 @@ def stage_validated_install(
         )
         transaction_digest = hashlib.sha256(transaction_raw).hexdigest()
         component_name_max = _copy_temp_component_budget(stage)
+        frozen_sources = {
+            item.relative: item for item in plan.source_contract.source_files
+        }
         # Derive the complete copy-sibling namespace before copying. Any
         # shortened digest must remain unique and disjoint from authenticated
         # payload and marker paths.
@@ -5024,9 +5145,6 @@ def stage_validated_install(
                 relative = source_path.relative_to(repo_root).as_posix()
             except ValueError as exc:
                 raise RuntimeError("copy source escaped the payload root") from exc
-            frozen_sources = {
-                item.relative: item for item in plan.source_contract.source_files
-            }
             source_snapshot = frozen_sources.get(relative)
             if source_snapshot is None:
                 raise RuntimeError("copy source is absent from the frozen payload")
@@ -5077,6 +5195,14 @@ def stage_validated_install(
             "owned stage after directory permission repair",
         )
         write_completion_marker(stage, expected_contract)
+        complete_stage = _inspect_owned_stage(
+            stage,
+            transaction,
+            transaction_raw,
+            require_complete=True,
+            directory_mode=PORTABLE_DIRECTORY_MODE,
+        )
+        _normalize_installed_directory_modes(stage, complete_stage)
         _inspect_owned_stage(
             stage, transaction, transaction_raw, require_complete=True
         )

@@ -176,18 +176,19 @@ class RuntimePayloadContractTests(unittest.TestCase):
         self.assertNotIn("assets/hero-command-center.png", installed_readme)
         self.assertNotIn("therefore resolve only in this repository", installed_readme)
 
-    def test_installed_readme_distinguishes_shipped_and_omitted_validation_tools(self) -> None:
+    def test_installed_readme_routes_release_validation_to_source_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload = self.install(Path(tmp))
             installed_readme = (payload / "README.md").read_text(encoding="utf-8")
 
-        self.assertIn("Offline validators remain in the installed runtime", installed_readme)
-        self.assertIn("scripts/validate_skills.py", installed_readme)
-        self.assertIn("scripts/content_audit.py", installed_readme)
-        self.assertIn("scripts/design_audit.py", installed_readme)
-        self.assertIn("test suite", installed_readme)
-        self.assertIn("credential-reading live evaluator", installed_readme)
+        self.assertIn(
+            "runtime payload, not a release-validation workspace", installed_readme
+        )
+        self.assertIn("Do not use scripts from the installed directory", installed_readme)
         self.assertIn("Run the full release suite from a source checkout", installed_readme)
+        self.assertNotIn("scripts/validate_skills.py", installed_readme)
+        self.assertNotIn("scripts/content_audit.py", installed_readme)
+        self.assertNotIn("scripts/design_audit.py", installed_readme)
         self.assertNotIn("scripts/eval_run.py", installed_readme)
         self.assertNotIn("unittest discover", installed_readme)
         self.assertNotIn("compileall scripts tests", installed_readme)
@@ -228,6 +229,46 @@ class RuntimePayloadContractTests(unittest.TestCase):
             ):
                 mode = stat.S_IMODE((payload / metadata_name).stat().st_mode)
                 self.assertEqual(mode & 0o077, 0)
+
+    @unittest.skipIf(os.name == "nt", "POSIX payload mode contract")
+    def test_payload_directories_ignore_restrictive_source_modes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self.fixture_source(root)
+            for directory in sorted(
+                (path for path in source.rglob("*") if path.is_dir()),
+                key=lambda path: len(path.parts),
+                reverse=True,
+            ):
+                directory.chmod(0o700)
+            source.chmod(0o700)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            source_contract = installer.load_payload_contract(source)
+            plan = installer.build_install_payload_plan(source, source_contract)
+
+            stage = installer.stage_validated_install(
+                source, skills_dir, source_contract, plan
+            )
+            destination = skills_dir / installer.SKILL_NAME
+            installer.promote_staged_install(
+                stage,
+                destination,
+                skills_dir,
+                plan.installed_contract,
+            )
+
+            payload_directories = [
+                destination,
+                *sorted(path for path in destination.rglob("*") if path.is_dir()),
+            ]
+            self.assertGreater(len(payload_directories), 2)
+            for directory in payload_directories:
+                with self.subTest(directory=directory.relative_to(destination)):
+                    self.assertEqual(
+                        stat.S_IMODE(directory.stat().st_mode),
+                        installer.INSTALLED_PAYLOAD_DIRECTORY_MODE,
+                    )
 
     def test_active_guidance_and_source_gallery_remain_intact(self) -> None:
         self.assertTrue((ROOT / "assets" / "hero-command-center.png").is_file())
