@@ -1715,6 +1715,408 @@ class ContinuityChainTests(unittest.TestCase):
             errors,
         )
 
+    def test_shared_denial_predicate_binds_every_coordinated_field_group(self) -> None:
+        denials = (
+            "hero wardrobe and guide location must not change",
+            "hero wardrobe or guide location must not change",
+            "hero wardrobe, and guide location must not change",
+            "hero wardrobe as well as guide location must not change",
+            "hero wardrobe, as well as guide location must not change",
+        )
+        for denial in denials:
+            with self.subTest(denial=denial):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                                "location": "stage-a",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                                "location": "hall-a",
+                            },
+                            "extra": {
+                                "canonical_identity_id": "extra",
+                                "wardrobe": "white coat",
+                                "location": "yard-a",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                                "location": "stage-a",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                                "location": "hall-b",
+                            },
+                            "extra": {
+                                "canonical_identity_id": "extra",
+                                "wardrobe": "silver coat",
+                                "location": "yard-a",
+                            },
+                        }
+                    },
+                    allowed_changes=[
+                        "wardrobe may change",
+                        "location may change",
+                        denial,
+                    ],
+                )
+
+                self.assertTrue(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.location" in error for error in errors),
+                    errors,
+                )
+                self.assertFalse(
+                    any("characters.extra.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+    def test_explicit_multi_identity_denial_applies_to_exact_named_set(self) -> None:
+        for denial in (
+            "hero and guide wardrobe must not change",
+            "hero or guide wardrobe must not change",
+            "hero, and guide wardrobe must not change",
+            "hero as well as guide wardrobe must not change",
+            "hero, as well as guide wardrobe must not change",
+        ):
+            with self.subTest(denial=denial):
+                before = {
+                    "characters": {
+                        identity: {
+                            "canonical_identity_id": identity,
+                            "wardrobe": "old coat",
+                        }
+                        for identity in ("hero", "guide", "extra")
+                    }
+                }
+                after = {
+                    "characters": {
+                        identity: {
+                            "canonical_identity_id": identity,
+                            "wardrobe": "new coat",
+                        }
+                        for identity in ("hero", "guide", "extra")
+                    }
+                }
+                errors, _ = self.validate_states(
+                    before,
+                    after,
+                    allowed_changes=["wardrobe may change", denial],
+                )
+
+                self.assertTrue(any("characters.hero.wardrobe" in e for e in errors), errors)
+                self.assertTrue(any("characters.guide.wardrobe" in e for e in errors), errors)
+                self.assertFalse(any("characters.extra.wardrobe" in e for e in errors), errors)
+
+    def test_ambiguous_attached_identity_denial_fails_closed(self) -> None:
+        before = {
+            "characters": {
+                "hero": {
+                    "canonical_identity_id": "hero",
+                    "name": "captain",
+                    "wardrobe": "red coat",
+                },
+                "guide": {
+                    "canonical_identity_id": "guide",
+                    "name": "captain",
+                    "wardrobe": "black coat",
+                },
+                "extra": {
+                    "canonical_identity_id": "extra",
+                    "wardrobe": "white coat",
+                },
+            }
+        }
+        after = {
+            "characters": {
+                key: {**value, "wardrobe": "changed coat"}
+                for key, value in before["characters"].items()
+            }
+        }
+        errors, _ = self.validate_states(
+            before,
+            after,
+            allowed_changes=[
+                "wardrobe may change",
+                "captain wardrobe must not change",
+            ],
+        )
+
+        for identity in ("hero", "guide", "extra"):
+            self.assertTrue(
+                any(f"characters.{identity}.wardrobe" in error for error in errors),
+                errors,
+            )
+
+    def test_identity_in_temporal_context_does_not_scope_denial(self) -> None:
+        for denial in (
+            "wardrobe stays fixed during hero scene",
+            "wardrobe stays fixed after hero shot",
+            "wardrobe stays fixed before hero sequence",
+            "wardrobe stays fixed following hero transition",
+        ):
+            with self.subTest(denial=denial):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=["wardrobe may change", denial],
+                )
+
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+    def test_temporal_identity_context_does_not_scope_positive_waiver(self) -> None:
+        for allowance in (
+            "wardrobe may change during hero scene",
+            "wardrobe may change after hero shot",
+            "wardrobe may change before hero sequence",
+            "wardrobe may change following hero transition",
+        ):
+            with self.subTest(allowance=allowance):
+                errors, warnings = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertEqual(errors, [])
+                self.assertEqual(warnings, [])
+
+    def test_attached_identity_beats_unattached_temporal_identity(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "white coat",
+                    },
+                }
+            },
+            allowed_changes=[
+                "wardrobe may change",
+                "hero wardrobe stays fixed during guide scene",
+            ],
+        )
+
+        self.assertTrue(any("characters.hero.wardrobe" in e for e in errors), errors)
+        self.assertFalse(any("characters.guide.wardrobe" in e for e in errors), errors)
+
+    def test_possessive_entity_scope_accepts_straight_and_curly_apostrophes(self) -> None:
+        possessive_owners = ("hero's", "hero’s")
+        for owner in possessive_owners:
+            allowance = f"{owner} wardrobe may change"
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertFalse(any("characters.hero.wardrobe" in e for e in errors), errors)
+                self.assertTrue(any("characters.guide.wardrobe" in e for e in errors), errors)
+
+        for owner in possessive_owners:
+            denial = f"{owner} wardrobe must not change"
+            with self.subTest(denial=denial):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=["wardrobe may change", denial],
+                )
+
+                self.assertTrue(any("characters.hero.wardrobe" in e for e in errors), errors)
+                self.assertFalse(any("characters.guide.wardrobe" in e for e in errors), errors)
+
+    def test_colon_and_em_dash_keep_known_scope_and_reject_unknown_scope(self) -> None:
+        for boundary in (":", "—"):
+            known = f"wardrobe may change {boundary} only for hero"
+            errors, _ = self.validate_states(
+                {
+                    "characters": {
+                        "hero": {"canonical_identity_id": "hero", "wardrobe": "red"},
+                        "guide": {"canonical_identity_id": "guide", "wardrobe": "black"},
+                    }
+                },
+                {
+                    "characters": {
+                        "hero": {"canonical_identity_id": "hero", "wardrobe": "blue"},
+                        "guide": {"canonical_identity_id": "guide", "wardrobe": "white"},
+                    }
+                },
+                allowed_changes=[known],
+            )
+            self.assertFalse(any("characters.hero.wardrobe" in e for e in errors), errors)
+            self.assertTrue(any("characters.guide.wardrobe" in e for e in errors), errors)
+
+            scoped_errors, scoped_warnings = self.validate_states(
+                {
+                    "characters": {
+                        "hero": {"canonical_identity_id": "hero", "wardrobe": "red"},
+                        "guide": {"canonical_identity_id": "guide", "wardrobe": "black"},
+                    }
+                },
+                {
+                    "characters": {
+                        "hero": {"canonical_identity_id": "hero", "wardrobe": "blue"},
+                        "guide": {"canonical_identity_id": "guide", "wardrobe": "black"},
+                    }
+                },
+                allowed_changes=[
+                    f"hero wardrobe may change {boundary} "
+                    "guide wardrobe must not change"
+                ],
+            )
+            self.assertEqual(scoped_errors, [])
+            self.assertEqual(scoped_warnings, [])
+
+            for unsafe in (
+                f"wardrobe may change {boundary} stranger only",
+                f"stranger only {boundary} wardrobe may change",
+                f"wardrobe may change {boundary} wardrobe must not change",
+            ):
+                with self.subTest(boundary=boundary, unsafe=unsafe):
+                    unsafe_errors, _ = self.validate_states(
+                        {"character": {"wardrobe": "red coat"}},
+                        {"character": {"wardrobe": "blue coat"}},
+                        allowed_changes=[unsafe],
+                    )
+                    self.assertTrue(
+                        any("wardrobe" in error for error in unsafe_errors),
+                        unsafe_errors,
+                    )
+
+    def test_unknown_possessive_scope_never_becomes_global(self) -> None:
+        for allowance in (
+            "stranger's wardrobe may change",
+            "stranger’s wardrobe may change",
+        ):
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {"character": {"wardrobe": "red coat"}},
+                    {"character": {"wardrobe": "blue coat"}},
+                    allowed_changes=[allowance],
+                )
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
     def test_unknown_bare_scope_residual_never_promotes_a_global_waiver(self) -> None:
         allowances = (
             "wardrobe may change, stranger only",

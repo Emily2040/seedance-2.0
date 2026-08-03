@@ -235,7 +235,10 @@ AXIS_RESET_SHOT_QUALIFIERS = {
 }
 WAIVER_CONTEXT_WORDS = {
     "after",
+    "also",
+    "alternatively",
     "approved",
+    "as",
     "before",
     "cut",
     "deliberately",
@@ -251,6 +254,7 @@ WAIVER_CONTEXT_WORDS = {
     "time",
     "transition",
     "when",
+    "well",
 }
 WAIVER_PREDICATE_WORDS = (
     TRANSITION_CHANGE_WORDS
@@ -262,6 +266,9 @@ WAIVER_PREDICATE_WORDS = (
     | WAIVER_CONTEXT_WORDS
     | {"altering", "t"}
 )
+TEMPORAL_CONTEXT_LEADERS = {"after", "before", "during", "following"}
+TEMPORAL_CONTEXT_NOUNS = {"cut", "jump", "scene", "sequence", "shot", "transition"}
+ENTITY_LIST_CONNECTORS = {"and", "or"}
 
 # A coordinated field list has no predicate before its coordinator (for
 # example, ``wardrobe and product identity may change``). Conversely, a word
@@ -317,7 +324,9 @@ def text_segments(text: object) -> list[str]:
     raw_segments = [
         segment.strip()
         for segment in re.split(
-            r"(?:[.;,\r\n]+|\bbut\b|\bhowever\b)",
+            r"(?:[.;:\r\n\u2013\u2014]+|"
+            r",(?![ \t]*(?:and|or|as[ \t]+well[ \t]+as)\b)|"
+            r"\bbut\b|\bhowever\b)",
             str(text),
             flags=re.IGNORECASE,
         )
@@ -470,8 +479,79 @@ def bound_field_group(
     return min(nearest, key=lambda group: group[0][0])
 
 
+def groups_share_predicate(
+    left: list[FieldSpan],
+    right: list[FieldSpan],
+    tokens: list[str],
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> bool:
+    """Recognize a coordinated entity/field list before its shared predicate."""
+    start = left[-1][1]
+    end = right[0][0]
+    identity_spans, _ambiguous = identity_token_spans(
+        tokens,
+        identity_aliases,
+        alias_widths,
+    )
+    identity_indexes = {
+        index
+        for span_start, span_end, _identities in identity_spans
+        for index in range(span_start, span_end)
+        if start <= index < end
+    }
+    between = [
+        token
+        for index, token in enumerate(tokens[start:end], start=start)
+        if index not in identity_indexes and token not in {"s", "the"}
+    ]
+    has_connector = (
+        bool(set(between) & ENTITY_LIST_CONNECTORS)
+        or any(
+            between[index : index + 3] == ["as", "well", "as"]
+            for index in range(max(0, len(between) - 2))
+        )
+    )
+    # Unknown words around an explicit coordinator are treated as unresolved
+    # entity labels, not as permission to bind the predicate only to the last
+    # field. A real intervening predicate still ends the coordination chain.
+    return has_connector and not bool(set(between) & CLAUSE_PREDICATE_WORDS)
+
+
+def coordinated_field_cluster(
+    group: list[FieldSpan],
+    groups: list[list[FieldSpan]],
+    tokens: list[str],
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
+) -> list[list[FieldSpan]]:
+    """Expand one bound group across an explicit coordinated field list."""
+    index = groups.index(group)
+    first = index
+    last = index
+    while first > 0 and groups_share_predicate(
+        groups[first - 1],
+        groups[first],
+        tokens,
+        identity_aliases,
+        alias_widths,
+    ):
+        first -= 1
+    while last + 1 < len(groups) and groups_share_predicate(
+        groups[last],
+        groups[last + 1],
+        tokens,
+        identity_aliases,
+        alias_widths,
+    ):
+        last += 1
+    return groups[first : last + 1]
+
+
 def clause_field_polarities(
     tokens: list[str],
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
 ) -> tuple[
     list[list[FieldSpan]],
     set[tuple[FieldSpan, ...]],
@@ -485,7 +565,16 @@ def clause_field_polarities(
         if token in TRANSITION_CHANGE_WORDS:
             group = bound_field_group(index, groups)
             if group is not None:
-                positive_groups.add(tuple(group))
+                positive_groups.update(
+                    tuple(member)
+                    for member in coordinated_field_cluster(
+                        group,
+                        groups,
+                        tokens,
+                        identity_aliases,
+                        alias_widths,
+                    )
+                )
         if token in NEGATION_WORDS:
             group = bound_field_group(
                 index,
@@ -493,18 +582,45 @@ def clause_field_polarities(
                 prefer_forward=token == "without",
             )
             if group is not None:
-                denied_groups.add(tuple(group))
+                denied_groups.update(
+                    tuple(member)
+                    for member in coordinated_field_cluster(
+                        group,
+                        groups,
+                        tokens,
+                        identity_aliases,
+                        alias_widths,
+                    )
+                )
         if token in PRESERVATION_WORDS:
             group = bound_field_group(index, groups)
             if group is not None and event_distance(index, group) <= 4:
-                denied_groups.add(tuple(group))
+                denied_groups.update(
+                    tuple(member)
+                    for member in coordinated_field_cluster(
+                        group,
+                        groups,
+                        tokens,
+                        identity_aliases,
+                        alias_widths,
+                    )
+                )
 
     for index, (left, right) in enumerate(zip(tokens, tokens[1:])):
         if left not in NEGATING_CONTRACTION_STEMS or right != "t":
             continue
         group = bound_field_group(index, groups)
         if group is not None:
-            denied_groups.add(tuple(group))
+            denied_groups.update(
+                tuple(member)
+                for member in coordinated_field_cluster(
+                    group,
+                    groups,
+                    tokens,
+                    identity_aliases,
+                    alias_widths,
+                )
+            )
     return groups, positive_groups, denied_groups
 
 
@@ -526,6 +642,8 @@ def analyze_field_entry(
     key: str,
     *,
     allow_bare: bool,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None,
 ) -> tuple[list[str], list[str], bool]:
     """Return positive clauses, scoped denial contexts, and unsafe structure.
 
@@ -542,7 +660,11 @@ def analyze_field_entry(
     previous_context = ""
     entry_mentions_key = mentions_field(str(text), key)
     for tokens in semantic_token_clauses(text):
-        groups, positive_groups, denied_groups = clause_field_polarities(tokens)
+        groups, positive_groups, denied_groups = clause_field_polarities(
+            tokens,
+            identity_aliases,
+            alias_widths,
+        )
         if not groups:
             inherited_denial = (
                 key in previous_fields and anaphorically_denies_change(tokens)
@@ -571,7 +693,10 @@ def analyze_field_entry(
             if group_token in denied_groups:
                 denials.append(current_context)
             bare_group = allow_bare and current_context in field_phrases(key)
-            if group_token in positive_groups or bare_group:
+            if (
+                group_token not in denied_groups
+                and (group_token in positive_groups or bare_group)
+            ):
                 positive.append(current_context)
     return positive, denials, unsafe
 
@@ -616,22 +741,150 @@ def identity_token_spans(
     return selected, ambiguous
 
 
-def mentioned_identity_tokens(
+def is_temporal_identity_span(
+    tokens: list[str],
+    start: int,
+    end: int,
+) -> bool:
+    before = tokens[max(0, start - 2) : start]
+    noun_index = end + 1 if end < len(tokens) and tokens[end] == "s" else end
+    after = tokens[noun_index : noun_index + 1]
+    has_leader = bool(before) and (
+        before[-1] in TEMPORAL_CONTEXT_LEADERS
+        or (
+            len(before) == 2
+            and before[0] in TEMPORAL_CONTEXT_LEADERS
+            and before[1] == "the"
+        )
+    )
+    return has_leader and bool(after) and after[0] in TEMPORAL_CONTEXT_NOUNS
+
+
+def identity_span_attaches_to_group(
+    tokens: list[str],
+    span: tuple[int, int, set[IdentityToken]],
+    group: list[FieldSpan],
+    identity_indexes: set[int],
+) -> bool:
+    start, end, _identities = span
+    field_start = group[0][0]
+    field_end = group[-1][1]
+    if is_temporal_identity_span(tokens, start, end):
+        return False
+
+    prefix_tokens = [
+        token
+        for index, token in enumerate(tokens[start:field_start], start=start)
+        if index not in identity_indexes
+    ]
+    if end <= field_start and set(prefix_tokens) <= {
+        "and",
+        "as",
+        "exclusively",
+        "for",
+        "of",
+        "only",
+        "or",
+        "s",
+        "specifically",
+        "the",
+        "well",
+    }:
+        return True
+
+    if start < field_end:
+        return False
+    between = tokens[field_end:start]
+    for marker_index in range(field_end, start):
+        if tokens[marker_index] not in {
+            "exclusively",
+            "for",
+            "of",
+            "only",
+            "specifically",
+        }:
+            continue
+        tail = [
+            token
+            for index, token in enumerate(
+                tokens[marker_index + 1 : start],
+                start=marker_index + 1,
+            )
+            if index not in identity_indexes
+        ]
+        if set(tail) <= {
+            "and",
+            "as",
+            "exclusively",
+            "only",
+            "or",
+            "specifically",
+            "the",
+            "well",
+        } and not (set(between) & TEMPORAL_CONTEXT_LEADERS):
+            return True
+    return (
+        end < len(tokens)
+        and tokens[end] in QUALIFIER_MODIFIERS
+        and not (set(between) & TEMPORAL_CONTEXT_LEADERS)
+    )
+
+
+def grammatical_identity_scope(
     text: str,
+    key: str,
     identity_aliases: IdentityAliases,
     alias_widths: tuple[int, ...] | None = None,
-) -> tuple[set[IdentityToken], bool]:
-    spans, ambiguous = identity_token_spans(
-        normalize_phrase(text).split(),
+) -> tuple[set[IdentityToken], bool, set[int], set[int]]:
+    """Return field-attached identities and identity tokens valid as context.
+
+    Identity words in temporal phrases such as ``during hero scene`` remain
+    valid prose but do not scope the field. Prefix, possessive, and explicit
+    suffix qualifiers do. The two index sets are all selected identity tokens
+    and the subset licensed by either attachment or temporal grammar.
+    """
+    tokens = normalize_phrase(text).split()
+    spans, _broad_ambiguity = identity_token_spans(
+        tokens,
         identity_aliases,
         alias_widths,
     )
-    mentioned = {
-        identity
-        for _start, _end, identities in spans
-        for identity in identities
+    all_identity_indexes = {
+        index
+        for start, end, _identities in spans
+        for index in range(start, end)
     }
-    return mentioned, ambiguous
+    groups = field_groups(tokens)
+    target_identities: set[IdentityToken] = set()
+    ambiguous_scope = False
+    licensed_indexes: set[int] = set()
+    for span in spans:
+        start, end, identities = span
+        temporal = is_temporal_identity_span(tokens, start, end)
+        attached_groups = [
+            group
+            for group in groups
+            if identity_span_attaches_to_group(
+                tokens,
+                span,
+                group,
+                all_identity_indexes,
+            )
+        ]
+        if temporal or attached_groups:
+            licensed_indexes.update(range(start, end))
+        if any(
+            key in {candidate for _start, _end, candidate in group}
+            for group in attached_groups
+        ):
+            target_identities.update(identities)
+            ambiguous_scope = ambiguous_scope or len(identities) > 1
+    return (
+        target_identities,
+        ambiguous_scope,
+        all_identity_indexes,
+        licensed_indexes,
+    )
 
 
 def has_bounded_waiver_grammar(
@@ -655,27 +908,24 @@ def has_bounded_waiver_grammar(
     ):
         return False
 
-    identity_spans, ambiguous = identity_token_spans(
-        tokens,
-        identity_aliases,
-        alias_widths,
+    mentioned, ambiguous, identity_indexes, licensed_identity_indexes = (
+        grammatical_identity_scope(
+            text,
+            key,
+            identity_aliases,
+            alias_widths,
+        )
     )
-    if ambiguous:
+    if ambiguous or len(mentioned) > 1:
         return False
-    mentioned = {
-        identity
-        for _start, _end, identities in identity_spans
-        for identity in identities
-    }
-    if len(mentioned) > 1:
+    if identity_indexes - licensed_identity_indexes:
         return False
 
     occupied: set[int] = set()
     for group in groups:
         for start, end, _candidate in group:
             occupied.update(range(start, end))
-    for start, end, _identities in identity_spans:
-        occupied.update(range(start, end))
+    occupied.update(licensed_identity_indexes)
 
     special_axis_tokens: set[int] = set()
     if key == "travel_direction":
@@ -697,6 +947,12 @@ def has_bounded_waiver_grammar(
     for index, token in enumerate(tokens):
         if index in occupied or index in special_axis_tokens:
             continue
+        if (
+            token == "s"
+            and index > 0
+            and index - 1 in licensed_identity_indexes
+        ):
+            continue
         if token not in allowed:
             return False
         # Scope markers without a recognized entity are not global grammar.
@@ -714,10 +970,13 @@ def is_unqualified_global_waiver(
     aliases = identity_aliases or {}
     if not has_bounded_waiver_grammar(text, key, aliases, alias_widths):
         return False
-    mentioned, ambiguous = mentioned_identity_tokens(
-        text,
-        aliases,
-        alias_widths,
+    mentioned, ambiguous, _all_indexes, _licensed_indexes = (
+        grammatical_identity_scope(
+            text,
+            key,
+            aliases,
+            alias_widths,
+        )
     )
     return not ambiguous and not mentioned
 
@@ -738,10 +997,13 @@ def allowance_matches_scope(
         alias_widths,
     ):
         return False
-    mentioned, ambiguous = mentioned_identity_tokens(
-        identity_context if identity_context is not None else text,
-        identity_aliases,
-        alias_widths,
+    mentioned, ambiguous, _all_indexes, _licensed_indexes = (
+        grammatical_identity_scope(
+            identity_context if identity_context is not None else text,
+            key,
+            identity_aliases,
+            alias_widths,
+        )
     )
     if ambiguous or len(mentioned) > 1:
         return False
@@ -757,20 +1019,39 @@ def allowance_matches_scope(
 
 def denial_conflicts_scope(
     text: str,
+    key: str,
     scope_identity: IdentityToken | None,
     identity_aliases: IdentityAliases,
     alias_widths: tuple[int, ...] | None = None,
 ) -> bool:
     """Apply a denial globally or only to its one unambiguous entity scope."""
-    mentioned, ambiguous = mentioned_identity_tokens(
-        text,
-        identity_aliases,
-        alias_widths,
+    mentioned, ambiguous, all_indexes, licensed_indexes = (
+        grammatical_identity_scope(
+            text,
+            key,
+            identity_aliases,
+            alias_widths,
+        )
     )
-    # An unscoped, unknown, or ambiguous denial fails closed for every entity.
-    if ambiguous or len(mentioned) != 1:
+    tokens = normalize_phrase(text).split()
+    occupied = set(licensed_indexes)
+    for group in field_groups(tokens):
+        for start, end, _candidate in group:
+            occupied.update(range(start, end))
+    unknown_residual = bool(all_indexes - licensed_indexes)
+    for index, token in enumerate(tokens):
+        if index in occupied:
+            continue
+        if token == "s" and index > 0 and index - 1 in licensed_indexes:
+            continue
+        if token in WAIVER_PREDICATE_WORDS | QUALIFIER_MODIFIERS | {"for", "of"}:
+            continue
+        unknown_residual = True
+    # An unscoped, unknown, or alias-ambiguous denial fails closed globally.
+    if ambiguous or unknown_residual or not mentioned:
         return True
-    return scope_identity == next(iter(mentioned))
+    # A grammatical multi-identity denial applies exactly to the named set.
+    return scope_identity in mentioned
 
 
 def has_allowance(
@@ -797,6 +1078,8 @@ def has_allowance(
                 text,
                 key,
                 allow_bare=bare_entry,
+                identity_aliases=aliases,
+                alias_widths=alias_widths,
             )
             denials.extend(entry_denials)
             unsafe = unsafe or entry_unsafe
@@ -817,6 +1100,8 @@ def has_allowance(
             transition_value,
             key,
             allow_bare=False,
+            identity_aliases=aliases,
+            alias_widths=alias_widths,
         )
         denials.extend(entry_denials)
         unsafe = unsafe or entry_unsafe
@@ -848,6 +1133,7 @@ def has_allowance(
         and not any(
             denial_conflicts_scope(
                 denial,
+                key,
                 scope_identity,
                 aliases,
                 alias_widths,
