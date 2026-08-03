@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +85,24 @@ def skills_dir_with_minimum_slack(
 
 def short_lexical_base(name: str) -> Path:
     return Path(f"C:/{name}") if os.name == "nt" else Path(f"/{name}")
+
+
+def existing_install_snapshot(
+    relative_file: str,
+) -> installer.PathSnapshot:
+    parent = str(Path(relative_file).parent).replace("\\", "/")
+    entries: dict[str, dict[str, object]] = {
+        relative_file: {
+            "type": "file",
+            "size": 0,
+            "sha256": "0" * 64,
+            "device": 1,
+            "inode": 3,
+        }
+    }
+    if parent != ".":
+        entries[parent] = {"type": "dir", "device": 1, "inode": 2}
+    return installer.PathSnapshot("dir", entries, (1, 1), "0" * 64)
 
 
 @unittest.skipUnless(os.name == "nt", "Windows MAX_PATH subprocess regression")
@@ -224,6 +243,181 @@ class WindowsPortablePolicyTests(unittest.TestCase):
                 "transaction backup root",
             ):
                 self.assertIn(expected, labels)
+
+    def test_plan_projects_existing_entries_under_backup_and_quarantine(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            contract = make_payload(root / "payload")
+            relative = "runtime-cache/user-note.txt"
+            snapshot = existing_install_snapshot(relative)
+            labels = {
+                label
+                for label, _path, _is_directory in installer.planned_windows_install_paths(
+                    root / "skills",
+                    contract,
+                    snapshot,
+                )
+            }
+
+            self.assertIn(
+                f"transaction backup existing install file: {relative}",
+                labels,
+            )
+            self.assertIn(
+                f"transaction quarantine existing install file: {relative}",
+                labels,
+            )
+            self.assertFalse(any("stage existing install" in label for label in labels))
+
+    def test_existing_entry_can_fail_only_after_projection_to_backup_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            contract = make_payload(Path(tmp) / "payload")
+            skills_dir = short_lexical_base("existing-plan")
+            live_prefix = installer.windows_utf16_units(
+                skills_dir / installer.SKILL_NAME / "runtime-cache" / "x"
+            ) - 1
+            backup_prefix = installer.windows_utf16_units(
+                skills_dir / installer.BACKUP_NAME / "runtime-cache" / "x"
+            ) - 1
+            component_length = max(
+                1,
+                installer.WINDOWS_PORTABLE_FILE_LIMIT + 1 - backup_prefix,
+            )
+            self.assertLessEqual(
+                live_prefix + component_length,
+                installer.WINDOWS_PORTABLE_FILE_LIMIT,
+            )
+            self.assertLessEqual(
+                component_length,
+                installer.WINDOWS_PORTABLE_COMPONENT_LIMIT,
+            )
+            relative = "runtime-cache/" + ("n" * component_length)
+            snapshot = existing_install_snapshot(relative)
+
+            installer.assert_windows_portable_install_path(skills_dir, contract)
+            with self.assertRaises(ValueError) as raised:
+                installer.assert_windows_portable_install_path(
+                    skills_dir,
+                    contract,
+                    snapshot,
+                )
+
+            message = str(raised.exception)
+            self.assertIn("existing install file", message)
+            self.assertIn(relative, message)
+
+    def test_main_rechecks_the_contract_loaded_under_the_install_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            preflight_contract = make_payload(root / "preflight")
+            locked_contract = make_payload(
+                root / "locked",
+                ("references/added-while-waiting.md",),
+            )
+            skills_dir = root / "skills"
+            checked: list[
+                tuple[installer.PayloadContract, installer.PathSnapshot | None]
+            ] = []
+
+            def reject_locked_contract(
+                _skills_dir: Path,
+                contract: installer.PayloadContract,
+                existing: installer.PathSnapshot | None = None,
+                *,
+                before_installer_writes: bool = True,
+            ) -> None:
+                checked.append((contract, existing))
+                if contract is locked_contract:
+                    self.assertFalse(before_installer_writes)
+                    raise ValueError("locked contract was rechecked")
+
+            original_argv = sys.argv
+            sys.argv = ["install_codex_skill.py", "--dest", str(skills_dir)]
+            try:
+                with (
+                    mock.patch.object(
+                        installer,
+                        "_load_payload_contract_once",
+                        return_value=preflight_contract,
+                    ),
+                    mock.patch.object(
+                        installer,
+                        "load_payload_contract",
+                        return_value=locked_contract,
+                    ),
+                    mock.patch.object(
+                        installer,
+                        "assert_platform_portable_install_path",
+                        side_effect=reject_locked_contract,
+                    ),
+                    mock.patch.object(installer, "safe_print"),
+                ):
+                    result = installer.main()
+            finally:
+                sys.argv = original_argv
+
+            self.assertEqual(result, 1)
+            self.assertEqual(
+                [contract for contract, _existing in checked],
+                [preflight_contract, locked_contract],
+            )
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
+    def test_main_checks_a_bound_existing_tree_before_staging_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            destination = skills_dir / installer.SKILL_NAME
+            destination.mkdir(parents=True)
+            note = destination / "runtime-cache" / "user-note.txt"
+            note.parent.mkdir()
+            note.write_text("preserve until path planning passes\n", encoding="utf-8")
+            checked: list[installer.PathSnapshot | None] = []
+
+            def stop_after_existing_snapshot(
+                _skills_dir: Path,
+                _contract: installer.PayloadContract,
+                existing: installer.PathSnapshot | None = None,
+                *,
+                before_installer_writes: bool = True,
+            ) -> None:
+                checked.append(existing)
+                if existing is not None:
+                    self.assertFalse(before_installer_writes)
+                    raise ValueError("existing install was path-checked")
+
+            original_argv = sys.argv
+            sys.argv = [
+                "install_codex_skill.py",
+                "--dest",
+                str(skills_dir),
+                "--force",
+            ]
+            try:
+                with (
+                    mock.patch.object(
+                        installer,
+                        "assert_platform_portable_install_path",
+                        side_effect=stop_after_existing_snapshot,
+                    ),
+                    mock.patch.object(installer, "safe_print"),
+                ):
+                    result = installer.main()
+            finally:
+                sys.argv = original_argv
+
+            self.assertEqual(result, 1)
+            self.assertEqual(len(checked), 2)
+            self.assertIsNone(checked[0])
+            self.assertIsNotNone(checked[1])
+            assert checked[1] is not None
+            self.assertIn("runtime-cache/user-note.txt", checked[1].entries)
+            self.assertEqual(
+                note.read_text(encoding="utf-8"),
+                "preserve until path planning passes\n",
+            )
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
 
     def test_relative_skills_directory_is_measured_lexically_from_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

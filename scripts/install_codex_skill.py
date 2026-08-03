@@ -995,10 +995,13 @@ def windows_utf16_units(value: Path | str) -> int:
 def planned_windows_install_paths(
     skills_dir: Path,
     contract: PayloadContract,
+    existing_install: PathSnapshot | None = None,
 ) -> Iterator[tuple[str, Path, bool]]:
     """Yield every predictable live and transactional path the installer may use."""
     if not isinstance(contract, PayloadContract):
         raise TypeError("Windows path planning requires a frozen payload contract")
+    if existing_install is not None and not isinstance(existing_install, PathSnapshot):
+        raise TypeError("Windows path planning requires a bound existing-install snapshot")
     root = _absolute_lexical(skills_dir)
     transaction_id = "f" * 32
     roots = (
@@ -1020,6 +1023,24 @@ def planned_windows_install_paths(
 
     payload_directories = sorted(_implied_payload_directories(contract.declared))
     internal_files = (COMPLETION_MARKER, PROVENANCE_MARKER)
+    existing_directories = (
+        sorted(
+            relative
+            for relative, metadata in existing_install.entries.items()
+            if relative and metadata.get("type") == "dir"
+        )
+        if existing_install is not None
+        else []
+    )
+    existing_files = (
+        sorted(
+            relative
+            for relative, metadata in existing_install.entries.items()
+            if relative and metadata.get("type") == "file"
+        )
+        if existing_install is not None
+        else []
+    )
     for root_label, install_root in roots:
         yield (f"{root_label} root", install_root, True)
         for relative in payload_directories:
@@ -1036,6 +1057,13 @@ def planned_windows_install_paths(
                 install_root / QUARANTINE_MARKER,
                 False,
             )
+        if root_label in {"transaction quarantine", "transaction backup"}:
+            for relative in existing_directories:
+                path = install_root.joinpath(*PurePosixPath(relative).parts)
+                yield (f"{root_label} existing install directory: {relative}", path, True)
+            for relative in existing_files:
+                path = install_root.joinpath(*PurePosixPath(relative).parts)
+                yield (f"{root_label} existing install file: {relative}", path, False)
 
 
 def _overlong_component(path: Path) -> tuple[str, int] | None:
@@ -1052,10 +1080,22 @@ def _overlong_component(path: Path) -> tuple[str, int] | None:
 def assert_windows_portable_install_path(
     skills_dir: Path,
     contract: PayloadContract,
+    existing_install: PathSnapshot | None = None,
+    *,
+    before_installer_writes: bool = True,
 ) -> None:
     """Refuse a plan that requires legacy-incompatible Windows paths."""
+    refusal_state = (
+        "No installer files were written."
+        if before_installer_writes
+        else "The live install was not changed."
+    )
     worst: tuple[int, int, int, str, Path, str] | None = None
-    for label, path, is_directory in planned_windows_install_paths(skills_dir, contract):
+    for label, path, is_directory in planned_windows_install_paths(
+        skills_dir,
+        contract,
+        existing_install,
+    ):
         component = _overlong_component(path)
         if component is not None:
             name, units = component
@@ -1064,7 +1104,7 @@ def assert_windows_portable_install_path(
                 f"Component uses {units} UTF-16 code units; safe limit is "
                 f"{WINDOWS_PORTABLE_COMPONENT_LIMIT}.\n"
                 "Choose a shorter --dest with components of 255 units or fewer. "
-                "No installer files were written.\n"
+                f"{refusal_state}\n"
                 f"Installer artifact: {label}\n"
                 f"Component: {_bounded_diagnostic(name, 180)}"
             )
@@ -1087,10 +1127,27 @@ def assert_windows_portable_install_path(
         "Windows portable path limit would be exceeded.\n"
         f"Predicted {kind} path uses {units} UTF-16 code units; safe limit is {limit}.\n"
         "Choose a shorter --dest (for example C:\\Codex\\skills), or set "
-        "CODEX_HOME closer to the drive root. No installer files were written.\n"
+        f"CODEX_HOME closer to the drive root. {refusal_state}\n"
         f"Installer artifact: {label}\n"
         f"Predicted path: {path}"
     )
+
+
+def assert_platform_portable_install_path(
+    skills_dir: Path,
+    contract: PayloadContract,
+    existing_install: PathSnapshot | None = None,
+    *,
+    before_installer_writes: bool = True,
+) -> None:
+    """Apply Windows path policy to the exact contract and live tree in use."""
+    if os.name == "nt":
+        assert_windows_portable_install_path(
+            skills_dir,
+            contract,
+            existing_install,
+            before_installer_writes=before_installer_writes,
+        )
 
 
 def _capture_path_snapshot(path: Path) -> PathSnapshot:
@@ -5045,8 +5102,7 @@ def main() -> int:
     # new user runs, and a stack trace reads as "the tool is broken".
     try:
         preflight_contract = _load_payload_contract_once(repo_root)
-        if os.name == "nt":
-            assert_windows_portable_install_path(skills_dir, preflight_contract)
+        assert_platform_portable_install_path(skills_dir, preflight_contract)
         assert_safe_preflight(destination, skills_dir, repo_root)
     except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as exc:
         safe_print(f"Refusing to install: {_bounded_diagnostic(exc)}")
@@ -5097,6 +5153,18 @@ def main() -> int:
                     f"{_bounded_diagnostic(destination, 240)}; repairing it."
                 )
 
+            existing_install = (
+                _capture_path_snapshot(destination) if _path_exists(destination) else None
+            )
+            # The source may have changed while this process waited for the
+            # lock, and a managed install may contain undeclared caches or user
+            # notes that will move beneath the longer backup/quarantine roots.
+            assert_platform_portable_install_path(
+                skills_dir,
+                contract,
+                existing_install,
+                before_installer_writes=False,
+            )
             stage = stage_validated_install(
                 repo_root,
                 skills_dir,
