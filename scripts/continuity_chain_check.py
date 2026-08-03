@@ -355,17 +355,27 @@ def is_unqualified_global_waiver(text: str, key: str) -> bool:
     field_token_groups = [phrase.split() for phrase in field_phrases(key)]
     if key == "travel_direction":
         field_token_groups.append(["axis", "reset"])
-    starts = [
-        index
-        for phrase_tokens in field_token_groups
-        for index in range(len(tokens) - len(phrase_tokens) + 1)
-        if tokens[index : index + len(phrase_tokens)] == phrase_tokens
-    ]
-    if not starts:
-        return False
-    prefix = set(tokens[: min(starts)])
     allowed_prefix = set(TRANSITION_CHANGE_WORDS) | GLOBAL_WAIVER_GRAMMAR
-    return prefix <= allowed_prefix
+    for phrase_tokens in field_token_groups:
+        width = len(phrase_tokens)
+        for index in range(len(tokens) - width + 1):
+            if tokens[index : index + width] != phrase_tokens:
+                continue
+            if not set(tokens[:index]) <= allowed_prefix:
+                continue
+
+            suffix = tokens[index + width :]
+            # A trailing ownership/beneficiary phrase is an entity scope, even
+            # when the named entity is not present in either boundary state.
+            # Fail closed instead of silently upgrading an unknown qualifier
+            # such as "wardrobe may change for stranger" to a global waiver.
+            # "axis reset for the reverse angle" is established shot grammar,
+            # not an entity qualifier.
+            is_axis_phrase = phrase_tokens == ["axis", "reset"]
+            if not is_axis_phrase and ({"for", "of"} & set(suffix)):
+                continue
+            return True
+    return False
 
 
 def allowance_matches_scope(

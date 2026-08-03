@@ -1140,6 +1140,57 @@ class ContinuityChainTests(unittest.TestCase):
 
         self.assertTrue(any("wardrobe" in error for error in errors), errors)
 
+    def test_unknown_suffix_entity_qualifier_does_not_become_global_waiver(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "white coat",
+                    },
+                }
+            },
+            allowed_changes=["wardrobe may change for stranger"],
+        )
+
+        self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("characters.guide.wardrobe" in error for error in errors), errors)
+
+    def test_explicit_global_waiver_still_applies_to_reordered_entities(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": [
+                    {"id": "hero", "wardrobe": "red coat"},
+                    {"id": "guide", "wardrobe": "black coat"},
+                ]
+            },
+            {
+                "characters": [
+                    {"id": "guide", "wardrobe": "white coat"},
+                    {"id": "hero", "wardrobe": "blue coat"},
+                ]
+            },
+            allowed_changes=["all wardrobe changes are explicitly allowed"],
+        )
+
+        self.assertFalse(any("wardrobe" in error for error in errors), errors)
+
     def test_fallback_list_identity_replacement_is_rejected(self) -> None:
         errors, _ = self.validate_states(
             {
