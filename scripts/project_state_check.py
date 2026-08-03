@@ -9,6 +9,7 @@ from lineage_contract import (
     build_take_review_indexes,
     bound_validation_diagnostics,
     classify_parent_id,
+    json_integer,
     load_project_document,
     TakeReviewIndex,
     validate_take_review_record,
@@ -245,6 +246,12 @@ def main() -> int:
             parent_kind, _ = classify_parent_id(obj)
             if parent_kind == "invalid":
                 errors.append(f"{rel}: parent_clip_id must be null or a non-empty string")
+            sequence_index = json_integer(obj.get("sequence_index"))
+            if parent_kind == "root" and sequence_index is not None and sequence_index > 1:
+                errors.append(
+                    f"{rel}: later clip sequence_index {obj.get('sequence_index')} "
+                    "must declare a non-empty parent_clip_id"
+                )
             felt = obj.get("felt_intent")
             if "felt_intent" in obj and (not isinstance(felt, str) or not felt.strip()):
                 errors.append(f"{rel}: felt_intent must be a non-empty one-line string")

@@ -101,6 +101,23 @@ class TakeReconciliationTests(unittest.TestCase):
                     f"clip clip_01 status {status} requires a current take_history entry",
                 )
 
+    def test_in_progress_retry_can_retain_prior_reviewed_take_history(self) -> None:
+        for status in ("generated", "reviewed"):
+            with self.subTest(status=status):
+                project = self.project()
+                project["clips"] = project["clips"][:1]
+                project["scenes"][0]["assigned_clip_ids"] = ["clip_01"]
+                project["beats"] = [
+                    beat
+                    for beat in project["beats"]
+                    if beat.get("assigned_clip_id") == "clip_01"
+                ]
+                project["current_clip_id"] = "clip_01"
+                project["clips"][0]["status"] = status
+                project_errors, continuity_errors = self.validate(project, [self.review()])
+                self.assertEqual(project_errors, [])
+                self.assertEqual(continuity_errors, [])
+
     def test_malformed_history_verdict_types_fail_cleanly_in_both_consumers(self) -> None:
         for verdict in ([], {}, None, True, 1):
             with self.subTest(verdict=verdict):
