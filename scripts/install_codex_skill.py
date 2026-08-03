@@ -840,6 +840,7 @@ def _posix_open_directory_component(
     name: str,
     path: Path,
     label: str,
+    diagnostic: str,
 ) -> int:
     try:
         before = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
@@ -848,7 +849,8 @@ def _posix_open_directory_component(
     if _is_reparse_stat(before) or stat.S_ISLNK(before.st_mode):
         raise ValueError(
             f"{label} contains a linked or reparse component: "
-            f"{_bounded_diagnostic(path, 220)}"
+            f"{_bounded_diagnostic(diagnostic, 180)} "
+            f"(component: {_bounded_diagnostic(path, 220)})"
         )
     if not stat.S_ISDIR(before.st_mode):
         raise ValueError(f"{label} component is not a directory: {_bounded_diagnostic(path, 220)}")
@@ -871,7 +873,8 @@ def _posix_open_directory_component(
         if _is_reparse_stat(current) or stat.S_ISLNK(current.st_mode):
             raise ValueError(
                 f"{label} contains a linked or reparse component: "
-                f"{_bounded_diagnostic(path, 220)}"
+                f"{_bounded_diagnostic(diagnostic, 180)} "
+                f"(component: {_bounded_diagnostic(path, 220)})"
             ) from exc
         if (
             not stat.S_ISDIR(current.st_mode)
@@ -956,7 +959,13 @@ def _bound_relative_parent(
     try:
         for part in parent_parts:
             current /= part
-            child = _posix_open_directory_component(descriptor, part, current, label)
+            child = _posix_open_directory_component(
+                descriptor,
+                part,
+                current,
+                label,
+                relative,
+            )
             parent_descriptor = descriptor
             descriptor = child
             os.close(parent_descriptor)
