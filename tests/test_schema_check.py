@@ -307,6 +307,73 @@ class ExecutionTests(unittest.TestCase):
         ]
         self.assertTrue(list(validator.iter_errors(too_many)))
 
+    def test_authority_identifiers_and_take_review_shape_are_strictly_bounded(self) -> None:
+        project_schema = schema_check.load_json(ROOT / "schemas/project-state.schema.json")
+        project_validator = schema_check.Draft202012Validator(project_schema)
+        project = json.loads(
+            (ROOT / "examples/sequence-airport-arrival/project-state.json").read_text(
+                "utf-8"
+            )
+        )
+        for invalid in ("   ", "x" * 257):
+            with self.subTest(document="project-state", invalid_length=len(invalid)):
+                data = json.loads(json.dumps(project))
+                data["project_id"] = invalid
+                self.assertTrue(list(project_validator.iter_errors(data)))
+
+        review_schema = schema_check.load_json(ROOT / "schemas/take-review.schema.json")
+        review_validator = schema_check.Draft202012Validator(review_schema)
+        review = json.loads(
+            (ROOT / "examples/sequence-airport-arrival/clip-01-take-review.json").read_text(
+                "utf-8"
+            )
+        )
+        self.assertEqual(list(review_validator.iter_errors(review)), [])
+
+        for field in ("project_id", "clip_id", "take_id"):
+            for invalid in ("   ", "x" * 257):
+                with self.subTest(field=field, invalid_length=len(invalid)):
+                    data = json.loads(json.dumps(review))
+                    data[field] = invalid
+                    self.assertTrue(list(review_validator.iter_errors(data)))
+
+        attacks = {
+            "observed start array": lambda item: item.update(observed_start_state=[]),
+            "observed end null": lambda item: item.update(observed_end_state=None),
+            "completed beats string": lambda item: item.update(completed_beats="claimed"),
+            "completed beats item": lambda item: item.update(completed_beats=[1]),
+            "incomplete beats object": lambda item: item.update(incomplete_beats={}),
+            "unexpected beats null": lambda item: item.update(
+                unexpected_completed_beats=None
+            ),
+            "continuity breaks string": lambda item: item.update(
+                continuity_breaks="none"
+            ),
+            "accepted deviations object": lambda item: item.update(
+                accepted_deviations={}
+            ),
+            "confidence array": lambda item: item.update(observation_confidence=[]),
+            "unknown confidence": lambda item: item.update(
+                observation_confidence="extreme"
+            ),
+            "uncertainties string": lambda item: item.update(uncertainties="none"),
+            "uncertainty item": lambda item: item.update(uncertainties=[1]),
+            "confirmation string": lambda item: item.update(
+                requires_user_confirmation="yes"
+            ),
+            "unexpected field": lambda item: item.update(authority="claimed"),
+        }
+        for label, mutate in attacks.items():
+            with self.subTest(attack=label):
+                data = json.loads(json.dumps(review))
+                mutate(data)
+                self.assertTrue(list(review_validator.iter_errors(data)), label)
+
+        rejected_with_deviation = json.loads(json.dumps(review))
+        rejected_with_deviation["verdict"] = "reject"
+        rejected_with_deviation["accepted_deviations"] = ["claimed exception"]
+        self.assertTrue(list(review_validator.iter_errors(rejected_with_deviation)))
+
     def test_clip_contract_schema_enforces_local_status_and_endpoint_invariants(self) -> None:
         schema = schema_check.load_json(ROOT / "schemas/clip-contract.schema.json")
         self.assertIn("Structural and record-local", schema["description"])

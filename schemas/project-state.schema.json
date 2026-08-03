@@ -27,7 +27,12 @@
   "properties": {
     "schema_version": {"type": "string"},
     "state_revision": {"type": "integer", "minimum": 1},
-    "project_id": {"type": "string", "minLength": 1},
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "\\S"
+    },
     "project_mode": {"enum": ["standalone_clip", "sequence_project"]},
     "surface": {"type": "object"},
     "clip_budget_sec": {"type": ["number", "null"]},

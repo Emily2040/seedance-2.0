@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -14,6 +16,7 @@ from strict_json import (
     bound_diagnostics,
     json_integer as strict_json_integer,
     load as load_strict_json,
+    loads as loads_strict_json,
     safe_diagnostic_text,
 )
 
@@ -40,6 +43,8 @@ MAX_CYCLE_DISPLAY_NODES = 8
 MAX_TAKE_HISTORY_ITEMS = 4096
 MAX_TAKE_EVIDENCE_CHARS = 4096
 MAX_TAKE_REVIEW_FILES_PER_DIRECTORY = 4096
+MAX_TAKE_REVIEW_BYTES = 1024 * 1024
+MAX_TAKE_REVIEW_BYTES_PER_DIRECTORY = 16 * 1024 * 1024
 MAX_REVIEWS_PER_TAKE_KEY = 2
 
 VERDICT_CLIP_STATUS = {
@@ -53,7 +58,7 @@ TAKE_HISTORY_REQUIRED_FIELDS = frozenset({"take_id", "clip_id", "verdict"})
 TAKE_HISTORY_ALLOWED_FIELDS = frozenset(
     {*TAKE_HISTORY_REQUIRED_FIELDS, "evidence"}
 )
-AUTHORITATIVE_TAKE_REVIEW_FIELDS = frozenset(
+TAKE_REVIEW_FIELDS = frozenset(
     {
         "project_id",
         "clip_id",
@@ -75,6 +80,21 @@ AUTHORITATIVE_TAKE_REVIEW_FIELDS = frozenset(
 TAKE_REVIEW_SOURCE_STATUSES = frozenset(
     {"generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"}
 )
+TAKE_REVIEW_OBSERVED_STATE_FIELDS = frozenset(
+    {"observed_start_state", "observed_end_state"}
+)
+TAKE_REVIEW_STRING_ARRAY_FIELDS = frozenset(
+    {
+        "completed_beats",
+        "incomplete_beats",
+        "unexpected_completed_beats",
+        "uncertainties",
+    }
+)
+TAKE_REVIEW_ARRAY_FIELDS = frozenset(
+    {"continuity_breaks", "accepted_deviations"}
+)
+TAKE_REVIEW_CONFIDENCE_LEVELS = frozenset({"low", "medium", "high"})
 
 ParentIdKind = Literal["root", "invalid", "parent"]
 ParentLinkMode = Literal[
@@ -206,12 +226,275 @@ def _is_bounded_identifier(value: object) -> bool:
     )
 
 
+def validate_take_review_record(review: object, label: str) -> list[str]:
+    """Validate one take-review with the same record-local rules as its schema."""
+
+    errors: list[str] = []
+    if not isinstance(review, dict):
+        _append_take_error(errors, f"{label}: take-review must be an object", label)
+        return errors
+
+    missing = sorted(TAKE_REVIEW_FIELDS - set(review))
+    if missing:
+        _append_take_error(
+            errors,
+            f"{label}: missing fields: {', '.join(missing)}",
+            label,
+        )
+
+    unexpected_count = 0
+    unexpected_preview: list[str] = []
+    for field in review:
+        if field in TAKE_REVIEW_FIELDS:
+            continue
+        unexpected_count += 1
+        if len(unexpected_preview) < 8:
+            unexpected_preview.append(_bounded(field, 64))
+    if unexpected_count:
+        rendered = ", ".join(unexpected_preview)
+        if unexpected_count > len(unexpected_preview):
+            rendered += f", ... ({unexpected_count} fields)"
+        _append_take_error(
+            errors,
+            f"{label}: unexpected fields: {rendered}",
+            label,
+        )
+
+    for field in ("project_id", "clip_id", "take_id"):
+        value = review.get(field)
+        if not _is_bounded_identifier(value):
+            _append_take_error(
+                errors,
+                f"{label}: {field} must be a non-empty string of at most "
+                f"{MAX_IDENTIFIER_CHARS} characters; got {_bounded(value)}",
+                label,
+            )
+
+    source_status = review.get("source_status")
+    if (
+        not isinstance(source_status, str)
+        or source_status not in TAKE_REVIEW_SOURCE_STATUSES
+    ):
+        _append_take_error(
+            errors,
+            f"{label}: invalid source_status {_bounded(source_status)}",
+            label,
+        )
+
+    verdict = review.get("verdict")
+    if not isinstance(verdict, str) or verdict not in VERDICT_CLIP_STATUS:
+        _append_take_error(
+            errors,
+            f"{label}: invalid verdict {_bounded(verdict)}",
+            label,
+        )
+
+    for field in sorted(TAKE_REVIEW_OBSERVED_STATE_FIELDS):
+        value = review.get(field)
+        if not isinstance(value, dict):
+            _append_take_error(
+                errors,
+                f"{label}: {field} must be an object; got {_bounded(value)}",
+                label,
+            )
+
+    for field in sorted(TAKE_REVIEW_STRING_ARRAY_FIELDS):
+        value = review.get(field)
+        if not isinstance(value, list):
+            _append_take_error(
+                errors,
+                f"{label}: {field} must be an array of strings; got {_bounded(value)}",
+                label,
+            )
+            continue
+        for index, item in enumerate(value):
+            if not isinstance(item, str):
+                _append_take_error(
+                    errors,
+                    f"{label}: {field}[{index}] must be a string; got {_bounded(item)}",
+                    label,
+                )
+                break
+
+    for field in sorted(TAKE_REVIEW_ARRAY_FIELDS):
+        value = review.get(field)
+        if not isinstance(value, list):
+            _append_take_error(
+                errors,
+                f"{label}: {field} must be an array; got {_bounded(value)}",
+                label,
+            )
+
+    confidence = review.get("observation_confidence")
+    if (
+        not isinstance(confidence, str)
+        or confidence not in TAKE_REVIEW_CONFIDENCE_LEVELS
+    ):
+        _append_take_error(
+            errors,
+            f"{label}: invalid observation_confidence {_bounded(confidence)}",
+            label,
+        )
+
+    confirmation = review.get("requires_user_confirmation")
+    if not isinstance(confirmation, bool):
+        _append_take_error(
+            errors,
+            f"{label}: requires_user_confirmation must be a boolean; "
+            f"got {_bounded(confirmation)}",
+            label,
+        )
+
+    accepted_deviations = review.get("accepted_deviations")
+    if verdict == "reject" and isinstance(accepted_deviations, list) and accepted_deviations:
+        _append_take_error(
+            errors,
+            f"{label}: rejected take must not accept deviations",
+            label,
+        )
+    return errors
+
+
 def _is_take_review_path(path: Path) -> bool:
     name = path.name
     return (
         "project-state" not in name
         and (name == "take-review.json" or name.endswith("-take-review.json"))
     )
+
+
+def _file_identity(info: os.stat_result) -> tuple[int, int] | None:
+    """Return a stable same-file identity, or None when the filesystem has none."""
+
+    if not info.st_ino:
+        return None
+    return info.st_dev, info.st_ino
+
+
+def _is_regular_non_link(info: os.stat_result) -> bool:
+    """Reject links, Windows reparse points, devices, pipes, and sockets."""
+
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    file_attributes = getattr(info, "st_file_attributes", 0)
+    return stat.S_ISREG(info.st_mode) and not (file_attributes & reparse_flag)
+
+
+def _read_bounded_take_review_bytes(descriptor: int) -> bytes:
+    """Capture at most the authority-file limit plus one detection byte."""
+
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    chunks: list[bytes] = []
+    remaining = MAX_TAKE_REVIEW_BYTES + 1
+    while remaining:
+        chunk = os.read(descriptor, min(64 * 1024, remaining))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def _load_checked_take_review(
+    path: Path,
+    excluded_file_ids: set[tuple[int, int]],
+) -> tuple[Literal["loaded", "excluded", "error"], object, int]:
+    """Open one regular file safely and parse a bounded, stable byte snapshot."""
+
+    try:
+        path_before = path.lstat()
+    except OSError as exc:
+        return "error", f"cannot be read safely: {_safe_detail(str(exc))}", 0
+    if not _is_regular_non_link(path_before):
+        return "error", "must be a regular non-link file", 0
+    identity_before = _file_identity(path_before)
+    if identity_before is None:
+        return "error", "cannot establish a stable file identity", 0
+
+    flags = os.O_RDONLY
+    for flag_name in (
+        "O_BINARY",
+        "O_CLOEXEC",
+        "O_NOINHERIT",
+        "O_NOFOLLOW",
+        "O_NONBLOCK",
+    ):
+        flags |= getattr(os, flag_name, 0)
+
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        return "error", f"cannot be opened safely: {_safe_detail(str(exc))}", 0
+
+    captured_bytes = 0
+    try:
+        opened = os.fstat(descriptor)
+        identity = _file_identity(opened)
+        if not _is_regular_non_link(opened):
+            return "error", "must be a regular non-link file", 0
+        if identity is None:
+            return "error", "cannot establish a stable file identity", 0
+        if identity != identity_before:
+            return "error", "changed while being opened", 0
+        if identity in excluded_file_ids:
+            return "excluded", None, 0
+        if opened.st_size > MAX_TAKE_REVIEW_BYTES:
+            return (
+                "error",
+                f"exceeds the {MAX_TAKE_REVIEW_BYTES}-byte take-review limit",
+                0,
+            )
+
+        first_capture = _read_bounded_take_review_bytes(descriptor)
+        captured_bytes = len(first_capture)
+        if captured_bytes > MAX_TAKE_REVIEW_BYTES:
+            return (
+                "error",
+                f"exceeds the {MAX_TAKE_REVIEW_BYTES}-byte take-review limit",
+                captured_bytes,
+            )
+        between_captures = os.fstat(descriptor)
+        second_capture = _read_bounded_take_review_bytes(descriptor)
+        captured_bytes = max(captured_bytes, len(second_capture))
+        if captured_bytes > MAX_TAKE_REVIEW_BYTES:
+            return (
+                "error",
+                f"exceeds the {MAX_TAKE_REVIEW_BYTES}-byte take-review limit",
+                captured_bytes,
+            )
+        after_capture = os.fstat(descriptor)
+        path_after = path.lstat()
+
+        observed = (opened, between_captures, after_capture, path_after)
+        if any(not _is_regular_non_link(info) for info in observed):
+            return (
+                "error",
+                "changed into a non-regular or linked file while being read",
+                captured_bytes,
+            )
+        if any(_file_identity(info) != identity for info in observed):
+            return "error", "changed identity while being read", captured_bytes
+        if any(info.st_size != len(first_capture) for info in observed):
+            return "error", "changed size while being read", captured_bytes
+        if first_capture != second_capture:
+            return "error", "changed contents while being read", captured_bytes
+    except (OSError, ValueError) as exc:
+        return (
+            "error",
+            f"cannot be read safely: {_safe_detail(str(exc))}",
+            captured_bytes,
+        )
+    finally:
+        os.close(descriptor)
+
+    try:
+        text = first_capture.decode("utf-8")
+        return "loaded", loads_strict_json(text), captured_bytes
+    except (UnicodeError, ValueError) as exc:
+        return (
+            "error",
+            f"is invalid JSON: {_safe_detail(str(exc))}",
+            captured_bytes,
+        )
 
 
 def build_take_review_index(
@@ -227,31 +510,31 @@ def build_take_review_index(
     """
 
     resolved_directory = directory.resolve()
-    excluded = {path.resolve() for path in excluded_project_paths}
-    excluded_file_ids: set[tuple[int, int]] = set()
-    for path in excluded:
-        try:
-            stat = path.stat()
-        except OSError:
-            continue
-        if stat.st_ino:
-            excluded_file_ids.add((stat.st_dev, stat.st_ino))
-    candidates: list[Path] = []
     diagnostics: list[str] = []
+    excluded_file_ids: set[tuple[int, int]] = set()
+    for path in excluded_project_paths:
+        try:
+            with path.open("rb") as handle:
+                identity = _file_identity(os.fstat(handle.fileno()))
+        except OSError as exc:
+            diagnostics.append(
+                f"cannot identify project-state file "
+                f"{safe_diagnostic_text(path.name, 120)}: {_safe_detail(str(exc))}"
+            )
+            continue
+        if identity is None:
+            diagnostics.append(
+                f"cannot establish a stable identity for project-state file "
+                f"{safe_diagnostic_text(path.name, 120)}"
+            )
+            continue
+        excluded_file_ids.add(identity)
+
+    candidates: list[Path] = []
     try:
         entries = resolved_directory.iterdir()
         for path in entries:
-            if not _is_take_review_path(path) or path.resolve() in excluded:
-                continue
-            try:
-                stat = path.stat()
-            except OSError:
-                stat = None
-            if (
-                stat is not None
-                and stat.st_ino
-                and (stat.st_dev, stat.st_ino) in excluded_file_ids
-            ):
+            if not _is_take_review_path(path):
                 continue
             candidates.append(path)
             if len(candidates) > MAX_TAKE_REVIEW_FILES_PER_DIRECTORY:
@@ -267,35 +550,42 @@ def build_take_review_index(
         )
 
     records_by_key: dict[tuple[str, str, str], list[TakeReviewRecord]] = {}
+    captured_review_bytes = 0
     for path in sorted(candidates, key=lambda candidate: candidate.name):
-        try:
-            review = load_strict_json(path)
-        except (OSError, UnicodeError, ValueError) as exc:
+        load_status, payload, captured_bytes = _load_checked_take_review(
+            path,
+            excluded_file_ids,
+        )
+        if (
+            captured_review_bytes + captured_bytes
+            > MAX_TAKE_REVIEW_BYTES_PER_DIRECTORY
+        ):
             diagnostics.append(
-                f"sibling {safe_diagnostic_text(path.name, 120)} is invalid JSON: "
-                f"{_safe_detail(str(exc))}"
+                f"sibling take-review bytes exceed the "
+                f"{MAX_TAKE_REVIEW_BYTES_PER_DIRECTORY}-byte directory limit"
+            )
+            break
+        captured_review_bytes += captured_bytes
+        if load_status == "excluded":
+            continue
+        if load_status == "error":
+            diagnostics.append(
+                f"sibling {safe_diagnostic_text(path.name, 120)} {payload}"
             )
             continue
-        if not isinstance(review, dict):
-            diagnostics.append(
-                f"sibling {safe_diagnostic_text(path.name, 120)} take-review must be an object"
-            )
+        review = payload
+
+        label = f"sibling {safe_diagnostic_text(path.name, 120)}"
+        review_errors = validate_take_review_record(review, label)
+        if review_errors:
+            for error in review_errors:
+                _append_take_error(diagnostics, error, "sibling take-review index")
             continue
 
-        key_values = tuple(review.get(field) for field in ("project_id", "clip_id", "take_id"))
-        invalid_fields = [
-            field
-            for field, value in zip(("project_id", "clip_id", "take_id"), key_values)
-            if not _is_bounded_identifier(value)
-        ]
-        if invalid_fields:
-            diagnostics.append(
-                f"sibling {safe_diagnostic_text(path.name, 120)} take-review has invalid "
-                f"identity fields: {', '.join(invalid_fields)}"
-            )
-            continue
-
-        project_id, clip_id, take_id = key_values
+        assert isinstance(review, dict)
+        project_id = review["project_id"]
+        clip_id = review["clip_id"]
+        take_id = review["take_id"]
         assert isinstance(project_id, str)
         assert isinstance(clip_id, str)
         assert isinstance(take_id, str)
@@ -483,31 +773,14 @@ def validate_take_reconciliation(
             )
         else:
             review = matches[0].data
-            missing_review_fields = sorted(AUTHORITATIVE_TAKE_REVIEW_FIELDS - set(review))
-            if missing_review_fields:
-                _append_take_error(
-                    errors,
-                    f"{rel}: sibling take-review for take {_identifier(take_id)} is not "
-                    f"authoritative; missing fields: {', '.join(missing_review_fields)}",
-                    rel,
-                )
-            source_status = review.get("source_status")
-            if not isinstance(source_status, str) or source_status not in TAKE_REVIEW_SOURCE_STATUSES:
-                _append_take_error(
-                    errors,
-                    f"{rel}: sibling take-review for take {_identifier(take_id)} has invalid "
-                    f"source_status {_bounded(source_status)}",
-                    rel,
-                )
-            review_verdict = review.get("verdict")
-            if not isinstance(review_verdict, str) or review_verdict not in VERDICT_CLIP_STATUS:
-                _append_take_error(
-                    errors,
-                    f"{rel}: sibling take-review for take {_identifier(take_id)} has invalid "
-                    f"verdict {_bounded(review_verdict)}",
-                    rel,
-                )
-            elif review_verdict != verdict:
+            review_label = (
+                f"{rel}: sibling take-review for take {_identifier(take_id)}"
+            )
+            review_errors = validate_take_review_record(review, review_label)
+            for review_error in review_errors:
+                _append_take_error(errors, review_error, rel)
+            review_verdict = review.get("verdict") if not review_errors else None
+            if isinstance(review_verdict, str) and review_verdict != verdict:
                 _append_take_error(
                     errors,
                     f"{rel}: take_history verdict {verdict} for take "

@@ -399,7 +399,9 @@ cannot prove graph-wide lineage. `project_state_check.py` and
 parent existence and order, cycles, executable parent-state continuity, and
 binding every post-review clip status to its current take history and sibling
 take-review record. Both semantic validators share the same bounded review
-index; neither accepts a project-state document as its own review.
+index; authority candidates must be stable regular non-link files no larger
+than 1 MiB, their captured bytes are capped at 16 MiB per directory, and neither
+validator accepts a project-state document as its own review.
 Passing the schema alone is never a valid release or handoff gate.
 
 ```bash

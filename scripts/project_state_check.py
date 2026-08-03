@@ -11,6 +11,7 @@ from lineage_contract import (
     classify_parent_id,
     load_project_document,
     TakeReviewIndex,
+    validate_take_review_record,
     validate_take_reconciliation,
 )
 from strict_json import bound_diagnostics
@@ -51,12 +52,8 @@ REQUIRED_CLIP_CONTRACT_FIELDS = {
     "this_clip_only", "reserved_for_later", "planned_start_state", "planned_end_state",
     "continuity_locks", "allowed_changes", "status",
 }
-REQUIRED_TAKE_REVIEW_FIELDS = {
-    "project_id", "clip_id", "take_id", "source_status", "verdict",
-    "observed_start_state", "observed_end_state", "completed_beats", "incomplete_beats",
-    "unexpected_completed_beats", "continuity_breaks", "accepted_deviations",
-    "observation_confidence", "uncertainties", "requires_user_confirmation",
-}
+
+
 def load_json(path: Path) -> object:
     return load_strict_json(path)
 
@@ -254,9 +251,7 @@ def main() -> int:
             if set(obj.get("this_clip_only", [])) & set(obj.get("reserved_for_later", [])):
                 errors.append(f"{rel}: current and reserved beats overlap")
         if "take-review" in path.name or path.name == "take-review.json":
-            check_required(obj, REQUIRED_TAKE_REVIEW_FIELDS, rel, errors)
-            if obj.get("verdict") == "reject" and obj.get("accepted_deviations"):
-                errors.append(f"{rel}: rejected take must not accept deviations")
+            errors.extend(validate_take_review_record(obj, rel))
 
     for schema in (root / "schemas").glob("*.schema.json") if (root / "schemas").exists() else []:
         try:
