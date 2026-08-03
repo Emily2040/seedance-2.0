@@ -44,6 +44,7 @@ else:
 IdentityToken = tuple[str, str | int]
 ListIdentity = tuple[str, str, str | int]
 IdentityAliases = dict[str, set[IdentityToken]]
+FieldSpan = tuple[int, int, str]
 MISSING = object()
 
 
@@ -225,6 +226,54 @@ GENERIC_IDENTITY_PATH_WORDS = {
     "state",
     "value",
 }
+FIELD_COORDINATORS = {"a", "an", "and", "or", "the"}
+HARD_CLAUSE_CONNECTORS = {"whereas", "while"}
+QUALIFIER_MODIFIERS = {"exclusively", "only", "specifically"}
+AXIS_RESET_SHOT_QUALIFIERS = {
+    ("for", "reverse", "angle"),
+    ("for", "the", "reverse", "angle"),
+}
+WAIVER_CONTEXT_WORDS = {
+    "after",
+    "approved",
+    "before",
+    "cut",
+    "deliberately",
+    "during",
+    "following",
+    "indirectly",
+    "jump",
+    "next",
+    "restriction",
+    "scene",
+    "sequence",
+    "shot",
+    "time",
+    "transition",
+    "when",
+}
+WAIVER_PREDICATE_WORDS = (
+    TRANSITION_CHANGE_WORDS
+    | NEGATION_WORDS
+    | PRESERVATION_WORDS
+    | NEGATING_CONTRACTION_STEMS
+    | GLOBAL_WAIVER_GRAMMAR
+    | FIELD_COORDINATORS
+    | WAIVER_CONTEXT_WORDS
+    | {"altering", "t"}
+)
+
+# A coordinated field list has no predicate before its coordinator (for
+# example, ``wardrobe and product identity may change``). Conversely, a word
+# here before ``and``/``or`` proves the preceding field already has its own
+# predicate and begins a new field clause: ``wardrobe is fixed and canonical
+# identity may change``.
+CLAUSE_PREDICATE_WORDS = (
+    (TRANSITION_CHANGE_WORDS - {"change", "changed", "changes", "changing"})
+    | NEGATION_WORDS
+    | PRESERVATION_WORDS
+    | NEGATING_CONTRACTION_STEMS
+)
 
 
 def load(path: Path) -> dict:
@@ -247,74 +296,283 @@ def mentions_field(text: str, key: str) -> bool:
     return any(f" {phrase} " in padded for phrase in field_phrases(key))
 
 
-def is_axis_reset(text: str) -> bool:
-    return " axis reset " in f" {normalize_phrase(text)} "
+def is_scope_fragment(text: object) -> bool:
+    """Return whether a fieldless fragment has explicit scoping grammar."""
+    tokens = normalize_phrase(text).split()
+    return bool(tokens) and not field_groups(tokens) and bool(
+        set(tokens) & QUALIFIER_MODIFIERS
+        or tokens[0] in {"for", "of"}
+    )
 
 
 def text_segments(text: object) -> list[str]:
-    return [
-        segment
+    """Split independent clauses while preserving attached scope fragments.
+
+    Splitting first, then attaching a qualifier avoids regex backtracking at a
+    combined boundary such as ``.\nOnly for hero``. A leading qualifier belongs
+    to the following field clause; a later qualifier belongs to the preceding
+    one. Unknown names remain attached when they carry explicit scope grammar,
+    so bounded parsing can reject rather than discard them.
+    """
+    raw_segments = [
+        segment.strip()
         for segment in re.split(
-            r"(?:[.;,\n]+|\bbut\b|\bhowever\b)",
+            r"(?:[.;,\r\n]+|\bbut\b|\bhowever\b)",
             str(text),
             flags=re.IGNORECASE,
         )
         if normalize_phrase(segment)
     ]
+    segments: list[str] = []
+    leading_scope: list[str] = []
+    for segment in raw_segments:
+        if is_scope_fragment(segment):
+            if segments:
+                segments[-1] = f"{segments[-1]} {segment}"
+            else:
+                leading_scope.append(segment)
+            continue
+        if leading_scope:
+            segment = " ".join((*leading_scope, segment))
+            leading_scope.clear()
+        segments.append(segment)
+    if leading_scope:
+        # A qualifier with no field clause cannot grant a waiver. Keeping it as
+        # its own segment lets whole-entry validation fail closed.
+        segments.append(" ".join(leading_scope))
+    return segments
 
 
-def negates_field_change(text: str, key: str) -> bool:
-    tokens = normalize_phrase(text).split()
-    if set(tokens) & NEGATION_WORDS:
+def field_groups(tokens: list[str]) -> list[list[FieldSpan]]:
+    """Return mentioned continuity fields, preserving coordinated field lists."""
+    mentions: set[FieldSpan] = set()
+    for candidate in TRACKED_KEYS:
+        phrases = field_phrases(candidate)
+        if candidate == "travel_direction":
+            phrases = phrases | {"axis reset"}
+        for phrase in phrases:
+            phrase_tokens = phrase.split()
+            width = len(phrase_tokens)
+            for index in range(len(tokens) - width + 1):
+                if tokens[index : index + width] == phrase_tokens:
+                    mentions.add((index, index + width, candidate))
+
+    ordered = sorted(mentions, key=lambda item: (item[0], -(item[1] - item[0]), item[2]))
+    groups: list[list[FieldSpan]] = []
+    occupied_until = -1
+    for mention in ordered:
+        start, end, _candidate = mention
+        if start < occupied_until:
+            continue
+        if groups:
+            between = tokens[groups[-1][-1][1] : start]
+            if between and set(between) <= FIELD_COORDINATORS:
+                groups[-1].append(mention)
+                occupied_until = end
+                continue
+        groups.append([mention])
+        occupied_until = end
+    return groups
+
+
+def semantic_token_clauses(text: object) -> list[list[str]]:
+    """Split prose where distinct field predicates cannot share polarity.
+
+    Punctuation and contrast conjunctions are hard boundaries. ``while`` and
+    ``whereas`` also separate predicates even when one side has no action word.
+    ``and``/``or`` split only after a completed predicate, preserving natural
+    coordinated field lists such as ``wardrobe and product identity may
+    change``.
+    """
+    clauses: list[list[str]] = []
+    for segment in text_segments(text):
+        tokens = normalize_phrase(segment).split()
+        if not tokens:
+            continue
+        groups = field_groups(tokens)
+        mentions = [mention for group in groups for mention in group]
+        boundaries = {
+            index
+            for index, token in enumerate(tokens)
+            if token in HARD_CLAUSE_CONNECTORS
+        }
+        for index, token in enumerate(tokens):
+            if token not in {"and", "or"}:
+                continue
+            clause_start = max(
+                (boundary + 1 for boundary in boundaries if boundary < index),
+                default=0,
+            )
+            clause_end = min(
+                (boundary for boundary in boundaries if boundary > index),
+                default=len(tokens),
+            )
+            fields_before = [
+                mention for mention in mentions if clause_start <= mention[0] and mention[1] <= index
+            ]
+            fields_after = [
+                mention for mention in mentions if index < mention[0] < clause_end
+            ]
+            if not fields_before or not fields_after:
+                continue
+            next_field_start = min(mention[0] for mention in fields_after)
+            if not set(tokens[index + 1 : next_field_start]) <= FIELD_COORDINATORS:
+                continue
+            if set(tokens[clause_start:index]) & CLAUSE_PREDICATE_WORDS:
+                boundaries.add(index)
+
+        start = 0
+        for boundary in sorted(boundaries):
+            if tokens[start:boundary]:
+                clauses.append(tokens[start:boundary])
+            start = boundary + 1
+        if tokens[start:]:
+            clauses.append(tokens[start:])
+    return clauses
+
+
+def event_distance(index: int, group: list[FieldSpan]) -> int:
+    start = group[0][0]
+    end = group[-1][1]
+    if index < start:
+        return start - index
+    if index >= end:
+        return index - end + 1
+    return 0
+
+
+def bound_field_group(
+    index: int,
+    groups: list[list[FieldSpan]],
+    *,
+    prefer_forward: bool = False,
+) -> list[FieldSpan] | None:
+    """Bind one lexical event to one local field group.
+
+    Ordinary predicate words attach backward on a distance tie. The subordinate
+    negator ``without`` attaches forward (``without altering identity``). This
+    avoids making a denial at the end of one clause also negate the next field.
+    """
+    if not groups:
+        return None
+    if prefer_forward:
+        forward = [group for group in groups if group[0][0] > index]
+        if forward:
+            return min(forward, key=lambda group: group[0][0])
+        return None
+    nearest_distance = min(event_distance(index, group) for group in groups)
+    nearest = [group for group in groups if event_distance(index, group) == nearest_distance]
+    if len(nearest) == 1:
+        return nearest[0]
+    backward = [group for group in nearest if group[-1][1] <= index]
+    if backward:
+        return max(backward, key=lambda group: group[-1][1])
+    return min(nearest, key=lambda group: group[0][0])
+
+
+def clause_field_polarities(
+    tokens: list[str],
+) -> tuple[
+    list[list[FieldSpan]],
+    set[tuple[FieldSpan, ...]],
+    set[tuple[FieldSpan, ...]],
+]:
+    """Bind affirmative and preservation events to their local field groups."""
+    groups = field_groups(tokens)
+    positive_groups: set[tuple[FieldSpan, ...]] = set()
+    denied_groups: set[tuple[FieldSpan, ...]] = set()
+    for index, token in enumerate(tokens):
+        if token in TRANSITION_CHANGE_WORDS:
+            group = bound_field_group(index, groups)
+            if group is not None:
+                positive_groups.add(tuple(group))
+        if token in NEGATION_WORDS:
+            group = bound_field_group(
+                index,
+                groups,
+                prefer_forward=token == "without",
+            )
+            if group is not None:
+                denied_groups.add(tuple(group))
+        if token in PRESERVATION_WORDS:
+            group = bound_field_group(index, groups)
+            if group is not None and event_distance(index, group) <= 4:
+                denied_groups.add(tuple(group))
+
+    for index, (left, right) in enumerate(zip(tokens, tokens[1:])):
+        if left not in NEGATING_CONTRACTION_STEMS or right != "t":
+            continue
+        group = bound_field_group(index, groups)
+        if group is not None:
+            denied_groups.add(tuple(group))
+    return groups, positive_groups, denied_groups
+
+
+def anaphorically_denies_change(tokens: list[str]) -> bool:
+    """Recognize a fieldless preservation tail without treating prose as NLP."""
+    token_set = set(tokens)
+    if token_set & PRESERVATION_WORDS:
         return True
     if any(
         left in NEGATING_CONTRACTION_STEMS and right == "t"
         for left, right in zip(tokens, tokens[1:])
     ):
         return True
-
-    for phrase in field_phrases(key):
-        phrase_tokens = phrase.split()
-        width = len(phrase_tokens)
-        for index in range(len(tokens) - width + 1):
-            if tokens[index : index + width] != phrase_tokens:
-                continue
-            before = tokens[max(0, index - 3) : index]
-            after = tokens[index + width : index + width + 4]
-            if set(before) & PRESERVATION_WORDS:
-                return True
-            if set(after) & PRESERVATION_WORDS:
-                return True
-    return False
+    return bool(token_set & NEGATION_WORDS and token_set & TRANSITION_CHANGE_WORDS)
 
 
-def positively_mentions_field(text: object, key: str) -> bool:
-    for segment in text_segments(text):
-        if not mentions_field(segment, key) or negates_field_change(segment, key):
+def analyze_field_entry(
+    text: object,
+    key: str,
+    *,
+    allow_bare: bool,
+) -> tuple[list[str], bool, bool]:
+    """Return positive clauses, any denial, and unsafe residual structure.
+
+    Polarity is aggregated across the whole entry. A fieldless denial inherits
+    the immediately preceding field group, so punctuation cannot turn
+    ``wardrobe may change; must remain unchanged`` into a waiver. Other
+    fieldless residual clauses are unsafe: dropping one could silently promote
+    a scoped or qualified statement to a global allowance.
+    """
+    positive: list[str] = []
+    denied = False
+    unsafe = False
+    previous_fields: set[str] = set()
+    entry_mentions_key = mentions_field(str(text), key)
+    for tokens in semantic_token_clauses(text):
+        groups, positive_groups, denied_groups = clause_field_polarities(tokens)
+        if not groups:
+            if key in previous_fields and anaphorically_denies_change(tokens):
+                denied = True
+            if entry_mentions_key:
+                unsafe = True
             continue
-        normalized = normalize_phrase(segment)
-        if normalized in field_phrases(key):
-            return True
-        if set(normalized.split()) & TRANSITION_CHANGE_WORDS:
-            return True
-    return False
+
+        current_fields = {
+            candidate
+            for group in groups
+            for _start, _end, candidate in group
+        }
+        previous_fields = current_fields
+        for group in groups:
+            group_token = tuple(group)
+            group_keys = {candidate for _start, _end, candidate in group}
+            if key not in group_keys:
+                continue
+            if group_token in denied_groups:
+                denied = True
+            bare_group = allow_bare and " ".join(tokens) in field_phrases(key)
+            if group_token in positive_groups or bare_group:
+                positive.append(" ".join(tokens))
+    return positive, denied, unsafe
 
 
-def positively_resets_axis(text: object) -> bool:
-    return any(
-        is_axis_reset(segment)
-        and not negates_field_change(segment, "travel_direction")
-        and not (set(normalize_phrase(segment).split()) & NEGATION_WORDS)
-        for segment in text_segments(text)
-    )
-
-
-def mentioned_identity_tokens(
-    text: str,
+def identity_token_spans(
+    tokens: list[str],
     identity_aliases: IdentityAliases,
     alias_widths: tuple[int, ...] | None = None,
-) -> tuple[set[IdentityToken], bool]:
-    tokens = normalize_phrase(text).split()
+) -> tuple[list[tuple[int, int, set[IdentityToken]]], bool]:
     candidates: list[tuple[int, int, str, set[IdentityToken]]] = []
     widths = alias_widths
     if widths is None:
@@ -337,7 +595,7 @@ def mentioned_identity_tokens(
     # as "hero" from also matching inside the distinct ID "super hero".
     candidates.sort(key=lambda item: (-(item[1] - item[0]), item[0], item[2]))
     occupied: set[int] = set()
-    mentioned: set[IdentityToken] = set()
+    selected: list[tuple[int, int, set[IdentityToken]]] = []
     ambiguous = False
     for start, end, _phrase, identities in candidates:
         span = set(range(start, end))
@@ -346,36 +604,114 @@ def mentioned_identity_tokens(
         occupied.update(span)
         if len(identities) > 1:
             ambiguous = True
-        mentioned.update(identities)
+        selected.append((start, end, identities))
+    return selected, ambiguous
+
+
+def mentioned_identity_tokens(
+    text: str,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None = None,
+) -> tuple[set[IdentityToken], bool]:
+    spans, ambiguous = identity_token_spans(
+        normalize_phrase(text).split(),
+        identity_aliases,
+        alias_widths,
+    )
+    mentioned = {
+        identity
+        for _start, _end, identities in spans
+        for identity in identities
+    }
     return mentioned, ambiguous
 
 
-def is_unqualified_global_waiver(text: str, key: str) -> bool:
-    tokens = normalize_phrase(text).split()
-    field_token_groups = [phrase.split() for phrase in field_phrases(key)]
-    if key == "travel_direction":
-        field_token_groups.append(["axis", "reset"])
-    allowed_prefix = set(TRANSITION_CHANGE_WORDS) | GLOBAL_WAIVER_GRAMMAR
-    for phrase_tokens in field_token_groups:
-        width = len(phrase_tokens)
-        for index in range(len(tokens) - width + 1):
-            if tokens[index : index + width] != phrase_tokens:
-                continue
-            if not set(tokens[:index]) <= allowed_prefix:
-                continue
+def has_bounded_waiver_grammar(
+    text: str,
+    key: str,
+    identity_aliases: IdentityAliases,
+    alias_widths: tuple[int, ...] | None = None,
+) -> bool:
+    """Accept only explicit field, predicate, context, and entity grammar.
 
-            suffix = tokens[index + width :]
-            # A trailing ownership/beneficiary phrase is an entity scope, even
-            # when the named entity is not present in either boundary state.
-            # Fail closed instead of silently upgrading an unknown qualifier
-            # such as "wardrobe may change for stranger" to a global waiver.
-            # "axis reset for the reverse angle" is established shot grammar,
-            # not an entity qualifier.
-            is_axis_phrase = phrase_tokens == ["axis", "reset"]
-            if not is_axis_phrase and ({"for", "of"} & set(suffix)):
+    An unknown residual token is never discarded. This is intentionally a
+    bounded command grammar rather than open-ended natural-language inference:
+    callers can use the documented bare-field shorthand or an explicit change
+    predicate, but an unknown ``stranger only`` tail cannot become global.
+    """
+    tokens = normalize_phrase(text).split()
+    groups = field_groups(tokens)
+    if not any(
+        key in {candidate for _start, _end, candidate in group}
+        for group in groups
+    ):
+        return False
+
+    identity_spans, ambiguous = identity_token_spans(
+        tokens,
+        identity_aliases,
+        alias_widths,
+    )
+    if ambiguous:
+        return False
+    mentioned = {
+        identity
+        for _start, _end, identities in identity_spans
+        for identity in identities
+    }
+    if len(mentioned) > 1:
+        return False
+
+    occupied: set[int] = set()
+    for group in groups:
+        for start, end, _candidate in group:
+            occupied.update(range(start, end))
+    for start, end, _identities in identity_spans:
+        occupied.update(range(start, end))
+
+    special_axis_tokens: set[int] = set()
+    if key == "travel_direction":
+        for group in groups:
+            if not any(
+                candidate == "travel_direction"
+                and tokens[start:end] == ["axis", "reset"]
+                for start, end, candidate in group
+            ):
                 continue
-            return True
-    return False
+            suffix_start = group[-1][1]
+            if tuple(tokens[suffix_start:]) in AXIS_RESET_SHOT_QUALIFIERS:
+                special_axis_tokens.update(range(suffix_start, len(tokens)))
+
+    allowed = set(WAIVER_PREDICATE_WORDS)
+    if mentioned:
+        allowed.update(QUALIFIER_MODIFIERS)
+        allowed.update({"for", "of"})
+    for index, token in enumerate(tokens):
+        if index in occupied or index in special_axis_tokens:
+            continue
+        if token not in allowed:
+            return False
+        # Scope markers without a recognized entity are not global grammar.
+        if not mentioned and token in QUALIFIER_MODIFIERS | {"for"}:
+            return False
+    return True
+
+
+def is_unqualified_global_waiver(
+    text: str,
+    key: str,
+    identity_aliases: IdentityAliases | None = None,
+    alias_widths: tuple[int, ...] | None = None,
+) -> bool:
+    aliases = identity_aliases or {}
+    if not has_bounded_waiver_grammar(text, key, aliases, alias_widths):
+        return False
+    mentioned, ambiguous = mentioned_identity_tokens(
+        text,
+        aliases,
+        alias_widths,
+    )
+    return not ambiguous and not mentioned
 
 
 def allowance_matches_scope(
@@ -384,16 +720,30 @@ def allowance_matches_scope(
     scope_identity: IdentityToken | None,
     identity_aliases: IdentityAliases,
     alias_widths: tuple[int, ...] | None = None,
+    *,
+    identity_context: str | None = None,
 ) -> bool:
-    mentioned, ambiguous = mentioned_identity_tokens(
+    if not has_bounded_waiver_grammar(
         text,
+        key,
+        identity_aliases,
+        alias_widths,
+    ):
+        return False
+    mentioned, ambiguous = mentioned_identity_tokens(
+        identity_context if identity_context is not None else text,
         identity_aliases,
         alias_widths,
     )
     if ambiguous or len(mentioned) > 1:
         return False
     if not mentioned:
-        return is_unqualified_global_waiver(text, key)
+        return is_unqualified_global_waiver(
+            text,
+            key,
+            identity_aliases,
+            alias_widths,
+        )
     return scope_identity is not None and scope_identity == next(iter(mentioned))
 
 
@@ -406,6 +756,8 @@ def has_allowance(
     alias_widths: tuple[int, ...] | None = None,
 ) -> bool:
     aliases = identity_aliases or {}
+    candidates: list[str] = []
+    conflicts = False
     for field in ("allowed_changes", "accepted_deviations", "continuity_breaks"):
         entries = clip.get(field, [])
         if not isinstance(entries, list):
@@ -413,40 +765,59 @@ def has_allowance(
         for text in entries:
             if not isinstance(text, str):
                 continue
-            for segment in text_segments(text):
-                permits_field = positively_mentions_field(segment, key) or (
-                    key == "travel_direction" and positively_resets_axis(segment)
-                )
-                if permits_field and allowance_matches_scope(
-                    segment,
+            bare_entry = normalize_phrase(text) in field_phrases(key)
+            positive, denied, unsafe = analyze_field_entry(
+                text,
+                key,
+                allow_bare=bare_entry,
+            )
+            conflicts = conflicts or denied or unsafe
+            for clause in positive:
+                if not has_bounded_waiver_grammar(
+                    clause,
                     key,
-                    scope_identity,
                     aliases,
                     alias_widths,
                 ):
-                    return True
+                    conflicts = True
+                    continue
+                candidates.append(clause)
 
     transition_value = clip.get("transition_in", "")
-    if not isinstance(transition_value, str):
-        return False
-    for transition in text_segments(transition_value):
-        normalized_transition = normalize_phrase(transition)
-        permits_field = (
-            key == "travel_direction" and positively_resets_axis(transition)
-        ) or (
-            mentions_field(transition, key)
-            and not negates_field_change(transition, key)
-            and bool(set(normalized_transition.split()) & TRANSITION_CHANGE_WORDS)
+    if isinstance(transition_value, str):
+        positive, denied, unsafe = analyze_field_entry(
+            transition_value,
+            key,
+            allow_bare=False,
         )
-        if permits_field and allowance_matches_scope(
-            transition,
+        conflicts = conflicts or denied or unsafe
+        for clause in positive:
+            if not has_bounded_waiver_grammar(
+                clause,
+                key,
+                aliases,
+                alias_widths,
+            ):
+                conflicts = True
+                continue
+            candidates.append(clause)
+
+    # Denials and preservation claims are authoritative across the complete
+    # entry set. Returning on the first positive would let a later conflicting
+    # entry disappear solely because of list order.
+    if conflicts:
+        return False
+    return any(
+        allowance_matches_scope(
+            clause,
             key,
             scope_identity,
             aliases,
             alias_widths,
-        ):
-            return True
-    return False
+            identity_context=clause,
+        )
+        for clause in candidates
+    )
 
 
 def identity_value_token(value: object) -> tuple[str, str | int] | None:

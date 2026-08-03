@@ -378,6 +378,237 @@ class ContinuityChainTests(unittest.TestCase):
         self.assertTrue(any("location" in error for error in errors), errors)
         self.assertEqual(warnings, [])
 
+    def test_denial_for_another_field_does_not_cancel_wardrobe_waiver(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {
+                    "canonical_identity_id": "hero-a",
+                    "wardrobe": "red coat",
+                }
+            },
+            {
+                "character": {
+                    "canonical_identity_id": "hero-b",
+                    "wardrobe": "blue coat",
+                }
+            },
+            allowed_changes=["wardrobe may change without altering canonical identity"],
+        )
+
+        self.assertFalse(any("wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("canonical_identity_id" in error for error in errors), errors)
+
+    def test_without_binds_forward_across_subordinate_modifiers(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {
+                    "canonical_identity_id": "hero-a",
+                    "wardrobe": "red coat",
+                }
+            },
+            {
+                "character": {
+                    "canonical_identity_id": "hero-b",
+                    "wardrobe": "blue coat",
+                }
+            },
+            allowed_changes=[
+                "wardrobe may change without deliberately or indirectly altering canonical identity"
+            ],
+        )
+
+        self.assertFalse(any("wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("canonical_identity_id" in error for error in errors), errors)
+
+    def test_without_non_field_restriction_does_not_negate_waiver(self) -> None:
+        errors, warnings = self.validate_states(
+            {"character": {"wardrobe": "red coat"}},
+            {"character": {"wardrobe": "blue coat"}},
+            allowed_changes=["wardrobe may change without restriction"],
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_postpositive_denial_targets_only_its_named_field(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {
+                    "wardrobe": "red coat",
+                    "product_identity": "watch-a",
+                }
+            },
+            {
+                "character": {
+                    "wardrobe": "blue coat",
+                    "product_identity": "watch-b",
+                }
+            },
+            allowed_changes=["wardrobe may change while product identity must not change"],
+        )
+
+        self.assertFalse(any("wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("product_identity" in error for error in errors), errors)
+
+    def test_denial_of_coordinated_fields_does_not_create_a_partial_waiver(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {"wardrobe": "red coat"},
+                "product": {"product_identity": "watch-a"},
+            },
+            {
+                "character": {"wardrobe": "blue coat"},
+                "product": {"product_identity": "watch-b"},
+            },
+            allowed_changes=["wardrobe and product identity must not change"],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("product_identity" in error for error in errors), errors)
+
+    def test_mixed_field_clauses_keep_positive_and_negative_scope_separate(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {
+                    "canonical_identity_id": "hero-a",
+                    "wardrobe": "red coat",
+                },
+                "environment": {"location": "studio-a"},
+            },
+            {
+                "character": {
+                    "canonical_identity_id": "hero-b",
+                    "wardrobe": "blue coat",
+                },
+                "environment": {"location": "studio-b"},
+            },
+            allowed_changes=[
+                "wardrobe may change without altering canonical identity, location may change"
+            ],
+        )
+
+        self.assertFalse(any("wardrobe" in error for error in errors), errors)
+        self.assertFalse(any("location" in error for error in errors), errors)
+        self.assertTrue(any("canonical_identity_id" in error for error in errors), errors)
+
+    def test_change_verbs_are_bound_to_their_local_field_clause(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {"wardrobe": "red coat"},
+                "environment": {"location": "studio-a"},
+            },
+            {
+                "character": {"wardrobe": "blue coat"},
+                "environment": {"location": "studio-b"},
+            },
+            allowed_changes=["wardrobe continuity while location may change"],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+        self.assertFalse(any("location" in error for error in errors), errors)
+
+    def test_bare_field_fragments_from_mixed_entries_are_not_waivers(self) -> None:
+        for allowance in (
+            "wardrobe while location may change",
+            "wardrobe, location may change",
+        ):
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "character": {"wardrobe": "red coat"},
+                        "environment": {"location": "studio-a"},
+                    },
+                    {
+                        "character": {"wardrobe": "blue coat"},
+                        "environment": {"location": "studio-b"},
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+                self.assertFalse(any("location" in error for error in errors), errors)
+
+    def test_mixed_denial_and_permission_clauses_remain_asymmetric(self) -> None:
+        for allowance in (
+            "wardrobe must not change while product identity may change",
+            "wardrobe change is not permitted while product identity may change",
+        ):
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "character": {
+                            "wardrobe": "red coat",
+                            "product_identity": "watch-a",
+                        }
+                    },
+                    {
+                        "character": {
+                            "wardrobe": "blue coat",
+                            "product_identity": "watch-b",
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+                self.assertFalse(any("product_identity" in error for error in errors), errors)
+
+    def test_preservation_clause_does_not_negate_following_identity_waiver(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {
+                    "canonical_identity_id": "hero-a",
+                    "wardrobe": "red coat",
+                }
+            },
+            {
+                "character": {
+                    "canonical_identity_id": "hero-b",
+                    "wardrobe": "blue coat",
+                }
+            },
+            allowed_changes=["wardrobe is fixed and canonical identity may change"],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+        self.assertFalse(any("canonical_identity_id" in error for error in errors), errors)
+
+    def test_coordinated_positive_fields_share_the_local_permission(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "character": {
+                    "wardrobe": "red coat",
+                    "product_identity": "watch-a",
+                }
+            },
+            {
+                "character": {
+                    "wardrobe": "blue coat",
+                    "product_identity": "watch-b",
+                }
+            },
+            allowed_changes=["wardrobe and product identity may change"],
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_ordinary_but_still_separates_independent_field_clauses(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "character": {"wardrobe": "red coat"},
+                "environment": {"location": "studio-a"},
+            },
+            {
+                "character": {"wardrobe": "blue coat"},
+                "environment": {"location": "studio-b"},
+            },
+            allowed_changes=["wardrobe must not change but location may change"],
+        )
+
+        self.assertTrue(any("wardrobe" in error for error in errors), errors)
+        self.assertFalse(any("location" in error for error in errors), errors)
+
     def test_negated_mapping_value_does_not_turn_its_key_into_a_waiver(self) -> None:
         errors, _ = self.validate_states(
             {"character": {"wardrobe": "red coat"}},
@@ -538,6 +769,15 @@ class ContinuityChainTests(unittest.TestCase):
             {"character": {"travel_direction": "left-to-right"}},
             {"character": {"travel_direction": "right-to-left"}},
             allowed_changes=["no axis reset"],
+        )
+
+        self.assertTrue(any("travel_direction" in warning for warning in warnings), warnings)
+
+    def test_unknown_axis_reset_entity_qualifier_is_not_global(self) -> None:
+        _, warnings = self.validate_states(
+            {"character": {"travel_direction": "left-to-right"}},
+            {"character": {"travel_direction": "right-to-left"}},
+            allowed_changes=["axis reset for stranger"],
         )
 
         self.assertTrue(any("travel_direction" in warning for warning in warnings), warnings)
@@ -1171,6 +1411,491 @@ class ContinuityChainTests(unittest.TestCase):
 
         self.assertTrue(any("characters.hero.wardrobe" in error for error in errors), errors)
         self.assertTrue(any("characters.guide.wardrobe" in error for error in errors), errors)
+
+    def test_comma_separated_unknown_qualifier_stays_attached_to_waiver(self) -> None:
+        qualifiers = (
+            "for stranger",
+            "only for stranger",
+            "specifically for stranger",
+            "exclusively for stranger",
+            "only specifically exclusively for stranger",
+            "but for stranger",
+            "but only for stranger",
+            "but specifically for stranger",
+            "but exclusively for stranger",
+            "but only specifically exclusively for stranger",
+        )
+        for qualifier in qualifiers:
+            allowance = f"wardrobe may change, {qualifier}"
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+        for qualifier in qualifiers[5:]:
+            allowance = f"wardrobe may change {qualifier}"
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_unknown_qualifier_cannot_escape_across_other_boundaries(self) -> None:
+        for allowance in (
+            "wardrobe may change; only for stranger",
+            "wardrobe may change. Specifically for stranger",
+            "wardrobe may change\nhowever exclusively for stranger",
+            "only for stranger, wardrobe may change",
+        ):
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {"character": {"wardrobe": "red coat"}},
+                    {"character": {"wardrobe": "blue coat"}},
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_conflicting_wardrobe_polarity_is_aggregated_across_entry(self) -> None:
+        allowances = (
+            "wardrobe may change; wardrobe must not change",
+            "wardrobe may change, wardrobe remains unchanged",
+            "wardrobe may change while wardrobe remains unchanged",
+            "wardrobe may change whereas wardrobe remains unchanged",
+            "wardrobe may change but wardrobe remains unchanged",
+            "wardrobe may change however wardrobe remains unchanged",
+            "wardrobe may change; must remain unchanged",
+            "wardrobe may change, must remain unchanged",
+            "wardrobe may change, but must remain unchanged",
+            "wardrobe may change while it must remain unchanged",
+            "wardrobe may change whereas it must remain unchanged",
+            "wardrobe may change but must remain unchanged",
+            "wardrobe may change however must remain unchanged",
+        )
+        for allowance in allowances:
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {"character": {"wardrobe": "red coat"}},
+                    {"character": {"wardrobe": "blue coat"}},
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_conflicting_wardrobe_polarity_is_aggregated_across_entries(self) -> None:
+        for kwargs in (
+            {
+                "allowed_changes": [
+                    "wardrobe may change",
+                    "wardrobe must not change",
+                ]
+            },
+            {
+                "allowed_changes": ["wardrobe may change"],
+                "accepted_deviations": ["wardrobe remains unchanged"],
+            },
+            {
+                "allowed_changes": ["wardrobe may change"],
+                "transition_in": "wardrobe must not change",
+            },
+        ):
+            with self.subTest(kwargs=kwargs):
+                errors, _ = self.validate_states(
+                    {"character": {"wardrobe": "red coat"}},
+                    {"character": {"wardrobe": "blue coat"}},
+                    **kwargs,
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_unknown_bare_scope_residual_never_promotes_a_global_waiver(self) -> None:
+        allowances = (
+            "wardrobe may change, stranger only",
+            "wardrobe may change. stranger only",
+            "wardrobe may change\nstranger only",
+            "wardrobe may change but stranger only",
+            "wardrobe may change however stranger only",
+            "wardrobe may change only stranger",
+            "stranger only, wardrobe may change",
+            "only stranger, wardrobe may change",
+            "wardrobe may change, stranger",
+        )
+        for allowance in allowances:
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {"character": {"wardrobe": "red coat"}},
+                    {"character": {"wardrobe": "blue coat"}},
+                    allowed_changes=[allowance],
+                )
+
+                self.assertTrue(any("wardrobe" in error for error in errors), errors)
+
+    def test_known_bare_only_qualifier_remains_entity_scoped(self) -> None:
+        allowances = (
+            "wardrobe may change, hero only",
+            "wardrobe may change only hero",
+            "hero only, wardrobe may change",
+            "only hero, wardrobe may change",
+            "wardrobe may change but hero only",
+            "wardrobe may change however only hero",
+        )
+        for allowance in allowances:
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertFalse(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+    def test_combined_sentence_newline_keeps_one_known_scope_qualifier(self) -> None:
+        for allowance in (
+            "wardrobe may change.\nOnly for hero",
+            "wardrobe may change.\r\nOnly for hero",
+        ):
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertFalse(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+    def test_comma_separated_known_qualifier_remains_entity_scoped(self) -> None:
+        qualifiers = (
+            "for hero",
+            "only for hero",
+            "specifically for hero",
+            "exclusively for hero",
+            "only specifically exclusively for hero",
+            "but for hero",
+            "but only for hero",
+            "but specifically for hero",
+            "but exclusively for hero",
+            "but only specifically exclusively for hero",
+        )
+        for qualifier in qualifiers:
+            allowance = f"wardrobe may change, {qualifier}"
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertFalse(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+        for qualifier in qualifiers[5:]:
+            allowance = f"wardrobe may change {qualifier}"
+            with self.subTest(allowance=allowance):
+                errors, _ = self.validate_states(
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "red coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "black coat",
+                            },
+                        }
+                    },
+                    {
+                        "characters": {
+                            "hero": {
+                                "canonical_identity_id": "hero",
+                                "wardrobe": "blue coat",
+                            },
+                            "guide": {
+                                "canonical_identity_id": "guide",
+                                "wardrobe": "white coat",
+                            },
+                        }
+                    },
+                    allowed_changes=[allowance],
+                )
+
+                self.assertFalse(
+                    any("characters.hero.wardrobe" in error for error in errors),
+                    errors,
+                )
+                self.assertTrue(
+                    any("characters.guide.wardrobe" in error for error in errors),
+                    errors,
+                )
+
+    def test_qualifier_scope_does_not_leak_into_a_later_field_clause(self) -> None:
+        errors, _ = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                    },
+                },
+                "environment": {"location": "studio-a"},
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "white coat",
+                    },
+                },
+                "environment": {"location": "studio-b"},
+            },
+            allowed_changes=["wardrobe may change for hero while location may change"],
+        )
+
+        self.assertFalse(any("characters.hero.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any("characters.guide.wardrobe" in error for error in errors), errors)
+        self.assertFalse(any("location" in error for error in errors), errors)
+
+    def test_later_qualifier_does_not_scope_an_earlier_global_clause(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                        "location": "studio-a",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "white coat",
+                        "location": "studio-b",
+                    },
+                }
+            },
+            allowed_changes=["wardrobe may change while location may change for guide"],
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_distinct_field_clauses_keep_distinct_entity_scopes(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "red coat",
+                        "location": "stage-a",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                        "location": "studio-a",
+                    },
+                }
+            },
+            {
+                "characters": {
+                    "hero": {
+                        "canonical_identity_id": "hero",
+                        "wardrobe": "blue coat",
+                        "location": "stage-a",
+                    },
+                    "guide": {
+                        "canonical_identity_id": "guide",
+                        "wardrobe": "black coat",
+                        "location": "studio-b",
+                    },
+                }
+            },
+            allowed_changes=[
+                "hero wardrobe may change while guide location may change"
+            ],
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_comma_still_splits_independent_global_field_clauses(self) -> None:
+        errors, warnings = self.validate_states(
+            {
+                "character": {"wardrobe": "red coat"},
+                "environment": {"location": "studio-a"},
+            },
+            {
+                "character": {"wardrobe": "blue coat"},
+                "environment": {"location": "studio-b"},
+            },
+            allowed_changes=[
+                "all wardrobe changes are explicitly allowed, location may change"
+            ],
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
 
     def test_explicit_global_waiver_still_applies_to_reordered_entities(self) -> None:
         errors, _ = self.validate_states(
