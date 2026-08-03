@@ -87,45 +87,19 @@ PAUSE_DURING_COPY = textwrap.dedent(
     sys.path.insert(0, str(scripts_dir))
     import install_codex_skill as installer
 
-    original_copytree = installer.shutil.copytree
+    original_copy = installer._copy_payload_file_atomic
     copied = 0
-    active_copy = None
 
     def paused_copy(source, destination, *args, **kwargs):
         global copied
-        result = active_copy(source, destination, *args, **kwargs)
+        result = original_copy(source, destination, *args, **kwargs)
         copied += 1
         if copied == 2:
             ready.touch()
             time.sleep(120)
         return result
 
-    def controlled_copytree(
-        source,
-        destination,
-        symlinks=False,
-        ignore=None,
-        copy_function=None,
-        ignore_dangling_symlinks=False,
-        dirs_exist_ok=False,
-    ):
-        # Python 3.11 recursively forwards copy_function positionally, while
-        # newer runtimes may use keyword arguments. Mirror shutil.copytree's
-        # public signature so the pause hook is injected exactly once on both.
-        global active_copy
-        if active_copy is None:
-            active_copy = copy_function or installer.shutil.copy2
-        return original_copytree(
-            source,
-            destination,
-            symlinks=symlinks,
-            ignore=ignore,
-            copy_function=paused_copy,
-            ignore_dangling_symlinks=ignore_dangling_symlinks,
-            dirs_exist_ok=dirs_exist_ok,
-        )
-
-    installer.shutil.copytree = controlled_copytree
+    installer._copy_payload_file_atomic = paused_copy
     sys.argv = ["install_codex_skill.py", "--dest", str(skills_dir)]
     if force:
         sys.argv.append("--force")
@@ -266,18 +240,21 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                     shutil.copy2(ROOT / "SKILL.md", destination / "SKILL.md")
                 original_classify = installer._classify_existing_install_bound
                 swapped = False
+                classify_calls = 0
 
                 def classify_then_swap(path: Path, manifest):
-                    nonlocal swapped
+                    nonlocal classify_calls, swapped
                     classification = original_classify(path, manifest)
                     self.assertEqual(classification.state, initial_state)
-                    if path.exists():
-                        path.rename(stashed)
-                    path.mkdir()
-                    (path / "user-data.txt").write_text(
-                        "preserve\n", encoding="utf-8"
-                    )
-                    swapped = True
+                    classify_calls += 1
+                    if classify_calls == 2:
+                        if path.exists():
+                            path.rename(stashed)
+                        path.mkdir()
+                        (path / "user-data.txt").write_text(
+                            "preserve\n", encoding="utf-8"
+                        )
+                        swapped = True
                     return classification
 
                 with mock.patch.object(
@@ -288,6 +265,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                     result, output = self.call_main(skills_dir)
 
                 self.assertTrue(swapped)
+                self.assertEqual(classify_calls, 2)
                 self.assertEqual(result, 1, output)
                 self.assertIn("destination changed", output)
                 self.assertEqual(
@@ -347,15 +325,22 @@ class AtomicInstallRegressionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
             destination = skills_dir / SKILL_NAME
+            alternate_source = Path(tmp) / "alternate-source"
+            shutil.copytree(ROOT, alternate_source)
+            (alternate_source / "SKILL.md").write_text(
+                "different source revision\n", encoding="utf-8"
+            )
+            alternate_contract = installer.load_payload_contract(alternate_source)
 
             @contextlib.contextmanager
             def publish_different_payload(_skills_dir: Path):
                 destination.mkdir()
-                alternate = destination / "SKILL.md"
-                alternate.write_text("different source revision\n", encoding="utf-8")
-                installer.write_completion_marker(
-                    destination, installer.payload_manifest(destination)
-                )
+                for source_file in alternate_contract.source_files:
+                    relative = Path(*source_file.relative.split("/"))
+                    target = destination / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(alternate_source / relative, target)
+                installer.write_completion_marker(destination, alternate_contract)
                 yield
 
             with mock.patch.object(
@@ -496,6 +481,16 @@ class AtomicInstallRegressionTests(unittest.TestCase):
         valid, reason = installer.validate_completed_install(destination)
         self.assertTrue(valid, reason)
 
+    def normalize_portable_stage_modes(self, stage: Path) -> None:
+        if os.name == "nt":
+            return
+        directories = [stage, *(path for path in stage.rglob("*") if path.is_dir())]
+        files = [path for path in stage.rglob("*") if path.is_file()]
+        for directory in directories:
+            directory.chmod(installer.PORTABLE_DIRECTORY_MODE)
+        for file_path in files:
+            file_path.chmod(installer.PORTABLE_FILE_MODE)
+
     def call_main(self, skills_dir: Path, *args: str) -> tuple[int, str]:
         original_argv = sys.argv
         sys.argv = ["install_codex_skill.py", "--dest", str(skills_dir), *args]
@@ -538,6 +533,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
         stage = skills_dir / str(transaction["stage_name"])
         destination = stage.joinpath(*relative.split("/"))
         destination.parent.mkdir(parents=True)
+        self.normalize_portable_stage_modes(stage)
         installer._write_json_exclusive(
             stage / installer.PROVENANCE_MARKER,
             installer._provenance_record(transaction, transaction_raw),
@@ -702,11 +698,15 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             shutil.copy2(ROOT / "SKILL.md", skill_file)
             stream = Path(f"{skill_file}:late-note")
             original_classify = installer._classify_existing_install_bound
+            classify_calls = 0
 
             def classify_then_add_stream(path: Path, manifest):
+                nonlocal classify_calls
                 classification = original_classify(path, manifest)
                 self.assertEqual(classification.state, "incomplete")
-                stream.write_text("MUST SURVIVE\n", encoding="utf-8")
+                classify_calls += 1
+                if classify_calls == 2:
+                    stream.write_text("MUST SURVIVE\n", encoding="utf-8")
                 return classification
 
             with mock.patch.object(
@@ -717,6 +717,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 result, output = self.call_main(skills_dir)
 
             self.assertEqual(result, 1, output)
+            self.assertEqual(classify_calls, 2)
             self.assertIn("not representable", output)
             self.assertEqual(stream.read_text(encoding="utf-8"), "MUST SURVIVE\n")
             self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
@@ -811,6 +812,165 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertIn("transaction record is untrusted", result.stderr)
             self.assertEqual(transaction.read_text(encoding="utf-8"), '{"broken":')
             self.assertFalse((skills_dir / SKILL_NAME).exists())
+
+    def test_unhashable_transaction_enums_fail_closed_through_cli(self) -> None:
+        payload = {
+            "SKILL.md": {
+                "size": 1,
+                "sha256": hashlib.sha256(b"x").hexdigest(),
+            }
+        }
+        for field in ("old_root_type", "replacement_state"):
+            for hostile in ([], {}):
+                with (
+                    self.subTest(field=field, hostile=type(hostile).__name__),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    skills_dir = Path(tmp) / "skills"
+                    skills_dir.mkdir()
+                    transaction_id = "a" * 32
+                    record = installer._transaction_record(
+                        f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                        f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                        transaction_id,
+                        payload,
+                        None,
+                    )
+                    unsigned = dict(record)
+                    unsigned.pop("record_sha256")
+                    unsigned[field] = hostile
+                    path = skills_dir / installer.TRANSACTION_NAME
+                    installer._write_json_exclusive(
+                        path,
+                        installer._record_with_digest(unsigned),
+                    )
+
+                    result = self.run_installer(skills_dir, "--force")
+                    combined = result.stdout + result.stderr
+
+                    self.assertEqual(result.returncode, 1, combined)
+                    self.assertNotIn("Traceback", combined)
+                    self.assertIn("transaction record is untrusted", combined)
+                    self.assertTrue(path.is_file())
+                    self.assertFalse((skills_dir / SKILL_NAME).exists())
+
+    def test_unhashable_quarantine_enums_fail_closed_through_cli(self) -> None:
+        payload = {
+            "SKILL.md": {
+                "size": 1,
+                "sha256": hashlib.sha256(b"x").hexdigest(),
+            }
+        }
+        for field in ("purpose", "authorized_root_type"):
+            for hostile in ([], {}):
+                with (
+                    self.subTest(field=field, hostile=type(hostile).__name__),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    skills_dir = Path(tmp) / "skills"
+                    skills_dir.mkdir()
+                    transaction_id = "b" * 32
+                    transaction = installer._transaction_record(
+                        f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                        f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                        transaction_id,
+                        payload,
+                        None,
+                    )
+                    transaction_raw = installer._write_json_exclusive(
+                        skills_dir / installer.TRANSACTION_NAME,
+                        transaction,
+                    )
+                    quarantine = skills_dir / str(transaction["quarantine_name"])
+                    quarantine.mkdir()
+                    (quarantine / "owned.txt").write_bytes(b"authorized")
+                    authorized = installer._capture_path_snapshot(quarantine)
+                    marker = installer._quarantine_record(
+                        transaction,
+                        transaction_raw,
+                        "stage",
+                        authorized,
+                    )
+                    unsigned = dict(marker)
+                    unsigned.pop("record_sha256")
+                    unsigned[field] = hostile
+                    marker_path = quarantine / installer.QUARANTINE_MARKER
+                    installer._write_json_exclusive(
+                        marker_path,
+                        installer._record_with_digest(unsigned),
+                    )
+
+                    result = self.run_installer(skills_dir, "--force")
+                    combined = result.stdout + result.stderr
+
+                    self.assertEqual(result.returncode, 1, combined)
+                    self.assertNotIn("Traceback", combined)
+                    self.assertTrue(marker_path.is_file())
+                    self.assertTrue((quarantine / "owned.txt").is_file())
+                    self.assertFalse((skills_dir / SKILL_NAME).exists())
+
+    def test_unhashable_private_journal_enums_fail_closed_through_cli(self) -> None:
+        payload = {
+            "SKILL.md": {
+                "size": 1,
+                "sha256": hashlib.sha256(b"x").hexdigest(),
+            }
+        }
+        for field in ("purpose", "authorized_root_type"):
+            for hostile in ([], {}):
+                with (
+                    self.subTest(field=field, hostile=type(hostile).__name__),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    skills_dir = Path(tmp) / "skills"
+                    skills_dir.mkdir()
+                    transaction_id = "c" * 32
+                    transaction = installer._transaction_record(
+                        f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                        f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                        transaction_id,
+                        payload,
+                        None,
+                    )
+                    transaction_raw = installer._write_json_exclusive(
+                        skills_dir / installer.TRANSACTION_NAME,
+                        transaction,
+                    )
+                    quarantine = skills_dir / str(transaction["quarantine_name"])
+                    quarantine.mkdir()
+                    (quarantine / "owned.txt").write_bytes(b"authorized")
+                    authorized = installer._capture_path_snapshot(quarantine)
+                    workspace, journal_path = installer._private_delete_paths(
+                        skills_dir,
+                        transaction,
+                    )
+                    workspace_identity = installer._create_private_delete_workspace(
+                        workspace
+                    )
+                    journal = installer._private_delete_record(
+                        transaction,
+                        transaction_raw,
+                        "stage",
+                        authorized,
+                        workspace_identity,
+                    )
+                    unsigned = dict(journal)
+                    unsigned.pop("record_sha256")
+                    unsigned[field] = hostile
+                    installer._write_json_exclusive(
+                        journal_path,
+                        installer._record_with_digest(unsigned),
+                    )
+
+                    result = self.run_installer(skills_dir, "--force")
+                    combined = result.stdout + result.stderr
+
+                    self.assertEqual(result.returncode, 1, combined)
+                    self.assertNotIn("Traceback", combined)
+                    self.assertTrue(journal_path.is_file())
+                    self.assertTrue(workspace.is_dir())
+                    self.assertTrue((quarantine / "owned.txt").is_file())
+                    self.assertFalse((skills_dir / SKILL_NAME).exists())
 
     def test_hostile_duplicate_marker_key_has_bounded_diagnostic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1658,7 +1818,9 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 "_regular_file_metadata",
                 swap_after_last_validation,
             ):
-                with self.assertRaisesRegex(RuntimeError, "changed immediately"):
+                with self.assertRaisesRegex(
+                    RuntimeError, "changed immediately|changed or late data"
+                ):
                     installer._delete_bound_tree(quarantine, authorized)
 
             self.assertEqual(target_checks, 3)
@@ -2194,6 +2356,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                         expected_raw[: len(expected_raw) // 2]
                     )
                 (stage / "SKILL.md").write_bytes(payload_bytes)
+                self.normalize_portable_stage_modes(stage)
 
                 with self.assertRaisesRegex(RuntimeError, "could not precede"):
                     installer.recover_interrupted_transaction(
@@ -2252,6 +2415,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             (stage / installer.COMPLETION_MARKER).write_bytes(
                 expected_completion[: len(expected_completion) // 2]
             )
+            self.normalize_portable_stage_modes(stage)
 
             with self.assertRaisesRegex(RuntimeError, "full payload"):
                 installer.recover_interrupted_transaction(
@@ -2708,6 +2872,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertEqual(len(expected_temps), 2)
             for relative in expected_temps:
                 stage.joinpath(*relative.split("/")).write_bytes(b"partial")
+            self.normalize_portable_stage_modes(stage)
 
             with (
                 mock.patch.object(
@@ -2824,6 +2989,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             (stage / installer.COMPLETION_MARKER).write_bytes(
                 expected_raw[: len(expected_raw) // 2]
             )
+            self.normalize_portable_stage_modes(stage)
 
             result = self.run_installer(skills_dir)
 

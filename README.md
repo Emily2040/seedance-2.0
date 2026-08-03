@@ -399,9 +399,16 @@ that file's containing stage directory is `fsync`ed after the rename. The
 transaction does not recursively flush the supplied skills-directory ancestry;
 that ancestry is assumed to have the durability expected by the caller.
 
+Only manifest-declared files and their implied directories are created. Source
+permissions are not inherited: POSIX stage/live directories are normalized to
+`0700` and files to `0600`. Named streams, extended attributes, and resource
+forks on the source root, declared files, or implied directories are refused
+before transaction authority is published, because the portable install
+contract cannot represent them.
+
 Installs skip the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator — an agent needs the skill text, not the artwork. The gallery links in an installed copy's README therefore resolve only in this repository.
 
-A destination inside this repository is refused rather than attempted: copying the source tree into a directory inside itself recurses until the path length fails. For a project-local install, run the script from the project you are installing into, by absolute path, as above.
+A destination inside this repository is refused rather than attempted because it would mutate the source authority domain while the payload is being authenticated. For a project-local install, run the script from the project you are installing into, by absolute path, as above.
 
 This repository keeps dense facts in references so the active skill stays small.
 
