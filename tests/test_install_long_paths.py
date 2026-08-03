@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -42,6 +43,36 @@ def make_payload(
         newline="\n",
     )
     return installer.load_payload_contract(repo_root)
+
+
+def contract_with_synthetic_file(
+    contract: installer.PayloadContract,
+    relative: str,
+) -> installer.PayloadContract:
+    """Extend a frozen fixture without creating an overlong host path."""
+    declared = tuple(sorted((*contract.declared, relative)))
+    source_files = tuple(
+        sorted(
+            (
+                *contract.source_files,
+                installer.FileSnapshot(relative, (1, 1, 1, 1, 1, 1), 0, "0" * 64),
+            ),
+            key=lambda snapshot: snapshot.relative,
+        )
+    )
+    manifest_bytes = ("\n".join(declared) + "\n").encode("utf-8")
+    manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    files = {
+        snapshot.relative: {"size": snapshot.size, "sha256": snapshot.sha256}
+        for snapshot in source_files
+    }
+    return installer.PayloadContract(
+        manifest_bytes,
+        declared,
+        source_files,
+        manifest_sha256,
+        installer._contract_sha256(manifest_sha256, declared, files),
+    )
 
 
 def candidate_slack(
@@ -418,6 +449,149 @@ class WindowsPortablePolicyTests(unittest.TestCase):
             )
             self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
             self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+
+    def test_main_restores_trusted_backup_before_rejecting_a_new_long_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            destination = skills_dir / installer.SKILL_NAME
+            destination.mkdir()
+            sentinel = destination / "rollback-proof.txt"
+            sentinel.write_text("restore me\n", encoding="utf-8")
+
+            recovery_root = root / "recovery-payload"
+            recovery_contract = make_payload(recovery_root)
+            stage = installer.stage_validated_install(
+                recovery_root,
+                skills_dir,
+                recovery_contract,
+                force=True,
+            )
+            installer._rename_directory(destination, skills_dir / installer.BACKUP_NAME)
+            self.assertFalse(destination.exists())
+            self.assertTrue(stage.is_dir())
+            self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
+
+            long_relative = "references/" + ("x" * 240) + ".md"
+            long_contract = contract_with_synthetic_file(recovery_contract, long_relative)
+            with self.assertRaisesRegex(ValueError, "path limit would be exceeded"):
+                installer.assert_windows_portable_install_path(skills_dir, long_contract)
+
+            checks: list[bool] = []
+
+            def enforce_windows_policy(
+                checked_skills_dir: Path,
+                contract: installer.PayloadContract,
+                existing: installer.PathSnapshot | None = None,
+                *,
+                before_installer_writes: bool = True,
+            ) -> None:
+                checks.append(before_installer_writes)
+                installer.assert_windows_portable_install_path(
+                    checked_skills_dir,
+                    contract,
+                    existing,
+                    before_installer_writes=before_installer_writes,
+                )
+
+            original_argv = sys.argv
+            sys.argv = [
+                "install_codex_skill.py",
+                "--dest",
+                str(skills_dir),
+                "--force",
+            ]
+            try:
+                with (
+                    mock.patch.object(
+                        installer,
+                        "_load_payload_contract_once",
+                        return_value=long_contract,
+                    ),
+                    mock.patch.object(
+                        installer,
+                        "assert_platform_portable_install_path",
+                        side_effect=enforce_windows_policy,
+                    ),
+                    mock.patch.object(installer, "safe_print") as safe_print,
+                ):
+                    result = installer.main()
+            finally:
+                sys.argv = original_argv
+
+            self.assertEqual(result, 1)
+            self.assertEqual(checks, [True, False])
+            self.assertTrue(destination.is_dir())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "restore me\n")
+            self.assertFalse((skills_dir / installer.BACKUP_NAME).exists())
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertEqual(list(skills_dir.glob(f"{installer.STAGE_PREFIX}*")), [])
+            rendered = "\n".join(str(call.args[0]) for call in safe_print.call_args_list)
+            self.assertIn("Recovered the previous", rendered)
+            self.assertIn("Windows portable path limit", rendered)
+            self.assertIn("transaction stage payload file: references/", rendered)
+
+    def test_long_plan_preserves_an_untrusted_transaction_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skills_dir = root / "skills"
+            skills_dir.mkdir()
+            transaction = skills_dir / installer.TRANSACTION_NAME
+            transaction.write_text('{"broken":', encoding="utf-8")
+            base_contract = make_payload(root / "new-plan")
+            long_relative = "references/" + ("x" * 240) + ".md"
+            long_contract = contract_with_synthetic_file(base_contract, long_relative)
+
+            checks = 0
+
+            def enforce_windows_policy(
+                checked_skills_dir: Path,
+                contract: installer.PayloadContract,
+                existing: installer.PathSnapshot | None = None,
+                *,
+                before_installer_writes: bool = True,
+            ) -> None:
+                nonlocal checks
+                checks += 1
+                installer.assert_windows_portable_install_path(
+                    checked_skills_dir,
+                    contract,
+                    existing,
+                    before_installer_writes=before_installer_writes,
+                )
+
+            original_argv = sys.argv
+            sys.argv = [
+                "install_codex_skill.py",
+                "--dest",
+                str(skills_dir),
+                "--force",
+            ]
+            try:
+                with (
+                    mock.patch.object(
+                        installer,
+                        "_load_payload_contract_once",
+                        return_value=long_contract,
+                    ),
+                    mock.patch.object(
+                        installer,
+                        "assert_platform_portable_install_path",
+                        side_effect=enforce_windows_policy,
+                    ),
+                    mock.patch.object(installer, "safe_print") as safe_print,
+                ):
+                    result = installer.main()
+            finally:
+                sys.argv = original_argv
+
+            self.assertEqual(result, 1)
+            self.assertEqual(checks, 1, "untrusted recovery must stop before the locked plan check")
+            self.assertEqual(transaction.read_text(encoding="utf-8"), '{"broken":')
+            self.assertFalse((skills_dir / installer.SKILL_NAME).exists())
+            rendered = "\n".join(str(call.args[0]) for call in safe_print.call_args_list)
+            self.assertIn("transaction record is untrusted", rendered)
 
     def test_relative_skills_directory_is_measured_lexically_from_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

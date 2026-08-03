@@ -5102,7 +5102,18 @@ def main() -> int:
     # new user runs, and a stack trace reads as "the tool is broken".
     try:
         preflight_contract = _load_payload_contract_once(repo_root)
-        assert_platform_portable_install_path(skills_dir, preflight_contract)
+        try:
+            assert_platform_portable_install_path(skills_dir, preflight_contract)
+        except ValueError:
+            # A pre-existing transaction record is only a reason to defer the
+            # portability refusal; its pathname grants no authority.  Reading
+            # or recovering it here would race another installer, so validate
+            # it only after taking the shared install lock below.  Malformed,
+            # incompatible, or attacker-created records then fail closed in
+            # recover_interrupted_transaction without stranding a trusted
+            # backup behind a newly introduced path-policy check.
+            if not _path_exists(_transaction_path(skills_dir)):
+                raise
         assert_safe_preflight(destination, skills_dir, repo_root)
     except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as exc:
         safe_print(f"Refusing to install: {_bounded_diagnostic(exc)}")
