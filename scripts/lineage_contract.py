@@ -355,7 +355,7 @@ def validate_take_review_record(review: object, label: str) -> list[str]:
     return errors
 
 
-def _is_take_review_path(path: Path) -> bool:
+def is_take_review_path(path: Path) -> bool:
     name = path.name
     return (
         "project-state" not in name
@@ -544,7 +544,7 @@ def build_take_review_index(
     try:
         entries = resolved_directory.iterdir()
         for path in entries:
-            if not _is_take_review_path(path):
+            if not is_take_review_path(path):
                 continue
             candidates.append(path)
             if len(candidates) > MAX_TAKE_REVIEW_FILES_PER_DIRECTORY:

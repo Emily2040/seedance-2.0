@@ -10,6 +10,7 @@ from lineage_contract import (
     bound_validation_diagnostics,
     classify_parent_id,
     json_integer,
+    is_take_review_path,
     load_bounded_take_review,
     load_project_document,
     TakeReviewIndex,
@@ -234,7 +235,7 @@ def main() -> int:
 
     for path in sorted((root / "examples").rglob("*.json")) if (root / "examples").exists() else []:
         rel = path.relative_to(root).as_posix()
-        is_take_review = "take-review" in path.name or path.name == "take-review.json"
+        is_take_review = is_take_review_path(path)
         if is_take_review and path.parent.resolve() in review_indexes:
             # The directory index already loaded and validated this candidate
             # through the stable, bounded authority reader. Invalid, excluded,
