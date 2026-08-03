@@ -92,21 +92,148 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
-      # Linux hides trusted.* xattrs from callers without CAP_SYS_ADMIN. Run
-      # the preservation-success cases under an explicitly capability-proven
-      # process; the ordinary unit run above covers fail-closed behavior.
+      - name: Compile Python files
+        run: python -m compileall scripts tests
+      - name: Check diff whitespace
+        run: git diff --check
+
+  linux-privileged-frame-publication:
+    # A root process on the hosted VM still lacks CAP_SYS_ADMIN. Run only the
+    # success-path metadata regressions in an immutable, explicitly privileged
+    # container; the ordinary job above proves unprivileged refusal behavior.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      # ubuntu:24.04 linux/amd64 manifest published 2026-07-02.
+      image: ubuntu@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
+      options: --privileged
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPYCACHEPREFIX: /tmp/seedance-privileged-pycache
+    steps:
+      - name: Provision the pinned privileged runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install --yes --no-install-recommends \
+            acl \
+            attr \
+            ca-certificates \
+            ffmpeg \
+            git \
+            libcap2-bin \
+            python3
+          python3 --version
+          ffmpeg -hide_banner -version
+          setfacl --version
+          getfacl --version
+          setfattr --version
+          getfattr --version
+          capsh --print
+          {
+            printf 'SEEDANCE_TEST_FFMPEG=%s\n' "$(command -v ffmpeg)"
+            printf 'SEEDANCE_CI_FFMPEG_PROVISIONED=1\n'
+          } >> "$GITHUB_ENV"
+      # Actions are pinned to commit SHAs. Checkout runs only after the
+      # container's Git and CA runtime has been provisioned explicitly.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Prove privileged filesystem and publication prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -eq 0
+          command -v python3
+          command -v ffmpeg
+          command -v setfacl
+          command -v getfacl
+          command -v setfattr
+          command -v getfattr
+          python3 - <<'PY'
+          import os
+          import subprocess
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          workspace = Path(os.environ["GITHUB_WORKSPACE"])
+          sys.path.insert(0, str(workspace / "scripts"))
+          import extract_last_frame as extractor
+
+          assert os.geteuid() == 0, os.geteuid()
+          assert extractor._linux_has_effective_cap_sys_admin(), Path(
+              "/proc/self/status"
+          ).read_text(encoding="ascii")
+          assert extractor._posix_descriptor_xattr_api_supported()
+          assert extractor._posix_atomic_exchange_supported()
+
+          with tempfile.TemporaryDirectory(prefix="seedance-privileged-proof-") as raw:
+              root = Path(raw)
+              probe = root / "policy-probe"
+              probe.write_bytes(b"descriptor-bound")
+              descriptor = os.open(probe, os.O_RDWR)
+              try:
+                  trusted_name = "trusted.seedance-ci-proof"
+                  trusted_value = b"visible"
+                  os.setxattr(descriptor, trusted_name, trusted_value)
+                  assert trusted_name in os.listxattr(descriptor)
+                  assert os.getxattr(descriptor, trusted_name) == trusted_value
+                  os.removexattr(descriptor, trusted_name)
+                  assert trusted_name not in os.listxattr(descriptor)
+              finally:
+                  os.close(descriptor)
+
+              subprocess.run(
+                  ["setfattr", "-n", "user.seedance-ci-proof", "-v", "visible", probe],
+                  check=True,
+              )
+              subprocess.run(
+                  ["getfattr", "-n", "user.seedance-ci-proof", probe], check=True
+              )
+              subprocess.run(
+                  ["setfacl", "-m", "u:12345:r--", probe], check=True
+              )
+              subprocess.run(["getfacl", probe], check=True)
+              assert "system.posix_acl_access" in os.listxattr(probe)
+
+              distinct_uid = 65534 if os.geteuid() != 65534 else 65533
+              distinct_gid = 65534 if os.getegid() != 65534 else 65533
+              os.chown(probe, distinct_uid, distinct_gid)
+              changed = probe.stat()
+              assert changed.st_uid == distinct_uid, changed
+              assert changed.st_gid == distinct_gid, changed
+
+              left = root / "exchange-left"
+              right = root / "exchange-right"
+              left.write_bytes(b"left")
+              right.write_bytes(b"right")
+              directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+              try:
+                  extractor._posix_exchange_names(
+                      left.name, directory, right.name, directory
+                  )
+                  assert left.read_bytes() == b"right"
+                  assert right.read_bytes() == b"left"
+                  extractor._posix_exchange_names(
+                      left.name, directory, right.name, directory
+                  )
+                  assert left.read_bytes() == b"left"
+                  assert right.read_bytes() == b"right"
+              finally:
+                  os.close(directory)
+
+          assert extractor._posix_descriptor_xattrs_supported()
+          print(
+              "proved CAP_SYS_ADMIN, descriptor trusted.* xattrs, POSIX ACLs, "
+              "distinct UID/GID ownership, and renameat2(RENAME_EXCHANGE)"
+          )
+          PY
       - name: Run privileged Linux metadata-preservation regressions
         shell: bash
         run: |
           set -euo pipefail
-          python_path="$(command -v python)"
-          sudo env \
-            GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
-            PYTHONDONTWRITEBYTECODE=1 \
-            PYTHONPYCACHEPREFIX=/tmp/seedance-root-pycache \
-            SEEDANCE_TEST_FFMPEG="$SEEDANCE_TEST_FFMPEG" \
-            SEEDANCE_CI_FFMPEG_PROVISIONED=1 \
-            "$python_path" - <<'PY'
+          python3 - <<'PY'
           import os
           import sys
           import unittest
@@ -142,8 +269,6 @@ jobs:
           if not result.wasSuccessful():
               raise SystemExit(1)
           PY
-      - name: Compile Python files
-        run: python -m compileall scripts tests
       - name: Check diff whitespace
         run: git diff --check
 
