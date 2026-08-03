@@ -57,7 +57,7 @@ First, underline all superlatives and vague style labels and classify each by sl
 
 Do not remove useful genre language when it is paired with concrete direction. `Noir hallway with hard venetian-blind shadows` is useful; `dramatic cinematic noir vibes` is not. Keep terms that communicate medium, era, palette, or lens behavior.
 
-Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for the slop-class taxonomy and extended replacement table, and [seedance-vocab-en](../seedance-vocab-en/SKILL.md) with `references/vocab/en.md` for the full function-organized English precision vocabulary. For non-English prompts, load the matching vocab file's Slop Traps table (`references/vocab/zh.md`, `ja.md`, `ko.md`, `es.md`, `ru.md`) - each language community has its own empty-quality words and decompositions.
+Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for the slop-class taxonomy and extended replacement table, and [seedance-vocab-en](../seedance-vocab-en/SKILL.md) with [English vocabulary](../../references/vocab/en.md) for the full function-organized English precision vocabulary. For non-English prompts, load the matching vocab file's Slop Traps table: [Chinese](../../references/vocab/zh.md), [Japanese](../../references/vocab/ja.md), [Korean](../../references/vocab/ko.md), [Spanish](../../references/vocab/es.md), or [Russian](../../references/vocab/ru.md). Each language community has its own empty-quality words and decompositions.
 
 ## Output Contract
 

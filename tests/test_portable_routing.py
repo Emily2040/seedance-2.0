@@ -24,7 +24,6 @@ def route_errors(
     root: Path,
     *,
     require_routes: bool = True,
-    reject_unlinked_routes: bool = True,
 ) -> list[str]:
     errors: list[str] = []
     validate_skills.validate_portable_routes(
@@ -32,7 +31,6 @@ def route_errors(
         root,
         errors,
         require_routes=require_routes,
-        reject_unlinked_routes=reject_unlinked_routes,
     )
     return errors
 
@@ -46,7 +44,6 @@ def runtime_route_errors(root: Path) -> list[str]:
             root,
             errors,
             require_routes=is_root_skill,
-            reject_unlinked_routes=is_root_skill,
         )
     return errors
 
@@ -130,6 +127,48 @@ class PortableRouteValidationTests(unittest.TestCase):
             "Load `references/guide.md`.\n",
             "is code text, not a Markdown link",
         )
+
+    def test_nested_runtime_unlinked_route_instruction_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "skills/source/SKILL.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "For full vocabulary, load `references/vocab/en.md`.\n",
+                encoding="utf-8",
+            )
+
+            errors = route_errors(source, root, require_routes=False)
+            self.assertTrue(
+                any("is code text, not a Markdown link" in error for error in errors),
+                errors,
+            )
+
+    def test_descriptive_code_paths_do_not_become_route_false_positives(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "references/source.md"
+            guide = root / "references/guide.md"
+            source.parent.mkdir(parents=True)
+            guide.write_text("# Guide\n", encoding="utf-8")
+            source.write_text(
+                "The package layout includes `references/guide.md`. "
+                "The client loads `SKILL.md` on demand. "
+                "The generated report is named `guide.md`.\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(route_errors(source, root, require_routes=False), [])
+
+    def test_code_form_label_inside_markdown_link_is_not_rejected(self) -> None:
+        temporary, root, skill_file = self.fixture(
+            "See [`guide.md`](references/guide.md).\n"
+        )
+        with temporary:
+            target = root / "references/guide.md"
+            target.parent.mkdir(parents=True)
+            target.write_text("# Guide\n", encoding="utf-8")
+            self.assertEqual(route_errors(skill_file, root), [])
 
     def test_missing_target_is_rejected(self) -> None:
         self.assert_route_error(
@@ -293,7 +332,6 @@ class PortableRouteValidationTests(unittest.TestCase):
                     source,
                     root,
                     require_routes=False,
-                    reject_unlinked_routes=False,
                 ),
                 [],
             )
@@ -309,7 +347,6 @@ class PortableRouteValidationTests(unittest.TestCase):
                 source,
                 root,
                 require_routes=False,
-                reject_unlinked_routes=False,
             )
             self.assertTrue(any("opaque route" in error for error in errors), errors)
 
@@ -327,7 +364,6 @@ class PortableRouteValidationTests(unittest.TestCase):
                     source,
                     root,
                     require_routes=False,
-                    reject_unlinked_routes=False,
                 ),
                 [],
             )
@@ -352,7 +388,6 @@ class PortableRouteValidationTests(unittest.TestCase):
                     source,
                     root,
                     require_routes=False,
-                    reject_unlinked_routes=False,
                 )
                 self.assertTrue(any(expected in error for error in errors), errors)
 

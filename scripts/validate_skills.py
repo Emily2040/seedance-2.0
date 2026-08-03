@@ -167,7 +167,12 @@ MARKDOWN_LINK_RE = re.compile(
     r"(?<!!)\[[^\]\r\n]+\]\((?P<target><[^>\r\n]+>|[^)\r\n]+)\)"
 )
 UNLINKED_ROUTE_RE = re.compile(
-    r"`(?P<target>[^`\r\n]*(?:skills|references)[\\/][^`\r\n]*)`",
+    r"`(?P<target>(?:\.{0,2}/)*(?:(?:skills|references)[\\/])?"
+    r"[A-Za-z0-9][A-Za-z0-9_./\\-]*\.md(?:#[A-Za-z0-9_-]+)?)`",
+    re.IGNORECASE,
+)
+UNLINKED_ROUTE_DIRECTIVE_RE = re.compile(
+    r"\b(?:load|read|open|consult|follow|see|use|check|review|route\s+to)\b",
     re.IGNORECASE,
 )
 ROUTE_SEGMENT_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")
@@ -286,13 +291,76 @@ def _canonical_relative_route(
     return "/".join(parts) or "."
 
 
+def _unlinked_route_instructions(
+    text: str,
+    path: Path,
+    root: Path,
+) -> tuple[re.Match[str], ...]:
+    """Return actionable code-form routes while ignoring descriptive prose.
+
+    A backticked Markdown filename is not automatically a route: runtime docs
+    also describe package layouts, filenames, and generated artifacts. Treat it
+    as an unlinked route only when the same sentence directs the agent to load,
+    read, open, consult, follow, see, use, check, review, or route to that file.
+    Root-qualified ``skills/`` and ``references/`` paths are always route-shaped;
+    a short filename is route-shaped only when it resolves inside those active
+    runtime trees. Code-form labels that are already inside Markdown links are
+    excluded.
+    """
+
+    root = root.resolve()
+    source_parent_parts = path.parent.resolve().relative_to(root).parts
+    active_by_name: dict[str, list[Path]] = {}
+    for active_path in active_runtime_markdown_paths(root):
+        active_by_name.setdefault(active_path.name.casefold(), []).append(active_path)
+    matches: list[re.Match[str]] = []
+    for match in UNLINKED_ROUTE_RE.finditer(text):
+        # ``[`label.md`](target.md)`` is already a real Markdown link.
+        if (
+            match.start() > 0
+            and text[match.start() - 1] == "["
+            and text[match.end() :].startswith("](")
+        ):
+            continue
+
+        raw_target = match.group("target").replace("\\", "/")
+        route_path = raw_target.partition("#")[0]
+        raw_parts = route_path.split("/")
+        explicit_root = bool(raw_parts) and raw_parts[0].casefold() in {
+            "skills",
+            "references",
+        }
+        if explicit_root:
+            route_shaped = True
+        else:
+            target_parts, escaped = _lexical_route_target(source_parent_parts, raw_parts)
+            basename_matches = active_by_name.get(PurePosixPath(route_path).name.casefold(), [])
+            route_shaped = (
+                not escaped
+                and bool(target_parts)
+                and target_parts[0].casefold() in {"skills", "references"}
+                and root.joinpath(*target_parts).is_file()
+            ) or len(basename_matches) == 1
+        if not route_shaped:
+            continue
+
+        sentence_start = 0
+        for boundary in re.finditer(
+            r"(?:\n|[.!?;](?=\s|$))",
+            text[: match.start()],
+        ):
+            sentence_start = boundary.end()
+        if UNLINKED_ROUTE_DIRECTIVE_RE.search(text[sentence_start : match.start()]):
+            matches.append(match)
+    return tuple(matches)
+
+
 def validate_portable_routes(
     path: Path,
     root: Path,
     errors: list[str],
     *,
     require_routes: bool = True,
-    reject_unlinked_routes: bool = True,
 ) -> None:
     """Validate explicit Markdown routes without claiming client auto-loading.
 
@@ -315,12 +383,11 @@ def validate_portable_routes(
             "use an ordinary relative Markdown link"
         )
 
-    if reject_unlinked_routes:
-        for match in UNLINKED_ROUTE_RE.finditer(text):
-            line = _line_number(text, match.start())
-            errors.append(
-                f"{rel}:{line}: route `{match.group('target')}` is code text, not a Markdown link"
-            )
+    for match in _unlinked_route_instructions(text, path, root):
+        line = _line_number(text, match.start())
+        errors.append(
+            f"{rel}:{line}: route `{match.group('target')}` is code text, not a Markdown link"
+        )
 
     routes: list[tuple[re.Match[str], str]] = []
     source_parent_parts = path.parent.resolve().relative_to(root).parts
@@ -612,10 +679,6 @@ def main() -> int:
             root,
             errors,
             require_routes=is_root_skill,
-            # Backticked repository paths in reference prose can document a
-            # layout or command without being a load route. The root routing
-            # table has no such ambiguity and keeps the stronger check.
-            reject_unlinked_routes=is_root_skill,
         )
 
 

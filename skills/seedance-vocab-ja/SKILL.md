@@ -44,11 +44,11 @@ Prefer concise production Japanese over literal translation. Keep the structure 
 
 ## Register Rule
 
-The moment a prompt contains dialogue, load Register (文体) in `references/vocab/ja.md` and declare one register per speaker - 敬語, です・ます体, or 普通体 - with a first-person pronoun that matches it. An unstated register is a decision handed to the model, and the mora cost differs enough to break the sync budget (ありがとう 5 → ありがとうございます 10).
+The moment a prompt contains dialogue, load Register (文体) in [Japanese vocabulary](../../references/vocab/ja.md) and declare one register per speaker - 敬語, です・ます体, or 普通体 - with a first-person pronoun that matches it. An unstated register is a decision handed to the model, and the mora cost differs enough to break the sync budget (ありがとう 5 → ありがとうございます 10).
 
 ## De-Slop Rule
 
-When the prompt leans on `映画のような`, `エモい`, `雰囲気のある`, `壮大な`, or `高画質`, load the Slop Traps table in `references/vocab/ja.md` and decompose each into the physical elements that produce it - 動作動詞＋速度＋視点, 光源＋方向＋挙動.
+When the prompt leans on `映画のような`, `エモい`, `雰囲気のある`, `壮大な`, or `高画質`, load the Slop Traps table in [Japanese vocabulary](../../references/vocab/ja.md) and decompose each into the physical elements that produce it - 動作動詞＋速度＋視点, 光源＋方向＋挙動.
 
 ## Output Contract
 

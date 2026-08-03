@@ -23,4 +23,4 @@ Seedance prompting is not pixel scripting. The text should direct intent; refere
 
 Short prompts should be dense, not vague.
 
-For the operational version of this split — deciding where one generation's budget goes between identity fidelity, motion boldness, and scene density — load `allocation-model.md`.
+For the operational version of this split — deciding where one generation's budget goes between identity fidelity, motion boldness, and scene density — load [allocation-model](allocation-model.md).

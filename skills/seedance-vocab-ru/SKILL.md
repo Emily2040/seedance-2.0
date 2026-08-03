@@ -47,11 +47,11 @@ Load [vocab/ru](../../references/vocab/ru.md) for dense role-binding, first/last
 
 ## De-Slop Rule
 
-When the prompt leans on `кинематографичный`, `эпичный`, `атмосферный`, `потрясающий`, or `высокое качество`, load the Slop Traps table in `references/vocab/ru.md` and decompose each into the physical elements that produce it - движение камеры, источник света, материал, звук.
+When the prompt leans on `кинематографичный`, `эпичный`, `атмосферный`, `потрясающий`, or `высокое качество`, load the Slop Traps table in [Russian vocabulary](../../references/vocab/ru.md) and decompose each into the physical elements that produce it - движение камеры, источник света, материал, звук.
 
 ## Dialogue Rule
 
-For spoken Russian, load the Russian Dialogue Notes in `references/vocab/ru.md`: lines of a few words, one speaker per generation, Cyrillic first with transliteration as the field-reported fallback, and a post-dub plan for fully voiced pieces.
+For spoken Russian, load the Russian Dialogue Notes in [Russian vocabulary](../../references/vocab/ru.md): lines of a few words, one speaker per generation, Cyrillic first with transliteration as the field-reported fallback, and a post-dub plan for fully voiced pieces.
 
 ## Output Contract
 

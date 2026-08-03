@@ -72,7 +72,7 @@ Field-observed from Russian community testing (Habr, vc.ru); test per surface, n
 | Короткие реплики | Split monologues into lines of a few words: `Она тихо говорит: «Я нашла его»` - long phrases drift into noise |
 | Кириллица vs транслит | The community tested pure Cyrillic, transliteration (`Ya nashla yego`), and hybrids - results vary by surface; try Cyrillic first, transliteration as the field-reported fallback when Cyrillic degrades |
 | Один говорящий | One speaker per generation for reliable lip-sync; locked medium close-up during the line |
-| Полная озвучка | A fully voiced Russian piece is not reliably achievable in-model: generate with room tone or short lines, then dub and lip-sync in post (see `audio-post-delivery.md`) |
+| Полная озвучка | A fully voiced Russian piece is not reliably achievable in-model: generate with room tone or short lines, then dub and lip-sync in post (see [audio-post-delivery](../audio-post-delivery.md)) |
 | Доступ из РФ | Access from Russia typically runs through third-party wrappers - treat their model names, prices, and limits as wrapper-specific, never official |
 | Бюджет реплики | ~10-15 words maximum per phrase, fewer is safer; long phrases drift into noise |
 | Аудио-референс | On surfaces that accept a voice clip, attach your own recorded or licensed Russian voice so the model lip-syncs to it instead of synthesizing - the field-reported fix for English-accented articulation |

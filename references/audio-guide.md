@@ -2,7 +2,7 @@
 
 Use this reference for detailed audio, dialogue, beat-sync, ambience, and lip-sync workflows. Keep audio roles explicit and avoid promising exact platform behavior unless the active surface documents it.
 
-For professional audio post, stems, M&E, dubbing, loudness, or delivery checks, also load `audio-post-delivery.md`.
+For professional audio post, stems, M&E, dubbing, loudness, or delivery checks, also load [audio-post-delivery](audio-post-delivery.md).
 
 ## How the audio actually works (reason before you prompt)
 

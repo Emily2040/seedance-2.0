@@ -20,7 +20,7 @@ The rows below are compressed for scanning, so a single `[official]` label sits 
 | Element | Layer | Actually established by |
 |---|---|---|
 | multi-shot in one call | model capability | provider docs |
-| `Shot 1:/2:/3:` labels | request syntax | provider docs, **surface-specific** — Chinese surfaces use a `【时间轴】` timeline instead, see `multishot-grammar.md` |
+| `Shot 1:/2:/3:` labels | request syntax | provider docs, **surface-specific** — Chinese surfaces use a `【时间轴】` timeline instead, see [multishot-grammar](multishot-grammar.md) |
 | Standard tier | surface access | practitioner reports, **not** provider docs |
 | 10–15s or `auto` | surface access | provider docs |
 | shots × seconds budget | heuristic | a planning default to test, not a documented limit |
@@ -53,4 +53,4 @@ Surface duration caps are active-surface facts, not universal Seedance facts; au
 
 ## Competitive Context *(2026-06-14)*
 
-Native audio is no longer a Seedance-unique differentiator — as of mid-2026 Veo 3.1, Sora 2, Kling 3.0, Runway Gen-4.5, Hailuo 2.3, and Vidu Q3 all ship it [tech-press]. Lead with what is still distinctive in combination — single-pass multimodal references (text+image+video+audio together), multi-shot from one prompt, and multilingual lip-sync — rather than selling native audio as a headline. The official native resolution is 480p/720p; 1080p is surface-specific (see `api-status.md`).
+Native audio is no longer a Seedance-unique differentiator — as of mid-2026 Veo 3.1, Sora 2, Kling 3.0, Runway Gen-4.5, Hailuo 2.3, and Vidu Q3 all ship it [tech-press]. Lead with what is still distinctive in combination — single-pass multimodal references (text+image+video+audio together), multi-shot from one prompt, and multilingual lip-sync — rather than selling native audio as a headline. The official native resolution is 480p/720p; 1080p is surface-specific (see [api-status](api-status.md)).

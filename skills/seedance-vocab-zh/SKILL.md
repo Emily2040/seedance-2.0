@@ -47,11 +47,11 @@ Load [vocab/zh](../../references/vocab/zh.md) for dense role-binding, first/last
 
 ## Script Variant Rule
 
-When the deliverable targets 台灣, 香港, or any Traditional-script audience, load Script Variant (简繁) in `references/vocab/zh.md` before writing subtitle or delivery text. Prompt in Simplified; declare the delivery script separately - and never convert between them by find-and-replace (头发 → 頭髮, not 頭發).
+When the deliverable targets 台灣, 香港, or any Traditional-script audience, load Script Variant (简繁) in [Chinese vocabulary](../../references/vocab/zh.md) before writing subtitle or delivery text. Prompt in Simplified; declare the delivery script separately - and never convert between them by find-and-replace (头发 → 頭髮, not 頭發).
 
 ## De-Slop Rule
 
-When the prompt leans on `电影感`, `氛围感`, `高级感`, `大片感`, or bare `质感`, load the Slop Traps table in `references/vocab/zh.md` and decompose each into the physical elements that produce it - 材质, 光线, 色彩, 空气.
+When the prompt leans on `电影感`, `氛围感`, `高级感`, `大片感`, or bare `质感`, load the Slop Traps table in [Chinese vocabulary](../../references/vocab/zh.md) and decompose each into the physical elements that produce it - 材质, 光线, 色彩, 空气.
 
 ## Output Contract
 

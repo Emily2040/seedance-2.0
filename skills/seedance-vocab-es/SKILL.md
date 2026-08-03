@@ -44,7 +44,7 @@ Translate production meaning, not word-for-word English. Keep the prompt concret
 
 ## De-Slop Rule
 
-When the prompt leans on `cinematográfico`, `épico`, `impresionante`, `mágico`, or `de alta calidad`, load the Slop Traps table in `references/vocab/es.md` and decompose each into the physical elements that produce it - movimiento de cámara, fuente de luz, material, sonido.
+When the prompt leans on `cinematográfico`, `épico`, `impresionante`, `mágico`, or `de alta calidad`, load the Slop Traps table in [Spanish vocabulary](../../references/vocab/es.md) and decompose each into the physical elements that produce it - movimiento de cámara, fuente de luz, material, sonido.
 
 ## Output Contract
 

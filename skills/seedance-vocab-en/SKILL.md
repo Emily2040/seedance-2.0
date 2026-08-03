@@ -51,7 +51,7 @@ English homonyms read as threats to filters: `shoot the scene`, `kill the lights
 
 `@Image1 is the reference; keep identity, color, and shape unchanged. Only [motion/light/camera] changes. Camera: [one move]. Sound: [one cue]. Constraints: [lock].`
 
-Load `references/vocab/en.md` for the full function-organized vocabulary, slop traps, and filter-trip repairs. Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for the core replacement rule and [filter-vocab](../../references/filter-vocab.md) for the full false-positive repair table.
+Load [English vocabulary](../../references/vocab/en.md) for the full function-organized vocabulary, slop traps, and filter-trip repairs. Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for the core replacement rule and [filter-vocab](../../references/filter-vocab.md) for the full false-positive repair table.
 
 ## Output Contract
 
