@@ -99,10 +99,19 @@ jobs:
 
   linux-privileged-frame-publication:
     # A root process on the hosted VM still lacks CAP_SYS_ADMIN. Run only the
-    # success-path metadata regressions in an immutable, explicitly privileged
-    # container; the ordinary job above proves unprivileged refusal behavior.
+    # success-path metadata regressions in an explicitly privileged container
+    # with a digest-pinned base; the ordinary job above proves unprivileged
+    # refusal behavior on every pull request, including forks.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # Never execute fork-controlled code with host-level container privileges.
+    # Push and manual runs are repository-controlled; pull requests must have
+    # a head repository identical to this repository.
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository)
     container:
       # ubuntu:24.04 linux/amd64 manifest published 2026-07-02.
       image: ubuntu@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
@@ -111,11 +120,14 @@ jobs:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONPYCACHEPREFIX: /tmp/seedance-privileged-pycache
     steps:
-      - name: Provision the pinned privileged runtime
+      - name: Provision privileged test dependencies
         shell: bash
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
+          # Only the Ubuntu base manifest is immutable. Resolve these explicit
+          # packages from Ubuntu 24.04's signed current repositories and print
+          # every relevant tool version below so package drift stays visible.
           apt-get update
           apt-get install --yes --no-install-recommends \
             acl \
@@ -139,6 +151,8 @@ jobs:
       # Actions are pinned to commit SHAs. Checkout runs only after the
       # container's Git and CA runtime has been provisioned explicitly.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Prove privileged filesystem and publication prerequisites
         shell: bash
         run: |
