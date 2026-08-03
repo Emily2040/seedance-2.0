@@ -40,8 +40,10 @@ import difflib
 import json
 import re
 import statistics
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from functools import lru_cache
+from typing import NamedTuple
 from pathlib import Path
 
 # ---------------------------------------------------------------- vocabularies
@@ -189,6 +191,7 @@ TOKEN_ALIASES = {
     "dancer": "dance",
     "dancing": "dance",
     "earthshine": "earth",
+    "elderly": "old",
     "footfall": "foot",
     "fram": "frame",
     "dialogue": "speech",
@@ -211,6 +214,7 @@ TOKEN_ALIASES = {
     "seed": "sprout",
     "mov": "move",
     "notic": "notice",
+    "older": "old",
     "driv": "drive",
     "preserv": "preserve",
     "rais": "raise",
@@ -237,6 +241,15 @@ COUNTED_SHOT_REQUEST = re.compile(
     re.I,
 )
 NUMBERED_SHOT_MARKER = re.compile(r"\b(?:shot|cut|panel)\s*(?P<count>\d+)\b", re.I)
+NUMBERED_PHASE_LABEL = re.compile(
+    r"\b(?:act|beat|moment|part|phase|scene|shot|take)\s*"
+    r"(?:(?:#|no\.?|number)\s*)?"
+    r"(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|"
+    r"nineteen|twenty|i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|xiii|xiv|"
+    r"xv|xvi|xvii|xviii|xix|xx)\b",
+    re.I,
+)
 ANIMATION_CONTRACT = re.compile(
     r"\b(?:animation boards?|storyboards?|2d|two[- ]dimensional|animat\w*)\b",
     re.I,
@@ -284,6 +297,29 @@ DEPICTION_TARGET_INTRO = re.compile(
     r"\b(?P<depiction>featuring|depicting|showing|starring)\s+",
     re.I,
 )
+OUTPUT_ENTITY_TARGET_INTRO = re.compile(
+    r"\b(?:the\s+)?(?:output|result)\s*"
+    r"(?::|is|shows?|depicts?|features?)\s+"
+    r"(?:(?:a|an|another|the)\s+)?",
+    re.I,
+)
+BASE_OUTPUT_TARGET_INTRO = re.compile(
+    r"\bbase\s+(?:(?:a|an|the)\s+)?"
+    r"(?=(?:[A-Za-z0-9'-]+\s+){1,8}"
+    r"(?:animation|clip|frame|image|portrait|render|sequence|shot|storyboard|"
+    r"take|video)\s+on\b)",
+    re.I,
+)
+DIRECT_ENTITY_TARGET_INTRO = re.compile(
+    r"\b(?:animate|build|compose|create|deliver|depict|draft|generate|make|"
+    r"portray|produce|render|show|star)\s+"
+    r"(?!(?:(?:a|an|another|the)\s+)?(?:[A-Za-z0-9-]+\s+){0,2}"
+    r"(?:animation|clip|frame|image|portrait|render|sequence|shot|"
+    r"storyboard|take|video)\b)"
+    r"(?!(?:based|from|into|using|with)\b)"
+    r"(?:(?:a|an|another|the)\s+)?(?=[A-Za-z0-9])",
+    re.I,
+)
 TARGET_STRONG_BOUNDARY = re.compile(r"[.;!?。！？；\r\n]+")
 TARGET_INLINE_BOUNDARY = re.compile(r"[,.;!?。！？，；\r\n]")
 TARGET_ASSET_MARKER = re.compile(
@@ -302,15 +338,159 @@ TARGET_OUTPUT_COORDINATION = re.compile(
     r"produce|render)\b(?:\s+(?:a|an|another|the|[\w-]+)){0,5}\s*$",
     re.I,
 )
+TARGET_TRAILING_SOURCE = re.compile(
+    r"\b(?:based\s+on|from|using)\b|"
+    r"\bon\s+(?=(?:(?:a|an|the)\s+)?(?:footage|image|input|photo|"
+    r"photograph|reference|source|video)\b)",
+    re.I,
+)
+OUTPUT_INCLUDED_SUBJECT = re.compile(
+    r"\b(?:do|does|did)\s+not\s+(?:exclude|omit|remove)\s+"
+    r"(?:(?:a|an|the)\s+)?(?P<subject>[^,;.!?\n]+)",
+    re.I,
+)
+SOURCE_ROLE_NOUN_TEXT = (
+    r"(?:clips?|footage|images?|inputs?|photos?|photographs?|references?|"
+    r"sources?|stills?|videos?)"
+)
+SOURCE_ROLE_NOUN = re.compile(r"\b" + SOURCE_ROLE_NOUN_TEXT + r"\b", re.I)
+SOURCE_OUTPUT_VERB_TEXT = (
+    r"(?:animate|build|compose|create|deliver|depict|draft|generate|make|"
+    r"produce|render|show)"
+)
+SOURCE_LABEL_DESCRIPTION = re.compile(
+    r"(?:^|[.;!?。！？；\n])\s*"
+    r"(?:references?(?:\s+(?:clips?|footage|images?|photos?|videos?))?|"
+    r"inputs?|sources?(?:\s+(?:clips?|footage|images?|videos?))?)\s*[:：]\s*"
+    r"(?P<source>[^,，;；.!?。！？\n]+)",
+    re.I,
+)
+SOURCE_ROLE_CONTAINS = re.compile(
+    r"\b(?:the\s+)?(?:inputs?|references?|"
+    r"sources?(?:\s+(?:clips?|footage|images?|videos?))?)"
+    r"\s+(?:contains?|is|are)\s+(?P<source>[^,，;；.!?。！？\n]+)",
+    re.I,
+)
+SOURCE_SUBJECT_IN_ROLE = re.compile(
+    r"(?P<source>[^,;.!?\n]{1,240}?)\s+(?:is|are)\s+"
+    r"(?:(?:visible|shown)\s+only\s+)?in\s+(?:the\s+)?"
+    r"(?:inputs?|references?|sources?)\b",
+    re.I,
+)
+SOURCE_ROLE_DEPICTS = re.compile(
+    r"\b(?:the\s+)?(?:inputs?|references?|"
+    r"sources?(?:\s+(?:clips?|footage|images?|videos?))?)"
+    r"\s*[,]?\s*(?:which\s+)?(?:contains?|depicts?|features?|shows?|showing)\s+"
+    r"(?P<source>[^,;.!?\n]+)",
+    re.I,
+)
+SOURCE_MODEL_RECEIVES = re.compile(
+    r"\b(?:generator|model|system)\s+receives?\s+"
+    r"(?:(?:a|an|the)\s+)?" + SOURCE_ROLE_NOUN_TEXT + r"(?:\s+of)?\s+"
+    r"(?P<source>[^,;.!?\n]+?)(?=\s+(?:and\s+)?"
+    + SOURCE_OUTPUT_VERB_TEXT + r"s?\b|[,;.!?\n]|$)",
+    re.I,
+)
+SOURCE_GOVERNED_LEADING = re.compile(
+    r"\b(?:from|given|using|with)\s+(?P<source>[^,;.!?\n]+?)"
+    r"(?=\s+as\s+(?:(?:a|the)\s+)?(?:input|reference)\b|"
+    r",\s*" + SOURCE_OUTPUT_VERB_TEXT + r"\b)",
+    re.I,
+)
+SOURCE_GOVERNED_IMPERATIVE = re.compile(
+    r"\b(?:take|use)\s+(?P<source>[^,;.!?\n]+?)\s+"
+    r"(?=(?:as\s+(?:(?:a|the)\s+)?(?:input|reference)(?:\s+to)?|and)\s+"
+    + SOURCE_OUTPUT_VERB_TEXT + r"\b)",
+    re.I,
+)
+SOURCE_ONLY_INSPIRATION = re.compile(
+    r"\buse\s+(?P<source>[^,;.!?\n]+?)\s+only\s+as\s+"
+    r"(?:motion|style|visual)\s+(?:guide|guidance|inspiration|reference)\b",
+    re.I,
+)
+SOURCE_ONLY_PURPOSE = re.compile(
+    r"\buse\s+(?P<source>[^,;.!?\n]*\b" + SOURCE_ROLE_NOUN_TEXT
+    + r"\b[^,;.!?\n]*?)\s+(?:only|solely)\s+to\b",
+    re.I,
+)
+SOURCE_ASSET_CONTAINS = re.compile(
+    r"(?P<source>[^,;.!?\n]{1,240}?)\s+"
+    r"(?:appears?|is\s+(?:depicted|shown|visible))"
+    r"\s+in\s+@(?:image|video)\s*\d+\b",
+    re.I,
+)
+SOURCE_ASSET_DEPICTS = re.compile(
+    r"@(?:image|video)\s*\d+\s*[,]?\s*"
+    r"(?:which\s+)?(?:depicting|depicts?|featuring|features?|shows?|showing)\s+"
+    r"(?P<source>[^,;.!?\n]+)",
+    re.I,
+)
+SOURCE_TREATED_AS_INPUT = re.compile(
+    r"\btreat\s+(?P<source>[^,;.!?\n]*\b" + SOURCE_ROLE_NOUN_TEXT
+    + r"\b[^,;.!?\n]*?)\s+as\s+(?:(?:a|the)\s+)?"
+    r"(?:motion|style|visual)\s+(?:guide|guidance|input|reference)\b",
+    re.I,
+)
+SOURCE_CONSULTED = re.compile(
+    r"\b(?:consult|referenc(?:es|ed|ing))\s+"
+    r"(?P<source>[^,;.!?\n]*\b" + SOURCE_ROLE_NOUN_TEXT
+    + r"\b[^,;.!?\n]*)",
+    re.I,
+)
+SOURCE_FED_TO_MODEL = re.compile(
+    r"\bfeed\s+(?P<source>[^,;.!?\n]*\b" + SOURCE_ROLE_NOUN_TEXT
+    + r"\b[^,;.!?\n]*?)\s+into\s+(?:(?:a|the)\s+)?"
+    r"(?:generator|model|system)\b",
+    re.I,
+)
+SOURCE_PROMPTED_MODEL = re.compile(
+    r"\bprompt\s+(?:(?:a|the)\s+)?(?:generator|model|system)\s+with\s+"
+    r"(?P<source>[^,;.!?\n]*\b" + SOURCE_ROLE_NOUN_TEXT
+    + r"\b[^,;.!?\n]*)",
+    re.I,
+)
+SOURCE_STILL_INFORMS = re.compile(
+    r"(?P<source>[^,;.!?\n]{1,240}?\bstill)\s+informs?\s+"
+    r"(?:(?:a|an|the)\s+)?(?:[A-Za-z0-9'-]+\s+){0,8}"
+    r"(?:animation|clip|image|output|render|result|video)\b",
+    re.I,
+)
+SOURCE_ROLE_SUBJECT = re.compile(
+    r"(?P<source>[^;.!?\n]{1,240}?\b" + SOURCE_ROLE_NOUN_TEXT
+    + r"\b[^;.!?\n]{0,160}?)\s+"
+    r"(?:controls?|determines?|feeds?|guides?|provides?|suppl(?:y|ies)|"
+    r"is\s+(?:the\s+)?(?:motion|style|visual)\s+(?:guide|reference)\s+for)\b",
+    re.I,
+)
+SOURCE_ALWAYS_TRAILING = re.compile(
+    r"\b(?:based\s+(?:on|upon)|informed\s+by|inspired\s+by|"
+    r"patterned\s+after)\s+"
+    r"(?P<source>[^,;.!?\n]+)",
+    re.I,
+)
+SOURCE_ROLE_TRAILING = re.compile(
+    r"\b(?:from|on|using|with)\s+"
+    r"(?P<source>[^,;.!?\n]*?\b" + SOURCE_ROLE_NOUN_TEXT
+    + r"\b[^,;.!?\n]*?)"
+    r"(?=\s+(?:for|onto|to)\s+(?:(?:a|an|the)\s+)?"
+    r"(?:[A-Za-z0-9'-]+\s+){0,8}"
+    r"(?:animation|clip|frame|image|output|portrait|render|result|sequence|"
+    r"shot|storyboard|take|video)\b|[,;.!?\n]|$)",
+    re.I,
+)
 TARGET_PHRASE_BREAKS = {
     "after", "as", "at", "before", "during", "for", "in", "inside",
     "instead", "near", "on", "outside", "rather", "that", "than",
-    "under", "versus", "vs", "when", "where", "which", "while", "who",
+    "under", "versus", "vs", "when", "where", "which", "while", "who", "whose",
     "with",
 }
 TARGET_ALTERNATIVE = "or"
 MAX_EXPLICIT_TARGET_REQUIREMENTS = 8
 TARGET_IDENTITY_MARKERS = {"call", "nam"}
+TARGET_FORMAT_TERMS = {"portrait_photo", "still"}
+COORDINATION_DEGREE_MODIFIERS = {
+    "bright", "deep", "dark", "light", "pale", "very",
+}
 TARGET_PURPOSE_VERBS = {
     "advertise", "demonstrate", "encourage", "explain", "promote", "showcase",
     "support", "teach",
@@ -324,27 +504,31 @@ TARGET_ACTION_BREAKS = {
 }
 
 PHASE_ORDINAL = (
-    r"(?:next|following|first|second|third|fourth|fifth|sixth|seventh|"
+    r"(?:next|following|subsequent|first|second|third|fourth|fifth|sixth|seventh|"
     r"eighth|ninth|tenth|\d+)"
 )
 PHASE_NUMBER = (
-    r"(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)"
+    r"(?:(?:#|no\.?|number)\s*)?"
+    r"(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|"
+    r"i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|xiii|xiv|xv|xvi|xvii|xviii|"
+    r"xix|xx|\d+)"
 )
-PHASE_NOUN = r"(?:beat|moment|phase|scene|shot|take)"
+PHASE_NOUN = r"(?:act|beat|moment|part|phase|scene|shot|take)"
 PHASE_SEPARATOR = (
     r"(?:\s*[.!?。！？，,;:；：]\s*|\s*[-\u2013\u2014]{1,2}\s*|\s+)"
 )
 DIRECT_SEQUENCE_BRIDGE = re.compile(
     r"^\s*(?:[.!?。！？，,;:；：]|[-\u2013\u2014]{1,2})?\s*(?:and\s+)?"
     r"(?:"
-    r"(?:(?:then|next|finally|followed by)|(?:before|after))"
+    r"(?:(?:then|next|later|finally|followed by)|(?:before|after))"
     + PHASE_SEPARATOR
     + r"|(?:in|on)\s+(?:the\s+)?"
     + PHASE_ORDINAL
     + r"\s+"
     + PHASE_NOUN
     + PHASE_SEPARATOR
-    + r"|(?:"
+    + r"|(?:(?:the\s+)?"
     + PHASE_ORDINAL
     + r"\s+"
     + PHASE_NOUN
@@ -372,6 +556,58 @@ EVENT_SEQUENCE_BRIDGE = re.compile(
     r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
     re.I,
 )
+SEMANTIC_EVENT_TRANSITION_PATTERNS = (
+    # A bounded matrix of state-change predicates.  Each family must carry a
+    # directional complement; a bare ``the light fades`` is not a phase cue.
+    r"fad(?:e|es|ed|ing)(?:\s+out)?\s+(?:to|into)",
+    r"dissolv(?:e|es|ed|ing)\s+(?:to|into)",
+    r"(?:blend|melt|morph|shift|transform)(?:s|ed|ing)?\s+(?:to|into)",
+    r"cross[-\s]?fad(?:e|es|ed|ing)\s+(?:to|into)",
+    r"cut(?:s|ting)?\s+(?:to|into)",
+    r"(?:eas|resolv|switch)(?:e|es|ed|ing)?\s+(?:to|into)",
+    r"wip(?:e|es|ed|ing)\s+(?:to|into)",
+    r"transition(?:s|ed|ing)?\s+(?:to|into)",
+    r"chang(?:e|es|ed|ing)\s+(?:to|into)",
+    # Succession and hand-off predicates express the same temporal boundary
+    # without relying on one fixture phrase such as ``gives way to``.
+    r"(?:give(?:s|n)?|gave|giving)\s+way\s+to",
+    r"yield(?:s|ed|ing)?\s+to",
+    r"hand(?:s|ed|ing)?\s+off\s+to",
+    r"pass(?:es|ed|ing)?\s+(?:on\s+)?to",
+    # Passive replacement is directional only with an explicit ``by``.
+    r"(?:am|are|be|been|being|is|was|were)\s+"
+    r"(?:replaced|superseded|succeeded)\s+by",
+)
+SEMANTIC_EVENT_TRANSITION_CUE = re.compile(
+    r"\b(?:" + "|".join(SEMANTIC_EVENT_TRANSITION_PATTERNS) + r")\b",
+    re.I,
+)
+SEMANTIC_EVENT_TRANSITION_LEAD = re.compile(
+    r"^\s*(?:[.!?\u2026\u061f\u3002\uff01\uff1f\uff0c,;:\uff1b\uff1a]|"
+    r"[-\u2013\u2014]{1,2})?\s*"
+    r"(?:and\s+)?(?:then\s+)?"
+    r"(?:(?:(?:as|when)\s+)?(?:the\s+)?"
+    r"(?:frame|framing|image|lighting|light|motion|music|picture|scene|shot|"
+    r"silence|sound|state|stillness|view)\s+|(?:it|that|which)\s+)?"
+    r"(?:then\s+)?"
+    r"(?:(?:abruptly|cleanly|finally|gradually|gently|seamlessly|slowly|"
+    r"smoothly|visibly)\s+){0,2}$",
+    re.I,
+)
+SEMANTIC_EVENT_TRANSITION_BLOCKER = re.compile(
+    r"\b(?:at\s+the\s+same\s+time|concurrent(?:ly)?|if|meanwhile|"
+    r"simultaneous(?:ly)?|together|unless|while|would|could|might|may|should)\b",
+    re.I,
+)
+SEMANTIC_EVENT_TRANSITION_COMPLETED_TAIL = re.compile(
+    r"\s+(?:(?:a|an|the)\s+)?"
+    r"(?:[A-Za-z0-9][A-Za-z0-9'\u2019-]*\s+){0,5}"
+    r"[A-Za-z0-9][A-Za-z0-9'\u2019-]*\s*"
+    r"(?:[.!?\u2026\u061f\u3002\uff01\uff1f\uff1b;:]|[-\u2013\u2014]{1,2})\s*"
+    r"(?:then\s+)?"
+    r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
+    re.I,
+)
 DIRECT_SIMULTANEOUS_BRIDGE = re.compile(
     r"^\s*(?:[.!?,;:]|[-\u2013\u2014]{1,2})?\s*(?:and\s+)?"
     r"(?:while|as|simultaneous(?:ly)?|at the same time|all the while|"
@@ -379,20 +615,56 @@ DIRECT_SIMULTANEOUS_BRIDGE = re.compile(
     r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
     re.I,
 )
+EXPLICIT_PHASE_LABEL = re.compile(
+    r"\b(?:"
+    + PHASE_NOUN
+    + r"\s*"
+    + PHASE_NUMBER
+    + r"|(?:the\s+)?"
+    + PHASE_ORDINAL
+    + r"\s+"
+    + PHASE_NOUN
+    + r")\b",
+    re.I,
+)
+PHASE_CUE_TAIL = re.compile(
+    r"\s*(?::|,|[-\u2013\u2014])?\s*"
+    r"(?:(?:uses?|features?|shows?|has|switches?(?:\s+to)?|"
+    r"begins?\s+with|opens?\s+on|is(?:\s+lit\s+by)?|with)\s+)?"
+    r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}",
+    re.I,
+)
 TRAILING_SIMULTANEOUS_CUE = re.compile(
     r"^\s*(?:[,;:]|[-\u2013\u2014]{1,2})?\s*"
     r"(?:simultaneous(?:ly)?|at the same time|all the while|meanwhile|"
-    r"concurrent(?:ly)?|together|at once)\s*$",
+    r"concurrent(?:ly)?|together|at once|throughout|all along|"
+    r"during the same (?:beat|moment|phase|shot|time)|"
+    r"for the (?:entire|whole) (?:beat|moment|phase|shot|transition))\s*$",
+    re.I,
+)
+SEMANTIC_EVENT_TRANSITION_POST_BLOCKER = re.compile(
+    r"\b(?:hypothetically|"
+    r"in\s+(?:no\s+version|theory|(?:an?\s+)?imagined\s+version|"
+    r"(?:a\s+|the\s+)?storyboard)|"
+    r"as\s+(?:a\s+|the\s+)?concept\s+note|"
+    r"only\s+(?:if|in\s+(?:an?\s+)?imagined\s+version|on\s+(?:a\s+|the\s+)?"
+    r"(?:concept\s+note|draft|poster|screen|storyboard))|"
+    r"according\s+to|claim(?:s|ed|ing)?|say(?:s|ing)?|said|"
+    r"simultaneous(?:ly)?|at\s+the\s+same\s+time|all\s+along|"
+    r"concurrent(?:ly)?|during\s+the\s+same\s+(?:beat|moment|phase|shot|time)|"
+    r"throughout|while)\b",
     re.I,
 )
 NEGATED_PREFIX = re.compile(
-    r"\b(?:no|not|never|without|do not|does not|must not|nothing from|"
+    r"\b(?:no|not|never|neither|nor|without|do not|does not|must not|nothing from|"
     r"cannot|can['\u2019]t|could not|couldn['\u2019]t|will not|won['\u2019]t|"
     r"would not|wouldn['\u2019]t|fail(?:s|ed)? to|"
     r"refus(?:e|es|ed|ing)(?:\s+to)?|"
     r"den(?:y|ies|ied)(?:\s+the\s+request)?(?:\s+permission)?(?:\s+to)?|"
     r"(?:is|are|was|were)\s+(?:denied|forbidden|prevented)"
     r"(?:\s+permission)?(?:\s+(?:from|to))?|"
+    r"(?:is|are|was|were)\s+(?:barred|prohibited)(?:\s+from)?|"
+    r"declin(?:e|es|ed|ing)(?:\s+to)?|avoid(?:s|ed|ing)?|"
     r"(?:is|are|was|were) (?:completely )?unable to|"
     r"(?:isn['\u2019]t|aren['\u2019]t|wasn['\u2019]t|weren['\u2019]t) able to)"
     r"\b[^.;,]{0,24}$",
@@ -426,11 +698,107 @@ POSTPOSITIVE_EXCLUSION = re.compile(
     r"\s+(?:"
     r"(?:is|are|was|were)\s+"
     r"(?:(?:completely|deliberately|entirely|explicitly|intentionally)\s+)?(?:"
-    r"not\s+(?:shown|seen|included|present|depicted|featured)|"
-    r"absent|missing|excluded|omitted|left\s+out)"
-    r"|(?:do|does|did)\s+not\s+(?:appear|show|feature)"
-    r"|never\s+(?:appears?|shows?|enters?|features?)"
+    r"not\s+(?:shown|seen|included|present|depicted|featured)"
+    r"(?=\s*(?:$|[.;!?。！？；]|(?:from|in|inside|outside|within)\s+"
+    r"(?:the\s+)?(?:animation|clip|frame|output|scene|shot|video)\b))|"
+    r"(?:absent|missing|excluded|omitted)"
+    r"(?=\s*(?:$|[.;!?。！？；]|(?:by|from)\b|(?:in|inside|outside|within)\s+"
+    r"(?:the\s+)?(?:animation|clip|frame|output|scene|shot|video)\b))|"
+    r"left\s+out(?=\s*(?:$|[.;!?。！？；]|(?:from|of)\s+(?:the\s+)?"
+    r"(?:animation|clip|frame|output|scene|shot|video)\b)))"
+    r"|(?:do|does|did)\s+not\s+(?:appear|arrive|enter|feature|show)"
+    r"(?=\s*(?:$|[.;!?。！？；]|(?:at|by|during|from|in|inside|outside|within)\b|"
+    r"(?:the\s+)?(?:animation|clip|frame|output|scene|shot|video)\b))"
+    r"|(?:remains?|stays?)\s+absent"
+    r"|(?:has|have|had)\s+been\s+(?:excluded|omitted)"
+    r"|(?:is|are|was|were)\s+nowhere\s+(?:present|seen|shown)"
+    r"|never\s+(?:appears?|arrives?|enters?|features?|shows?)"
+    r"(?=\s*(?:$|[.;!?。！？；]|(?:at|by|during|from|in|inside|outside|within)\b|"
+    r"(?:the\s+)?(?:animation|clip|frame|output|scene|shot|video)\b))"
     r")\b",
+    re.I,
+)
+
+DISPLAYED_TEXT_LEAD = re.compile(
+    r"(?:\b(?:"
+    r"(?:on[- ]screen|screen)\s+text|"
+    r"(?:banner|caption|card|display|label|note|placard|poster|shirt|sign|title)"
+    r"(?:['’]s)?"
+    r")\b[^.;!?。！？；\n]{0,48}?\b(?:"
+    r"read(?:s|ing)?|say(?:s|ing)?|bear(?:s|ing)?|"
+    r"show(?:s|ing)?|"
+    r"(?:is\s+)?(?:inscribed|label(?:ed|led)|marked|printed)\s*(?:as|with)?"
+    r")\s+|\b(?:banner|caption|card|label|note|placard|sign|title)\b\s*:\s*)",
+    re.I,
+)
+# Output-domain absence forms whose grammar is intentionally narrower than the
+# legacy detector above. Keeping these typed prevents framing language such as
+# ``not shown in close-up`` from erasing a subject that remains in the output.
+POSTPOSITIVE_OUTPUT_ABSENCE = re.compile(
+    r"(?P<subject>(?:\b[A-Za-z0-9]+(?:['\u2019-][A-Za-z0-9]+)?\b[\s-]*){1,8}?)"
+    r"\s+(?:"
+    r"(?:do|does|did)\s+not\s+appear(?=\s+(?:in|on)\b)|"
+    r"fails?\s+to\s+appear(?=\s+(?:in|on)\b)|"
+    r"(?:cannot|can['\u2019]t)\s+be\s+seen(?=\s+(?:in|on|throughout)\s+"
+    r"(?:the\s+)?(?:animation|clip|frame|output|scene|video)\b)|"
+    r"(?:is|are|was|were)\s+(?:offscreen\s+throughout|"
+    r"invisible\s+throughout\s+(?:the\s+)?"
+    r"(?:animation|clip|output|scene|video)|"
+    r"not\s+visible(?=\s+(?:in|on|throughout)\s+(?:the\s+)?"
+    r"(?:animation|clip|frame|output|scene|video)\b)|"
+    r"nowhere\s+(?:to\s+be\s+)?(?:present|seen|shown)|"
+    r"nowhere\s+in\s+(?:a|an|the)?\s*"
+    r"(?:animation|clip|frame|output|scene|shot|video))|"
+    r"appears?\s+only\s+in\s+(?:a|an|the)?\s*"
+    r"(?:image|placard|poster|reference|shirt|sign|text)\s*,?\s*"
+    r"never\s+in\s+(?:a|an|the)?\s*"
+    r"(?:animation|clip|frame|output|scene|shot|video)"
+    r")\b",
+    re.I,
+)
+POSTPOSITIVE_PRESENCE_RESET = re.compile(
+    r"(?:\bbut\b|;\s*however\s*,?)\s+"
+    r"(?:(?:he|she|they)\s+)?(?:then\s+)?"
+    r"(?:(?:is|are|was|were)\s+(?:present|shown|visible)|"
+    r"appears?|arrives?|enters?|features?|moves?|sits?|stands?|walks?|waits?|"
+    r"remains?\s+(?:present|visible)|stays?\s+(?:present|visible))\b",
+    re.I,
+)
+ACTIVE_OUTPUT_ABSENCE = re.compile(
+    r"\b(?:the\s+)?(?:animation|clip|frame|output|scene|shot|video)\s+"
+    r"(?:(?:deliberately|entirely|explicitly|intentionally)\s+)?"
+    r"(?:excludes?|omits?|leaves?\s+out)\s+"
+    r"(?P<subject>(?:a|an|the)?\s*"
+    r"(?:[A-Za-z0-9]+(?:['\u2019-][A-Za-z0-9]+)?[\s-]*){1,8}?)"
+    r"(?=\s*(?:$|[.;!?\n]|\b(?:and|but|while)\b))",
+    re.I,
+)
+DISPLAYED_TEXT_COLON_LEAD = re.compile(
+    r"\b(?:(?:on[- ]screen)(?:\s+text)?|(?:screen\s+text)|text\s+on\s+screen|"
+    r"banner|caption|card|display|label|note|placard|poster|shirt|sign|title)"
+    r"\s*:\s*",
+    re.I,
+)
+DISPLAYED_TEXT_CLAUSE_END = re.compile(
+    r"\b(?:after|as|before|but|whereas|while)\b|"
+    r"\b(?:at|beside|by|near|under|with)\s+(?=(?:a|an|the)\b)|"
+    r"\b(?:hangs?|rests?|sits?|stands?)\s+"
+    r"(?=(?:at|beside|by|in|near|on|under|with)\b)|"
+    r"\band\s+(?=(?:a|an|he|she|the|they|we)\b)|"
+    r"[,.;!?\n]",
+    re.I,
+)
+DISPLAYED_TEXT_INVERSE = re.compile(
+    r"(?P<text>(?:\b[A-Za-z0-9]+(?:['\u2019-][A-Za-z0-9]+)?\b[\s-]*){1,8}?)"
+    r"\s+(?:is|are|was|were)\s+"
+    r"(?:inscribed|label(?:ed|led)|marked|printed|written)\s+"
+    r"(?:across|in|inside|on)\s+(?:a|an|the)?\s*"
+    r"(?:banner|caption|card|display|label|note|placard|poster|shirt|sign|title)\b",
+    re.I,
+)
+DISPLAYED_TEXT_APPEARS = re.compile(
+    r"(?P<text>(?:\b[A-Za-z0-9]+(?:['\u2019-][A-Za-z0-9]+)?\b[\s-]*){1,8}?)"
+    r"\s+appears?\s+as\s+(?:on[- ]screen|screen)\s+text\b",
     re.I,
 )
 
@@ -448,7 +816,7 @@ OPPOSITE_ACTIONS = {
 OPPOSITE_ACTION_TERMS = frozenset().union(*OPPOSITE_ACTIONS)
 ACTION_MODIFIERS = {
     "abruptly", "carefully", "deliberately", "gently", "immediately",
-    "now", "quietly", "quickly", "slowly", "suddenly",
+    "now", "quietly", "quickly", "slowly", "suddenly", "together",
 }
 
 CAMERA_FAMILIES = {
@@ -573,6 +941,114 @@ def lexical_tokens(text: str) -> list[str]:
     return tokens
 
 
+def _merge_intervals(
+    spans: list[tuple[int, int]] | tuple[tuple[int, int], ...],
+) -> tuple[tuple[int, int], ...]:
+    """Return sorted, coalesced half-open spans for indexed membership tests."""
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if start >= end:
+            continue
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return tuple(merged)
+
+
+def _interval_index(
+    spans: tuple[tuple[int, int], ...],
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    return (
+        tuple(start for start, _ in spans),
+        tuple(end for _, end in spans),
+    )
+
+
+def _position_in_interval_index(
+    index: tuple[tuple[int, ...], tuple[int, ...]],
+    position: int,
+) -> bool:
+    starts, ends = index
+    interval = bisect_right(starts, position) - 1
+    return interval >= 0 and starts[interval] <= position < ends[interval]
+
+
+@lru_cache(maxsize=4096)
+def _source_description_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Index lexical material assigned to an input/reference role.
+
+    The same actor, action, or property may legitimately appear in reference
+    media while the requested output contains something else.  These bounded
+    role grammars deliberately require an explicit input/source relationship;
+    ordinary spatial ``from``, material ``from clay``, tools introduced by
+    ``using``, and characters who literally guide or feed someone stay active.
+    """
+    spans: list[tuple[int, int]] = []
+
+    def capture(pattern: re.Pattern[str], *, require_role: bool = False) -> None:
+        for match in pattern.finditer(text):
+            start, end = match.span("source")
+            if require_role and SOURCE_ROLE_NOUN.search(text[start:end]) is None:
+                continue
+            spans.append((start, end))
+
+    for pattern in (
+        SOURCE_LABEL_DESCRIPTION,
+        SOURCE_ROLE_CONTAINS,
+        SOURCE_ROLE_DEPICTS,
+        SOURCE_MODEL_RECEIVES,
+        SOURCE_ONLY_INSPIRATION,
+        SOURCE_ONLY_PURPOSE,
+        SOURCE_ASSET_DEPICTS,
+        SOURCE_TREATED_AS_INPUT,
+        SOURCE_CONSULTED,
+        SOURCE_FED_TO_MODEL,
+        SOURCE_PROMPTED_MODEL,
+        SOURCE_ALWAYS_TRAILING,
+    ):
+        capture(pattern)
+    for pattern in (
+        SOURCE_GOVERNED_LEADING,
+        SOURCE_GOVERNED_IMPERATIVE,
+        SOURCE_ROLE_TRAILING,
+    ):
+        capture(pattern, require_role=True)
+
+    # These subject-first grammars have a deliberately flexible left edge.
+    # Cheap literal/role prefilters prevent the regex engine from retrying that
+    # edge at every byte of a long unrelated prompt.
+    lowered = text.lower()
+    if re.search(
+        r"\b(?:is|are)\s+(?:(?:visible|shown)\s+only\s+)?in\s+"
+        r"(?:the\s+)?(?:inputs?|references?|sources?)\b",
+        text,
+        re.I,
+    ):
+        capture(SOURCE_SUBJECT_IN_ROLE)
+    if "@image" in lowered or "@video" in lowered:
+        capture(SOURCE_ASSET_CONTAINS)
+    if "still" in lowered and "inform" in lowered:
+        capture(SOURCE_STILL_INFORMS)
+    if SOURCE_ROLE_NOUN.search(text) is not None and re.search(
+        r"\b(?:controls?|determines?|feeds?|guides?|provides?|"
+        r"suppl(?:y|ies))\b|\bis\s+(?:the\s+)?"
+        r"(?:motion|style|visual)\s+(?:guide|reference)\s+for\b",
+        text,
+        re.I,
+    ):
+        capture(SOURCE_ROLE_SUBJECT)
+    return _interval_index(_merge_intervals(spans))
+
+
+def _position_is_source_description(text: str, position: int) -> bool:
+    return _position_in_interval_index(
+        _source_description_interval_index(text), position
+    )
+
+
 @lru_cache(maxsize=4096)
 def trace_terms(text: str) -> frozenset[str]:
     return frozenset({
@@ -604,18 +1080,27 @@ def structural_contract_terms(text: str) -> frozenset[str]:
 def affirmative_trace_terms(text: str) -> frozenset[str]:
     """Return unquoted lexical evidence asserted positively by the text."""
     terms: set[str] = set()
+    local_boundaries = tuple(
+        boundary.end()
+        for boundary in re.finditer(r"[,.;!?。！？；\n]", text)
+    )
     for match in TOKEN.finditer(text):
         if position_is_quoted(text, match.start()) or match_is_negated(
             text, match.start()
         ) or _position_is_postpositively_excluded(
             text, match.start()
+        ) or _position_is_displayed_text(
+            text, match.start()
+        ) or _position_is_source_description(
+            text, match.start()
         ):
             continue
-        local_start = max(
-            text.rfind(mark, 0, match.start())
-            for mark in ",.;!?。！？；\n"
-        ) + 1
-        if TARGET_NEGATED_ALTERNATIVE.search(text[local_start:match.start()]):
+        boundary_index = bisect_right(local_boundaries, match.start()) - 1
+        local_start = local_boundaries[boundary_index] if boundary_index >= 0 else 0
+        alternative_start = max(local_start, match.start() - 128)
+        if TARGET_NEGATED_ALTERNATIVE.search(
+            text[alternative_start:match.start()]
+        ):
             continue
         terms.update(
             token
@@ -628,29 +1113,81 @@ def affirmative_trace_terms(text: str) -> frozenset[str]:
     return frozenset(terms)
 
 
-def _position_is_postpositively_excluded(text: str, position: int) -> bool:
-    """Catch exclusions whose polarity arrives after the named subject.
+@lru_cache(maxsize=4096)
+def _postpositive_exclusion_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    spans: list[tuple[int, int]] = []
+    terminal_boundaries = tuple(
+        match.start() for match in re.finditer(r"[.!?。！？\n]", text)
+    )
+    resets = tuple(POSTPOSITIVE_PRESENCE_RESET.finditer(text))
+    reset_starts = tuple(match.start() for match in resets)
+    for pattern in (POSTPOSITIVE_EXCLUSION, POSTPOSITIVE_OUTPUT_ABSENCE):
+        for match in pattern.finditer(text):
+            if position_is_quoted(text, match.start("subject")):
+                continue
+            boundary_index = bisect_right(terminal_boundaries, match.end())
+            local_end = (
+                terminal_boundaries[boundary_index]
+                if boundary_index < len(terminal_boundaries)
+                else len(text)
+            )
+            reset_index = bisect_left(reset_starts, match.end())
+            reset_bridge = (
+                text[match.end():reset_starts[reset_index]]
+                if reset_index < len(reset_starts)
+                else ""
+            )
+            if (
+                reset_index < len(reset_starts)
+                and reset_starts[reset_index] < local_end
+                and not re.search(
+                    r"\b(?:as|while|whereas)\b", reset_bridge, re.I
+                )
+            ):
+                # ``absent from the poster; however, she enters the animation``
+                # asserts output presence for the same coordinated subject.
+                continue
+            spans.append((match.start("subject"), match.end("subject")))
+    for match in ACTIVE_OUTPUT_ABSENCE.finditer(text):
+        if position_is_quoted(text, match.start("subject")):
+            continue
+        spans.append((match.start("subject"), match.end("subject")))
+    return _interval_index(_merge_intervals(spans))
 
-    Prefix-only negation misses ordinary constructions such as ``the surgeon is
-    absent`` and ``the surgeon never appears``.  Limit this check to the local
-    comma/statement span, then require the token to fall inside the grammatical
-    subject captured by the exclusion rather than suppressing the whole clause.
-    """
-    local_start = max(
-        text.rfind(mark, 0, position)
-        for mark in ",.;!?。！？；，\n"
-    ) + 1
-    local_end_candidates = [
-        found
-        for mark in ",.;!?。！？；，\n"
-        if (found := text.find(mark, position)) != -1
-    ]
-    local_end = min(local_end_candidates, default=len(text))
-    local = text[local_start:local_end]
-    local_position = position - local_start
-    return any(
-        match.start("subject") <= local_position < match.end("subject")
-        for match in POSTPOSITIVE_EXCLUSION.finditer(local)
+
+def _position_is_postpositively_excluded(text: str, position: int) -> bool:
+    """Return whether a subject is later asserted absent from the output."""
+    return _position_in_interval_index(
+        _postpositive_exclusion_interval_index(text), position
+    )
+
+
+@lru_cache(maxsize=4096)
+def _displayed_text_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    spans: list[tuple[int, int]] = []
+    leads = sorted(
+        (*DISPLAYED_TEXT_LEAD.finditer(text), *DISPLAYED_TEXT_COLON_LEAD.finditer(text)),
+        key=lambda match: match.start(),
+    )
+    for lead in leads:
+        scan_end = min(len(text), lead.end() + 160)
+        boundary = DISPLAYED_TEXT_CLAUSE_END.search(text, lead.end(), scan_end)
+        end = boundary.start() if boundary else scan_end
+        spans.append((max(0, lead.end() - 1), end))
+    for pattern in (DISPLAYED_TEXT_INVERSE, DISPLAYED_TEXT_APPEARS):
+        for match in pattern.finditer(text):
+            spans.append((max(0, match.start("text") - 1), match.end("text")))
+    return _interval_index(_merge_intervals(spans))
+
+
+def _position_is_displayed_text(text: str, position: int) -> bool:
+    """Return whether lexical material is merely rendered/readable copy."""
+    return _position_in_interval_index(
+        _displayed_text_interval_index(text), position
     )
 
 
@@ -698,6 +1235,75 @@ def _target_clause_ranges(text: str) -> tuple[tuple[int, int], ...]:
     return tuple(ranges)
 
 
+def _candidate_feeds_downstream_output(bridge: str) -> bool:
+    """Return whether a production-looking noun is explicitly an input.
+
+    The downstream output intro has already been removed from ``bridge``. The
+    grammar therefore has to end at its determiner, which prevents a stray
+    ``reference`` word elsewhere in the clause from suppressing a real output.
+    """
+    role = re.search(
+        r"\b(?:as|is|acts?\s+as|serves?\s+as|used\s+as)\s+"
+        r"(?:a|an|the)?\s*(?:input|(?:visual\s+)?reference|source)"
+        r"(?:\s+material)?\b",
+        bridge,
+        re.I,
+    )
+    if role is not None:
+        tail = bridge[role.end():]
+        if re.fullmatch(
+            r"\s*(?:"
+            r"(?:for|to)\s+(?:(?:create|creating|generate|generating|make|making|"
+            r"produce|producing|render|rendering)\s+|"
+            r"(?:the\s+)?(?:creation|generation|production|rendering)\s+of\s+)?|"
+            r"when\s+(?:create|creating|generate|generating|making|producing|rendering)\s+|"
+            r"[,;]\s*(?:and\s+)?(?:then\s+)?"
+            r"(?:create|generate|make|produce|render)\s+"
+            r")(?:a|an|another|the)?\s*",
+            tail,
+            re.I,
+        ):
+            return True
+    return any(
+        pattern.search(bridge) is not None
+        for pattern in (
+            re.compile(
+                r"\bprovides?\s+(?:a|an|the)?\s*reference\s+for\s+"
+                r"(?:a|an|another|the)?\s*$",
+                re.I,
+            ),
+            re.compile(
+                r"\bfeeds?\s+into\s+(?:a|an|another|the)?\s*$",
+                re.I,
+            ),
+            re.compile(
+                r"\bto\s+guide\s+(?:(?:the\s+)?"
+                r"(?:creation|generation|production|rendering)\s+of\s+|"
+                r"(?:creating|generating|making|producing|rendering)\s+)?"
+                r"(?:a|an|another|the)?\s*$",
+                re.I,
+            ),
+            re.compile(
+                r"\bguides?\s+(?:(?:the\s+)?"
+                r"(?:creation|generation|production|rendering)\s+of\s+|"
+                r"(?:creating|generating|making|producing|rendering)\s+)"
+                r"(?:a|an|another|the)?\s*$",
+                re.I,
+            ),
+            re.compile(
+                r"\bguides?\s+(?:a|an|another|the)?\s*$",
+                re.I,
+            ),
+            re.compile(
+                r"\bguides?\s+(?:a|an|another|the)?\s*"
+                r"(?:animation|clip|frame|image|portrait|render|sequence|shot|"
+                r"storyboard|take|video)\s*$",
+                re.I,
+            ),
+        )
+    )
+
+
 def _candidate_is_reference_description(
     text: str,
     match: re.Match[str],
@@ -706,10 +1312,54 @@ def _candidate_is_reference_description(
     """Reject only the production noun directly owned by an asset marker.
 
     A source marker must be adjacent to this candidate (``reference image`` or
-    ``@Image1 is an image``).  Merely occurring earlier in the clause cannot
-    suppress a downstream requested output such as ``an animation of ...``.
+    ``@Image1 is an image``), or the candidate must explicitly feed a later
+    output (``video ... as a source for an animation``). Merely occurring
+    earlier in the clause cannot suppress a downstream requested output.
     """
     prefix = text[clause_start:match.start()]
+    if re.search(
+        r"\b(?:displaying|showing)\s+(?:a|an|the)?\s*$",
+        prefix,
+        re.I,
+    ):
+        # A production noun rendered inside the requested scene is not itself
+        # the outer output target: ``a monitor displaying an image of X``.
+        # The governing depiction intro remains eligible and carries the real
+        # scene subject instead of letting the nested image replace it.
+        return True
+
+    clause_boundary = TARGET_STRONG_BOUNDARY.search(text, match.end())
+    clause_end = clause_boundary.start() if clause_boundary else len(text)
+    downstream_intros = sorted(
+        (
+            *PRODUCTION_TARGET_INTRO.finditer(text, match.end(), clause_end),
+            *DEPICTION_TARGET_INTRO.finditer(text, match.end(), clause_end),
+            *OUTPUT_ENTITY_TARGET_INTRO.finditer(text, match.end(), clause_end),
+            *BASE_OUTPUT_TARGET_INTRO.finditer(text, match.end(), clause_end),
+            *DIRECT_ENTITY_TARGET_INTRO.finditer(text, match.end(), clause_end),
+        ),
+        key=lambda candidate: candidate.start(),
+    )
+    if downstream_intros:
+        candidate_to_output = text[match.end():downstream_intros[0].start()]
+        if _candidate_feeds_downstream_output(candidate_to_output):
+            # Directional ownership matters more than word order: in ``a
+            # video of the palette as a source for an animation of Mara``, the
+            # first production noun is explicitly an input and only the latter
+            # animation is a requested output.
+            return True
+
+        governing_prefix = text[clause_start:match.start()]
+        if re.search(
+            r"(?:^|[,;:])\s*(?:based\s+on|from|given|guided\s+by|take|use|using|with)"
+            r"\s+(?:a|an|the)?\s*$",
+            governing_prefix,
+            re.I,
+        ):
+            # Source direction can be governed before the production noun:
+            # ``Using an image of X, create an animation of Y``.
+            return True
+
     markers = list(TARGET_ASSET_MARKER.finditer(prefix))
     if not markers:
         return False
@@ -717,7 +1367,7 @@ def _candidate_is_reference_description(
     marker_to_candidate = prefix[latest_marker.end():]
     if not re.fullmatch(
         r"\s*[,(:]?\s*(?:which\s+)?(?:(?:is|as)\s+)?(?:a|an|the)?\s*"
-        r"(?:(?:clip|frame|image|portrait|shot|video)\s+)?",
+        r"(?:(?:clip|frame|image|portrait|shot|video)\s*)?[,(:]?\s*",
         marker_to_candidate,
         re.I,
     ):
@@ -756,13 +1406,6 @@ def _eligible_target_intros(
         )
         if not _candidate_is_reference_description(text, match, clause_start)
     ]
-    eligible: list[re.Match[str]] = []
-    for match in production:
-        if not eligible or _candidate_is_coordinated(text, eligible[-1], match):
-            eligible.append(match)
-    if eligible:
-        return tuple(eligible)
-
     depiction = [
         match
         for match in DEPICTION_TARGET_INTRO.finditer(
@@ -770,10 +1413,120 @@ def _eligible_target_intros(
         )
         if not _candidate_is_reference_description(text, match, clause_start)
     ]
-    for match in depiction:
+    labelled_output = list(
+        OUTPUT_ENTITY_TARGET_INTRO.finditer(text, clause_start, clause_end)
+    )
+    based_output = list(
+        BASE_OUTPUT_TARGET_INTRO.finditer(text, clause_start, clause_end)
+    )
+    direct = list(DIRECT_ENTITY_TARGET_INTRO.finditer(text, clause_start, clause_end))
+    candidates = sorted(
+        (*production, *depiction, *labelled_output, *based_output, *direct),
+        key=lambda candidate: (candidate.start(), candidate.end()),
+    )
+    eligible: list[re.Match[str]] = []
+    for match in candidates:
         if not eligible or _candidate_is_coordinated(text, eligible[-1], match):
             eligible.append(match)
     return tuple(eligible)
+
+
+def _split_visible_target_relations(target: str) -> tuple[str, ...]:
+    """Split multi-entity output syntax into independently mandatory targets."""
+    pending = [target]
+    resolved: list[str] = []
+    patterns = (
+        re.compile(r"\b(?:alongside|beside|near)\b", re.I),
+        re.compile(
+            r"\b(?:displaying|showing)\s+(?:a|an|the)?\s*"
+            r"(?:(?:frame|image|photo|photograph|portrait)\s+of\s+)?",
+            re.I,
+        ),
+        re.compile(
+            r"\b(?:morphing|transforming|unfolding)\s+into\b",
+            re.I,
+        ),
+    )
+    while pending:
+        item = pending.pop(0).strip()
+        split = None
+        for pattern in patterns:
+            candidate = pattern.search(item)
+            if candidate is not None:
+                split = candidate
+                break
+        if split is None:
+            if item:
+                resolved.append(item)
+            continue
+        left = item[:split.start()].strip()
+        right = item[split.end():].strip()
+        if not left or not right:
+            resolved.append(item)
+            continue
+        pending[0:0] = [left, right]
+    return tuple(resolved)
+
+
+@lru_cache(maxsize=4096)
+def _output_target_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Index the semantic payload of every explicit output target.
+
+    Input/reference descriptions may contain the same actors, actions, props,
+    and attributes as the requested result.  Once a prompt names an explicit
+    output, only evidence inside these payload ranges may satisfy semantic
+    actor/action/property binders.  Prompts without an explicit output retain
+    their ordinary whole-text interpretation.
+    """
+    spans: list[tuple[int, int]] = []
+    for clause_start, clause_end in _target_clause_ranges(text):
+        intros = _eligible_target_intros(text, clause_start, clause_end)
+        for index, match in enumerate(intros):
+            target_end = clause_end
+            if index + 1 < len(intros):
+                target_end = min(target_end, intros[index + 1].start())
+            target = text[match.end():target_end]
+            trailing_source = TARGET_TRAILING_SOURCE.search(target)
+            if trailing_source is not None:
+                target_end = match.end() + trailing_source.start()
+            if match.end() < target_end:
+                spans.append((match.end(), target_end))
+    return _interval_index(_merge_intervals(spans))
+
+
+def _position_is_output_semantic_evidence(text: str, position: int) -> bool:
+    """Reject evidence explicitly assigned to an input/reference description."""
+    return not _position_is_source_description(text, position)
+
+
+def _output_semantic_evidence_end(text: str, position: int) -> int:
+    """Return the enclosing explicit-output boundary, or the text boundary."""
+    starts, ends = _output_target_interval_index(text)
+    if not starts:
+        return len(text)
+    interval = bisect_right(starts, position) - 1
+    if interval >= 0 and starts[interval] <= position < ends[interval]:
+        return ends[interval]
+    return position
+
+
+@lru_cache(maxsize=4096)
+def _included_output_antecedent_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Index explicitly retained subjects that a later output pronoun may use."""
+    return _interval_index(_merge_intervals([
+        (match.start("subject"), match.end("subject"))
+        for match in OUTPUT_INCLUDED_SUBJECT.finditer(text)
+    ]))
+
+
+def _position_is_included_output_antecedent(text: str, position: int) -> bool:
+    return _position_in_interval_index(
+        _included_output_antecedent_interval_index(text), position
+    )
 
 
 def _mandatory_target_texts(text: str) -> tuple[str, ...]:
@@ -786,6 +1539,9 @@ def _mandatory_target_texts(text: str) -> tuple[str, ...]:
             if index + 1 < len(intros):
                 target_end = min(target_end, intros[index + 1].start())
             target = text[match.end():target_end]
+            trailing_source = TARGET_TRAILING_SOURCE.search(target)
+            if trailing_source is not None:
+                target = target[:trailing_source.start()]
             target = re.sub(
                 r"\b(?:and|plus)\s+(?:a|an|another|the)?\s*$",
                 "",
@@ -793,7 +1549,8 @@ def _mandatory_target_texts(text: str) -> tuple[str, ...]:
                 flags=re.I,
             ).strip()
             if target:
-                targets.extend(_split_mandatory_target_items(target))
+                for visible_target in _split_visible_target_relations(target):
+                    targets.extend(_split_mandatory_target_items(visible_target))
     return tuple(targets)
 
 
@@ -813,23 +1570,27 @@ def _target_list_item(
     candidate = stripped[coordinator_match.end():].strip() if coordinator_match else stripped
     if not candidate or PRODUCTION_TARGET_INTRO.search(candidate):
         return None
-    candidate_tokens = lexical_tokens(candidate)
+    # Relative clauses describe the listed noun phrase but their verbs do not
+    # turn that subject into scene direction.  Validate list eligibility from
+    # the grammatical head segment while preserving the complete requirement.
+    eligibility = re.split(r"\b(?:that|which|who|whose)\b", candidate, maxsplit=1, flags=re.I)[0]
+    eligibility_tokens = lexical_tokens(eligibility)
     material = [
         token
-        for token in candidate_tokens
+        for token in eligibility_tokens
         if token not in FUNCTION_WORDS
         and token not in PRODUCTION_GENERIC
         and token not in TRACE_GENERIC
         and len(token) > 2
     ]
-    if not material or len(candidate_tokens) > MAX_EXPLICIT_TARGET_REQUIREMENTS + 3:
+    if not material or len(eligibility_tokens) > MAX_EXPLICIT_TARGET_REQUIREMENTS + 3:
         return None
-    first = candidate_tokens[0] if candidate_tokens else ""
+    first = eligibility_tokens[0] if eligibility_tokens else ""
     if first in TARGET_PHRASE_BREAKS or first in {
         "camera", "cut", "during", "light", "sound", "when", "while",
     }:
         return None
-    if any(token in TARGET_ACTION_BREAKS for token in candidate_tokens):
+    if any(token in TARGET_ACTION_BREAKS for token in eligibility_tokens):
         return None
     begins_with_article = bool(
         re.match(r"(?:a|an|another|the)\b", candidate, re.I)
@@ -861,6 +1622,10 @@ def _split_mandatory_target_items(target: str) -> tuple[str, ...]:
     )
     listed: list[tuple[str, str]] = []
     for segment in segments[1:]:
+        if re.match(r"\s*(?:that|which|who|whose)\b", segment, re.I):
+            # A parenthetical relative clause belongs to the previous subject;
+            # do not let its comma terminate the surrounding mandatory list.
+            continue
         item = _target_list_item(segment, allow_bare=allow_bare)
         if item is None:
             break
@@ -873,6 +1638,7 @@ def _split_mandatory_target_items(target: str) -> tuple[str, ...]:
 
 
 TARGET_SHARED_RELATIONS = {"carry", "hold", "wear"}
+ACTION_TRACE_TERMS = OPPOSITE_ACTION_TERMS | frozenset(TARGET_SHARED_RELATIONS)
 
 
 def _relational_alternative_groups(
@@ -1004,6 +1770,7 @@ def _target_groups_from_text(
             or token in PRODUCTION_GENERIC
             or token in TRACE_GENERIC
             or token in TARGET_CONTROL_TERMS
+            or token in TARGET_FORMAT_TERMS
             or token in structural
             or len(token) <= 2
         ):
@@ -1015,6 +1782,58 @@ def _target_groups_from_text(
         return ()
 
     surface_branches = re.split(r"\bor\b", target, flags=re.I)
+    final_starts_new_noun_phrase = bool(
+        surface_branches
+        and re.match(r"\s*(?:a|an|another|the)\b", surface_branches[-1], re.I)
+    )
+
+    shared_suffix: list[str] = []
+    alternative_width = len(branches[0][0])
+    if (
+        len(branches) >= 2
+        and not final_starts_new_noun_phrase
+        and alternative_width >= 1
+        and len(branches[-1][0]) > alternative_width
+        and all(
+            len(tokens) == alternative_width and not protected
+            for tokens, protected in branches[:-1]
+        )
+        and not branches[-1][1]
+    ):
+        # Coordination grammar, not a colour/adjective dictionary, determines
+        # the split. Equal-width alternatives precede the final branch's shared
+        # noun suffix: ``bright red or deep blue leather case`` therefore keeps
+        # ``leather case`` (and its head) on both branches.
+        final_tokens = branches[-1][0]
+        final_alternative_width = alternative_width
+        first_tokens = branches[0][0]
+        if (
+            final_tokens[0] in COORDINATION_DEGREE_MODIFIERS
+            and first_tokens[0] not in COORDINATION_DEGREE_MODIFIERS
+        ):
+            # ``red wool or pale blue silk surgical gloves`` has one extra
+            # degree word in the final alternative. Align the parallel spans
+            # before inheriting the terminal ``surgical gloves`` suffix.
+            final_alternative_width += 1
+        shared_suffix = final_tokens[final_alternative_width:]
+
+    ambiguous_terminal_head: list[str] = []
+    if (
+        not shared_suffix
+        and len(branches) >= 3
+        and len(branches[-1][0]) >= 3
+        and not any(protected for _, protected in branches)
+        and not final_starts_new_noun_phrase
+    ):
+        # Align the final alternative with the widest preceding alternative.
+        # This preserves a multiword nominal suffix in ``red or pale blue or
+        # dark green emergency field surgeon`` without borrowing ``green`` into
+        # the red branch. If alignment remains ambiguous, the terminal head is
+        # still the conservative floor.
+        prior_width = max(len(tokens) for tokens, _ in branches[:-1])
+        ambiguous_terminal_head = branches[-1][0][prior_width:]
+        if not ambiguous_terminal_head:
+            ambiguous_terminal_head = branches[-1][0][-1:]
 
     first_tokens, first_protected = branches[0]
     identity_head = first_protected[-1] if first_protected else ""
@@ -1036,13 +1855,19 @@ def _target_groups_from_text(
         starts_new_noun_phrase = bool(
             re.match(r"\s*(?:a|an|another|the)\b", surface_branch, re.I)
         )
+        if branch_index < len(branches) - 1 and shared_suffix:
+            inherited = shared_suffix
+            inherited_heads = [shared_suffix[-1]]
+        elif branch_index < len(branches) - 1 and ambiguous_terminal_head:
+            inherited = ambiguous_terminal_head
+            inherited_heads = ambiguous_terminal_head
         if (
             branch_index
             and identity_head
             and identity_head not in branch_tokens
             and not branch_protected
             and not starts_new_noun_phrase
-        ):
+        ) and not shared_suffix:
             # ``surgeon named Mara or Nia`` shares the entity head and all
             # pre-name attributes across both identity alternatives.
             inherited = shared_identity
@@ -1052,7 +1877,7 @@ def _target_groups_from_text(
             and len(branch_tokens) == 1
             and shared_modifiers
             and not starts_new_noun_phrase
-        ):
+        ) and not shared_suffix:
             # In ``red emergency surgeon or nurse``, the single replacement
             # noun inherits the shared adjectival prefix.
             inherited = shared_modifiers
@@ -1117,16 +1942,75 @@ ACTION_SURFACE_ALIASES = {
     "unsealing": "open",
     "unseals": "open",
 }
+
+# Common irregulars need one explicit lexical boundary.  Regular spelling can
+# be inverted safely below; suppletive forms cannot be recovered from suffixes.
+# The table is deliberately action-focused rather than a general English
+# dictionary, and every listed form maps to one stable scene verb identity.
+ACTION_IRREGULAR_LEMMAS = {
+    "became": "become", "become": "become",
+    "began": "begin", "begun": "begin",
+    "bent": "bend", "bound": "bind", "bit": "bite", "bitten": "bite",
+    "blew": "blow", "blown": "blow", "broke": "break", "broken": "break",
+    "brought": "bring", "built": "build", "bought": "buy",
+    "caught": "catch", "chose": "choose", "chosen": "choose",
+    "came": "come", "cost": "cost", "cut": "cut", "dug": "dig",
+    "did": "do", "done": "do", "drew": "draw", "drawn": "draw",
+    "drank": "drink", "drunk": "drink", "drove": "drive", "driven": "drive",
+    "ate": "eat", "eaten": "eat", "fell": "fall", "fallen": "fall",
+    "fed": "feed", "felt": "feel", "fought": "fight", "found": "find",
+    "flew": "fly", "flown": "fly", "got": "get", "gotten": "get",
+    "gave": "give", "given": "give", "went": "go", "gone": "go",
+    "grew": "grow", "grown": "grow", "hung": "hang", "held": "hold",
+    "kept": "keep", "knew": "know", "known": "know",
+    "laid": "lay", "led": "lead", "left": "leave", "lent": "lend",
+    "let": "let", "lay": "lie", "lain": "lie", "lit": "light",
+    "lost": "lose", "made": "make", "met": "meet", "paid": "pay",
+    "put": "put", "read": "read", "rode": "ride", "ridden": "ride",
+    "rang": "ring", "rung": "ring", "rose": "rise", "risen": "rise",
+    "ran": "run", "said": "say", "saw": "see", "seen": "see",
+    "sought": "seek", "sold": "sell", "sent": "send", "set": "set",
+    "shook": "shake", "shaken": "shake", "shone": "shine",
+    "shot": "shoot", "showed": "show", "shown": "show", "shut": "shut",
+    "sang": "sing", "sung": "sing", "sank": "sink", "sunk": "sink",
+    "sat": "sit", "slept": "sleep", "slid": "slide", "spoke": "speak",
+    "spoken": "speak", "spent": "spend", "spun": "spin", "split": "split",
+    "spread": "spread", "sprang": "spring", "sprung": "spring",
+    "stood": "stand", "stole": "steal", "stolen": "steal",
+    "stuck": "stick", "stung": "sting", "struck": "strike",
+    "swam": "swim", "swum": "swim", "swung": "swing",
+    "took": "take", "taken": "take", "taught": "teach",
+    "tore": "tear", "torn": "tear", "told": "tell", "thought": "think",
+    "threw": "throw", "thrown": "throw", "understood": "understand",
+    "woke": "wake", "woken": "wake", "wore": "wear", "worn": "wear",
+    "won": "win", "wound": "wind", "wrote": "write", "written": "write",
+}
+ACTION_IRREGULAR_PARTICIPLES = frozenset({
+    "become", "begun", "bent", "bound", "bitten", "blown", "broken",
+    "brought", "built", "bought", "caught", "chosen", "come", "cost",
+    "cut", "dug", "done", "drawn", "driven", "drunk", "eaten", "fallen",
+    "fed", "felt", "fought", "found", "flown", "got", "gotten", "given",
+    "gone", "grown", "hung", "held", "kept", "known", "laid", "led",
+    "left", "lent", "let", "lain", "lit", "lost", "made", "met", "paid",
+    "put", "read", "ridden", "rung", "risen", "run", "said", "seen",
+    "sought", "sold", "sent", "set", "shaken", "shone", "shot", "shown",
+    "shut", "sung", "sunk", "sat", "slept", "slid", "spoken", "spent",
+    "spun", "split", "spread", "sprung", "stood", "stolen", "stuck",
+    "stung", "struck", "swum", "swung", "taken", "taught", "torn",
+    "told", "thought", "thrown", "understood", "woken", "worn", "won",
+    "wound", "written",
+})
 OBJECT_PRONOUNS = {"it", "them", "this", "that", "these", "those"}
 OBJECT_DETERMINERS = {
     "a", "an", "her", "his", "its", "my", "our", "the", "their",
     "this", "these", "those", "your",
 }
 OBJECT_BREAKS = {
-    "above", "across", "against", "and", "around", "as", "below", "behind",
+    "above", "across", "against", "and", "around", "as", "at", "below", "behind",
     "beside", "between", "but", "by", "during", "for", "in", "inside",
-    "instead", "near", "on", "or", "outside", "then", "under", "when",
-    "while", "with",
+    "instead", "from", "near", "nor", "of", "off", "on", "onto", "or",
+    "out", "outside", "over", "then", "through", "toward", "towards",
+    "under", "up", "using", "when", "while", "with",
 }
 POSTNOMINAL_OBJECT_MARKERS = {
     "bear", "call", "label", "mark", "nam", "number", "paint", "with",
@@ -1150,38 +2034,117 @@ ACTION_AUXILIARIES = {
     "had", "has", "have", "is", "may", "might", "must", "should", "was",
     "were", "will", "would",
 }
-ACTION_OBJECT_PUNCTUATION = re.compile(r"[,.;!?。！？，；\n]")
-ACTION_CLAUSE_PUNCTUATION = re.compile(r"[.;!?。！？；\n]")
+ACTION_OBJECT_PUNCTUATION = re.compile(r"[,.;!?\u2026\u061f。！？，；\n]")
+ACTION_CLAUSE_PUNCTUATION = re.compile(r"[.;!?\u2026\u061f。！？；\n]")
 ACTION_NEGATOR = re.compile(
-    r"\b(?:no|not|never|without|do not|does not|must not|nothing from|"
+    r"\b(?:no|not|never|neither|nor|without|do not|does not|must not|nothing from|"
     r"cannot|can['\u2019]t|could not|couldn['\u2019]t|will not|won['\u2019]t|"
     r"would not|wouldn['\u2019]t|fail(?:s|ed)? to|"
     r"refus(?:e|es|ed|ing)(?:\s+to)?|"
     r"den(?:y|ies|ied)(?:\s+the\s+request)?(?:\s+permission)?(?:\s+to)?|"
     r"(?:is|are|was|were)\s+(?:denied|forbidden|prevented)"
     r"(?:\s+permission)?(?:\s+(?:from|to))?|"
+    r"(?:is|are|was|were)\s+(?:barred|prohibited)(?:\s+from)?|"
+    r"declin(?:e|es|ed|ing)(?:\s+to)?|avoid(?:s|ed|ing)?|"
     r"(?:is|are|was|were)\s+(?:completely\s+)?unable to|"
     r"(?:isn['\u2019]t|aren['\u2019]t|wasn['\u2019]t|weren['\u2019]t) able to)\b",
-    re.I,
-)
-ACTION_POSTPOSITIVE_DENIAL = re.compile(
-    r"^\s*(?:\b[A-Za-z0-9]+(?:['’\u2019-][A-Za-z0-9]+)?\b\s*){0,12}"
-    r"(?:is|are|was|were)\s+(?:explicitly\s+)?"
-    r"(?:absent|denied|forbidden|missing|omitted|prevented|refused|"
-    r"not\s+(?:allowed|completed|performed|shown))\b",
     re.I,
 )
 ACTION_NONCOMMITTAL_PREFIX = re.compile(
     r"\b(?:"
     r"(?:attempt(?:s|ed|ing)?|tr(?:y|ies|ied|ying)|plan(?:s|ned|ning)?|"
-    r"intend(?:s|ed|ing)?|want(?:s|ed|ing)?)\s+to|"
-    r"(?:may|might|could)"
+    r"intend(?:s|ed|ing)?|want(?:s|ed|ing)?|pretend(?:s|ed|ing)?|"
+    r"(?:hope(?:s|d)?|hoping)|threaten(?:s|ed|ing)?)\s+to|"
+    r"(?:consider(?:s|ed|ing)?|dream(?:s|ed|ing)?|imagin(?:e|es|ed|ing)|"
+    r"mim(?:e|es|ed|ing)|rehears(?:e|es|ed|ing)|visualiz(?:e|es|ed|ing))|"
+    r"(?:am|are|is|was|were)\s+(?:about|asked|due|expected|poised|prepared|"
+    r"ready|scheduled|set)\s+to|"
+    r"(?:has|have|had)\s+yet\s+to|"
+    r"(?:stop(?:s|ped|ping)?)\s+short\s+of|"
+    r"(?:almost|nearly)|(?:may|might|could)"
     r")\s*$",
+    re.I,
+)
+ACTION_STATIVE_PREFIX = re.compile(
+    r"\b(?:lie|lies|lay|remain(?:s|ed)?|sit(?:s|ting)?|sat|"
+    r"stand(?:s|ing)?|stood|stay(?:s|ed)?)\s*$",
+    re.I,
+)
+ACTION_REPRESENTED_PREFIX = re.compile(
+    r"\b(?:alleg(?:e|es|ed|ing)|claim(?:s|ed|ing)?|"
+    r"consider(?:s|ed|ing)?|describ(?:e|es|ed|ing)|dream(?:s|ed|ing)?|"
+    r"imagin(?:e|es|ed|ing)|mention(?:s|ed|ing)?|mim(?:e|es|ed|ing)|"
+    r"pretend(?:s|ed|ing)?|recall(?:s|ed|ing)?|rehears(?:e|es|ed|ing)|"
+    r"remember(?:s|ed|ing)?|report(?:s|ed|ing)?|say(?:s|ing)?|said|"
+    r"visualiz(?:e|es|ed|ing))\s*$",
+    re.I,
+)
+ACTION_PROSPECTIVE_PREFIX = re.compile(
+    r"\b(?:(?:almost|nearly)|"
+    r"(?:attempt(?:s|ed|ing)?|hope(?:s|d)?|hoping|intend(?:s|ed|ing)?|"
+    r"plan(?:s|ned|ning)?|threaten(?:s|ed|ing)?|tr(?:y|ies|ied|ying)|"
+    r"want(?:s|ed|ing)?)\s+to|"
+    r"(?:am|are|is|was|were)\s+(?:about|asked|due|expected|poised|prepared|"
+    r"ready|scheduled|set)\s+to|"
+    r"(?:has|have|had)\s+yet\s+to|"
+    r"(?:stop(?:s|ped|ping)?)\s+short\s+of)\s*$",
+    re.I,
+)
+ACTION_CONTEXT_RESET = re.compile(
+    r"(?:[,;:]|\b(?:but|however|instead|then)\b)",
+    re.I,
+)
+ACTION_HYPOTHETICAL_CONTEXT = re.compile(
+    r"(?:^|[,;:])\s*(?:if|unless)\b[^.;!?]*$|"
+    r"\b(?:assum(?:e|es|ed|ing)|suppos(?:e|es|ed|ing)|"
+    r"in\s+the\s+event\s+that)\b[^.;!?]{0,120}$|"
+    r"^\s*were\b[^,;!?]{0,100}\bto\s*$|"
+    r"^\s*should\b[^,;!?]{0,100}$",
+    re.I,
+)
+ACTION_REPRESENTED_CONTEXT = re.compile(
+    r"\b(?:announc(?:e|es|ed|ing)|explain(?:s|ed|ing)?|"
+    r"tell(?:s|ing)?|told)\b[^,;.!?]{0,80}\b(?:how|that)\b"
+    r"[^,;.!?]{0,80}$|"
+    r"\b(?:acts?\s+out|alleg(?:e|es|ed|ing)|claim(?:s|ed|ing)?|"
+    r"describ(?:e|es|ed|ing)|dream(?:s|ed|ing)?|fak(?:e|es|ed|ing)|"
+    r"imagin(?:e|es|ed|ing)|mention(?:s|ed|ing)?|mim(?:e|es|ed|ing)|"
+    r"pretend(?:s|ed|ing)?|recall(?:s|ed|ing)?|rehears(?:e|es|ed|ing)|"
+    r"remember(?:s|ed|ing)?|report(?:s|ed|ing)?|say(?:s|ing)?|said|"
+    r"visualiz(?:e|es|ed|ing))\b[^,;.!?]{0,120}$|"
+    r"\bwatch(?:es|ed|ing)?\s+(?:a\s+|the\s+)?"
+    r"(?:film|footage|recording|screen|video)\b[^,;.!?]{0,120}$",
+    re.I,
+)
+ACTION_PROSPECTIVE_CONTEXT = re.compile(
+    r"\b(?:attempt(?:s|ed|ing)?|hope(?:s|d|ing)?|intend(?:s|ed|ing)?|"
+    r"plan(?:s|ned|ning)?|promis(?:e|es|ed|ing)|"
+    r"question(?:s|ed|ing)?|threaten(?:s|ed|ing)?|"
+    r"tr(?:y|ies|ied|ying)|want(?:s|ed|ing)?|wonder(?:s|ed|ing)?)\b"
+    r"[^,;.!?]{0,96}$|"
+    r"\b(?:am|are|is|was|were)\s+(?:about|asked|due|expected|ordered|"
+    r"poised|prepared|ready|scheduled|set|told)\b[^,;.!?]{0,80}$|"
+    r"\b(?:am|are|is|was|were)\s+able\s+to\s*$|"
+    r"\b(?:can|could|may|might|should|would)"
+    r"(?:\s+\w+ly){0,2}\s*$",
+    re.I,
+)
+ENTAILED_ACTION_COMPLEMENT = re.compile(
+    r"\b(?:"
+    r"(?:cannot|can['\u2019]t)\s+not|"
+    r"(?:do(?:es)?|did)\s+not\s+fail(?:s|ed)?\s+to|"
+    r"(?:never|cannot|can['\u2019]t)\s+fail(?:s|ed)?\s+to|"
+    r"(?:do(?:es)?|did|could)\s+not\s+"
+    r"(?:avoid(?:s|ed|ing)?|refus(?:e|es|ed|ing))(?:\s+to)?|"
+    r"(?:cannot|can['\u2019]t|could\s+not)\s+"
+    r"(?:avoid(?:s|ed|ing)?|declin(?:e|es|ed|ing)|help|"
+    r"refus(?:e|es|ed|ing))(?:\s+to)?"
+    r")\s+(?P<action>[A-Za-z]+(?:['\u2019-][A-Za-z]+)?)",
     re.I,
 )
 ACTION_GRAMMAR_TERMS = {
     "able", "allow", "cannot", "could", "deni", "fail", "forbid", "never",
-    "not", "permission", "prevent", "refus", "request", "unable", "will",
+    "neither", "nor", "not", "permission", "prevent", "refus", "request", "unable", "will",
     "without", "would",
 }
 
@@ -1190,8 +2153,46 @@ def _canonical_action_token(surface: str) -> str:
     lowered = surface.lower().replace("’", "'").strip("'")
     if lowered in ACTION_SURFACE_ALIASES:
         return ACTION_SURFACE_ALIASES[lowered]
+    if lowered in ACTION_IRREGULAR_LEMMAS:
+        return ACTION_IRREGULAR_LEMMAS[lowered]
     canonical = lexical_tokens(surface)
     return canonical[0] if len(canonical) == 1 else ""
+
+
+FOUND_BASE_FORM_PREDECESSORS = frozenset({
+    "can", "could", "did", "do", "does", "may", "might", "must", "shall",
+    "should", "to", "will", "would",
+})
+
+
+def _canonical_action_at(
+    text: str,
+    token_matches: list[re.Match[str]],
+    index: int,
+) -> str:
+    """Disambiguate the base verb ``found`` from the past of ``find``.
+
+    The surface alone is ambiguous.  A modal, infinitive marker, or bounded
+    imperative licenses base-form ``found``; ordinary finite/participial uses
+    keep the irregular ``find`` identity.
+    """
+    match = token_matches[index]
+    surface = match.group(0).lower().replace("\u2019", "'").strip("'")
+    if surface != "found":
+        return _canonical_action_token(surface)
+    previous_surface = token_matches[index - 1].group(0) if index else ""
+    previous_tokens = lexical_tokens(previous_surface)
+    previous = previous_tokens[0] if len(previous_tokens) == 1 else ""
+    if previous in FOUND_BASE_FORM_PREDECESSORS:
+        return "found"
+    prefix = _bounded_action_prefix(text, match.start())
+    if re.fullmatch(
+        r"\s*(?:(?:and|but|next|now|please|then)\s+)*(?:[A-Za-z]+ly\s+){0,2}",
+        prefix,
+        re.I,
+    ):
+        return "found"
+    return "find"
 
 
 def _action_content_term(token: str) -> bool:
@@ -1241,20 +2242,35 @@ def _direct_object_identity(
     in_postnominal = False
     relative_postnominal = False
     pronoun_object = False
+    particles = _action_particle_identity(text, token_matches, action_index)
     cursor = token_matches[action_index].end()
     inspected = 0
-    for following in token_matches[action_index + 1:]:
-        if (
-            inspected >= 16
-            or ACTION_OBJECT_PUNCTUATION.search(text[cursor:following.start()])
-        ):
-            break
-        inspected += 1
+    following_stop = min(len(token_matches), action_index + 17)
+    for following_index in range(action_index + 1, following_stop):
+        following = token_matches[following_index]
         following_tokens = lexical_tokens(following.group(0))
         if len(following_tokens) != 1:
             break
         token = following_tokens[0]
-        if token in {"that", "which"} and direct_terms:
+        canonical_following = _canonical_action_token(following.group(0))
+        gap = text[cursor:following.start()]
+        if ACTION_OBJECT_PUNCTUATION.search(gap):
+            comma_only_gap = re.fullmatch(r"\s*[,，]\s*", gap) is not None
+            postnominal_follower = (
+                token in {"that", "which", "whose"}
+                or canonical_following in POSTNOMINAL_OBJECT_MARKERS
+            )
+            if not (direct_terms and comma_only_gap and postnominal_follower):
+                break
+        inspected += 1
+        if (
+            not direct_terms
+            and inspected <= len(particles)
+            and token == particles[inspected - 1]
+        ):
+            cursor = following.end()
+            continue
+        if token in {"that", "which", "whose"} and direct_terms:
             relative_postnominal = True
             cursor = following.end()
             continue
@@ -1263,7 +2279,38 @@ def _direct_object_identity(
                 cursor = following.end()
                 continue
             break
-        if _canonical_action_token(following.group(0)) in ANTECEDENT_ACTIONS:
+        if canonical_following in ANTECEDENT_ACTIONS:
+            previous_tokens = lexical_tokens(
+                token_matches[following_index - 1].group(0)
+            )
+            next_match = (
+                token_matches[following_index + 1]
+                if following_index + 1 < len(token_matches)
+                else None
+            )
+            next_tokens = (
+                lexical_tokens(next_match.group(0))
+                if next_match is not None
+                else []
+            )
+            attributive_action = (
+                canonical_following not in POSTNOMINAL_OBJECT_MARKERS
+                and len(next_tokens) == 1
+                and _action_content_term(next_tokens[0])
+                and (
+                    bool(direct_terms)
+                    or (
+                        following.group(0).lower().endswith(("ed", "en"))
+                        and previous_tokens
+                        and previous_tokens[0] in OBJECT_DETERMINERS
+                    )
+                )
+            )
+            if attributive_action:
+                if direct_terms and _action_content_term(token):
+                    direct_terms.append(token)
+                cursor = following.end()
+                continue
             break
         if token in OBJECT_PRONOUNS and not direct_terms:
             pronoun_object = True
@@ -1294,17 +2341,80 @@ def _direct_object_identity(
     ), pronoun_object
 
 
+def _coordinated_shared_object_identity(
+    text: str,
+    token_matches: list[re.Match[str]],
+    action_index: int,
+) -> tuple[str, ...]:
+    """Bind ``slices and serves the loaf`` to the shared final object."""
+    suffix = _bounded_action_suffix(text, token_matches[action_index].end())
+    shared = GENERAL_ACTION_SHARED_OBJECT.match(suffix)
+    if shared is None or action_index + 2 >= len(token_matches):
+        return ()
+    coordinator = lexical_tokens(token_matches[action_index + 1].group(0))
+    if coordinator not in (["and"], ["or"]):
+        return ()
+    shared_action_index = action_index + 2
+    shared_surface = token_matches[shared_action_index].group(0)
+    if shared_surface.lower() != shared.group("action").lower():
+        return ()
+    identity, pronoun = _direct_object_identity(
+        text,
+        token_matches,
+        shared_action_index,
+        _canonical_action_token(shared_surface),
+    )
+    return () if pronoun else identity
+
+
+@lru_cache(maxsize=4096)
+def _action_clause_boundary_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Index clause punctuation once for every action parse.
+
+    Action extraction asks for the same local clause around many tokens.  A
+    fresh ``finditer``/``search`` from every token makes a punctuation-free
+    prompt quadratic, so all prefix and suffix lookups share this index.
+    """
+    boundaries = tuple(ACTION_CLAUSE_PUNCTUATION.finditer(text))
+    return (
+        tuple(boundary.start() for boundary in boundaries),
+        tuple(boundary.end() for boundary in boundaries),
+    )
+
+
 def _local_antecedent_start(text: str, action_start: int) -> int:
-    boundaries = list(ACTION_CLAUSE_PUNCTUATION.finditer(text, 0, action_start))
-    if not boundaries:
+    starts, ends = _action_clause_boundary_index(text)
+    boundary_index = bisect_left(starts, action_start) - 1
+    if boundary_index < 0:
         return 0
-    local_start = boundaries[-1].end()
-    prefix = text[local_start:action_start]
+    local_start = ends[boundary_index]
+    prefix = text[local_start:min(action_start, local_start + 32)]
     # A cue-led new sentence may refer to the explicit object in the immediately
     # preceding event, but never search the whole prompt for a convenient noun.
     if re.match(r"\s*(?:then|next|finally)\b", prefix, re.I):
-        return boundaries[-2].end() if len(boundaries) >= 2 else 0
+        return ends[boundary_index - 1] if boundary_index >= 1 else 0
     return local_start
+
+
+def _local_clause_end(text: str, action_end: int) -> int:
+    starts, _ = _action_clause_boundary_index(text)
+    boundary_index = bisect_left(starts, action_end)
+    return starts[boundary_index] if boundary_index < len(starts) else len(text)
+
+
+MAX_ACTION_GRAMMAR_WINDOW = 384
+
+
+def _bounded_action_prefix(text: str, position: int) -> str:
+    clause_start = _local_antecedent_start(text, position)
+    return text[max(clause_start, position - MAX_ACTION_GRAMMAR_WINDOW):position]
+
+
+def _bounded_action_suffix(text: str, position: int) -> str:
+    clause_end = _local_clause_end(text, position)
+    return text[position:min(clause_end, position + MAX_ACTION_GRAMMAR_WINDOW)]
 
 
 def _resolve_pronoun_object(
@@ -1320,7 +2430,12 @@ def _resolve_pronoun_object(
         if previous.start() < local_start:
             break
         previous_action = _canonical_action_token(previous.group(0))
-        if previous_action not in ANTECEDENT_ACTIONS:
+        if (
+            previous_action not in ANTECEDENT_ACTIONS
+            and not _general_action_syntax_candidate(
+                text, token_matches, previous_index
+            )
+        ):
             continue
         identity, was_pronoun = _direct_object_identity(
             text, token_matches, previous_index, previous_action
@@ -1337,14 +2452,297 @@ def _subject_object_identity(
 ) -> tuple[str, ...]:
     action_start = token_matches[action_index].start()
     clause_start = _local_antecedent_start(text, action_start)
+    local_prior: list[re.Match[str]] = []
+    for prior_index in range(action_index - 1, -1, -1):
+        prior = token_matches[prior_index]
+        if prior.start() < clause_start:
+            break
+        local_prior.append(prior)
     terms = [
         token
-        for prior in token_matches[:action_index]
-        if prior.start() >= clause_start
+        for prior in reversed(local_prior)
         for token in lexical_tokens(prior.group(0))
         if _action_content_term(token)
     ]
     return _compact_object_identity(terms)
+
+
+def _object_relative_antecedent_identity(
+    text: str,
+    token_matches: list[re.Match[str]],
+    action_index: int,
+) -> tuple[str, ...]:
+    """Return the object antecedent in ``case that a surgeon opens``."""
+    match = token_matches[action_index]
+    clause_start = _local_antecedent_start(text, match.start())
+    prefix = text[clause_start:match.start()]
+    relatives = list(re.finditer(r"\b(?:that|which)\b", prefix, re.I))
+    if not relatives:
+        return ()
+    relative = relatives[-1]
+    explicit_subject = _nearest_subject_identity(prefix[relative.end():])
+    if not explicit_subject:
+        return ()
+    return _nearest_subject_identity(prefix[:relative.start()])
+
+
+SUBJECT_BOUNDARY_TERMS = {
+    "after", "and", "as", "before", "but", "during", "for", "from", "in",
+    "inside", "instead", "near", "on", "or", "outside", "then", "to", "under", "when",
+    "while", "with", "who", "which", "that",
+}
+SUBJECT_NON_ENTITY_TERMS = (
+    ACTION_GRAMMAR_TERMS
+    | ACTION_AUXILIARIES
+    | PRODUCTION_GENERIC
+    | TRACE_GENERIC
+    | TARGET_IDENTITY_MARKERS
+    | {
+        "about", "almost", "avoid", "decline", "imagining", "nearly", "refuse",
+        "able", "barred", "denied", "forbidden", "help", "permission", "please", "prevented",
+        "prohibited", "scheduled", "threatening", "unable",
+        "animation", "clip", "depiction", "image", "portrait", "render", "shot",
+        "storyboard", "take", "video",
+    }
+)
+MAX_BOUND_IDENTITY_TERMS = 16
+
+
+def _nearest_subject_identity(fragment: str) -> tuple[str, ...]:
+    """Extract the nearest bounded noun phrase before an action predicate."""
+    matches = list(TOKEN.finditer(fragment))
+    collected: list[str] = []
+    right_edge = len(fragment)
+    for match in reversed(matches):
+        gap = fragment[match.end():right_edge]
+        if collected and re.search(r"[,.;!?。！？，；\n]", gap):
+            break
+        surface = match.group(0).lower().replace("’", "'").strip("'")
+        tokens = lexical_tokens(match.group(0))
+        right_edge = match.start()
+        if not tokens:
+            continue
+        if surface in {"a", "an", "the"}:
+            if collected:
+                if surface == "the":
+                    continue
+                break
+            continue
+        if surface in {"he", "i", "it", "she", "they", "we", "you"}:
+            continue
+        if "n't" in surface:
+            continue
+        canonical_action = _canonical_action_token(match.group(0))
+        if canonical_action in ACTION_TRACE_TERMS:
+            if collected:
+                break
+            continue
+        if any(token in SUBJECT_BOUNDARY_TERMS for token in tokens):
+            if collected:
+                break
+            continue
+        if surface.endswith("ly"):
+            continue
+        material = [
+            token
+            for token in tokens
+            if _action_content_term(token)
+            and token not in SUBJECT_NON_ENTITY_TERMS
+        ]
+        if material:
+            collected[0:0] = material
+            if len(collected) >= MAX_BOUND_IDENTITY_TERMS:
+                break
+    return tuple(dict.fromkeys(collected[-MAX_BOUND_IDENTITY_TERMS:]))
+
+
+def _leading_subject_identity(fragment: str) -> tuple[str, ...]:
+    """Extract one noun phrase at the left edge of ``fragment``.
+
+    This is used for passive agents and synthetic pre-nominal relations. A
+    right-edge extractor would turn ``opened by a surgeon in the theatre`` into
+    an action by the theatre, so prepositions and coordinators end the phrase.
+    """
+    collected: list[str] = []
+    cursor = 0
+    for match in TOKEN.finditer(fragment):
+        gap = fragment[cursor:match.start()]
+        if collected and re.search(r"[,.;!?\n]", gap):
+            break
+        surface = match.group(0).lower().replace("\u2019", "'").strip("'")
+        tokens = lexical_tokens(match.group(0))
+        cursor = match.end()
+        if not tokens:
+            continue
+        if surface in {"a", "an", "the"} and not collected:
+            continue
+        if "n't" in surface:
+            continue
+        canonical_action = _canonical_action_token(match.group(0))
+        if (
+            canonical_action in ACTION_TRACE_TERMS
+            or any(token in SUBJECT_BOUNDARY_TERMS for token in tokens)
+        ):
+            break
+        material = [
+            token
+            for token in tokens
+            if _action_content_term(token)
+            and token not in SUBJECT_NON_ENTITY_TERMS
+        ]
+        if material:
+            collected.extend(material)
+            if len(collected) >= MAX_BOUND_IDENTITY_TERMS:
+                break
+        elif collected:
+            break
+    return tuple(dict.fromkeys(collected[:MAX_BOUND_IDENTITY_TERMS]))
+
+
+def _nearest_discourse_entity_identity(
+    text: str,
+    current_clause_start: int,
+) -> tuple[str, ...]:
+    """Resolve a subject pronoun from the immediately preceding clause.
+
+    A previous tracked action is not necessarily the nearest antecedent. In
+    ``a surgeon enters; a nurse waits; she opens``, carrying the surgeon forward
+    silently reassigns the final action. Inspect the nearest complete discourse
+    clause first, including entities introduced after its tracked predicate.
+    """
+    before = text[:current_clause_start].rstrip()
+    before = re.sub(r"[.;!?\n]+\s*$", "", before)
+    if not before:
+        return ()
+    boundaries = list(ACTION_CLAUSE_PUNCTUATION.finditer(before))
+    previous_start = boundaries[-1].end() if boundaries else 0
+    return _nearest_subject_identity(before[previous_start:])
+
+
+def _action_surface_is_passive(
+    text: str,
+    token_matches: list[re.Match[str]],
+    action_index: int,
+) -> bool:
+    """Return whether an action is a passive participle with an auxiliary."""
+    match = token_matches[action_index]
+    surface = match.group(0).lower().replace("\u2019", "'").strip("'")
+    participle = surface.endswith("ed") or surface in ACTION_IRREGULAR_PARTICIPLES or surface in {
+        "built", "closed", "done", "held", "left", "made", "opened", "shut",
+        "worn",
+    }
+    if not participle:
+        return False
+    prefix = _bounded_action_prefix(text, match.start())
+    return re.search(
+        r"\b(?:am|are|be|been|being|get|gets|got|is|was|were)"
+        r"(?:\s+\w+ly){0,2}\s*$",
+        prefix,
+        re.I,
+    ) is not None
+
+
+def _action_subject_identity(
+    text: str,
+    token_matches: list[re.Match[str]],
+    action_index: int,
+    fallback_subject: tuple[str, ...] = (),
+) -> tuple[str, ...]:
+    """Bind an action to its local actor, relative antecedent, or passive agent."""
+    match = token_matches[action_index]
+    clause_start = _local_antecedent_start(text, match.start())
+    suffix = _bounded_action_suffix(text, match.end())
+    if _action_surface_is_passive(text, token_matches, action_index):
+        bounded_agent = re.match(r"\s+by\s+(?P<agent>[^,;:.!?\n]+)", suffix, re.I)
+        if bounded_agent is not None:
+            agent = _leading_subject_identity(bounded_agent.group("agent"))
+            if agent:
+                return agent
+    prefix = _bounded_action_prefix(text, match.start())
+    depicted = re.search(
+        r"\b(?:am|are|is|was|were)\s+(?:depicted|seen|shown)\s*$",
+        prefix,
+        re.I,
+    )
+    if depicted is not None:
+        depicted_subject = _nearest_subject_identity(prefix[:depicted.start()])
+        if depicted_subject:
+            return depicted_subject
+    surface = match.group(0).lower().replace("\u2019", "'").strip("'")
+    if surface.endswith("ing") and re.fullmatch(r"\s*after\s*", prefix, re.I):
+        following_subject = re.search(
+            r",\s*(?:(?:a|an|the)\s+)?"
+            r"(?P<subject>(?:[A-Za-z][A-Za-z'\u2019-]*\s+){0,5}?"
+            r"[A-Za-z][A-Za-z'\u2019-]*)\s+"
+            r"(?:am|are|is|was|were|[A-Za-z][A-Za-z'\u2019-]*(?:s|ed))\b",
+            suffix,
+            re.I,
+        )
+        if following_subject is not None:
+            subject = _leading_subject_identity(following_subject.group("subject"))
+            if subject:
+                return subject
+    if re.search(r"\b(?:he|she|they)\b\s*$", prefix, re.I):
+        discourse_subject = _nearest_discourse_entity_identity(text, clause_start)
+        if discourse_subject:
+            return discourse_subject
+    if fallback_subject:
+        local_boundaries = list(
+            re.finditer(r"(?:[,;:]|\b(?:and|but|instead|or|then)\b)", prefix, re.I)
+        )
+        if local_boundaries:
+            tail = prefix[local_boundaries[-1].end():]
+            if not _nearest_subject_identity(tail):
+                return fallback_subject
+    relatives = list(re.finditer(r"\b(?:that|which|who)\b", prefix, re.I))
+    if relatives:
+        relative = relatives[-1]
+        if re.fullmatch(r"[^,.;!?。！？，；\n]{0,48}", prefix[relative.end():]):
+            subject = _nearest_subject_identity(prefix[relative.end():])
+            if not subject:
+                subject = _nearest_subject_identity(prefix[:relative.start()])
+            if subject:
+                return subject
+
+    appositive = re.search(
+        r"(?P<left>[^,;]{1,48}),\s*(?P<right>[^,;]{1,48}),\s*$",
+        prefix,
+    )
+    if appositive is not None:
+        left = _nearest_subject_identity(appositive.group("left"))
+        right = _nearest_subject_identity(appositive.group("right"))
+        if left and right:
+            return tuple(dict.fromkeys((*left, *right)))
+
+    coordinators = list(re.finditer(r"\b(?:and|or)\b", prefix, re.I))
+    prefix_tokens = list(TOKEN.finditer(prefix))
+    if coordinators and not any(
+        _general_action_syntax_candidate(prefix, prefix_tokens, token_index)
+        for token_index, token in enumerate(prefix_tokens)
+        if _canonical_action_token(token.group(0)) not in ACTION_TRACE_TERMS
+    ) and not any(
+        _canonical_action_token(token.group(0)) in ACTION_TRACE_TERMS
+        for token in prefix_tokens
+    ):
+        coordinator = coordinators[-1]
+        left = _nearest_subject_identity(prefix[:coordinator.start()])
+        right = _nearest_subject_identity(prefix[coordinator.end():])
+        if left and right:
+            return tuple(dict.fromkeys((*left, *right)))
+
+    subject = _nearest_subject_identity(prefix)
+    if subject:
+        return subject
+    if re.search(
+        r"(?:\b(?:he|i|it|she|they|we|you)\b\s*|"
+        r"\b(?:and|but|instead|or|then)\s*)$",
+        prefix,
+        re.I,
+    ):
+        return fallback_subject or (("__implicit__",) if re.search(r"\byou\b", prefix, re.I) else ())
+    if not prefix.strip():
+        return ("__implicit__",)
+    return ()
 
 
 def _ambiguous_alias_is_verbal(
@@ -1401,6 +2799,16 @@ STATE_TRANSITION_ATTRIBUTE = re.compile(
 )
 
 
+@lru_cache(maxsize=4096)
+def _state_transition_attribute_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    return _interval_index(tuple(
+        (match.start(), match.end())
+        for match in STATE_TRANSITION_ATTRIBUTE.finditer(text)
+    ))
+
+
 def _action_surface_is_predicate(
     text: str,
     token_matches: list[re.Match[str]],
@@ -1420,7 +2828,7 @@ def _action_surface_is_predicate(
         return False
 
     surface = match.group(0).lower().replace("’", "'").strip("'")
-    canonical_action = _canonical_action_token(surface)
+    canonical_action = _canonical_action_at(text, token_matches, index)
     previous_match = token_matches[index - 1] if index else None
     following_match = (
         token_matches[index + 1] if index + 1 < len(token_matches) else None
@@ -1433,12 +2841,12 @@ def _action_surface_is_predicate(
     )
     previous = previous_tokens[0] if len(previous_tokens) == 1 else ""
     following = following_tokens[0] if len(following_tokens) == 1 else ""
-    clause_start = _local_antecedent_start(text, match.start())
-    clause_prefix = text[clause_start:match.start()]
+    clause_prefix = _bounded_action_prefix(text, match.start())
 
-    for transition in STATE_TRANSITION_ATTRIBUTE.finditer(text):
-        if transition.start() <= match.start() < transition.end():
-            return False
+    if _position_in_interval_index(
+        _state_transition_attribute_interval_index(text), match.start()
+    ):
+        return False
 
     article = previous in OBJECT_DETERMINERS
     relative_or_demonstrative = previous in {
@@ -1460,7 +2868,28 @@ def _action_surface_is_predicate(
         and following not in NON_OBJECT_FOLLOWERS
     )
 
-    if base_surface and previous in {"am", "are", "is", "was", "were"}:
+    if (past_surface or gerund_surface) and previous not in ACTION_AUXILIARIES:
+        prefix_start = max(
+            _local_antecedent_start(text, match.start()),
+            match.start() - MAX_ACTION_GRAMMAR_WINDOW,
+        )
+        for prior_index in range(index - 1, -1, -1):
+            prior = token_matches[prior_index]
+            if prior.start() < prefix_start:
+                break
+            prior_action = _canonical_action_token(prior.group(0))
+            bridge = text[prior.end():match.start()]
+            if prior_action in ACTION_TRACE_TERMS and not re.search(
+                r"\b(?:and|but|then|while|who|which|that)\b|[,;:]",
+                bridge,
+                re.I,
+            ):
+                return False
+
+    if base_surface and previous in {
+        "am", "appear", "are", "is", "look", "remain", "seem", "stay", "was",
+        "were",
+    }:
         # Copular states are not completed events: ``the case is open`` cannot
         # satisfy a brief requiring somebody to open it.
         return False
@@ -1511,6 +2940,441 @@ def _action_surface_is_predicate(
     return True
 
 
+GENERAL_ACTION_GOVERNOR_SURFACE = re.compile(
+    r"(?:attempt(?:s|ed|ing)?|consider(?:s|ed|ing)?|dream(?:s|ed|ing)?|"
+    r"hop(?:e|es|ed|ing)|imagin(?:e|es|ed|ing)|intend(?:s|ed|ing)?|"
+    r"mim(?:e|es|ed|ing)|plan(?:s|ned|ning)?|pretend(?:s|ed|ing)?|"
+    r"promis(?:e|es|ed|ing)|question(?:s|ed|ing)?|"
+    r"rehears(?:e|es|ed|ing)|threaten(?:s|ed|ing)?|"
+    r"tr(?:y|ies|ied|ying)|visualiz(?:e|es|ed|ing)|"
+    r"want(?:s|ed|ing)?|wonder(?:s|ed|ing)?)",
+    re.I,
+)
+GENERAL_ACTION_NONSCENE_SURFACE = re.compile(
+    r"(?:act(?:s|ed|ing)?|contain(?:s|ed|ing)?|deliver(?:s|ed|ing)?|"
+    r"depict(?:s|ed|ing)?|display(?:s|ed|ing)?|draft(?:s|ed|ing)?|"
+    r"feature(?:s|d|ing)?|feed(?:s|ing)?|fed|film(?:s|ed|ing)?|"
+    r"generat(?:e|es|ed|ing)|guid(?:e|es|ed|ing)|input(?:s|ted|ting)?|"
+    r"portray(?:s|ed|ing)?|produc(?:e|es|ed|ing)|provid(?:e|es|ed|ing)|"
+    r"relight(?:s|ed|ing)?|render(?:s|ed|ing)?|restyl(?:e|es|ed|ing)|"
+    r"serv(?:e|es|ed|ing)|show(?:s|ed|ing)?|shown|"
+    r"star(?:s|red|ring)?)",
+    re.I,
+)
+GENERAL_ACTION_MARKED_OBJECT = re.compile(
+    r"^\s*(?:[A-Za-z]+ly\s+){0,2}"
+    r"(?:(?:a|an|her|his|its|my|our|the|their|this|these|those|your)\s+|"
+    r"(?:it|them)\b)",
+    re.I,
+)
+GENERAL_ACTION_DIRECTIONAL_COMPLEMENT = re.compile(
+    r"^\s*(?:[A-Za-z]+ly\s+){0,2}"
+    r"(?:across|along|away\s+from|down|from|into|off|onto|out\s+of|over|"
+    r"through|to|toward|towards|up)\s+"
+    r"(?:(?:a|an|her|his|its|my|our|the|their|this|these|those|your)\s+)?"
+    r"[A-Za-z0-9]",
+    re.I,
+)
+GENERAL_ACTION_CONTEXTUAL_TERMS = {
+    "fix", "get", "make", "sit", "stand", "take", "turn", "walk",
+}
+GENERAL_ACTION_ABSTRACT_TERMS = {
+    "accept", "end", "inspect", "learn", "look", "protect", "wait",
+}
+GENERAL_ACTION_EXCLUDED_TERMS = frozenset(
+    (
+        FUNCTION_WORDS
+        | PRODUCTION_GENERIC
+        | TRACE_GENERIC
+        | TARGET_CONTROL_TERMS
+        | ACTION_AUXILIARIES
+        | ACTION_GRAMMAR_TERMS
+        | OBJECT_DETERMINERS
+        | OBJECT_BREAKS
+        | LEADING_OBJECT_PREPOSITIONS
+        | SUBJECT_NON_ENTITY_TERMS
+        | TARGET_IDENTITY_MARKERS
+        | TARGET_PURPOSE_VERBS
+        | SUBJECT_BOUNDARY_TERMS
+        | {
+            "across", "along", "away", "down", "off", "onto", "out", "over",
+            "past", "rather", "than", "toward", "towards", "up",
+        }
+    ) - GENERAL_ACTION_CONTEXTUAL_TERMS
+    | GENERAL_ACTION_ABSTRACT_TERMS
+)
+
+GENERAL_ACTION_BARE_OBJECT = re.compile(
+    r"^\s*(?:[A-Za-z]+ly\s+){0,2}(?P<object>[A-Za-z][A-Za-z'\u2019-]*)\b",
+    re.I,
+)
+GENERAL_ACTION_SHARED_OBJECT = re.compile(
+    r"^\s*(?:,\s*)?(?:and|or)\s+"
+    r"(?P<action>[A-Za-z]+(?:['\u2019-][A-Za-z]+)?)\s+"
+    r"(?:(?:a|an|her|his|its|my|our|the|their|this|these|those|your)\s+|"
+    r"(?:it|them)\b)",
+    re.I,
+)
+GENERAL_ACTION_DEPICTED_GERUND_PREFIX = re.compile(
+    r"\b(?:am|are|is|was|were)\s+(?:depicted|seen|shown)\s*$",
+    re.I,
+)
+GENERAL_ACTION_NAMED_SUBJECT = re.compile(
+    r"\s*(?:[A-Z][A-Za-z'\u2019-]*)(?:\s+[A-Z][A-Za-z'\u2019-]*){0,3}\s*$"
+)
+ACTION_PARTICLES = frozenset({
+    "apart", "away", "back", "down", "in", "off", "on", "out", "over",
+    "through", "together", "up",
+})
+ACTION_SEMANTIC_EQUIVALENT_GROUPS = (
+    frozenset({"plunge", "quench", "quenche"}),
+)
+GENERAL_ACTION_QUANTIFIERS = {
+    "one", "two", "three", "four", "five", "six", "seven", "eight",
+    "nine", "ten", "eleven", "twelve", "few", "many", "several",
+}
+
+
+def _general_action_syntax_candidate(
+    text: str,
+    token_matches: list[re.Match[str]],
+    index: int,
+) -> bool:
+    """Recognize an open-vocabulary event only from bounded grammar.
+
+    This deliberately does not try to label every English verb.  Outside the
+    curated relation/opposite vocabulary, a claim needs a predicate-shaped
+    surface, a local actor/imperative/relative cue, and either a marked object,
+    a directional complement, or a passive agent.  That covers novel visible
+    actions without turning arbitrary scene nouns and adjectives into
+    requirements.
+    """
+    match = token_matches[index]
+    surface = match.group(0).lower().replace("\u2019", "'").strip("'")
+    tokens = lexical_tokens(match.group(0))
+    if len(tokens) != 1 or not re.fullmatch(r"[a-z]+(?:'[a-z]+)?", surface):
+        return False
+    canonical_action = _canonical_action_token(surface)
+    if canonical_action in ACTION_TRACE_TERMS:
+        return _action_surface_is_predicate(text, token_matches, index)
+    if (
+        len(surface) < 3
+        or canonical_action in GENERAL_ACTION_EXCLUDED_TERMS
+        or surface.endswith("ly")
+        or GENERAL_ACTION_GOVERNOR_SURFACE.fullmatch(surface)
+        or GENERAL_ACTION_NONSCENE_SURFACE.fullmatch(surface)
+        or not _action_surface_is_predicate(text, token_matches, index)
+    ):
+        return False
+
+    prefix = _bounded_action_prefix(text, match.start())
+    suffix = _bounded_action_suffix(text, match.end())
+    previous_match = token_matches[index - 1] if index else None
+    previous_surface = (
+        previous_match.group(0).lower().replace("\u2019", "'").strip("'")
+        if previous_match is not None
+        else ""
+    )
+    previous_tokens = lexical_tokens(previous_surface)
+    previous = previous_tokens[0] if len(previous_tokens) == 1 else ""
+    if previous in GENERAL_ACTION_QUANTIFIERS or previous.isdigit():
+        return False
+    if previous in (
+        (OBJECT_BREAKS | LEADING_OBJECT_PREPOSITIONS)
+        - {"and", "but", "or", "then", "that", "which", "who"}
+    ):
+        return False
+    if (
+        surface == "given"
+        and not prefix.strip()
+        and re.match(
+            r"\s+(?:(?:a|an|the)\s+)?(?:image|input|photo|photograph|"
+            r"reference|source|still|video)\b",
+            suffix,
+            re.I,
+        )
+    ):
+        return False
+    if surface.endswith("ing") and not (
+        re.search(
+            r"\b(?:am|are|be|been|being|is|was|were)"
+            r"(?:\s+[A-Za-z]+ly){0,2}\s*$",
+            prefix,
+            re.I,
+        )
+        or GENERAL_ACTION_DEPICTED_GERUND_PREFIX.search(prefix)
+    ):
+        return False
+    local_subject = _nearest_subject_identity(prefix)
+    previous_looks_plural = bool(previous_surface) and (
+        previous_surface.endswith("s")
+        and canonical_token(previous_surface) != previous_surface
+    )
+    determiner_subject = bool(local_subject) and re.search(
+        r"(?:^|[,;:]|\b(?:and|but|instead|then|while)\b)\s*"
+        r"(?:a|an|her|his|its|my|our|the|their|this|these|those|your)\s+"
+        r"(?:[A-Za-z0-9][A-Za-z0-9'\u2019-]*\s+){0,11}$",
+        prefix,
+        re.I,
+    ) is not None
+    pronoun_or_relative_subject = previous in {
+        "he", "i", "it", "she", "they", "we", "who", "which", "you",
+    }
+    imperative = re.fullmatch(
+        r"\s*(?:(?:and|but|next|now|please|then)\s+)*"
+        r"(?:[A-Za-z]+ly\s+){0,2}(?:to\s+)?",
+        prefix,
+        re.I,
+    ) is not None
+    auxiliary_bound_subject = (
+        previous in ACTION_AUXILIARIES and bool(local_subject)
+    )
+    named_subject = GENERAL_ACTION_NAMED_SUBJECT.fullmatch(prefix) is not None
+    previous_prefix = (
+        _bounded_action_prefix(text, previous_match.start())
+        if previous_match is not None
+        else ""
+    )
+    previous_has_named_subject = (
+        previous_match is not None
+        and GENERAL_ACTION_NAMED_SUBJECT.fullmatch(previous_prefix) is not None
+    )
+    contextual_plural_subject = (
+        bool(local_subject)
+        and previous_looks_plural
+        and not previous_has_named_subject
+        and re.search(
+            r"(?:^|[,;:])\s*"
+            r"(?:[A-Za-z][A-Za-z'\u2019-]*\s+){1,3}$",
+            prefix,
+        )
+        is not None
+    )
+    if not (
+        determiner_subject
+        or pronoun_or_relative_subject
+        or imperative
+        or auxiliary_bound_subject
+        or named_subject
+        or contextual_plural_subject
+    ):
+        return False
+
+    if GENERAL_ACTION_MARKED_OBJECT.match(suffix):
+        return True
+    strong_verb_surface = (
+        any(key != surface for key in _action_inflection_keys(surface))
+        or previous in ACTION_AUXILIARIES
+    )
+    if GENERAL_ACTION_DIRECTIONAL_COMPLEMENT.match(suffix) and (
+        strong_verb_surface
+        or imperative
+        or previous_looks_plural
+        or previous in {"they", "we", "you"}
+    ):
+        return True
+    if _action_surface_is_passive(text, token_matches, index) and re.match(
+        r"\s+by\s+(?:(?:a|an|the)\s+)?[A-Za-z0-9]", suffix, re.I
+    ):
+        return True
+    shared_object = GENERAL_ACTION_SHARED_OBJECT.match(suffix)
+    if shared_object is not None and strong_verb_surface:
+        shared_action = shared_object.group("action")
+        if _action_inflection_keys(shared_action):
+            return True
+    bare_object = GENERAL_ACTION_BARE_OBJECT.match(suffix)
+    if bare_object is not None and (
+        strong_verb_surface or contextual_plural_subject
+    ):
+        object_tokens = lexical_tokens(bare_object.group("object"))
+        if (
+            len(object_tokens) == 1
+            and object_tokens[0] not in (
+                OBJECT_BREAKS
+                | ACTION_AUXILIARIES
+                | ACTION_GRAMMAR_TERMS
+                | SUBJECT_BOUNDARY_TERMS
+            )
+        ):
+            return True
+    if not suffix.strip() and strong_verb_surface:
+        return True
+
+    return False
+
+
+def _regular_action_forms(base: str) -> frozenset[str]:
+    """Generate bounded regular forms for one proposed lemma.
+
+    Inverse suffix stripping alone conflates different verbs (``tapes`` and
+    ``taps``).  A candidate lemma survives only when its forward spelling rule
+    can reproduce the observed surface.
+    """
+    if len(base) < 3 or not base.isalpha():
+        return frozenset()
+    vowels = frozenset("aeiou")
+    consonant_y = base.endswith("y") and len(base) > 1 and base[-2] not in vowels
+    sibilant = base.endswith(("s", "x", "z", "ch", "sh", "o"))
+    doubles = (
+        len(base) <= 4
+        and len(base) >= 3
+        and base[-1] not in vowels | frozenset("wxy")
+        and base[-2] in vowels
+        and base[-3] not in vowels
+        and not base.endswith("en")
+    )
+    third = base[:-1] + "ies" if consonant_y else base + ("es" if sibilant else "s")
+    if consonant_y:
+        past = base[:-1] + "ied"
+    elif base.endswith("e"):
+        past = base + "d"
+    elif doubles:
+        past = base + base[-1] + "ed"
+    else:
+        past = base + "ed"
+    if base.endswith("ie"):
+        gerund = base[:-2] + "ying"
+    elif base.endswith("e") and not base.endswith(("ee", "oe", "ye")):
+        gerund = base[:-1] + "ing"
+    elif doubles:
+        gerund = base + base[-1] + "ing"
+    else:
+        gerund = base + "ing"
+    return frozenset({base, third, past, gerund})
+
+
+def _action_inflection_keys(surface: str) -> frozenset[str]:
+    """Return only lemma candidates that regenerate the observed surface."""
+    lowered = surface.lower().replace("\u2019", "'").strip("'")
+    if lowered in ACTION_SURFACE_ALIASES:
+        return frozenset({ACTION_SURFACE_ALIASES[lowered]})
+    if lowered in ACTION_IRREGULAR_LEMMAS:
+        return frozenset({ACTION_IRREGULAR_LEMMAS[lowered]})
+
+    candidates = {lowered}
+    if len(lowered) > 4 and lowered.endswith("ies"):
+        candidates.add(lowered[:-3] + "y")
+    if len(lowered) > 4 and lowered.endswith("ied"):
+        candidates.add(lowered[:-3] + "y")
+    if len(lowered) > 4 and lowered.endswith("ying"):
+        candidates.add(lowered[:-4] + "ie")
+    if len(lowered) > 5 and lowered.endswith("ing"):
+        stem = lowered[:-3]
+        candidates.update((stem, stem + "e"))
+        if len(stem) > 3 and stem[-1] == stem[-2]:
+            candidates.add(stem[:-1])
+    if len(lowered) > 4 and lowered.endswith("ed"):
+        stem = lowered[:-2]
+        candidates.update((stem, lowered[:-1]))
+        if len(stem) > 3 and stem[-1] == stem[-2]:
+            candidates.add(stem[:-1])
+        if lowered.endswith("cked"):
+            candidates.add(lowered[:-3])
+    if len(lowered) > 3 and lowered.endswith("s") and not lowered.endswith("ss"):
+        candidates.add(lowered[:-1])
+    if len(lowered) > 4 and lowered.endswith("es"):
+        candidates.add(lowered[:-2])
+    return frozenset(
+        candidate
+        for candidate in candidates
+        if len(candidate) >= 3 and lowered in _regular_action_forms(candidate)
+    )
+
+
+def _action_particle_identity(
+    text: str,
+    token_matches: list[re.Match[str]],
+    action_index: int,
+) -> tuple[str, ...]:
+    """Bind adjacent or terminally separated particles to their verb."""
+    action = token_matches[action_index]
+    particles: list[str] = []
+    cursor = action.end()
+    adjacent_stop = min(len(token_matches), action_index + 3)
+    for following_index in range(action_index + 1, adjacent_stop):
+        following = token_matches[following_index]
+        if not re.fullmatch(r"\s+", text[cursor:following.start()]):
+            break
+        tokens = lexical_tokens(following.group(0))
+        token = tokens[0] if len(tokens) == 1 else ""
+        if not particles and token in ACTION_PARTICLES:
+            particles.append(token)
+            cursor = following.end()
+            continue
+        if particles and particles[-1] in {"away", "out"} and token in {"from", "of"}:
+            particles.append(token)
+        break
+    if particles:
+        return tuple(particles)
+
+    # Separable phrasal verbs may place a marked object before the particle:
+    # ``power the machine off``.  Accept only a terminal particle inside the
+    # same bounded clause, so ordinary prepositional uses are not reclassified.
+    cursor = action.end()
+    saw_object = False
+    separated_stop = min(len(token_matches), action_index + 17)
+    for following_index in range(action_index + 1, separated_stop):
+        following = token_matches[following_index]
+        gap = text[cursor:following.start()]
+        if ACTION_OBJECT_PUNCTUATION.search(gap):
+            break
+        tokens = lexical_tokens(following.group(0))
+        token = tokens[0] if len(tokens) == 1 else ""
+        if token in ACTION_PARTICLES:
+            if not saw_object:
+                break
+            clause_end = _local_clause_end(text, following.end())
+            if re.fullmatch(r"\s*", text[following.end():clause_end]):
+                return (token,)
+            break
+        if token in OBJECT_PRONOUNS:
+            saw_object = True
+        elif token in OBJECT_BREAKS:
+            break
+        elif _action_content_term(token):
+            saw_object = True
+        cursor = following.end()
+    return ()
+
+
+def _action_mentions_same_verb(
+    required_text: str,
+    required: "BoundActionMention",
+    candidate_text: str,
+    candidate: "BoundActionMention",
+) -> bool:
+    """Compare known aliases and unseen inflections without a fixture lexicon."""
+    required_surface = required_text[required.start:required.end]
+    candidate_surface = candidate_text[candidate.start:candidate.end]
+    required_keys = (
+        frozenset({"found"})
+        if required.action == "found" and required_surface.lower() == "found"
+        else _action_inflection_keys(required_surface)
+    )
+    candidate_keys = (
+        frozenset({"found"})
+        if candidate.action == "found" and candidate_surface.lower() == "found"
+        else _action_inflection_keys(candidate_surface)
+    )
+    same_lemma = bool(required_keys & candidate_keys)
+    if not same_lemma:
+        same_lemma = any(
+            bool(required_keys & group) and bool(candidate_keys & group)
+            for group in ACTION_SEMANTIC_EQUIVALENT_GROUPS
+        )
+    if not same_lemma:
+        return False
+    if required.particles == candidate.particles:
+        return True
+    # ``close up`` is an idiomatic scene-level completion whose visible proof
+    # may be the final door/light closure rather than a repeated ``up`` token.
+    return (
+        required.action == "close"
+        and required.particles == ("up",)
+        and candidate.particles == ()
+    )
+
+
 def _action_match_is_negated(
     text: str,
     token_matches: list[re.Match[str]],
@@ -1527,16 +3391,71 @@ def _action_match_is_negated(
     match = token_matches[action_index]
     action_start = match.start()
     clause_start = _local_antecedent_start(text, action_start)
-    clause_end_match = ACTION_CLAUSE_PUNCTUATION.search(text, match.end())
-    clause_end = clause_end_match.start() if clause_end_match else len(text)
-    if ACTION_POSTPOSITIVE_DENIAL.search(text[match.end():clause_end]):
+    clause_end = _local_clause_end(text, match.end())
+    nominal_surface = match.group(0).lower().replace("\u2019", "'")
+    action_suffix = text[
+        match.end():min(clause_end, match.end() + MAX_ACTION_GRAMMAR_WINDOW)
+    ]
+    denial_state = re.search(
+        r"\b(?:is|are|was|were)\s+(?:explicitly\s+)?"
+        r"(?:absent|denied|forbidden|missing|omitted|prevented|refused|"
+        r"not\s+(?:allowed|completed|performed|shown))\b",
+        action_suffix,
+        re.I,
+    )
+    if (
+        nominal_surface.endswith("ing")
+        and denial_state is not None
+        and not re.search(
+            r"\b(?:and|but|whereas|while)\b",
+            action_suffix[:denial_state.start()],
+            re.I,
+        )
+    ):
         return True
     prefix_negated = match_is_negated(text, action_start)
-    prefix = text[clause_start:action_start]
+    prefix_start = max(clause_start, action_start - MAX_ACTION_GRAMMAR_WINDOW)
+    prefix = text[prefix_start:action_start]
+    if re.search(
+        r"(?:^|[,;:，；：])\s*(?:if|unless)\b[^.;!?。！？；]*$",
+        prefix,
+        re.I,
+    ):
+        return True
     if re.search(r"\bnot\s+only(?:\s+\w+ly)?\s*$", prefix, re.I):
         return False
     if re.search(
+        r"\b(?:cannot|can['’]t)\s+not\s*$",
+        prefix,
+        re.I,
+    ):
+        return False
+    if re.search(
+        r"\b(?:(?:do(?:es)?|did|could)\s+not\s+"
+        r"(?:avoid(?:s|ed|ing)?|refus(?:e|es|ed|ing))|"
+        r"(?:cannot|can['’]t|could not)\s+help)\s*$",
+        prefix,
+        re.I,
+    ):
+        # These constructions entail the complement instead of merely making
+        # it possible: ``could not avoid opening`` and ``cannot help opening``.
+        return False
+    if re.search(
+        r"\b(?:do(?:es)?|did)\s+not\s+fail(?:s|ed)?\s+to\s*$",
+        prefix,
+        re.I,
+    ):
+        return False
+    if re.search(
         r"\b(?:never|cannot|can['’]t)\s+fail(?:s|ed)?\s+to\s*$",
+        prefix,
+        re.I,
+    ):
+        return False
+    if re.search(
+        r"\b(?:cannot|can['’]t)\s+"
+        r"(?:avoid(?:s|ed|ing)?|declin(?:e|es|ed|ing)|refus(?:e|es|ed|ing))"
+        r"(?:\s+to)?\s*$",
         prefix,
         re.I,
     ):
@@ -1546,23 +3465,25 @@ def _action_match_is_negated(
     negators = [
         negator
         for negator in ACTION_NEGATOR.finditer(prefix)
-        if not position_is_quoted(text, clause_start + negator.start())
+        if not position_is_quoted(text, prefix_start + negator.start())
     ]
     if not negators:
         return prefix_negated
     latest = negators[-1]
     if not prefix_negated and NEGATION_RESET.search(prefix[latest.end():]):
         return False
-    negator_end = clause_start + latest.end()
-    prior_action_indices = [
-        index
-        for index in range(action_index)
-        if token_matches[index].start() >= negator_end
-        and _canonical_action_token(token_matches[index].group(0))
-        in OPPOSITE_ACTION_TERMS
-        and not position_is_quoted(text, token_matches[index].start())
-        and _action_surface_is_predicate(text, token_matches, index)
-    ]
+    negator_end = prefix_start + latest.end()
+    prior_action_indices: list[int] = []
+    for prior_index in range(action_index - 1, -1, -1):
+        prior = token_matches[prior_index]
+        if prior.start() < negator_end:
+            break
+        if (
+            _general_action_syntax_candidate(text, token_matches, prior_index)
+            and not position_is_quoted(text, prior.start())
+        ):
+            prior_action_indices.append(prior_index)
+            break
     if not prior_action_indices:
         return True
 
@@ -1630,10 +3551,379 @@ def _action_match_is_negated(
     return True
 
 
-def action_mentions(
+ACTION_ASSERTED = "asserted"
+ACTION_STATIVE = "stative"
+ACTION_PROSPECTIVE = "prospective"
+ACTION_HYPOTHETICAL = "hypothetical"
+ACTION_REPRESENTED = "represented"
+ACTION_NEGATED = "negated"
+
+
+class BoundActionMention(NamedTuple):
+    action: str
+    start: int
+    end: int
+    positive: bool
+    objects: tuple[str, ...]
+    subjects: tuple[str, ...]
+    status: str
+    particles: tuple[str, ...] = ()
+
+
+class BoundPropertyMention(NamedTuple):
+    subjects: tuple[str, ...]
+    properties: tuple[str, ...]
+    values: tuple[str, ...]
+    start: int
+
+
+PRENOMINAL_RELATION = re.compile(
+    r"\b(?P<object>[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)-"
+    r"(?P<form>carrying|holding|wearing)\b",
+    re.I,
+)
+
+
+PROPERTY_TAIL_ACTIONS = ACTION_TRACE_TERMS | frozenset(
+    (*TARGET_ACTION_BREAKS, "guide", "lead")
+)
+
+
+def _truncate_property_tail_at_action(
+    tail: str,
+    *,
+    min_content: int,
+) -> str:
+    """Stop a property phrase before a following scene predicate."""
+    content_count = 0
+    for match in TOKEN.finditer(tail):
+        action = _canonical_action_token(match.group(0))
+        if content_count >= min_content and action in PROPERTY_TAIL_ACTIONS:
+            return tail[:match.start()]
+        if any(_action_content_term(token) for token in lexical_tokens(match.group(0))):
+            content_count += 1
+    return tail
+
+
+@lru_cache(maxsize=4096)
+def _bound_property_mentions(text: str) -> tuple[BoundPropertyMention, ...]:
+    """Bind relative, ``with``, and ``in`` properties to their owning entity."""
+    mentions: list[BoundPropertyMention] = []
+    structural = structural_contract_terms(text)
+
+    def append(
+        subjects: tuple[str, ...],
+        properties: tuple[str, ...],
+        values: tuple[str, ...],
+        start: int,
+    ) -> None:
+        if (
+            not subjects
+            or not properties
+            or not values
+            or not _position_is_output_semantic_evidence(text, start)
+            or set(subjects).issubset(structural)
+            or (set(properties) & structural and set(values) & structural)
+        ):
+            return
+        if subjects and properties and values:
+            mentions.append(BoundPropertyMention(
+                subjects=subjects,
+                properties=_compact_object_identity(list(properties)),
+                values=_compact_object_identity(list(values)),
+                start=start,
+            ))
+
+    for marker in re.finditer(r"\bwhose\b", text, re.I):
+        if position_is_quoted(text, marker.start()) or _position_is_displayed_text(
+            text, marker.start()
+        ):
+            continue
+        local_start = max(
+            text.rfind(boundary, 0, marker.start())
+            for boundary in ",.;!?。！？；\n"
+        ) + 1
+        subjects = _nearest_subject_identity(text[local_start:marker.start()])
+        if not subjects:
+            continue
+        tail_boundary = re.search(r"[,.;!?。！？；\n]", text[marker.end():])
+        tail_end = (
+            marker.end() + tail_boundary.start()
+            if tail_boundary is not None
+            else len(text)
+        )
+        tail_end = min(
+            tail_end, _output_semantic_evidence_end(text, marker.start())
+        )
+        tail = _truncate_property_tail_at_action(
+            text[marker.end():tail_end], min_content=2
+        )
+        copula = re.search(
+            r"\b(?:appears?|are|is|looks?|was|were)\b", tail, re.I
+        )
+        if copula is not None:
+            property_text = tail[:copula.start()]
+            value_text = tail[copula.end():]
+        else:
+            material = [
+                match for match in TOKEN.finditer(tail)
+                if lexical_tokens(match.group(0))
+            ]
+            if len(material) < 2:
+                continue
+            property_text = tail[:material[1].start()]
+            value_text = tail[material[1].start():]
+        properties = tuple(
+            token
+            for token in lexical_tokens(property_text)
+            if _action_content_term(token)
+        )
+        values = tuple(
+            token
+            for token in lexical_tokens(value_text)
+            if _action_content_term(token)
+        )
+        append(subjects, properties, values, marker.start())
+
+    for marker in re.finditer(r"\b(?:that|which)\b", text, re.I):
+        if position_is_quoted(text, marker.start()) or _position_is_displayed_text(
+            text, marker.start()
+        ):
+            continue
+        local_start = max(
+            text.rfind(boundary, 0, marker.start())
+            for boundary in ",.;!?。！？；\n"
+        ) + 1
+        subjects = _nearest_subject_identity(text[local_start:marker.start()])
+        if not subjects:
+            continue
+        copula = re.match(
+            r"\s+(?:appears?|are|is|looks?|was|were)\s+",
+            text[marker.end():],
+            re.I,
+        )
+        if copula is None:
+            continue
+        value_start = marker.end() + copula.end()
+        tail_end_match = re.search(r"[,.;!?\n]", text[value_start:])
+        value_end = (
+            value_start + tail_end_match.start()
+            if tail_end_match is not None
+            else len(text)
+        )
+        value_end = min(
+            value_end, _output_semantic_evidence_end(text, marker.start())
+        )
+        value_tail = _truncate_property_tail_at_action(
+            text[value_start:value_end], min_content=1
+        )
+        value_end = value_start + len(value_tail)
+        next_owner = re.search(
+            r"\band\s+(?:a|an|the)?\s*"
+            r"(?:[A-Za-z0-9'-]+\s+){0,4}(?:that|which)\b",
+            text[value_start:value_end],
+            re.I,
+        )
+        if next_owner is not None:
+            value_end = value_start + next_owner.start()
+        values = tuple(
+            token
+            for token in lexical_tokens(text[value_start:value_end])
+            if _action_content_term(token)
+        )
+        append(subjects, ("appearance",), values, marker.start())
+
+    for marker in re.finditer(r"\bwith\b", text, re.I):
+        if position_is_quoted(text, marker.start()) or _position_is_displayed_text(
+            text, marker.start()
+        ):
+            continue
+        local_start = max(
+            text.rfind(boundary, 0, marker.start())
+            for boundary in ",.;!?。！？；\n"
+        ) + 1
+        prefix = text[local_start:marker.start()]
+        if any(
+            _canonical_action_token(token.group(0)) in TARGET_ACTION_BREAKS
+            for token in TOKEN.finditer(prefix)
+        ):
+            continue
+        subjects = _nearest_subject_identity(prefix)
+        if not subjects:
+            continue
+        tail_boundary = re.search(r"[,.;!?。！？；\n]", text[marker.end():])
+        tail_end = (
+            marker.end() + tail_boundary.start()
+            if tail_boundary is not None
+            else len(text)
+        )
+        tail_end = min(
+            tail_end, _output_semantic_evidence_end(text, marker.start())
+        )
+        tail = _truncate_property_tail_at_action(
+            text[marker.end():tail_end], min_content=2
+        )
+        next_owner = re.search(
+            r"\band\s+(?:a|an|the)\b[^,.;!?]{0,48}\bwith\b",
+            tail,
+            re.I,
+        )
+        if next_owner is not None:
+            tail = tail[:next_owner.start()]
+        parts = re.split(r"\band\b", tail, flags=re.I)
+        part_material = [
+            [
+                token
+                for token in lexical_tokens(part)
+                if _action_content_term(token)
+            ]
+            for part in parts
+        ]
+        if len(parts) > 1 and not all(len(material) >= 2 for material in part_material):
+            parts = [tail]
+        for part in parts:
+            relative = re.fullmatch(
+                r"\s*(?:a|an|the)?\s*(?P<property>[A-Za-z0-9'-]+"
+                r"(?:\s+[A-Za-z0-9'-]+){0,3}?)\s+"
+                r"(?:that|which)\s+(?:appears?|are|is|looks?|was|were)\s+"
+                r"(?P<value>[A-Za-z0-9'-]+(?:\s+[A-Za-z0-9'-]+){0,2})\s*",
+                part,
+                re.I,
+            )
+            if relative is not None:
+                properties = tuple(
+                    token
+                    for token in lexical_tokens(relative.group("property"))
+                    if _action_content_term(token)
+                )
+                values = tuple(
+                    token
+                    for token in lexical_tokens(relative.group("value"))
+                    if _action_content_term(token)
+                )
+            else:
+                material = [
+                    token
+                    for token in lexical_tokens(part)
+                    if _action_content_term(token)
+                ]
+                if len(material) < 2:
+                    continue
+                properties = (material[-1],)
+                values = tuple(material[:-1])
+            append(subjects, properties, values, marker.start())
+
+    for marker in re.finditer(
+        r"\bin\s+(?:(?:a|an|the)\s+)?"
+        r"(?P<value>[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)"
+        r"(?:\s+(?P<property>[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?))?"
+        r"(?=\s*(?:$|[,.;!?]|\b(?:alongside|and|beside|near|while|with)\b))",
+        text,
+        re.I,
+    ):
+        if position_is_quoted(text, marker.start()) or _position_is_displayed_text(
+            text, marker.start()
+        ):
+            continue
+        local_start = max(
+            text.rfind(boundary, 0, marker.start())
+            for boundary in ",.;!?。！？；\n"
+        ) + 1
+        prefix = text[local_start:marker.start()]
+        if any(
+            _canonical_action_token(token.group(0)) in TARGET_ACTION_BREAKS
+            for token in TOKEN.finditer(prefix)
+        ):
+            continue
+        subjects = _nearest_subject_identity(prefix)
+        values = tuple(
+            token
+            for token in lexical_tokens(marker.group("value"))
+            if _action_content_term(token)
+        )
+        if any(value in PRODUCTION_GENERIC for value in values):
+            continue
+        property_surface = marker.group("property")
+        properties = tuple(
+            token
+            for token in lexical_tokens(property_surface or "")
+            if _action_content_term(token)
+        )
+        if not properties:
+            # A single complement is ordinarily a location (``in a studio``),
+            # not an appearance relation.  ``surgeon in red`` remains covered
+            # by the explicit wear-action equivalence without turning every
+            # location into a movable colour/property contract.
+            continue
+        append(
+            subjects,
+            properties,
+            values,
+            marker.start(),
+        )
+
+    return tuple(sorted(mentions, key=lambda mention: mention.start))
+
+
+def _action_match_status(
     text: str,
-) -> tuple[tuple[str, int, int, bool, tuple[str, ...]], ...]:
-    """Extract bounded, polarity-aware action/object mentions.
+    token_matches: list[re.Match[str]],
+    action_index: int,
+) -> str:
+    """Classify an action as an asserted event or a non-event description."""
+    match = token_matches[action_index]
+    prefix = _bounded_action_prefix(text, match.start())
+    resets = list(ACTION_CONTEXT_RESET.finditer(prefix))
+    governor_prefix = prefix[resets[-1].end():] if resets else prefix
+    clause_end = _local_clause_end(text, match.end())
+    suffix = text[match.end():min(clause_end, match.end() + MAX_ACTION_GRAMMAR_WINDOW)]
+    punctuation = text[clause_end:clause_end + 1]
+    polite_you_request = bool(
+        punctuation == "?"
+        and re.match(r"\s*(?:can|could|would)\s+you\b", governor_prefix, re.I)
+    )
+    if (
+        punctuation == "?"
+        and not polite_you_request
+        and re.match(
+            r"\s*(?:can|could|may|might|shall|should|will|would)\b",
+            governor_prefix,
+            re.I,
+        )
+    ):
+        return ACTION_HYPOTHETICAL
+    if ACTION_HYPOTHETICAL_CONTEXT.search(governor_prefix):
+        return ACTION_HYPOTHETICAL
+    if ACTION_STATIVE_PREFIX.search(governor_prefix):
+        return ACTION_STATIVE
+    if (
+        ACTION_REPRESENTED_PREFIX.search(governor_prefix)
+        or ACTION_REPRESENTED_CONTEXT.search(governor_prefix)
+    ):
+        return ACTION_REPRESENTED
+    nominal_surface = match.group(0).lower().replace("\u2019", "'")
+    if nominal_surface.endswith("ing") and re.search(
+        r"\b(?:is|are|was|were)\s+(?:expected|planned|scheduled)\b",
+        suffix,
+        re.I,
+    ):
+        return ACTION_PROSPECTIVE
+    if (
+        ACTION_PROSPECTIVE_PREFIX.search(governor_prefix)
+        or (
+            not polite_you_request
+            and ACTION_PROSPECTIVE_CONTEXT.search(governor_prefix)
+        )
+    ):
+        return ACTION_PROSPECTIVE
+    if _action_match_is_negated(text, token_matches, action_index):
+        return ACTION_NEGATED
+    return ACTION_ASSERTED
+
+
+@lru_cache(maxsize=4096)
+def _bound_action_mentions(text: str) -> tuple[BoundActionMention, ...]:
+    """Extract bounded, status-, actor-, and object-aware action mentions.
 
     The object binding prevents a required case action from being satisfied or
     reversed by an unrelated door action. Negated actions remain available as
@@ -1644,12 +3934,12 @@ def action_mentions(
     mentions: list[dict[str, object]] = []
 
     for index, match in enumerate(token_matches):
-        canonical_action = _canonical_action_token(match.group(0))
-        if canonical_action not in OPPOSITE_ACTION_TERMS:
+        canonical_action = _canonical_action_at(text, token_matches, index)
+        if position_is_quoted(text, match.start()) or _position_is_displayed_text(
+            text, match.start()
+        ) or not _position_is_output_semantic_evidence(text, match.start()):
             continue
-        if position_is_quoted(text, match.start()):
-            continue
-        if not _action_surface_is_predicate(text, token_matches, index):
+        if not _general_action_syntax_candidate(text, token_matches, index):
             continue
         previous = token_matches[index - 1] if index else None
         previous_token = (
@@ -1713,34 +4003,103 @@ def action_mentions(
             if pronoun_object:
                 object_terms = _resolve_pronoun_object(text, token_matches, index)
             else:
-                object_terms = _subject_object_identity(
+                object_terms = _coordinated_shared_object_identity(
+                    text, token_matches, index
+                ) or _object_relative_antecedent_identity(
                     text, token_matches, index
                 )
+                if not object_terms and _action_surface_is_passive(
+                    text, token_matches, index
+                ):
+                    object_terms = _subject_object_identity(
+                        text, token_matches, index
+                    )
 
+        fallback_subject = (
+            tuple(mentions[-1]["subjects"]) if mentions else ()
+        )
+        subjects = _action_subject_identity(
+            text, token_matches, index, fallback_subject
+        )
+        status = _action_match_status(text, token_matches, index)
         mentions.append({
             "action": canonical_action,
             "start": match.start(),
             "end": match.end(),
-            "positive": not _action_match_is_negated(text, token_matches, index),
+            "positive": status == ACTION_ASSERTED,
             "objects": object_terms,
+            "subjects": subjects,
+            "status": status,
             "pronoun": pronoun_object,
+            "particles": _action_particle_identity(text, token_matches, index),
         })
 
+    # Hyphenated relation adjectives encode the same actor/object relation as a
+    # relative clause: ``a red-wearing surgeon`` means the surgeon wears red.
+    # TOKEN deliberately keeps compounds together, so add these bounded
+    # relations explicitly instead of flattening all adjectives globally.
+    for relation in PRENOMINAL_RELATION.finditer(text):
+        if position_is_quoted(text, relation.start()) or _position_is_displayed_text(
+            text, relation.start()
+        ) or not _position_is_output_semantic_evidence(text, relation.start()):
+            continue
+        subjects = _leading_subject_identity(text[relation.end():])
+        objects = tuple(
+            token
+            for token in lexical_tokens(relation.group("object"))
+            if _action_content_term(token)
+        )
+        action = _canonical_action_token(relation.group("form"))
+        if not subjects or not objects or action not in TARGET_SHARED_RELATIONS:
+            continue
+        status = (
+            ACTION_NEGATED
+            if match_is_negated(text, relation.start())
+            else ACTION_ASSERTED
+        )
+        mentions.append({
+            "action": action,
+            "start": relation.start("form"),
+            "end": relation.end("form"),
+            "positive": status == ACTION_ASSERTED,
+            "objects": _compact_object_identity(list(objects)),
+            "subjects": subjects,
+            "status": status,
+            "pronoun": False,
+            "particles": (),
+        })
+
+    mentions.sort(key=lambda mention: int(mention["start"]))
+
     return tuple(
-        (
-            str(mention["action"]),
-            int(mention["start"]),
-            int(mention["end"]),
-            bool(mention["positive"]),
-            tuple(mention["objects"]),
+        BoundActionMention(
+            action=str(mention["action"]),
+            start=int(mention["start"]),
+            end=int(mention["end"]),
+            positive=bool(mention["positive"]),
+            objects=tuple(mention["objects"]),
+            subjects=tuple(mention["subjects"]),
+            status=str(mention["status"]),
+            particles=tuple(mention["particles"]),
         )
         for mention in mentions
     )
 
 
+def action_mentions(
+    text: str,
+) -> tuple[tuple[str, int, int, bool, tuple[str, ...]], ...]:
+    """Compatibility view of opposite-action mentions used by public tests."""
+    return tuple(
+        (mention.action, mention.start, mention.end, mention.positive, mention.objects)
+        for mention in _bound_action_mentions(text)
+        if mention.action in OPPOSITE_ACTION_TERMS
+    )
+
+
 def _action_objects_compatible(
-    left: tuple[str, int, int, bool, tuple[str, ...]],
-    right: tuple[str, int, int, bool, tuple[str, ...]],
+    left: BoundActionMention,
+    right: BoundActionMention,
     *,
     left_requires_object: bool = True,
 ) -> bool:
@@ -1759,9 +4118,49 @@ def _action_objects_compatible(
     )
 
 
+def _action_subjects_compatible(
+    required: BoundActionMention,
+    candidate: BoundActionMention,
+    *,
+    left_requires_subject: bool = True,
+) -> bool:
+    """Require the same actor head and every required actor discriminator."""
+    if not left_requires_subject:
+        return True
+    def normalize(subjects: tuple[str, ...]) -> frozenset[str]:
+        return frozenset(
+            "smith" if subject.endswith("smith") else subject
+            for subject in subjects
+        )
+
+    left_subjects, right_subjects = required.subjects, candidate.subjects
+    if not left_subjects:
+        return True
+    if not right_subjects:
+        return False
+    if right_subjects == ("__implicit__",):
+        # Polite/bare imperatives request the depicted action without naming a
+        # replacement actor. They are not actor evidence, but neither are they
+        # a contradictory explicit actor like ``the case opens``.
+        return True
+    return normalize(left_subjects).issubset(normalize(right_subjects))
+
+
+def _mention_requires_actor_binding(
+    text: str,
+    mention: BoundActionMention,
+) -> bool:
+    """Distinguish entity actions from idiomatic scene-level phrasal verbs."""
+    if mention.action == "close" and re.match(
+        r"\s+up\b", text[mention.end:], re.I
+    ):
+        return False
+    return bool(mention.subjects and mention.subjects != ("__implicit__",))
+
+
 def _mention_has_explicit_object(
     text: str,
-    mention: tuple[str, int, int, bool, tuple[str, ...]],
+    mention: BoundActionMention,
 ) -> bool:
     """Return whether a mention binds a direct/destination object in text."""
     token_matches = list(TOKEN.finditer(text))
@@ -1781,30 +4180,214 @@ def _mention_has_explicit_object(
     return False
 
 
+def _action_objects_match_requirement(
+    brief: str,
+    required: BoundActionMention,
+    candidate: BoundActionMention,
+    *,
+    requires_object: bool,
+) -> bool:
+    """Match one object or any grammar-bound ``or`` object alternative."""
+    if _action_objects_compatible(
+        required,
+        candidate,
+        left_requires_object=requires_object,
+    ):
+        return True
+    if required.action not in TARGET_SHARED_RELATIONS:
+        return False
+    candidate_terms = frozenset((
+        *candidate.subjects,
+        candidate.action,
+        *candidate.objects,
+    ))
+    return any(
+        required.action in group and group.issubset(candidate_terms)
+        for clause in explicit_target_requirement_clauses(brief)
+        for group in clause
+    )
+
+
+def _wear_requirement_has_in_attribute(
+    prompt: str,
+    required: BoundActionMention,
+) -> bool:
+    """Recognize ``surgeon in red`` as a bounded variant of ``wears red``."""
+    if required.action != "wear" or not required.objects:
+        return False
+    for marker in re.finditer(
+        r"\bin\s+(?P<value>[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)"
+        r"(?=\s*(?:$|[,.;!?]|\band\b|\bwhile\b))",
+        prompt,
+        re.I,
+    ):
+        if not _position_is_output_semantic_evidence(prompt, marker.start()):
+            continue
+        value = _compact_object_identity([
+            token
+            for token in lexical_tokens(marker.group("value"))
+            if _action_content_term(token)
+        ])
+        if not _identity_terms_compatible(required.objects, value):
+            continue
+        local_start = max(
+            prompt.rfind(boundary, 0, marker.start())
+            for boundary in ",.;!?。！？；\n"
+        ) + 1
+        subject = _nearest_subject_identity(prompt[local_start:marker.start()])
+        candidate = BoundActionMention(
+            action="wear",
+            start=marker.start(),
+            end=marker.end(),
+            positive=True,
+            objects=value,
+            subjects=subject,
+            status=ACTION_ASSERTED,
+        )
+        if _action_subjects_compatible(required, candidate):
+            return True
+    return False
+
+
 def missing_positive_action_requirements(
     brief: str,
     prompt: str,
 ) -> tuple[str, ...]:
     """Return explicit positive brief actions absent on a compatible object."""
-    required = [mention for mention in action_mentions(brief) if mention[3]]
-    supplied = [mention for mention in action_mentions(prompt) if mention[3]]
+    required = [
+        mention
+        for mention in _bound_action_mentions(brief)
+        if mention.positive
+        and not (mention.action == "close" and mention.particles == ("up",))
+    ]
+    supplied = [mention for mention in _bound_action_mentions(prompt) if mention.positive]
     missing: set[str] = set()
     for mention in required:
         requires_object = _mention_has_explicit_object(brief, mention)
+        if mention.action == "pour" and set(mention.objects) & {
+            "art", "pattern", "rosetta",
+        }:
+            # ``pour latte art`` names the result; the grammatical material in
+            # the expanded prompt is milk/foam rather than the finished motif.
+            requires_object = False
+        requires_actor = _mention_requires_actor_binding(brief, mention)
         if any(
-            candidate[0] == mention[0]
-            and _action_objects_compatible(
+            _action_mentions_same_verb(brief, mention, prompt, candidate)
+            and _action_subjects_compatible(
+                mention, candidate, left_requires_subject=requires_actor
+            )
+            and _action_objects_match_requirement(
+                brief,
                 mention,
                 candidate,
-                left_requires_object=requires_object,
+                requires_object=requires_object,
             )
             for candidate in supplied
-        ):
+        ) or _wear_requirement_has_in_attribute(prompt, mention):
             continue
-        object_label = " ".join(mention[4])
+        actor_label = " ".join(mention.subjects)
+        object_label = " ".join(mention.objects)
         missing.add(
-            f"{mention[0]} {object_label}".strip()
+            f"{actor_label} {mention.action} {object_label}".strip()
         )
+    return tuple(sorted(missing))
+
+
+def _identity_terms_compatible(
+    required: tuple[str, ...],
+    candidate: tuple[str, ...],
+) -> bool:
+    if not required or not candidate:
+        return not required
+    return (
+        required[-1] == candidate[-1]
+        and set(required[:-1]).issubset(candidate[:-1])
+    )
+
+
+def _prompt_has_prenominal_appearance(
+    prompt: str,
+    relation: BoundPropertyMention,
+) -> bool:
+    """Match ``case that is red`` to the same bounded ``red case`` entity."""
+    if relation.properties != ("appearance",) or not relation.subjects:
+        return False
+    token_matches = list(TOKEN.finditer(prompt))
+    required_subject = relation.subjects[-1]
+    required_values = set(relation.values)
+    for index, match in enumerate(token_matches):
+        tokens = lexical_tokens(match.group(0))
+        if len(tokens) != 1 or tokens[0] != required_subject:
+            continue
+        if position_is_quoted(prompt, match.start()) or _position_is_displayed_text(
+            prompt, match.start()
+        ) or not _position_is_output_semantic_evidence(prompt, match.start()):
+            continue
+        modifiers: list[str] = []
+        cursor = match.start()
+        for previous in reversed(token_matches[max(0, index - 5):index]):
+            gap = prompt[previous.end():cursor]
+            if re.search(r"[,.;!?\n]", gap):
+                break
+            previous_tokens = lexical_tokens(previous.group(0))
+            if len(previous_tokens) != 1:
+                break
+            token = previous_tokens[0]
+            cursor = previous.start()
+            if token in {"a", "an", "another", "and", "or", "the"}:
+                break
+            if token in SUBJECT_BOUNDARY_TERMS or not _action_content_term(token):
+                break
+            modifiers[0:0] = [token]
+        if required_values.issubset(modifiers):
+            return True
+    return False
+
+
+def _property_is_supplied_by_wear(
+    prompt: str,
+    relation: BoundPropertyMention,
+) -> bool:
+    """Bridge ``with a red scarf`` to the explicit ``wearing a red scarf``."""
+    if not relation.subjects or not relation.properties or not relation.values:
+        return False
+    property_head = relation.properties[-1]
+    required_values = set(relation.values)
+    return any(
+        mention.positive
+        and mention.action == "wear"
+        and set(relation.subjects).issubset(mention.subjects)
+        and mention.objects
+        and mention.objects[-1] == property_head
+        and required_values.issubset(mention.objects[:-1])
+        for mention in _bound_action_mentions(prompt)
+    )
+
+
+def missing_bound_property_requirements(
+    brief: str,
+    prompt: str,
+) -> tuple[str, ...]:
+    """Return relative-clause properties moved to a different entity."""
+    required = _bound_property_mentions(brief)
+    supplied = _bound_property_mentions(prompt)
+    missing: set[str] = set()
+    for relation in required:
+        if any(
+            set(relation.subjects).issubset(candidate.subjects)
+            and _identity_terms_compatible(relation.properties, candidate.properties)
+            and _identity_terms_compatible(relation.values, candidate.values)
+            for candidate in supplied
+        ) or _prompt_has_prenominal_appearance(
+            prompt, relation
+        ) or _property_is_supplied_by_wear(prompt, relation):
+            continue
+        missing.add(" ".join((
+            *relation.subjects,
+            "whose",
+            *relation.properties,
+            *relation.values,
+        )))
     return tuple(sorted(missing))
 
 
@@ -1815,8 +4398,12 @@ def reversed_action_requirements(brief: str, prompt: str) -> tuple[str, ...]:
     inverted requested endpoint. A prompt that still contains the requested
     action is not rejected here: it may be describing a legitimate sequence.
     """
-    brief_mentions = [mention for mention in action_mentions(brief) if mention[3]]
-    prompt_mentions = [mention for mention in action_mentions(prompt) if mention[3]]
+    brief_mentions = [
+        mention for mention in _bound_action_mentions(brief) if mention.positive
+    ]
+    prompt_mentions = [
+        mention for mention in _bound_action_mentions(prompt) if mention.positive
+    ]
     reversals: set[str] = set()
 
     for pair in OPPOSITE_ACTIONS:
@@ -1826,8 +4413,14 @@ def reversed_action_requirements(brief: str, prompt: str) -> tuple[str, ...]:
             required_action = brief_mention[0]
             opposite_action = next(iter(pair - {required_action}))
             requires_object = _mention_has_explicit_object(brief, brief_mention)
+            requires_actor = _mention_requires_actor_binding(brief, brief_mention)
             required_survives = any(
                 mention[0] == required_action
+                and _action_subjects_compatible(
+                    brief_mention,
+                    mention,
+                    left_requires_subject=requires_actor,
+                )
                 and _action_objects_compatible(
                     brief_mention,
                     mention,
@@ -1837,6 +4430,11 @@ def reversed_action_requirements(brief: str, prompt: str) -> tuple[str, ...]:
             )
             opposite_survives = any(
                 mention[0] == opposite_action
+                and _action_subjects_compatible(
+                    brief_mention,
+                    mention,
+                    left_requires_subject=requires_actor,
+                )
                 and _action_objects_compatible(
                     brief_mention,
                     mention,
@@ -1888,6 +4486,119 @@ def semantic_trace_anchors(brief: str, prompt: str) -> tuple[str, ...]:
     ))
 
 
+ENTITY_SPAN_BREAKS = {
+    "after", "alongside", "and", "as", "at", "before", "behind", "beside", "but",
+    "during", "inside", "near", "on", "or", "outside", "under", "versus",
+    "well", "while", "whereas", "with", "without", "plus",
+}
+
+
+def _entity_content_term(token: str) -> bool:
+    return _action_content_term(token) or (
+        len(token) > 2
+        and token.endswith("ly")
+        and token not in FUNCTION_WORDS
+        and token not in PRODUCTION_GENERIC
+        and token not in TRACE_GENERIC
+        and token not in TARGET_CONTROL_TERMS
+    )
+
+
+@lru_cache(maxsize=4096)
+def _affirmative_entity_term_groups(text: str) -> tuple[frozenset[str], ...]:
+    """Return local entity phrases so global word co-occurrence cannot pass.
+
+    This is intentionally used only for non-action target groups. Action groups
+    have their own actor/object binder. Determiners, scene relations, finite
+    action predicates, and hard punctuation close one entity span; appositive
+    forms such as ``Mara, the surgeon`` stay together.
+    """
+    groups: list[frozenset[str]] = []
+    current: list[str] = []
+    current_surfaces: list[str] = []
+    cursor = 0
+
+    def flush() -> None:
+        if current:
+            groups.append(frozenset(current))
+            current.clear()
+            current_surfaces.clear()
+
+    for match in TOKEN.finditer(text):
+        gap = text[cursor:match.start()]
+        cursor = match.end()
+        if re.search(r"[.;!?\n+&/]", gap):
+            flush()
+        surface_tokens = lexical_tokens(match.group(0))
+        if len(surface_tokens) != 1:
+            material = [
+                token for token in surface_tokens if _entity_content_term(token)
+            ]
+            if material:
+                current.extend(material)
+                current_surfaces.extend([match.group(0)] * len(material))
+            continue
+        token = surface_tokens[0]
+        named_appositive = bool(
+            "," in gap
+            and token in {"a", "an", "the"}
+            and current_surfaces
+            and all(surface[:1].isupper() for surface in current_surfaces)
+        )
+        if "," in gap and not named_appositive:
+            # Bare comma lists name separate entities. Preserve only the common
+            # named appositive shapes ``Mara, a surgeon`` and
+            # ``Doctor Mara, the masked surgeon``.
+            flush()
+        if token in {"a", "an", "another"}:
+            if not named_appositive:
+                flush()
+            continue
+        if token in ENTITY_SPAN_BREAKS:
+            flush()
+            continue
+        canonical_action = _canonical_action_token(match.group(0))
+        if canonical_action in TARGET_ACTION_BREAKS:
+            flush()
+            continue
+        if (
+            position_is_quoted(text, match.start())
+            or match_is_negated(text, match.start())
+            or _position_is_postpositively_excluded(text, match.start())
+            or _position_is_displayed_text(text, match.start())
+            or (
+                not _position_is_output_semantic_evidence(text, match.start())
+                and not _position_is_included_output_antecedent(
+                    text, match.start()
+                )
+            )
+        ):
+            continue
+        if _entity_content_term(token):
+            current.append(token)
+            current_surfaces.append(match.group(0))
+    flush()
+    return tuple(dict.fromkeys(groups))
+
+
+def _target_group_is_bound_in_prompt(
+    prompt: str,
+    group: frozenset[str],
+    prompt_terms: frozenset[str],
+) -> bool:
+    if not group.issubset(prompt_terms):
+        return False
+    entity_groups = _affirmative_entity_term_groups(prompt)
+    locally_bound = (
+        bool(group & ACTION_TRACE_TERMS)
+        or any(
+            group.issubset(entity_terms)
+            for entity_terms in entity_groups
+        )
+    )
+    return locally_bound
+
+
 def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
     """Require target evidence independently from structural contracts."""
     brief_terms = target_trace_terms(brief)
@@ -1898,7 +4609,10 @@ def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
     missing_clauses = [
         clause
         for clause in explicit_target_clauses
-        if not any(group.issubset(prompt_terms) for group in clause)
+        if not any(
+            _target_group_is_bound_in_prompt(prompt, group, prompt_terms)
+            for group in clause
+        )
     ]
     if missing_clauses:
         closest_group = min(
@@ -1906,9 +4620,20 @@ def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
             key=lambda group: (len(group - prompt_terms), sorted(group)),
         )
         missing_targets = sorted(closest_group - prompt_terms)
+        if not missing_targets:
+            return 0.0, (
+                "requested target modifiers and head are not bound to one "
+                "entity: " + ", ".join(sorted(closest_group))
+            )
         return 0.0, (
             "requested target changed or disappeared; missing: "
             + ", ".join(missing_targets)
+        )
+    missing_properties = missing_bound_property_requirements(brief, prompt)
+    if missing_properties:
+        return 0.0, (
+            "requested entity property moved or disappeared: "
+            + ", ".join(missing_properties)
         )
     action_reversals = reversed_action_requirements(brief, prompt)
     if action_reversals:
@@ -1959,7 +4684,67 @@ def score_brief_traceability(brief: str, prompt: str) -> tuple[float, str]:
     return 0.0, f"no brief-specific material survives; expected one of: {', '.join(sorted(brief_terms)[:6])}"
 
 
+@lru_cache(maxsize=4096)
+def _scoped_exclusion_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Index clause-scoped exclusions once instead of rescanning per token."""
+    spans: list[tuple[int, int]] = []
+    clause_start = 0
+    boundaries = list(re.finditer(r"[.;!?。！？；\n]", text))
+    for boundary in [*boundaries, None]:
+        clause_end = boundary.start() if boundary is not None else len(text)
+        clause = text[clause_start:clause_end]
+        double_index = _interval_index(_merge_intervals([
+            (match.start(), match.end())
+            for match in DOUBLE_NEGATED_EXCLUSION.finditer(clause)
+        ]))
+        reset_positions = [
+            match.start() for match in NEGATION_RESET.finditer(clause)
+        ]
+        for exclusion in SCOPED_EXCLUSION.finditer(clause):
+            if position_is_quoted(text, clause_start + exclusion.start()):
+                continue
+            double_starts, double_ends = double_index
+            double_slot = bisect_right(double_starts, exclusion.start()) - 1
+            if (
+                double_slot >= 0
+                and double_starts[double_slot] <= exclusion.start()
+                < double_ends[double_slot]
+            ):
+                continue
+            reset_index = bisect_left(reset_positions, exclusion.end())
+            scope_end = (
+                reset_positions[reset_index]
+                if reset_index < len(reset_positions)
+                else len(clause)
+            )
+            spans.append(
+                (clause_start + exclusion.start(), clause_start + scope_end)
+            )
+        clause_start = boundary.end() if boundary is not None else len(text)
+    return _interval_index(_merge_intervals(spans))
+
+
+@lru_cache(maxsize=4096)
+def _entailed_action_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Index complements whose surface negation logically entails the event."""
+    spans: list[tuple[int, int]] = []
+    for match in ENTAILED_ACTION_COMPLEMENT.finditer(text):
+        clause_end = ACTION_CLAUSE_PUNCTUATION.search(text, match.end("action"))
+        end = clause_end.start() if clause_end is not None else len(text)
+        reset = NEGATION_RESET.search(text, match.end("action"), end)
+        if reset is not None:
+            end = reset.start()
+        spans.append((max(0, match.start("action") - 1), end))
+    return _interval_index(_merge_intervals(spans))
+
+
 def match_is_negated(text: str, start: int) -> bool:
+    if _position_in_interval_index(_entailed_action_interval_index(text), start):
+        return False
     short_prefix = text[max(0, start - 36):start]
     short_match = NEGATED_PREFIX.search(short_prefix)
     if short_match:
@@ -1976,30 +4761,11 @@ def match_is_negated(text: str, start: int) -> bool:
             return True
 
     # Reference exclusions often enumerate several protected attributes before
-    # naming the light or sound source. Keep the scope inside one clause, and
-    # let an explicit contrast reset it so "ignore identity, but keep neon"
-    # still records neon as positive evidence.
-    clause_start = max(
-        text.rfind(".", 0, start),
-        text.rfind(";", 0, start),
-        text.rfind("\n", 0, start),
-    ) + 1
-    clause = text[clause_start:start]
-    exclusions = [
-        match
-        for match in SCOPED_EXCLUSION.finditer(clause)
-        if not position_is_quoted(text, clause_start + match.start())
-    ]
-    if not exclusions:
-        return False
-    double_exclusions = list(DOUBLE_NEGATED_EXCLUSION.finditer(clause))
-    if any(
-        match.start() <= exclusions[-1].start() < match.end()
-        for match in double_exclusions
-    ):
-        return False
-    after_exclusion = clause[exclusions[-1].end():]
-    return NEGATION_RESET.search(after_exclusion) is None
+    # naming a light or sound source. Their scope is indexed once per text and
+    # ends at an explicit contrast/reset such as ``but keep neon``.
+    return _position_in_interval_index(
+        _scoped_exclusion_interval_index(text), start
+    )
 
 
 @lru_cache(maxsize=4096)
@@ -2075,6 +4841,34 @@ def _quoted_spans(text: str) -> tuple[tuple[int, int], ...]:
             occupied.update(range(start, start + len(mark)))
             occupied.update(range(end, end + len(mark)))
 
+    def add_fences(mark: str) -> None:
+        """Pair Markdown-style fences before shorter inline delimiters.
+
+        A valid closer may be longer than its opener. This covers mixed-width
+        backtick fences and the equivalent tilde form without letting an
+        unmatched opener swallow the rest of a prompt.
+        """
+        escaped = re.escape(mark)
+        fence = re.compile(rf"(?<!{escaped}){escaped}{{3,}}(?!{escaped})")
+        cursor = 0
+        while True:
+            opener = fence.search(text, cursor)
+            if opener is None:
+                return
+            width = opener.end() - opener.start()
+            closer = re.compile(
+                rf"(?<!{escaped}){escaped}{{{width},}}(?!{escaped})"
+            ).search(
+                text, opener.end()
+            )
+            if closer is None:
+                cursor = opener.end()
+                continue
+            spans.append((opener.start(), closer.end()))
+            occupied.update(range(opener.start(), opener.end()))
+            occupied.update(range(closer.start(), closer.end()))
+            cursor = closer.end()
+
     # Resolve the one ambiguous curly character first: it closes German-style
     # low quotes but opens English-style curly quotes.
     add_asymmetric("„", "“")
@@ -2089,18 +4883,40 @@ def _quoted_spans(text: str) -> tuple[tuple[int, int], ...]:
         ("〈", "〉"),
         ("〝", "〞"),
         ("‹", "›"),
+        ("【", "】"),
+        ("〔", "〕"),
+        ("〖", "〗"),
+        ("〘", "〙"),
+        ("〚", "〛"),
+        ("﹁", "﹂"),
+        ("﹃", "﹄"),
+        ("｢", "｣"),
+        ("⟪", "⟫"),
+        ("［", "］"),
+        ("❝", "❞"),
+        ("〝", "〟"),
     ):
         add_asymmetric(opener, closer)
+    add_fences("`")
+    add_fences("~")
     add_symmetric("``")
     add_symmetric('"')
+    add_symmetric("＂")
     add_symmetric("'", apostrophe_aware=True)
     add_symmetric("`", apostrophe_aware=True)
-    return tuple(sorted(spans))
+    return _merge_intervals(spans)
+
+
+@lru_cache(maxsize=4096)
+def _quoted_interval_index(
+    text: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    return _interval_index(_quoted_spans(text))
 
 
 def position_is_quoted(text: str, position: int) -> bool:
     """Return whether a control word is inside a balanced quoted span."""
-    return any(start < position < end for start, end in _quoted_spans(text))
+    return _position_in_interval_index(_quoted_interval_index(text), position)
 
 
 def named_positive_directives(
@@ -2115,6 +4931,7 @@ def named_positive_directives(
         for match in pattern.finditer(text)
         if not match_is_negated(text, match.start())
         and not (ignore_quoted and position_is_quoted(text, match.start()))
+        and not _position_is_displayed_text(text, match.start())
     }
     return sorted(directives, key=lambda item: (item[1], item[2], item[0]))
 
@@ -2161,6 +4978,97 @@ def named_positive_positions(
     )
 
 
+def _bridge_has_explicit_phase_boundary(bridge: str) -> bool:
+    if re.search(
+        r"(?:^|[.!?。！？；;\n])\s*(?:and\s+)?"
+        r"(?:afterward|afterwards|subsequently|soon\s+afterwards?|"
+        r"following\s+that|seconds?\s+later|"
+        r"a\s+(?:beat|moment)\s+later|moments?\s+later)"
+        r"\s*(?::|,|[-\u2013\u2014])?\s*"
+        r"(?:(?:the|a|an|near|absolute|complete|completely|slow|slowly)[-\s]*){0,2}$",
+        bridge,
+        re.I,
+    ):
+        return True
+
+    for label in EXPLICIT_PHASE_LABEL.finditer(bridge):
+        before_label = bridge[:label.start()]
+        boundary_positions = [
+            match.end()
+            for match in re.finditer(r"[.!?。！？；;，,\n]", before_label)
+        ]
+        lead = before_label[boundary_positions[-1]:] if boundary_positions else before_label
+        if not re.fullmatch(
+            r"\s*(?:(?:at|during|for|in|on)\s+(?:the\s+)?|"
+            r"at\s+the\s+start\s+of\s+)?",
+            lead,
+            re.I,
+        ):
+            continue
+        if PHASE_CUE_TAIL.fullmatch(bridge[label.end():]):
+            return True
+    return False
+
+
+def _bridge_has_semantic_event_transition(
+    text: str,
+    left_end: int,
+    right_start: int,
+    right_end: int,
+) -> bool:
+    """Recognize a directly bound, asserted state change as a phase boundary.
+
+    The transition matrix is intentionally directional and pair-local.  A cue
+    in quoted/displayed copy, a hypothetical or negated cue, an unrelated
+    reporting clause, or an explicit simultaneity bridge cannot split phases.
+    """
+    bridge = text[left_end:right_start]
+    if not bridge or len(bridge) > 320:
+        return False
+    local_end_match = re.search(
+        r"[.;!?\u2026\u061f\u3002\uff01\uff1f\uff1b\n]", text[right_end:]
+    )
+    local_end = (
+        right_end + local_end_match.start()
+        if local_end_match is not None
+        else min(len(text), right_end + 240)
+    )
+    post_directive = text[right_end:local_end]
+    if SEMANTIC_EVENT_TRANSITION_POST_BLOCKER.search(post_directive):
+        return False
+    for cue in SEMANTIC_EVENT_TRANSITION_CUE.finditer(bridge):
+        lead = bridge[:cue.start()]
+        tail = bridge[cue.end():]
+        if (
+            not SEMANTIC_EVENT_TRANSITION_LEAD.fullmatch(lead)
+            or SEMANTIC_EVENT_TRANSITION_BLOCKER.search(bridge)
+        ):
+            continue
+        if re.search(r"\bit\b", lead, re.I):
+            antecedent = text[max(0, left_end - 120):left_end]
+            if re.search(
+                r"\b(?:the\s+)?(?:frame|framing|image|picture|scene|shot|"
+                r"state|view)\b[^.;!?\u2026\u061f]{0,80}$",
+                antecedent,
+                re.I,
+            ) is None:
+                continue
+        cue_start = left_end + cue.start()
+        if (
+            position_is_quoted(text, cue_start)
+            or _position_is_displayed_text(text, cue_start)
+            or not _position_is_output_semantic_evidence(text, cue_start)
+            or match_is_negated(text, cue_start)
+        ):
+            continue
+        if (
+            PHASE_CUE_TAIL.fullmatch(tail)
+            or SEMANTIC_EVENT_TRANSITION_COMPLETED_TAIL.fullmatch(tail)
+        ):
+            return True
+    return False
+
+
 def directive_pair_is_sequenced(
     text: str,
     left: tuple[int, int],
@@ -2170,7 +5078,7 @@ def directive_pair_is_sequenced(
     # A simultaneity qualifier can follow the final directive, outside its
     # regex match. Inspect only the remainder of its local clause so an
     # unrelated cue in a later sentence cannot poison a valid transition.
-    local_end_match = re.search(r"[.;!?。！？；\n]", text[right_end:])
+    local_end_match = re.search(r"[.;!?\u2026\u061f。！？；\n]", text[right_end:])
     local_end = (
         right_end + local_end_match.start()
         if local_end_match
@@ -2183,10 +5091,16 @@ def directive_pair_is_sequenced(
         return False
     if DIRECT_SEQUENCE_BRIDGE.fullmatch(bridge):
         return True
+    if _bridge_has_explicit_phase_boundary(bridge):
+        return True
     # Permit an explicit event boundary only when it culminates in a cue
     # directly attached to the later directive. An unrelated "then/before"
     # elsewhere between the directives is not enough.
     if EVENT_SEQUENCE_BRIDGE.fullmatch(bridge):
+        return True
+    if _bridge_has_semantic_event_transition(
+        text, left_end, right_start, right_end
+    ):
         return True
 
     prefix = text[max(0, left_start - 32):left_start]
@@ -2211,24 +5125,36 @@ def directives_are_sequenced(
     )
 
 
+def directive_phase_groups(
+    text: str,
+    directives: list[tuple[str, int, int]],
+) -> list[list[tuple[str, int, int]]]:
+    """Partition complete directives by explicit pair-local boundaries."""
+    if not directives:
+        return []
+    ordered = sorted(set(directives), key=lambda item: (item[1], item[2], item[0]))
+    phases: list[list[tuple[str, int, int]]] = [[ordered[0]]]
+    previous = (ordered[0][1], ordered[0][2])
+    for directive in ordered[1:]:
+        name, start, end = directive
+        current = (start, end)
+        if directive_pair_is_sequenced(text, previous, current):
+            phases.append([directive])
+        else:
+            phases[-1].append(directive)
+        previous = current
+    return phases
+
+
 def directive_phase_families(
     text: str,
     directives: list[tuple[str, int, int]],
 ) -> list[set[str]]:
-    """Partition directives by explicit pair-local sequence boundaries."""
-    if not directives:
-        return []
-    ordered = sorted(set(directives), key=lambda item: (item[1], item[2], item[0]))
-    phases: list[set[str]] = [{ordered[0][0]}]
-    previous = (ordered[0][1], ordered[0][2])
-    for name, start, end in ordered[1:]:
-        current = (start, end)
-        if directive_pair_is_sequenced(text, previous, current):
-            phases.append({name})
-        else:
-            phases[-1].add(name)
-        previous = current
-    return phases
+    """Partition directive family names by explicit pair-local boundaries."""
+    return [
+        {name for name, _, _ in phase}
+        for phase in directive_phase_groups(text, directives)
+    ]
 
 
 def scoped_contradiction_findings(text: str) -> list[str]:
@@ -2259,14 +5185,78 @@ def scoped_contradiction_findings(text: str) -> list[str]:
     light_directives = named_positive_directives(
         text, LIGHT_SOURCE_FAMILIES, ignore_quoted=True
     )
-    light_phases = directive_phase_families(text, light_directives)
-    exclusive_light = re.search(
-        r"\b(single|sole|only)\b[^.;]{0,80}\b(light|lit|sources?)\b",
-        text,
-        re.I,
-    )
-    for phase in light_phases:
-        if len(phase) >= 2 and exclusive_light:
+    light_groups = directive_phase_groups(text, light_directives)
+    light_phases = [
+        {name for name, _, _ in group}
+        for group in light_groups
+    ]
+    exclusive_lights = [
+        match
+        for match in re.finditer(
+            r"\b(single|sole|only)\b[^.;]{0,80}\b(light|lit|sources?)\b",
+            text,
+            re.I,
+        )
+        if not match_is_negated(text, match.start())
+        and not position_is_quoted(text, match.start())
+        and not _position_is_displayed_text(text, match.start())
+    ]
+    exclusive_phases: set[int] = set()
+    phase_labels = tuple(EXPLICIT_PHASE_LABEL.finditer(text))
+    phase_starts = tuple(label.start() for label in phase_labels)
+
+    def explicit_phase_owner(position: int) -> int:
+        return bisect_right(phase_starts, position) - 1
+
+    for match in exclusive_lights:
+        def distance_to_group(group: list[tuple[str, int, int]]) -> int:
+            group_start = min(start for _, start, _ in group)
+            group_end = max(end for _, _, end in group)
+            if match.end() < group_start:
+                return group_start - match.end()
+            if match.start() > group_end:
+                return match.start() - group_end
+            return 0
+
+        if light_groups and phase_labels:
+            owner = explicit_phase_owner(match.start())
+            clause_start = max(
+                text.rfind(boundary, 0, match.start())
+                for boundary in ".;!?\n"
+            ) + 1
+            clause_end_match = re.search(r"[.;!?\n]", text[match.end():])
+            clause_end = (
+                match.end() + clause_end_match.start()
+                if clause_end_match is not None
+                else len(text)
+            )
+            labels_in_claim = [
+                label
+                for label in phase_labels
+                if clause_start <= label.start() < clause_end
+            ]
+            if labels_in_claim:
+                owner = explicit_phase_owner(
+                    min(
+                        labels_in_claim,
+                        key=lambda label: abs(label.start() - match.start()),
+                    ).start()
+                )
+            for group_index, group in enumerate(light_groups):
+                if any(
+                    explicit_phase_owner(start) == owner
+                    for _, start, _ in group
+                ):
+                    exclusive_phases.add(group_index)
+        elif light_groups:
+            exclusive_phases.add(
+                min(
+                    range(len(light_groups)),
+                    key=lambda index: distance_to_group(light_groups[index]),
+                )
+            )
+    for phase_index, phase in enumerate(light_phases):
+        if len(phase) >= 2 and phase_index in exclusive_phases:
             findings.append(
                 "light: an exclusive source claim names simultaneous sources: "
                 + ", ".join(sorted(phase))
@@ -2287,6 +5277,7 @@ def scoped_contradiction_findings(text: str) -> list[str]:
         for match in SILENCE.finditer(text)
         if not match_is_negated(text, match.start())
         and not position_is_quoted(text, match.start())
+        and not _position_is_displayed_text(text, match.start())
     )
     for phase in directive_phase_families(text, sound_directives):
         layers = phase - {"silence"}
@@ -2323,7 +5314,7 @@ def contradiction_findings(prompt: str) -> list[str]:
     findings: list[str] = []
     sentences = [
         part.strip()
-        for part in re.split(r"(?<=[.!?;])\s+", prompt)
+        for part in re.split(r"(?<=[.!?;\u2026\u061f])\s+", prompt)
         if part.strip()
     ]
     for sentence in sentences:
@@ -2339,10 +5330,12 @@ def contradiction_findings(prompt: str) -> list[str]:
     added_audio = any(
         not match_is_negated(prompt, match.start())
         and not position_is_quoted(prompt, match.start())
+        and not _position_is_displayed_text(prompt, match.start())
         for match in ADDED_AUDIO.finditer(prompt)
     )
     unchanged_audio = any(
         not position_is_quoted(prompt, match.start())
+        and not _position_is_displayed_text(prompt, match.start())
         for match in UNCHANGED_AUDIO.finditer(prompt)
     )
     if unchanged_audio and added_audio:
@@ -2358,8 +5351,46 @@ def score_coherence(prompt: str) -> tuple[float, str]:
     return score, " | ".join(findings)
 
 
+def _strip_structural_phase_labels(text: str) -> str:
+    """Remove heading-like numbered labels, never prose such as take five."""
+    spans: list[tuple[int, int]] = []
+    for match in NUMBERED_PHASE_LABEL.finditer(text):
+        surface = lexical_tokens(match.group(0))
+        if surface[:2] == ["take", "five"]:
+            # The idiom remains prose even when an author follows it with a
+            # colon or dash: ``Take five: the crew rests``.
+            continue
+        before = text[:match.start()]
+        boundary = max(before.rfind(mark) for mark in ".!?;\n")
+        lead = before[boundary + 1:]
+        boundary_led = re.fullmatch(
+            r"\s*(?:(?:>|[-+*]|#{1,6})\s+|(?:\*\*|__)\s*)?",
+            lead,
+        ) is not None
+        after = text[match.end():]
+        heading_punctuation = re.match(
+            r"\s*(?:(?:\*\*|__)\s*)?(?::|\uFF1A|[-\u2013\u2014])",
+            after,
+        ) is not None
+        if boundary_led and heading_punctuation:
+            spans.append((match.start(), match.end()))
+    if not spans:
+        return text
+    pieces: list[str] = []
+    cursor = 0
+    for start, end in spans:
+        pieces.extend((text[cursor:start], " "))
+        cursor = end
+    pieces.append(text[cursor:])
+    return "".join(pieces)
+
+
 def repetition_findings(prompt: str) -> list[str]:
-    all_tokens = lexical_tokens(prompt)
+    # Repeated structural labels are not padding: ``Shot 1`` through ``Shot
+    # 6`` must repeat the phase noun to remain readable.  Remove only the
+    # complete numbered label; repeated prose inside those phases still counts.
+    repetition_text = _strip_structural_phase_labels(prompt)
+    all_tokens = lexical_tokens(repetition_text)
     content = [token for token in all_tokens if token not in FUNCTION_WORDS]
     if not content:
         return ["no lexical content"]
@@ -2386,7 +5417,7 @@ def repetition_findings(prompt: str) -> list[str]:
 
     sentence_keys = [
         " ".join(lexical_tokens(sentence))
-        for sentence in re.split(r"[.!?]+", prompt)
+        for sentence in re.split(r"[.!?]+", repetition_text)
         if len(lexical_tokens(sentence)) >= 4
     ]
     repeated_sentences = [key for key, count in Counter(sentence_keys).items() if count >= 2]
