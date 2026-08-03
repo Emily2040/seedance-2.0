@@ -92,13 +92,24 @@ history, but they do not override a later accepted take and do not need to stay
 inline with their archived reviews.
 
 Each inline history item is a closed object with `take_id`, `clip_id`, and
-`verdict`, plus optional `evidence`. IDs are non-blank and at most 256
-characters, evidence is at most 4096 characters, verdict is one of `accept`,
+`verdict`, plus optional `evidence`. Project, clip, and take IDs in the state,
+history, and sibling review are non-blank and at most 256 characters. Evidence
+is at most 4096 characters, verdict is one of `accept`,
 `accept_with_deviation`, `repair`, or `reject`, and the inline array is capped
 at 4096 items. Archive older attempts before reaching that cap. Both semantic
 validators use the same bounded reconciliation contract and index sibling
-reviews once per directory; a project-state document cannot serve as its own
-review.
+reviews once per directory. A review becomes authoritative only after its full
+record-local schema contract passes. An authority candidate must be a regular,
+non-link UTF-8 JSON file no larger than 1 MiB; symbolic links, Windows reparse
+points, pipes, devices, sockets, and oversized files fail closed before parsing.
+The captured review bytes for one directory are additionally capped at 16 MiB,
+so the per-file and file-count limits cannot multiply into multi-gigabyte work.
+Each review is opened once without following links where the platform supports
+that flag. The exact handle is checked against every project-state file
+identity, then read twice through the same bounded descriptor and accepted only
+when identity, size, and bytes remain stable. A project state, symlink,
+hardlink, or path-swap therefore cannot witness its own verdict, and divergent
+captures fail closed instead of parsing a torn in-place rewrite.
 
 ## Project State Capsule
 
