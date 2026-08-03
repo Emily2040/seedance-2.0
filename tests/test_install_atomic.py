@@ -7,6 +7,7 @@ import io
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -688,6 +689,60 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertEqual(target_checks, 2)
             self.assertEqual(target.read_bytes(), b"outside user data")
             self.assertEqual(stashed.read_bytes(), b"authorized installer bytes")
+
+    @unittest.skipIf(os.name == "nt", "POSIX private tombstone contract")
+    def test_posix_file_deletion_uses_a_private_bound_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "owned.txt"
+            target.write_bytes(b"authorized installer bytes")
+            expected = installer._bound_regular_file_metadata(target)
+            original_unlink = os.unlink
+            observed = False
+
+            def inspect_unlink(path, *args, dir_fd=None, **kwargs):
+                nonlocal observed
+                if path == installer.PRIVATE_DELETE_ENTRY:
+                    observed = True
+                    self.assertIsNotNone(dir_fd)
+                    self.assertEqual(
+                        stat.S_IMODE(os.fstat(dir_fd).st_mode),
+                        0o700,
+                    )
+                return original_unlink(path, *args, dir_fd=dir_fd, **kwargs)
+
+            with mock.patch.object(installer.os, "unlink", inspect_unlink):
+                installer._delete_regular_file_by_handle(target, expected)
+
+            self.assertTrue(observed)
+            self.assertFalse(target.exists())
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    @unittest.skipIf(os.name == "nt", "POSIX private tombstone contract")
+    def test_posix_directory_deletion_uses_a_private_bound_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "owned-directory"
+            target.mkdir()
+            expected_identity = installer._object_identity(target.lstat())
+            original_rmdir = os.rmdir
+            observed = False
+
+            def inspect_rmdir(path, *args, dir_fd=None, **kwargs):
+                nonlocal observed
+                if path == installer.PRIVATE_DELETE_ENTRY:
+                    observed = True
+                    self.assertIsNotNone(dir_fd)
+                    self.assertEqual(
+                        stat.S_IMODE(os.fstat(dir_fd).st_mode),
+                        0o700,
+                    )
+                return original_rmdir(path, *args, dir_fd=dir_fd, **kwargs)
+
+            with mock.patch.object(installer.os, "rmdir", inspect_rmdir):
+                installer._delete_empty_directory_by_handle(target, expected_identity)
+
+            self.assertTrue(observed)
+            self.assertFalse(target.exists())
+            self.assertEqual(list(Path(tmp).iterdir()), [])
 
     def test_transaction_record_cleanup_never_unlinks_a_swapped_outside_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -34,6 +34,8 @@ MAX_RECORD_BYTES = 8 * 1024 * 1024
 MAX_MANIFEST_ENTRIES = 50_000
 MAX_RESERVED_ARTIFACTS = 128
 MAX_DIAGNOSTIC_CHARS = 480
+PRIVATE_DELETE_ENTRY = "authorized-object"
+PRIVATE_DELETE_PREFIX = ".seedance-delete-"
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -1420,6 +1422,121 @@ def _descriptor_file_metadata(descriptor: int) -> tuple[dict[str, object], os.st
     )
 
 
+def _delete_opened_posix_path(
+    path: Path,
+    opened: os.stat_result,
+    *,
+    is_directory: bool,
+) -> None:
+    """Move an opened object into a private directory before unlinking it.
+
+    The quarantined tree can still be writable by another account. Keeping the
+    final pathname inside a mode-0700 directory and addressing it relative to
+    that opened directory closes the public tombstone swap window.
+    """
+    private_name = f"{PRIVATE_DELETE_PREFIX}{uuid.uuid4().hex}"
+    parent_descriptor: int | None = None
+    directory_descriptor: int | None = None
+    created: os.stat_result | None = None
+    moved = False
+    deleted = False
+    try:
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        parent_descriptor = os.open(path.parent, flags)
+        bound_parent = os.fstat(parent_descriptor)
+        current_parent = path.parent.lstat()
+        if (
+            _is_reparse_stat(bound_parent)
+            or not stat.S_ISDIR(bound_parent.st_mode)
+            or _object_identity(bound_parent) != _object_identity(current_parent)
+        ):
+            raise RuntimeError("deletion parent changed while it was opened")
+        current_object = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if _stat_identity(current_object) != _stat_identity(opened):
+            raise RuntimeError("quarantined object changed before its private move")
+
+        os.mkdir(private_name, 0o700, dir_fd=parent_descriptor)
+        created = os.stat(
+            private_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        directory_descriptor = os.open(
+            private_name,
+            flags,
+            dir_fd=parent_descriptor,
+        )
+        bound_directory = os.fstat(directory_descriptor)
+        if (
+            _is_reparse_stat(bound_directory)
+            or not stat.S_ISDIR(bound_directory.st_mode)
+            or _object_identity(bound_directory) != _object_identity(created)
+        ):
+            raise RuntimeError("private deletion directory changed while it was opened")
+        os.fchmod(directory_descriptor, 0o700)
+        secured_directory = os.fstat(directory_descriptor)
+        if stat.S_IMODE(secured_directory.st_mode) != 0o700:
+            raise RuntimeError("private deletion directory permissions are not private")
+
+        os.rename(
+            path.name,
+            PRIVATE_DELETE_ENTRY,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=directory_descriptor,
+        )
+        moved = True
+        moved_info = os.stat(
+            PRIVATE_DELETE_ENTRY,
+            dir_fd=directory_descriptor,
+            follow_symlinks=False,
+        )
+        if _stat_identity(moved_info) != _stat_identity(opened):
+            raise RuntimeError("quarantined object changed during private deletion move")
+        if is_directory:
+            os.rmdir(PRIVATE_DELETE_ENTRY, dir_fd=directory_descriptor)
+        else:
+            os.unlink(PRIVATE_DELETE_ENTRY, dir_fd=directory_descriptor)
+        deleted = True
+        if os.listdir(directory_descriptor):
+            raise RuntimeError("private deletion directory gained unexpected entries")
+    finally:
+        if directory_descriptor is not None:
+            os.close(directory_descriptor)
+        try:
+            # Remove the private container only while it is either still empty
+            # or known to contain no object after a successful deletion. If
+            # deletion failed after the move, retain the container and its
+            # contents for fail-closed recovery.
+            if (
+                parent_descriptor is not None
+                and created is not None
+                and (not moved or deleted)
+            ):
+                current = os.stat(
+                    private_name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    _is_reparse_stat(current)
+                    or not stat.S_ISDIR(current.st_mode)
+                    or _object_identity(current) != _object_identity(created)
+                ):
+                    raise RuntimeError("private deletion directory changed before cleanup")
+                os.rmdir(private_name, dir_fd=parent_descriptor)
+        finally:
+            if parent_descriptor is not None:
+                os.close(parent_descriptor)
+
+
 def _delete_regular_file_by_handle(
     path: Path, expected: Mapping[str, object]
 ) -> None:
@@ -1502,7 +1619,6 @@ def _delete_regular_file_by_handle(
 
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags)
-    tombstone = path.with_name(f".{path.name}.delete-{uuid.uuid4().hex}")
     try:
         actual, opened = _descriptor_file_metadata(descriptor)
         if actual != dict(expected):
@@ -1513,13 +1629,7 @@ def _delete_regular_file_by_handle(
         current = path.lstat()
         if _stat_identity(current) != _stat_identity(opened):
             raise RuntimeError("quarantined file pathname changed before deletion")
-        if _path_exists(tombstone):
-            raise RuntimeError("random deletion tombstone already exists")
-        path.rename(tombstone)
-        moved = tombstone.lstat()
-        if _stat_identity(moved) != _stat_identity(opened):
-            raise RuntimeError("quarantined file changed during deletion quarantine")
-        tombstone.unlink()
+        _delete_opened_posix_path(path, opened, is_directory=False)
     finally:
         os.close(descriptor)
 
@@ -1640,7 +1750,6 @@ def _delete_empty_directory_by_handle(
         | getattr(os, "O_NOFOLLOW", 0)
     )
     descriptor = os.open(path, flags)
-    tombstone = path.with_name(f".{path.name}.delete-{uuid.uuid4().hex}")
     try:
         opened = os.fstat(descriptor)
         current = path.lstat()
@@ -1652,13 +1761,7 @@ def _delete_empty_directory_by_handle(
             or _stat_identity(current) != _stat_identity(opened)
         ):
             raise RuntimeError("quarantined directory changed while it was opened")
-        if _path_exists(tombstone):
-            raise RuntimeError("random directory-deletion tombstone already exists")
-        path.rename(tombstone)
-        moved = tombstone.lstat()
-        if _stat_identity(moved) != _stat_identity(opened):
-            raise RuntimeError("quarantined directory changed during deletion quarantine")
-        tombstone.rmdir()
+        _delete_opened_posix_path(path, opened, is_directory=True)
     finally:
         os.close(descriptor)
 
