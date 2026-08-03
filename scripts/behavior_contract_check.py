@@ -646,7 +646,7 @@ def main() -> int:
     if errors:
         print("Behavior contract errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
     print("Behavior contract check passed.")
     return 0

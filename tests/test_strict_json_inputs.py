@@ -471,6 +471,7 @@ class StrictLoaderTests(unittest.TestCase):
 
 class MigratedReaderBoundaryTests(unittest.TestCase):
     MODULES = (
+        "behavior_contract_check.py",
         "build_hero.py",
         "continuity_chain_check.py",
         "eval_run.py",
