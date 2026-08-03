@@ -1,6 +1,6 @@
 # Directing Engine
 
-The difference between a prompt that asks for "a cinematic look" and a prompt a director would sign is motivation. A director does not pick a camera move, a light, or a performance from a menu. They decide what the scene must do to the audience, then make every craft choice serve that one decision - in a consistent personal voice, across the whole film. This reference is the reasoning layer above the lookup tables in `[skill:seedance-camera]`, `[skill:seedance-lighting]`, `[skill:seedance-motion]`, and `[skill:seedance-characters]`. Those skills answer "what phrase?"; this answers "why this, here, for this story."
+The difference between a prompt that asks for "a cinematic look" and a prompt a director would sign is motivation. A director does not pick a camera move, a light, or a performance from a menu. They decide what the scene must do to the audience, then make every craft choice serve that one decision - in a consistent personal voice, across the whole film. This reference is the reasoning layer above the lookup tables in [seedance-camera](../skills/seedance-camera/SKILL.md), [seedance-lighting](../skills/seedance-lighting/SKILL.md), [seedance-motion](../skills/seedance-motion/SKILL.md), and [seedance-characters](../skills/seedance-characters/SKILL.md). Those skills answer "what phrase?"; this answers "why this, here, for this story."
 
 Load this whenever an idea is becoming a script or a shot, whenever scenes need different treatment from each other, or whenever a long story must hold one directorial hand across many short clips.
 
@@ -64,11 +64,11 @@ Seedance renders observable behavior, not internal states. "She is sad," "he fee
 3. **Subtext through contradiction.** The strongest beats show the gap between word and want: agreeing while stepping back, smiling while gripping the cup. Direct the body to tell the truth the line hides.
 4. **One gesture per short clip.** In a few seconds, a single specific, legible action carries more than a list of feelings. Choose the gesture that contains the turn.
 5. **Register matches the scene and the voice.** Restrained realism, heightened theatricality, or stylized deadpan - pick one register for the scene and keep it consistent with the project voice (Step 6). Mixing registers reads as a mistake.
-6. **Ensemble discipline.** When more than one figure is on screen, give exactly one the focused beat and everyone else persistent micro-motion; route through `[skill:seedance-characters]` for the three-tier action hierarchy so faces and hands stay stable.
+6. **Ensemble discipline.** When more than one figure is on screen, give exactly one the focused beat and everyone else persistent micro-motion; route through [seedance-characters](../skills/seedance-characters/SKILL.md) for the three-tier action hierarchy so faces and hands stay stable.
 
 ## Step 5 - Lighting and Color as Emotion
 
-Light is not brightness; it is meaning. Extend the source choices in `[skill:seedance-lighting]` with the dramatic levers a director actually pulls.
+Light is not brightness; it is meaning. Extend the source choices in [seedance-lighting](../skills/seedance-lighting/SKILL.md) with the dramatic levers a director actually pulls.
 
 - **Ratio (key to fill).** Low ratio / high-key reads safe, open, honest, commercial. High ratio / low-key reads private, threatened, concealed, dramatic. Choose ratio from the scene's emotional exposure, not from a look word.
 - **Key direction and height.** Frontal flatters and protects; side reveals texture and conflict; back/rim isolates and makes mysterious; under-light unsettles; top-light judges or sanctifies. Direction is characterization.
@@ -107,11 +107,11 @@ Before finalizing any shot, run six checks. Fix or cut anything that fails.
 
 A Seedance clip is short - a handful of seconds - so a real story needs many connected clips. Direction therefore lives at two scales: the shot, and the arc across shots. The engine shapes the arc so the whole piece feels directed, not assembled.
 
-- **One voice, every clip.** The project voice (Step 6) and the continuity locks are inherited by every clip through `[skill:seedance-sequence]` and `[skill:seedance-continuation]`. A new clip never re-rolls the look.
+- **One voice, every clip.** The project voice (Step 6) and the continuity locks are inherited by every clip through [seedance-sequence](../skills/seedance-sequence/SKILL.md) and [seedance-continuation](../skills/seedance-continuation/SKILL.md). A new clip never re-rolls the look.
 - **Plan the progression.** Map how the instruments evolve from open to climax to release. As tension rises, shot scale generally tightens, camera and cut grow more active or pointedly stiller, light contrast deepens, color and sound thicken. The resolution loosens them again.
 - **Mark the turn with contrast.** Choose the one clip that breaks the established pattern - the widest frame in a tight film, the only still shot in a kinetic one, the single warm light in a cold story. The break is where the audience feels the meaning.
 - **Each beat keeps its own read.** Every clip still gets its own Step 1-7 pass; the spine biases those passes, it does not replace them.
-- **Global plan, local compile.** The arc is planned up front, but each clip is still compiled only from accepted footage and the current clip contract - the spine never licenses inventing a future beat. Honor the sequence law in `[skill:seedance-sequence]` and the source gate in `[skill:seedance-continuation]`.
+- **Global plan, local compile.** The arc is planned up front, but each clip is still compiled only from accepted footage and the current clip contract - the spine never licenses inventing a future beat. Honor the sequence law in [seedance-sequence](../skills/seedance-sequence/SKILL.md) and the source gate in [seedance-continuation](../skills/seedance-continuation/SKILL.md).
 
 A practical spine record per clip: `voice`, `arc_position` (open / rising / turn / climax / release), `intended_intention`, `scale_trend`, `movement_trend`, `light_trend`, `sound_trend`, and `is_pattern_break`.
 
@@ -125,7 +125,7 @@ The skills run this function whenever a scene becomes a shot.
 4. Write the performance as one true gesture per beat (Step 4).
 5. Run the coherence test (Step 7).
 6. Place the clip in the long-form spine: set its arc position and instrument trends, and decide whether it is the pattern break (Step 8).
-7. Hand the motivated setup to the Director Formula in `[skill:seedance-prompt]`, the prompt compiler in `[ref:prompt-compiler]`, or the plan in `[skill:seedance-sequence]`.
+7. Hand the motivated setup to the Director Formula in [seedance-prompt](../skills/seedance-prompt/SKILL.md), the prompt compiler in [prompt-compiler](prompt-compiler.md), or the plan in [seedance-sequence](../skills/seedance-sequence/SKILL.md).
 
 ## Worked Example - A Single Scene
 

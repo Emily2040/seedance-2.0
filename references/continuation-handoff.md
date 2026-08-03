@@ -22,7 +22,7 @@ If the source is missing, ask for the clip, final frame, or an exact visible-end
 
 ## Observation Fast Path
 
-The user should never be the state sensor **when the agent can actually see**. Attachment and inspection are different things: a host may accept a file and expose only its name. Before filling anything from "what is visible," confirm this client actually renders that media type — see Inspection Honesty in `[ref:agent-compatibility]`. If it does not, this fast path does not apply; take the **inspection unavailable** route below.
+The user should never be the state sensor **when the agent can actually see**. Attachment and inspection are different things: a host may accept a file and expose only its name. Before filling anything from "what is visible," confirm this client actually renders that media type — see Inspection Honesty in [agent-compatibility](agent-compatibility.md). If it does not, this fast path does not apply; take the **inspection unavailable** route below.
 
 When the client does inspect the attachment, the AGENT fills the observation record from what is visible and asks only about what the attachment cannot show:
 

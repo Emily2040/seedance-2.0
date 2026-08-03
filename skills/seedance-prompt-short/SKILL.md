@@ -43,7 +43,7 @@ Preserve in this order:
 
 Delete generic adjectives, duplicate style labels, obvious background details, secondary camera moves, and secondary actions before deleting preservation constraints.
 
-For bilingual or mixed-language compression, load `[ref:multilingual-community-examples]`. Keep only the language mix that clarifies reference roles, dialogue, camera terms, or safe production constraints.
+For bilingual or mixed-language compression, load [multilingual-community-examples](../../references/multilingual-community-examples.md). Keep only the language mix that clarifies reference roles, dialogue, camera terms, or safe production constraints.
 
 ## Compact Templates
 

@@ -122,7 +122,7 @@ Field-observed and under-tested as of 2026; test per surface, never promise resu
 
 Korean has no neutral register. Every spoken line commits to a speech level, so leaving it unstated does not avoid the decision - it hands it to the model. Declare one.
 
-This is a budget decision as well as a characterization one. The reliable-sync budget in `[ref:audio-guide]` is counted in syllables, and the same sentence costs a different number of them at each level:
+This is a budget decision as well as a characterization one. The reliable-sync budget in [audio-guide](../audio-guide.md) is counted in syllables, and the same sentence costs a different number of them at each level:
 
 | 같은 뜻 (same meaning) | 반말 → 해요체 → 합니다체, 음절 수 (syllable count) |
 |---|---|

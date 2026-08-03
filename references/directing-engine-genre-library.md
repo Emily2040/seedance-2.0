@@ -38,7 +38,7 @@ Each example runs the same procedure: read, intention, voice, coherent setup, pe
 - **Idea:** "an original anime hero gathers resolve before a fight."
 - **Read.** Function: the surge of resolve. Turn: doubt to resolve. POV: the hero's. Power: rising. Subtext: he will not lose.
 - **Intention:** make the audience feel the charge of resolve. **Voice:** expressive stylist in 2D grammar.
-- **Setup:** no photographic lens language; a held tense frame then a burst of radiating motion lines and one impact frame on the power-up; flat but dramatic cel light with a hard rim; saturated key color; one held beat, then a hard snap. Load `[ref:2d-anime-grammar]`.
+- **Setup:** no photographic lens language; a held tense frame then a burst of radiating motion lines and one impact frame on the power-up; flat but dramatic cel light with a hard rim; saturated key color; one held beat, then a hard snap. Load [2d-anime-grammar](2d-anime-grammar.md).
 - **Performance:** the body holds coiled, then a single explosive stance change on the burst frame.
 - **Prompt:** `Original 2D cel-animated hero, hand-drawn line, saturated key color, hard rim light; hold a tense coiled frame, then burst into a single explosive stance change with radiating motion lines and one impact frame as energy flares; flat dramatic cel lighting, no photographic lens language; held beat then a hard snap; keep the character design and silhouette consistent.`
 
@@ -65,7 +65,7 @@ Each example runs the same procedure: read, intention, voice, coherent setup, pe
 - **Idea:** "a phone clip of a dog stealing a sandwich."
 - **Read.** Function: a real moment caught. Turn: calm to chaos. POV: the filmer's. Power: the dog. Subtext: delight.
 - **Intention:** make it feel genuinely caught, not staged. **Voice:** observational naturalist with a phone-UGC source lock.
-- **Setup:** vertical handheld phone footage, slight grip sway, an auto-exposure shift on the pan, ambient kitchen sound; embrace the artifacts, because faux-clean reads fake. Load the source-look lock in `[skill:seedance-style]`.
+- **Setup:** vertical handheld phone footage, slight grip sway, an auto-exposure shift on the pan, ambient kitchen sound; embrace the artifacts, because faux-clean reads fake. Load the source-look lock in [seedance-style](../skills/seedance-style/SKILL.md).
 - **Performance:** the dog's one decisive lunge and grab; a human hand reaches a half-second too late.
 - **Prompt:** `Vertical handheld phone footage with slight grip sway and an auto-exposure shift; a dog on the counter makes one decisive lunge, grabs a sandwich, and bolts as an off-screen hand reaches a half-second too late; ambient kitchen room tone, no music; keep the look unpolished and the dog's grab the single beat.`
 
@@ -235,7 +235,7 @@ Each example runs the same procedure: read, intention, voice, coherent setup, pe
 
 - **Idea:** "a summer afternoon remembered."
 - **Read.** Function: evoke warm memory. Turn: present to remembered past. POV: the rememberer's. Power: time. Subtext: bittersweet longing.
-- **Intention:** make the audience feel a warm ache of memory. **Voice:** observational naturalist with a vintage source lock (see `[skill:seedance-style]`).
+- **Intention:** make the audience feel a warm ache of memory. **Voice:** observational naturalist with a vintage source lock (see [seedance-style](../skills/seedance-style/SKILL.md)).
 - **Setup:** grainy film texture; gate weave; halation on highlights; a warm faded palette; a gentle handheld drift; soft ambient. Embrace the era's artifacts.
 - **Performance:** an unhurried real moment - a child running through a sprinkler as the sun flares.
 - **Prompt:** `Grainy vintage film look with gate weave and halation on the highlights; a child runs through a garden sprinkler in warm faded afternoon light as the sun flares; gentle handheld drift, soft ambient; keep the era artifacts deliberate and the moment unstaged and unhurried.`

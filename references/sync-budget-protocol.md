@@ -1,6 +1,6 @@
 # Sync-Budget Measurement Protocol
 
-Two cells in the dialogue-capacity table of `[ref:audio-guide]` read "not separately measured": Japanese and Korean. That wording is deliberate — nobody has measured them, and this repository does not print numbers nobody measured. This protocol is the missing half of that honesty: the exact procedure that turns a few real dialogue takes on one surface into numbers those cells can carry.
+Two cells in the dialogue-capacity table of [audio-guide](audio-guide.md) read "not separately measured": Japanese and Korean. That wording is deliberate — nobody has measured them, and this repository does not print numbers nobody measured. This protocol is the missing half of that honesty: the exact procedure that turns a few real dialogue takes on one surface into numbers those cells can carry.
 
 Anyone with access to a Seedance 2.0 surface that voices dialogue can run it. Total cost is roughly 24-40 takes per language.
 
@@ -10,13 +10,13 @@ The **reliable-sync budget**: the longest line, counted in the language's own un
 
 ## Fixed conditions (do not vary these between takes)
 
-The shot must be the one the Dialogue rules in `[ref:audio-guide]` already prescribe, so the measurement isolates line length instead of confounding it with camera:
+The shot must be the one the Dialogue rules in [audio-guide](audio-guide.md) already prescribe, so the measurement isolates line length instead of confounding it with camera:
 
 - One speaker, locked medium close-up, eye level, no reframing.
 - No head turn, no walking, hands still, plain expression.
 - No music, no competing SFX: `Sound: quiet room tone` and the quoted line only.
 - Same surface, same duration setting, same resolution for every take in a ladder.
-- Speech level / register held constant within a ladder (해요체 for Korean, です・ます体 for Japanese) — the register sections in `[ref:vocab/ko]` and `[ref:vocab/ja]` exist precisely so this variable is controlled.
+- Speech level / register held constant within a ladder (해요체 for Korean, です・ます体 for Japanese) — the register sections in [vocab/ko](vocab/ko.md) and [vocab/ja](vocab/ja.md) exist precisely so this variable is controlled.
 - Lip-sync enabled where the surface exposes a toggle (Jimeng/即梦 ships it off).
 
 ## The ladders
@@ -72,7 +72,7 @@ Record every take — including the failures; the failures are the data — as o
 
 When a ladder is complete:
 
-1. Update the Japanese and/or Korean row of the dialogue-capacity table in `[ref:audio-guide]`: replace "not separately measured" with the measured range, the unit, the surface, and the date — e.g. `~10-14 morae on <surface>, 2026-XX [field]`.
+1. Update the Japanese and/or Korean row of the dialogue-capacity table in [audio-guide](audio-guide.md): replace "not separately measured" with the measured range, the unit, the surface, and the date — e.g. `~10-14 morae on <surface>, 2026-XX [field]`.
 2. Keep the claim label `[field]` — four takes per rung on one surface is field observation, not a guarantee, and the note column should still say "test per surface".
 3. Record the session in `references/source-registry.md` per its methodology, so the freshness check knows when the number ages out.
 4. If the measured number contradicts the current tier ordering (for example Korean beats English), do not resolve it silently: flag it in the table note. Surprising results are the ones worth keeping visible.

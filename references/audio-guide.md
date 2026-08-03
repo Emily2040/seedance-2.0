@@ -25,15 +25,15 @@ Two budgets matter, and people confuse them. The acoustic budget is how many wor
 |---|---|---|---|
 | English | ~16-20 words before the mix compresses | 5-10 words | close-second lip-sync |
 | Mandarin | count in characters/syllables, not words; strongest sync | one short clause | best lip-sync, training-weighted |
-| Japanese | not separately measured; treat as the weaker tier | one short line | mora-timed; word counts mislead — measure via `[ref:sync-budget-protocol]` |
-| Korean | not separately measured, under-tested | one short line | flag uncertainty, do not assume parity — measure via `[ref:sync-budget-protocol]` |
+| Japanese | not separately measured; treat as the weaker tier | one short line | mora-timed; word counts mislead — measure via [sync-budget-protocol](sync-budget-protocol.md) |
+| Korean | not separately measured, under-tested | one short line | flag uncertainty, do not assume parity — measure via [sync-budget-protocol](sync-budget-protocol.md) |
 | Russian | ~10-15 words maximum, shorter is better | under 10 words | weak, often English-accented |
 
 Past the reliable-sync budget, especially in non-English, use the voice-reference lip-sync path below or plan a post-dub.
 
-One budget trap is language-specific: **Korean has no neutral register**, and the speech level chosen for a line changes its syllable count. 감사합니다 (5 syllables) and 고마워 (3) are the same thanks at different levels, and 합니다체 runs roughly 1.5-2x 반말 across a line. On a tier already flagged as under-tested, picking the formal register by reflex can spend the budget on politeness endings rather than content. Decide the level deliberately - see Speech Level in `[ref:vocab/ko]`.
+One budget trap is language-specific: **Korean has no neutral register**, and the speech level chosen for a line changes its syllable count. 감사합니다 (5 syllables) and 고마워 (3) are the same thanks at different levels, and 합니다체 runs roughly 1.5-2x 반말 across a line. On a tier already flagged as under-tested, picking the formal register by reflex can spend the budget on politeness endings rather than content. Decide the level deliberately - see Speech Level in [vocab/ko](vocab/ko.md).
 
-**Japanese has the same trap in its registers.** ありがとう (5 morae) and ありがとうございます (10) are one thanks at two politeness levels, and full 敬語 can double a line on the tier already flagged as weaker for sync. The first-person pronoun (私/僕/俺) is part of the same decision. Decide the register deliberately - see Register (文体) in `[ref:vocab/ja]`.
+**Japanese has the same trap in its registers.** ありがとう (5 morae) and ありがとうございます (10) are one thanks at two politeness levels, and full 敬語 can double a line on the tier already flagged as weaker for sync. The first-person pronoun (私/僕/俺) is part of the same decision. Decide the register deliberately - see Register (文体) in [vocab/ja](vocab/ja.md).
 
 ## Dialogue
 
@@ -50,7 +50,7 @@ One budget trap is language-specific: **Korean has no neutral register**, and th
 
 `@Audio1` can be used for rhythm, pacing, mood, voice tone, ambience, music texture, or beat timing. Do not promise exact audio playback unless the active platform documents exact playback behavior. If the source contains a real voice or recognizable song, treat it as authorization-sensitive and convert it into broad sonic descriptors when rights are unclear.
 
-On surfaces that accept a spoken-voice audio reference, field reports describe a stronger role than tempo or mood: attaching an actual voice clip can make the model lip-sync to that audio instead of synthesizing speech itself - effectively a lip-sync compiler. This is the most reliable field-reported path for non-English dialogue: record or commission the line, attach it, and let the model only move the mouth. Use only your own recorded, licensed, or rights-cleared voice; treat a real or recognizable person's voice as authorization-sensitive and route it through `[skill:seedance-copyright]` when rights are unclear. Verify the active surface actually exposes a voice audio reference before relying on this.
+On surfaces that accept a spoken-voice audio reference, field reports describe a stronger role than tempo or mood: attaching an actual voice clip can make the model lip-sync to that audio instead of synthesizing speech itself - effectively a lip-sync compiler. This is the most reliable field-reported path for non-English dialogue: record or commission the line, attach it, and let the model only move the mouth. Use only your own recorded, licensed, or rights-cleared voice; treat a real or recognizable person's voice as authorization-sensitive and route it through [seedance-copyright](../skills/seedance-copyright/SKILL.md) when rights are unclear. Verify the active surface actually exposes a voice audio reference before relying on this.
 
 When an audio reference and video reference compete, silence or mute the video reference before upload when the audio should control timing. If the video must keep sound, state the priority: `@Video1 controls only camera/motion; @Audio1 controls tempo and energy`.
 

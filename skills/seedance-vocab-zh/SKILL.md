@@ -30,7 +30,7 @@ Chinese can say in four characters what English needs a sentence for - and the u
 
 Do not translate reference tags. Keep `@Image1`, `@Video1`, and `@Audio1` unchanged. Use short production phrases instead of abstract adjectives.
 
-Load `[ref:vocab/zh]` for dense role-binding, first/last-frame, camera, lighting, audio, edit/extend, constraint, and safety vocabulary.
+Load [vocab/zh](../../references/vocab/zh.md) for dense role-binding, first/last-frame, camera, lighting, audio, edit/extend, constraint, and safety vocabulary.
 
 | Function | Chinese wording |
 |---|---|

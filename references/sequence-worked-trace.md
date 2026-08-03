@@ -14,13 +14,13 @@ Only Clip 01 is compiled. Clips 02-03 stay provisional intent cards, because the
 
 ## 1 - Compile Clip 01
 
-The contract (`clip-01-contract.json`) carries the job ("Exit terminal and approach the open rear car door"), the felt intent ("the quiet relief of arrival"), the reserved beats (entering the car, departure), and the locks. The compiler (see `[ref:prompt-compiler]`) emits one natural-language prompt (`clip-01-prompt.md`) - T2V, since nothing exists yet - and before generation the intent echo is stated in one line: *this clip exists so the viewer feels the relief of arrival.* No internal JSON ships to Seedance.
+The contract (`clip-01-contract.json`) carries the job ("Exit terminal and approach the open rear car door"), the felt intent ("the quiet relief of arrival"), the reserved beats (entering the car, departure), and the locks. The compiler (see [prompt-compiler](prompt-compiler.md)) emits one natural-language prompt (`clip-01-prompt.md`) - T2V, since nothing exists yet - and before generation the intent echo is stated in one line: *this clip exists so the viewer feels the relief of arrival.* No internal JSON ships to Seedance.
 
 ## 2 - Observe, and accept a deviation
 
-The take comes back. The user attaches the clip or its final frame (locally: `python scripts/extract_last_frame.py take.mp4`), and the **agent** fills the observation record from the pixels - the Observation Fast Path in `[ref:continuation-handoff]` - asking only what a still cannot show. The review (`clip-01-take-review.json`) records the honest result: the traveler is **two steps short of the open door**, still walking, left-to-right. The plan said "reaches the door"; the pixels disagree.
+The take comes back. The user attaches the clip or its final frame (locally: `python scripts/extract_last_frame.py take.mp4`), and the **agent** fills the observation record from the pixels - the Observation Fast Path in [continuation-handoff](continuation-handoff.md) - asking only what a still cannot show. The review (`clip-01-take-review.json`) records the honest result: the traveler is **two steps short of the open door**, still walking, left-to-right. The plan said "reaches the door"; the pixels disagree.
 
-Verdict: `accept_with_deviation`. Reconciliation (see `[ref:sequence-project-state]`) updates canon: the deviation is recorded, the observed end state overrides the planned one, and Clip 02's contract is recompiled to open **two steps out, mid-stride** - it does not replay the terminal exit, and it does not pretend she reached the door. Rejected takes, by contrast, would change nothing: rejected footage never becomes canon or a parent source.
+Verdict: `accept_with_deviation`. Reconciliation (see [sequence-project-state](sequence-project-state.md)) updates canon: the deviation is recorded, the observed end state overrides the planned one, and Clip 02's contract is recompiled to open **two steps out, mid-stride** - it does not replay the terminal exit, and it does not pretend she reached the door. Rejected takes, by contrast, would change nothing: rejected footage never becomes canon or a parent source.
 
 ## 3 - Continue from what actually happened
 
@@ -36,7 +36,7 @@ Clip 03 chains from Clip 02's accepted footage: `extension_depth: 2` - exactly a
 
 ## 6 - Break for the night, resume tomorrow
 
-Sessions end; canon must not. The Project State Capsule (template in `[ref:sequence-project-state]`) carries the whole project in under ~40 lines: scene map (completed scenes compressed to one line each), current scene, current actual state, open motion, completed beats, next clip job **and intent**, locks, reserved beats, extension depth, uncertainties. A new session pastes the capsule and continues from the recorded actual state - no hidden memory is assumed, and the machine truth (`project-state.json`, per the State Lifecycle) regenerates the capsule whenever `state_revision` bumps.
+Sessions end; canon must not. The Project State Capsule (template in [sequence-project-state](sequence-project-state.md)) carries the whole project in under ~40 lines: scene map (completed scenes compressed to one line each), current scene, current actual state, open motion, completed beats, next clip job **and intent**, locks, reserved beats, extension depth, uncertainties. A new session pastes the capsule and continues from the recorded actual state - no hidden memory is assumed, and the machine truth (`project-state.json`, per the State Lifecycle) regenerates the capsule whenever `state_revision` bumps.
 
 ## 7 - Close out
 

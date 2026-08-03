@@ -30,7 +30,7 @@ Russian users arrive having already fought the hardest dialogue battle in this m
 
 Translate production intent, not every English word. Russian prompts should stay compact, concrete, and ordered by subject, action, camera, light, sound, and constraint.
 
-Load `[ref:vocab/ru]` for dense role-binding, first/last-frame, camera, lighting, audio, edit/extend, constraint, and safety vocabulary.
+Load [vocab/ru](../../references/vocab/ru.md) for dense role-binding, first/last-frame, camera, lighting, audio, edit/extend, constraint, and safety vocabulary.
 
 | Function | Russian wording |
 |---|---|

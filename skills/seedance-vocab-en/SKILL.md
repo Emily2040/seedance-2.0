@@ -45,13 +45,13 @@ Strip quality adjectives before adding anything: `cinematic`, `epic`, `stunning`
 
 ## Filter-Aware Wording
 
-English homonyms read as threats to filters: `shoot the scene`, `kill the lights`, `gun it`, `dead silence`, `blow up the image`. Use the production synonym (`film the take`, `cut the lights to black`, `accelerate hard`, `held silence`, `enlarge to full frame`). This is clarity for safe prompts only — never evasion. Anything genuinely risky (minors, real-person likeness, sexual or graphic content) routes to `[skill:seedance-filter]` for its boundary rule, not to a rewording.
+English homonyms read as threats to filters: `shoot the scene`, `kill the lights`, `gun it`, `dead silence`, `blow up the image`. Use the production synonym (`film the take`, `cut the lights to black`, `accelerate hard`, `held silence`, `enlarge to full frame`). This is clarity for safe prompts only — never evasion. Anything genuinely risky (minors, real-person likeness, sexual or graphic content) routes to [seedance-filter](../seedance-filter/SKILL.md) for its boundary rule, not to a rewording.
 
 ## Compact Pattern
 
 `@Image1 is the reference; keep identity, color, and shape unchanged. Only [motion/light/camera] changes. Camera: [one move]. Sound: [one cue]. Constraints: [lock].`
 
-Load `references/vocab/en.md` for the full function-organized vocabulary, slop traps, and filter-trip repairs. Load `[ref:anti-slop-lexicon]` for the core replacement rule and `[ref:filter-vocab]` for the full false-positive repair table.
+Load `references/vocab/en.md` for the full function-organized vocabulary, slop traps, and filter-trip repairs. Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for the core replacement rule and [filter-vocab](../../references/filter-vocab.md) for the full false-positive repair table.
 
 ## Output Contract
 

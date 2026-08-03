@@ -12,7 +12,7 @@ metadata:
 
 Seedance 2.0 operating loop for agent-directed video work. Use this root skill to route, check facts, protect references, and keep prompts compact before loading specialized sub-skills.
 
-Every route below is an ordinary relative Markdown link resolved from this `SKILL.md`; clients without private skill/reference aliases can open the linked file directly. Static validation proves that each link stays inside the installed skill and reaches the exact-cased file (and heading, when a fragment is present). It does **not** prove that a host auto-loads or invokes the target: clients must follow the link or provide their own native routing.
+Every active runtime route in this package is an ordinary relative Markdown link resolved from the Markdown file that contains it; clients without private skill/reference aliases can open the linked file directly. Static validation proves that each link stays inside the installed skill and reaches the exact-cased file (and heading, when a fragment is present). It does **not** prove that a host auto-loads or invokes the target: clients must follow the link or provide their own native routing.
 
 ## Soul
 

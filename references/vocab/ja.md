@@ -124,7 +124,7 @@ Field-observed from 2026 community testing (note.com, Qiita); test per surface, 
 
 Japanese dialogue commits to a register the same way Korean commits to a speech level: leaving it unstated does not avoid the decision, it hands the decision to the model. Declare one per speaker.
 
-This is a budget decision as well as a characterization one. Japanese is mora-timed, the sync budget in `[ref:audio-guide]` is spent per mora, and the same sentence costs a different number of them at each register:
+This is a budget decision as well as a characterization one. Japanese is mora-timed, the sync budget in [audio-guide](../audio-guide.md) is spent per mora, and the same sentence costs a different number of them at each register:
 
 | 同じ意味 (same meaning) | 普通体 → です・ます体 → 敬語, モーラ数 (mora count) |
 |---|---|

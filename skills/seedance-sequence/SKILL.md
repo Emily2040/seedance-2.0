@@ -23,7 +23,7 @@ metadata:
 
 Use this when the user's idea is larger than one reliable generation, when connected clips are requested, or when the user says continue, extend, next part, part two, next scene, or make it longer. Plan globally, generate locally: the skill plans the whole story, but compiles only the next unresolved clip.
 
-Load `[ref:sequence-project-state]`, `[ref:continuation-handoff]`, `[ref:prompt-compiler]`, `[ref:surface-prompt-profiles]`, `[ref:event-density]`, and `[ref:continuity-qc]`. Load `[ref:reference-transfer-contract]` when references are present and `[ref:dense-storyboard-mode]` when the request contains many shots or animation panels. Load `[ref:directing-engine]` to set one directorial voice for the whole story and plan the long-form spine so the look is authored by one hand across every clip. For a user's first multi-clip project, `[ref:sequence-worked-trace]` walks the whole loop once - plan, deviation, reconciliation, chain cap, re-anchor, resume.
+Load [sequence-project-state](../../references/sequence-project-state.md), [continuation-handoff](../../references/continuation-handoff.md), [prompt-compiler](../../references/prompt-compiler.md), [surface-prompt-profiles](../../references/surface-prompt-profiles.md), [event-density](../../references/event-density.md), and [continuity-qc](../../references/continuity-qc.md). Load [reference-transfer-contract](../../references/reference-transfer-contract.md) when references are present and [dense-storyboard-mode](../../references/dense-storyboard-mode.md) when the request contains many shots or animation panels. Load [directing-engine](../../references/directing-engine.md) to set one directorial voice for the whole story and plan the long-form spine so the look is authored by one hand across every clip. For a user's first multi-clip project, [sequence-worked-trace](../../references/sequence-worked-trace.md) walks the whole loop once - plan, deviation, reconciliation, chain cap, re-anchor, resume.
 
 ## Intent
 
@@ -56,7 +56,7 @@ Plan scenes before clips. A scene is the re-anchor unit: one location and time e
 ## Build Process
 
 1. Establish the story promise and final outcome before Clip 01.
-2. Identify the character, product, or narrative objective, and with `[ref:directing-engine]` set one directorial voice for the whole project and plan the long-form spine - how shot scale, camera movement, light contrast, and sound should progress from open to climax to release, and which single clip breaks the pattern to mark the turn.
+2. Identify the character, product, or narrative objective, and with [directing-engine](../../references/directing-engine.md) set one directorial voice for the whole project and plan the long-form spine - how shot scale, camera movement, light contrast, and sound should progress from open to climax to release, and which single clip breaks the pattern to mark the turn.
 3. Extract ordered beats and assign each beat a status: planned, current, completed, omitted, or replaced.
 4. Group beats into scenes: assign each scene one location and time envelope, one `arc_position`, canonical `anchor_source` references, `max_chain_depth` (default 2), and an audio plan.
 5. Divide each scene into generation-sized clips using the active surface budget or conservative assumption; chain clips from accepted footage only inside a scene, and open every scene from canonical references.

@@ -172,6 +172,7 @@ UNLINKED_ROUTE_RE = re.compile(
 )
 ROUTE_SEGMENT_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")
 ROUTE_ANCHOR_RE = re.compile(r"[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?")
+INSTALL_PAYLOAD_MANIFEST = PurePosixPath("validation/install-payload.txt")
 
 
 def _line_number(text: str, offset: int) -> int:
@@ -215,8 +216,90 @@ def _find_exact_case_path(root: Path, parts: tuple[str, ...]) -> tuple[Path | No
     return current, None
 
 
-def validate_portable_routes(path: Path, root: Path, errors: list[str]) -> None:
-    """Validate explicit Markdown routes without claiming a client will auto-load them."""
+def active_runtime_markdown_paths(root: Path) -> tuple[Path, ...]:
+    """Return manifest-shipped Markdown that can participate in runtime routing.
+
+    Release notes, examples, and the preserved ``references/migrated`` tree ship
+    for readers, but they are not active agent guidance. Keeping the scope tied
+    to the install manifest prevents a repository-only document from silently
+    becoming part of the installed routing contract.
+    """
+
+    manifest = root / INSTALL_PAYLOAD_MANIFEST
+    if not manifest.is_file():
+        return ()
+
+    active: list[Path] = []
+    for raw_line in manifest.read_text(encoding="utf-8").splitlines():
+        relative = raw_line.strip()
+        if not relative or relative.startswith("#"):
+            continue
+        portable = PurePosixPath(relative)
+        if portable.suffix != ".md":
+            continue
+        parts = portable.parts
+        is_root = parts == ("SKILL.md",)
+        is_skill = bool(parts) and parts[0] == "skills"
+        is_reference = (
+            bool(parts)
+            and parts[0] == "references"
+            and not (len(parts) >= 2 and parts[1] == "migrated")
+        )
+        if is_root or is_skill or is_reference:
+            active.append(root.joinpath(*parts))
+    return tuple(active)
+
+
+def _lexical_route_target(
+    source_parent_parts: tuple[str, ...],
+    raw_parts: list[str],
+) -> tuple[tuple[str, ...], bool]:
+    """Resolve POSIX path parts lexically and report root escape attempts."""
+
+    target_parts = list(source_parent_parts)
+    escaped = False
+    for part in raw_parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if target_parts:
+                target_parts.pop()
+            else:
+                escaped = True
+            continue
+        target_parts.append(part)
+    return tuple(target_parts), escaped
+
+
+def _canonical_relative_route(
+    source_parent_parts: tuple[str, ...],
+    target_parts: tuple[str, ...],
+) -> str:
+    """Return the shortest portable path from a runtime file to its target."""
+
+    common = 0
+    for source_part, target_part in zip(source_parent_parts, target_parts):
+        if source_part != target_part:
+            break
+        common += 1
+    parts = ("..",) * (len(source_parent_parts) - common) + target_parts[common:]
+    return "/".join(parts) or "."
+
+
+def validate_portable_routes(
+    path: Path,
+    root: Path,
+    errors: list[str],
+    *,
+    require_routes: bool = True,
+    reject_unlinked_routes: bool = True,
+) -> None:
+    """Validate explicit Markdown routes without claiming client auto-loading.
+
+    Nested runtime files may legitimately climb to a sibling directory, so a
+    route is resolved relative to the file that contains it and then checked
+    against the canonical repository-relative target.
+    """
 
     text = path.read_text(encoding="utf-8")
     root = root.resolve()
@@ -232,13 +315,15 @@ def validate_portable_routes(path: Path, root: Path, errors: list[str]) -> None:
             "use an ordinary relative Markdown link"
         )
 
-    for match in UNLINKED_ROUTE_RE.finditer(text):
-        line = _line_number(text, match.start())
-        errors.append(
-            f"{rel}:{line}: route `{match.group('target')}` is code text, not a Markdown link"
-        )
+    if reject_unlinked_routes:
+        for match in UNLINKED_ROUTE_RE.finditer(text):
+            line = _line_number(text, match.start())
+            errors.append(
+                f"{rel}:{line}: route `{match.group('target')}` is code text, not a Markdown link"
+            )
 
     routes: list[tuple[re.Match[str], str]] = []
+    source_parent_parts = path.parent.resolve().relative_to(root).parts
     for match in MARKDOWN_LINK_RE.finditer(text):
         destination = match.group("target").strip()
         if destination.startswith("<") and destination.endswith(">"):
@@ -246,11 +331,21 @@ def validate_portable_routes(path: Path, root: Path, errors: list[str]) -> None:
         parsed_hint = urlsplit(destination)
         if parsed_hint.scheme.casefold() in {"http", "https", "mailto"}:
             continue
-        path_parts = unquote(parsed_hint.path).replace("\\", "/").split("/")
-        if any(part.casefold() in {"skills", "references"} for part in path_parts):
+        hinted_target = unquote(parsed_hint.path).replace("\\", "/")
+        path_parts = hinted_target.split("/")
+        target_parts, _ = _lexical_route_target(source_parent_parts, path_parts)
+        names_a_route_root = any(
+            part.casefold() in {"skills", "references"} for part in path_parts
+        )
+        resolves_to_runtime_markdown = (
+            hinted_target.casefold().endswith(".md")
+            and bool(target_parts)
+            and target_parts[0].casefold() in {"skills", "references"}
+        )
+        if names_a_route_root or resolves_to_runtime_markdown:
             routes.append((match, destination))
 
-    if not routes:
+    if require_routes and not routes:
         errors.append(f"{rel}: no portable root route links found")
 
     for match, destination in routes:
@@ -290,28 +385,38 @@ def validate_portable_routes(path: Path, root: Path, errors: list[str]) -> None:
                 f"{rel}:{line}: route fragment must be a lowercase Markdown anchor: {fragment}"
             )
             continue
-        if target.casefold().startswith("skills/") and not target.startswith("skills/"):
-            errors.append(f"{rel}:{line}: route path must use exact lowercase `skills/`: {target}")
-            continue
-        if target.casefold().startswith("references/") and not target.startswith("references/"):
-            errors.append(f"{rel}:{line}: route path must use exact lowercase `references/`: {target}")
-            continue
-
         raw_parts = target.split("/")
-        if any(part in {".", ".."} for part in raw_parts):
-            errors.append(f"{rel}:{line}: route path must not traverse directories: {destination}")
-            continue
         if any(part == "" for part in raw_parts):
             errors.append(f"{rel}:{line}: route path must not contain empty segments: {destination}")
             continue
 
-        portable = PurePosixPath(target)
-        if portable.is_absolute():
-            errors.append(f"{rel}:{line}: route path must be relative: {destination}")
+        target_parts, escaped = _lexical_route_target(source_parent_parts, raw_parts)
+        if escaped:
+            errors.append(
+                f"{rel}:{line}: route path must not traverse outside the skill root: {destination}"
+            )
+            continue
+        canonical = _canonical_relative_route(source_parent_parts, target_parts)
+        if target != canonical:
+            errors.append(
+                f"{rel}:{line}: route path must not traverse redundantly; "
+                f"use canonical relative path `{canonical}`: {destination}"
+            )
             continue
 
-        if target.startswith("skills/"):
-            parts = portable.parts
+        if not target_parts:
+            errors.append(f"{rel}:{line}: route target is not a file: {target}")
+            continue
+        route_root = target_parts[0]
+        if route_root.casefold() == "skills" and route_root != "skills":
+            errors.append(f"{rel}:{line}: route path must use exact lowercase `skills/`: {target}")
+            continue
+        if route_root.casefold() == "references" and route_root != "references":
+            errors.append(f"{rel}:{line}: route path must use exact lowercase `references/`: {target}")
+            continue
+
+        if route_root == "skills":
+            parts = target_parts
             valid = (
                 len(parts) == 3
                 and ROUTE_SEGMENT_RE.fullmatch(parts[1]) is not None
@@ -319,10 +424,11 @@ def validate_portable_routes(path: Path, root: Path, errors: list[str]) -> None:
             )
             expected_shape = "skills/<skill-name>/SKILL.md"
         else:
-            parts = portable.parts
+            parts = target_parts
             stem_parts = parts[1:-1] + (PurePosixPath(parts[-1]).stem,)
             valid = (
-                len(parts) >= 2
+                route_root == "references"
+                and len(parts) >= 2
                 and parts[-1].endswith(".md")
                 and all(ROUTE_SEGMENT_RE.fullmatch(part) for part in stem_parts)
             )
@@ -331,7 +437,7 @@ def validate_portable_routes(path: Path, root: Path, errors: list[str]) -> None:
             errors.append(f"{rel}:{line}: route path must match `{expected_shape}`: {target}")
             continue
 
-        exact_path, case_match = _find_exact_case_path(root, portable.parts)
+        exact_path, case_match = _find_exact_case_path(root, target_parts)
         if exact_path is None:
             if case_match is not None:
                 errors.append(
@@ -488,11 +594,29 @@ def main() -> int:
         warnings.append("extra skill dirs: " + ", ".join(extra))
 
     validate_skill(root / "SKILL.md", root, errors, warnings)
-    validate_portable_routes(root / "SKILL.md", root, errors)
     for name in EXPECTED_SKILLS:
         path = root / "skills" / name / "SKILL.md"
         if path.exists():
             validate_skill(path, root, errors, warnings)
+
+    for path in active_runtime_markdown_paths(root):
+        if not path.is_file():
+            errors.append(
+                "active runtime Markdown declared by the install manifest is missing: "
+                + path.relative_to(root).as_posix()
+            )
+            continue
+        is_root_skill = path == root / "SKILL.md"
+        validate_portable_routes(
+            path,
+            root,
+            errors,
+            require_routes=is_root_skill,
+            # Backticked repository paths in reference prose can document a
+            # layout or command without being a load route. The root routing
+            # table has no such ambiguity and keeps the stronger check.
+            reject_unlinked_routes=is_root_skill,
+        )
 
 
     # Only bytecode git actually tracks is a finding. Importing any module here

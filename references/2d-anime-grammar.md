@@ -36,7 +36,7 @@ Stylized sound reads better than realistic foley: a whoosh on the smear, a sharp
 
 ## Style safety [field]
 
-Describe technique, era, and palette — never a studio, franchise, or living artist. "1990s hand-painted TV-anime look with grainy film texture" is safe grammar; named-studio or franchise style requests route through `[skill:seedance-copyright]` and `[skill:seedance-style]`.
+Describe technique, era, and palette — never a studio, franchise, or living artist. "1990s hand-painted TV-anime look with grainy film texture" is safe grammar; named-studio or franchise style requests route through [seedance-copyright](../skills/seedance-copyright/SKILL.md) and [seedance-style](../skills/seedance-style/SKILL.md).
 
 ## Failure → fix [field]
 

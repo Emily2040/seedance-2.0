@@ -1,4 +1,4 @@
-"""Portable root routes must be explicit, resolvable Markdown links."""
+"""Active runtime routes must be explicit, resolvable Markdown links."""
 
 from __future__ import annotations
 
@@ -19,9 +19,35 @@ import validate_skills  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def route_errors(skill_file: Path, root: Path) -> list[str]:
+def route_errors(
+    skill_file: Path,
+    root: Path,
+    *,
+    require_routes: bool = True,
+    reject_unlinked_routes: bool = True,
+) -> list[str]:
     errors: list[str] = []
-    validate_skills.validate_portable_routes(skill_file, root, errors)
+    validate_skills.validate_portable_routes(
+        skill_file,
+        root,
+        errors,
+        require_routes=require_routes,
+        reject_unlinked_routes=reject_unlinked_routes,
+    )
+    return errors
+
+
+def runtime_route_errors(root: Path) -> list[str]:
+    errors: list[str] = []
+    for path in validate_skills.active_runtime_markdown_paths(root):
+        is_root_skill = path == root / "SKILL.md"
+        validate_skills.validate_portable_routes(
+            path,
+            root,
+            errors,
+            require_routes=is_root_skill,
+            reject_unlinked_routes=is_root_skill,
+        )
     return errors
 
 
@@ -46,8 +72,46 @@ class PortableRouteValidationTests(unittest.TestCase):
         self.assertIsNone(validate_skills.UNLINKED_ROUTE_RE.search(text))
         self.assertGreaterEqual(len(list(validate_skills.MARKDOWN_LINK_RE.finditer(text))), 100)
 
+    def test_every_active_shipped_markdown_file_is_alias_free_and_resolves(self) -> None:
+        runtime_paths = validate_skills.active_runtime_markdown_paths(ROOT)
+        relative = {path.relative_to(ROOT).as_posix() for path in runtime_paths}
+
+        self.assertGreaterEqual(len(runtime_paths), 90)
+        self.assertIn("SKILL.md", relative)
+        self.assertIn("skills/seedance-prompt/SKILL.md", relative)
+        self.assertIn("references/directing-engine.md", relative)
+        self.assertFalse(any(path.startswith("references/migrated/") for path in relative))
+        self.assertEqual(runtime_route_errors(ROOT), [])
+
+        opaque = []
+        for path in runtime_paths:
+            text = path.read_text(encoding="utf-8")
+            opaque.extend(validate_skills.OPAQUE_ROUTE_RE.findall(text))
+        self.assertEqual(opaque, [])
+
+    def test_archived_markdown_remains_outside_the_active_runtime_contract(self) -> None:
+        archived = ROOT / "references/migrated/seedance-audio-original.md"
+        self.assertTrue(archived.is_file())
+        self.assertNotIn(archived, validate_skills.active_runtime_markdown_paths(ROOT))
+
+    def test_nested_routes_keep_readable_labels(self) -> None:
+        reference = (ROOT / "references/directing-engine.md").read_text(encoding="utf-8")
+        skill = (ROOT / "skills/seedance-interview/SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "[seedance-camera](../skills/seedance-camera/SKILL.md)",
+            reference,
+        )
+        self.assertIn(
+            "[pro-filmmaking-standards](../../references/pro-filmmaking-standards.md)",
+            skill,
+        )
+        self.assertNotIn("[../skills/", reference)
+        self.assertNotIn("[../../references/", skill)
+
     def test_static_validation_boundary_is_honest(self) -> None:
         text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Every active runtime route in this package", text)
         self.assertIn("ordinary relative Markdown link", text)
         self.assertIn("does **not** prove that a host auto-loads or invokes the target", text)
         self.assertIn("clients must follow the link or provide their own native routing", text)
@@ -207,6 +271,91 @@ class PortableRouteValidationTests(unittest.TestCase):
             reference_target.write_text("# Chinese\n\n## Dialogue\n", encoding="utf-8")
             self.assertEqual(route_errors(skill_file, root), [])
 
+    def test_routes_resolve_relative_to_nested_runtime_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "skills/source/SKILL.md"
+            peer = root / "skills/peer/SKILL.md"
+            reference = root / "references/guide.md"
+            source.parent.mkdir(parents=True)
+            peer.parent.mkdir(parents=True)
+            reference.parent.mkdir(parents=True)
+            source.write_text(
+                "Load [guide](../../references/guide.md) and "
+                "[peer](../peer/SKILL.md).\n",
+                encoding="utf-8",
+            )
+            peer.write_text("# Peer\n", encoding="utf-8")
+            reference.write_text("# Guide\n", encoding="utf-8")
+
+            self.assertEqual(
+                route_errors(
+                    source,
+                    root,
+                    require_routes=False,
+                    reject_unlinked_routes=False,
+                ),
+                [],
+            )
+
+    def test_nested_runtime_alias_is_rejected_without_requiring_a_route_table(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "skills/source/SKILL.md"
+            source.parent.mkdir(parents=True)
+            source.write_text("Load `[ref:guide]`.\n", encoding="utf-8")
+
+            errors = route_errors(
+                source,
+                root,
+                require_routes=False,
+                reject_unlinked_routes=False,
+            )
+            self.assertTrue(any("opaque route" in error for error in errors), errors)
+
+    def test_reference_routes_resolve_without_repeating_the_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "references/source.md"
+            peer = root / "references/peer.md"
+            source.parent.mkdir(parents=True)
+            source.write_text("Load [peer](peer.md).\n", encoding="utf-8")
+            peer.write_text("# Peer\n", encoding="utf-8")
+
+            self.assertEqual(
+                route_errors(
+                    source,
+                    root,
+                    require_routes=False,
+                    reject_unlinked_routes=False,
+                ),
+                [],
+            )
+
+    def test_nested_routes_reject_wrong_case_escape_and_redundant_traversal(self) -> None:
+        cases = (
+            ("../../References/guide.md", "exact lowercase `references/`"),
+            ("../../../references/guide.md", "must not traverse outside"),
+            ("../source/../../references/guide.md", "must not traverse redundantly"),
+        )
+        for target, expected in cases:
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "skills/source/SKILL.md"
+                reference = root / "references/guide.md"
+                source.parent.mkdir(parents=True)
+                reference.parent.mkdir(parents=True)
+                source.write_text(f"Load [guide]({target}).\n", encoding="utf-8")
+                reference.write_text("# Guide\n", encoding="utf-8")
+
+                errors = route_errors(
+                    source,
+                    root,
+                    require_routes=False,
+                    reject_unlinked_routes=False,
+                )
+                self.assertTrue(any(expected in error for error in errors), errors)
+
     def test_external_links_are_outside_the_static_route_contract(self) -> None:
         text = (
             "See [external docs](https://example.com/references/guide.md), then "
@@ -246,11 +395,16 @@ class PortableRoutePayloadTests(unittest.TestCase):
         return destination / installer.SKILL_NAME
 
     def assert_payload_contract(self, payload: Path) -> None:
-        self.assertEqual(route_errors(payload / "SKILL.md", payload), [])
+        self.assertEqual(runtime_route_errors(payload), [])
+        for path in validate_skills.active_runtime_markdown_paths(payload):
+            self.assertIsNone(
+                validate_skills.OPAQUE_ROUTE_RE.search(path.read_text(encoding="utf-8")),
+                path,
+            )
         text = (payload / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("does **not** prove that a host auto-loads", text)
 
-    def test_installed_payload_contains_every_root_route_target(self) -> None:
+    def test_installed_payload_contains_every_runtime_route_target(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             payload = self.install(Path(temporary) / "client with spaces" / "skills")
             self.assert_payload_contract(payload)

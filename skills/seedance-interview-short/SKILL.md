@@ -37,9 +37,9 @@ Ask at most three questions, and only ask them if the answer materially changes 
 
 If the user already supplied enough information, do not ask. Produce a brief immediately. If the user speaks production language fluently, drop the plain phrasing and ask in director terms.
 
-Run the interview and brief in the user's language; for native starting-point menus and invites, load `[ref:interview-starters]`. If the user gives explicit shot, lens, camera, blocking, or performance direction, keep it verbatim and compile it into a shot-contract-grade brief - never simplify or override a professional's spec. When the user has no idea at all, offer a starting-point menu to react to instead of asking a question they cannot answer.
+Run the interview and brief in the user's language; for native starting-point menus and invites, load [interview-starters](../../references/interview-starters.md). If the user gives explicit shot, lens, camera, blocking, or performance direction, keep it verbatim and compile it into a shot-contract-grade brief - never simplify or override a professional's spec. When the user has no idea at all, offer a starting-point menu to react to instead of asking a question they cannot answer.
 
-Even in fast mode, the brief states one motivated intention, not a generic "cinematic" look: name what the scene is doing and let the camera, light, and performance serve that. Load `[ref:directing-engine]` only when the right setup for the scene is genuinely unclear; otherwise apply its coherence rule inline.
+Even in fast mode, the brief states one motivated intention, not a generic "cinematic" look: name what the scene is doing and let the camera, light, and performance serve that. Load [directing-engine](../../references/directing-engine.md) only when the right setup for the scene is genuinely unclear; otherwise apply its coherence rule inline.
 
 ## Compact Brief Pattern
 
@@ -47,7 +47,7 @@ Even in fast mode, the brief states one motivated intention, not a generic "cine
 
 ## Routing Rule
 
-Route to `[skill:seedance-sequence]` for connected clips, long scenes, unclear total duration, or continuation-ready planning; `[skill:seedance-continuation]` for accepted-footage continuation; `[skill:seedance-prompt]` for a full standalone production prompt; `[skill:seedance-prompt-short]` for a compact prompt; `[skill:seedance-copyright]` for IP/likeness risk; or `[skill:seedance-troubleshoot]` when the user starts from a bad result.
+Route to [seedance-sequence](../seedance-sequence/SKILL.md) for connected clips, long scenes, unclear total duration, or continuation-ready planning; [seedance-continuation](../seedance-continuation/SKILL.md) for accepted-footage continuation; [seedance-prompt](../seedance-prompt/SKILL.md) for a full standalone production prompt; [seedance-prompt-short](../seedance-prompt-short/SKILL.md) for a compact prompt; [seedance-copyright](../seedance-copyright/SKILL.md) for IP/likeness risk; or [seedance-troubleshoot](../seedance-troubleshoot/SKILL.md) when the user starts from a bad result.
 
 ## Output Contract
 
