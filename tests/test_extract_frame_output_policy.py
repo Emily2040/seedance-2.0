@@ -632,7 +632,7 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                 mock.patch.object(
                     extractor, "_ReplaceFileW", side_effect=replace_with_attack
                 ),
-                mock.patch.object(extractor, "_SetSecurityInfo", return_value=0),
+                mock.patch.object(extractor, "_NtSetSecurityObject", return_value=0),
             ):
                 result, stdout, stderr = self.invoke(
                     str(clip),
