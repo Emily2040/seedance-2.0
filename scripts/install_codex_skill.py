@@ -142,6 +142,8 @@ def _text_for_stream(text: str, stream: TextIO) -> str:
 def safe_print(message: object, *, stream: TextIO | None = None) -> None:
     """Write one line without letting a narrow console encoding abort the CLI."""
     output = sys.stdout if stream is None else stream
+    if output is None:
+        return
     text = f"{message}\n"
     prepared = _text_for_stream(text, output)
     try:

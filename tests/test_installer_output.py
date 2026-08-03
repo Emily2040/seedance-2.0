@@ -152,6 +152,26 @@ class UnicodeConsoleSubprocessTests(unittest.TestCase):
 
 
 class SafePrintStreamTests(unittest.TestCase):
+    def test_absent_stdout_is_a_noop(self) -> None:
+        with mock.patch.object(installer.sys, "stdout", None):
+            installer.safe_print("message with no console")
+
+    def test_absent_stderr_and_stdout_are_a_noop(self) -> None:
+        with (
+            mock.patch.object(installer.sys, "stdout", None),
+            mock.patch.object(installer.sys, "stderr", None),
+        ):
+            installer.safe_print("error with no console", stream=installer.sys.stderr)
+
+    def test_absent_stderr_falls_back_to_available_stdout(self) -> None:
+        fallback = io.StringIO()
+        with (
+            mock.patch.object(installer.sys, "stdout", fallback),
+            mock.patch.object(installer.sys, "stderr", None),
+        ):
+            installer.safe_print("fallback error", stream=installer.sys.stderr)
+        self.assertEqual(fallback.getvalue(), "fallback error\n")
+
     def test_strict_cp1252_text_wrapper_escapes_only_unsupported_text(self) -> None:
         raw = io.BytesIO()
         stream = io.TextIOWrapper(raw, encoding="cp1252", errors="strict", newline="\n")
