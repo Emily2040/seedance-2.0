@@ -1177,6 +1177,80 @@ class PayloadManifestTests(unittest.TestCase):
         if result.returncode != 0:
             self.skipTest(f"Windows directory junctions are unavailable: {result.stderr.strip()}")
 
+    def set_windows_mount_point(self, source: Path, target: Path) -> None:
+        import ctypes
+        import struct
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
+        create_file.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        create_file.restype = wintypes.HANDLE
+        device_io_control = kernel32.DeviceIoControl
+        device_io_control.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPVOID,
+        ]
+        device_io_control.restype = wintypes.BOOL
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [wintypes.HANDLE]
+        close_handle.restype = wintypes.BOOL
+
+        handle = create_file(
+            str(source),
+            0x00000100,  # FILE_WRITE_ATTRIBUTES is sufficient for this ioctl
+            0x00000001 | 0x00000002 | 0x00000004,
+            None,
+            3,  # OPEN_EXISTING
+            0x02000000 | 0x00200000,
+            None,
+        )
+        if handle == ctypes.c_void_p(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            substitute = f"\\??\\{target}".encode("utf-16-le")
+            printable = str(target).encode("utf-16-le")
+            paths = substitute + b"\x00\x00" + printable + b"\x00\x00"
+            payload = struct.pack(
+                "<LHHHHHH",
+                0xA0000003,  # IO_REPARSE_TAG_MOUNT_POINT
+                8 + len(paths),
+                0,
+                0,
+                len(substitute),
+                len(substitute) + 2,
+                len(printable),
+            ) + paths
+            buffer = ctypes.create_string_buffer(payload)
+            returned = wintypes.DWORD()
+            if not device_io_control(
+                handle,
+                0x000900A4,  # FSCTL_SET_REPARSE_POINT
+                buffer,
+                len(payload),
+                None,
+                0,
+                ctypes.byref(returned),
+                None,
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            close_handle(handle)
+
     def test_manifest_rejects_parent_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.minimal_repo(Path(tmp), ["../outside.txt"])
@@ -1291,7 +1365,7 @@ class PayloadManifestTests(unittest.TestCase):
                     installer.load_payload_contract(root)
 
                 message = str(raised.exception)
-                self.assertIn(f"references/caller.md:1", message)
+                self.assertIn("references/caller.md:1", message)
                 self.assertIn(f"[{kind}:{name}]", message)
                 self.assertIn(target_relative, message)
                 self.assertIn("absent from validation/install-payload.txt", message)
@@ -1311,6 +1385,267 @@ class PayloadManifestTests(unittest.TestCase):
             missing.raise_for_error()
         self.assertIn("SKILL.md:2", str(raised.exception))
         self.assertIn("skills/missing/SKILL.md", str(raised.exception))
+
+    def test_source_snapshot_scans_only_the_first_repeated_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), [])
+            expected = (root / "SKILL.md").read_bytes()
+            consumed: list[bytes] = []
+
+            snapshot = installer._source_file_snapshot(
+                root,
+                "SKILL.md",
+                chunk_consumer=consumed.append,
+            )
+
+            self.assertEqual(b"".join(consumed), expected)
+            self.assertEqual(snapshot.size, len(expected))
+
+    def test_intermediate_component_swap_before_bound_open_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp)
+            relative = "references/linked/runtime.md"
+            root = self.minimal_repo(sandbox / "repo", [relative])
+            linked = root / "references" / "linked"
+            linked.mkdir(parents=True)
+            (linked / "runtime.md").write_text("declared\n", encoding="utf-8")
+            external = sandbox / "external"
+            external.mkdir()
+            (external / "runtime.md").write_text("external\n", encoding="utf-8")
+            displaced = root / "references" / "displaced"
+            attacked = False
+
+            if os.name == "nt":
+                original_open = installer._win32_open_relative_directory_component
+
+                def attack(
+                    parent_handle: int,
+                    name: str,
+                    path: Path,
+                    label: str,
+                    diagnostic: str,
+                ) -> int:
+                    nonlocal attacked
+                    if path == linked and not attacked:
+                        attacked = True
+                        linked.rename(displaced)
+                        self.junction_or_skip(linked, external)
+                    return original_open(
+                        parent_handle,
+                        name,
+                        path,
+                        label,
+                        diagnostic,
+                    )
+
+                patch = mock.patch.object(
+                    installer,
+                    "_win32_open_relative_directory_component",
+                    side_effect=attack,
+                )
+                rejection = self.assertRaises((OSError, ValueError))
+            else:
+                original_open = installer.os.open
+
+                def attack(
+                    path: str | os.PathLike[str],
+                    flags: int,
+                    mode: int = 0o777,
+                    *,
+                    dir_fd: int | None = None,
+                ) -> int:
+                    nonlocal attacked
+                    if os.fspath(path) == "linked" and dir_fd is not None and not attacked:
+                        attacked = True
+                        linked.rename(displaced)
+                        self.symlink_or_skip(
+                            linked,
+                            external,
+                            target_is_directory=True,
+                        )
+                    return original_open(path, flags, mode, dir_fd=dir_fd)
+
+                patch = mock.patch.object(installer.os, "open", side_effect=attack)
+                rejection = self.assertRaisesRegex(
+                    ValueError,
+                    "linked or reparse component",
+                )
+
+            with patch, rejection:
+                installer._read_stable_regular_bytes(
+                    root,
+                    relative,
+                    label="declared payload path",
+                    max_bytes=1024,
+                )
+            self.assertTrue(attacked)
+
+    @unittest.skipUnless(os.name == "nt", "Windows sharing semantics only")
+    def test_bound_parent_rejects_child_open_after_in_place_reparse_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp)
+            relative = "references/linked/runtime.md"
+            root = self.minimal_repo(sandbox / "repo", [relative])
+            references = root / "references"
+            references.mkdir()
+            linked = root / "references" / "linked"
+            external = sandbox / "external"
+            (external / "linked").mkdir(parents=True)
+            (external / "linked" / "runtime.md").write_bytes(b"external")
+
+            probe = sandbox / "probe"
+            probe.mkdir()
+            try:
+                self.set_windows_mount_point(probe, external)
+            except OSError as exc:
+                self.skipTest(f"Windows mount points are unavailable: {exc}")
+            probe.rmdir()
+
+            original_open = installer._win32_open_relative_directory_component
+            attacked = False
+
+            def attack(
+                parent_handle: int,
+                name: str,
+                path: Path,
+                label: str,
+                diagnostic: str,
+            ) -> int:
+                nonlocal attacked
+                if path == linked and not attacked:
+                    attacked = True
+                    self.set_windows_mount_point(references, external)
+                return original_open(
+                    parent_handle,
+                    name,
+                    path,
+                    label,
+                    diagnostic,
+                )
+
+            with (
+                mock.patch.object(
+                    installer,
+                    "_win32_open_relative_directory_component",
+                    side_effect=attack,
+                ),
+                self.assertRaises((OSError, ValueError)),
+            ):
+                installer._read_stable_regular_bytes(
+                    root,
+                    relative,
+                    label="declared payload path",
+                    max_bytes=1024,
+                )
+            self.assertTrue(attacked)
+            self.assertTrue(installer._is_reparse_stat(references.lstat()))
+
+    @unittest.skipUnless(os.name == "nt", "Windows sharing semantics only")
+    def test_bound_leaf_blocks_rewrite_before_record_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            relative = "references/runtime.md"
+            root = self.minimal_repo(Path(tmp) / "repo", [relative])
+            leaf = root / relative
+            leaf.parent.mkdir(parents=True)
+            leaf.write_bytes(b"declared")
+            original_lock = installer._locked_record_descriptor
+            attacked = False
+
+            @contextlib.contextmanager
+            def attack(
+                descriptor: int,
+                range_length: int = installer.MAX_RECORD_BYTES + 1,
+                *,
+                exclusive: bool = True,
+            ):
+                nonlocal attacked
+                if not attacked:
+                    attacked = True
+                    with self.assertRaises(OSError):
+                        leaf.write_bytes(b"external")
+                with original_lock(
+                    descriptor,
+                    range_length,
+                    exclusive=exclusive,
+                ):
+                    yield
+
+            with mock.patch.object(
+                installer,
+                "_locked_record_descriptor",
+                side_effect=attack,
+            ):
+                _snapshot, raw = installer._read_stable_regular_bytes(
+                    root,
+                    relative,
+                    label="declared payload path",
+                    max_bytes=1024,
+                )
+            self.assertTrue(attacked)
+            self.assertEqual(raw, b"declared")
+
+    @unittest.skipUnless(os.name == "nt", "Windows handle-relative semantics only")
+    def test_bound_read_does_not_reresolve_full_windows_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            relative = "references/runtime.md"
+            root = self.minimal_repo(Path(tmp) / "repo", [relative])
+            leaf = root / relative
+            leaf.parent.mkdir(parents=True)
+            leaf.write_bytes(b"declared")
+
+            with mock.patch.object(
+                Path,
+                "lstat",
+                side_effect=AssertionError("full path was re-resolved"),
+            ):
+                _snapshot, raw = installer._read_stable_regular_bytes(
+                    root,
+                    relative,
+                    label="declared payload path",
+                    max_bytes=1024,
+                )
+            self.assertEqual(raw, b"declared")
+
+    @unittest.skipIf(os.name == "nt", "POSIX dir_fd semantics only")
+    def test_leaf_swap_between_stat_and_open_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp)
+            relative = "references/runtime.md"
+            root = self.minimal_repo(sandbox / "repo", [relative])
+            leaf = root / relative
+            leaf.parent.mkdir(parents=True)
+            leaf.write_bytes(b"declared")
+            displaced = sandbox / "displaced.md"
+            replacement = sandbox / "replacement.md"
+            replacement.write_bytes(b"external")
+            original_open = installer.os.open
+            attacked = False
+
+            def attack(
+                path: str | os.PathLike[str],
+                flags: int,
+                mode: int = 0o777,
+                *,
+                dir_fd: int | None = None,
+            ) -> int:
+                nonlocal attacked
+                if os.fspath(path) == leaf.name and dir_fd is not None and not attacked:
+                    attacked = True
+                    leaf.rename(displaced)
+                    replacement.rename(leaf)
+                return original_open(path, flags, mode, dir_fd=dir_fd)
+
+            with (
+                mock.patch.object(installer.os, "open", side_effect=attack),
+                self.assertRaisesRegex(RuntimeError, "changed while it was being opened"),
+            ):
+                installer._read_stable_regular_bytes(
+                    root,
+                    relative,
+                    label="declared payload path",
+                    max_bytes=1024,
+                )
+            self.assertTrue(attacked)
 
     def test_cli_bounds_preflight_manifest_errors_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
