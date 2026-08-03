@@ -71,6 +71,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - name: Prove checked-out repository root
+        shell: bash
+        run: |
+          set -euo pipefail
+          checkout_root="$(git -C "$GITHUB_WORKSPACE" rev-parse --show-toplevel)"
+          test "$(git -C "$checkout_root" rev-parse --is-inside-work-tree)" = true
+          test -f "$checkout_root/scripts/extract_last_frame.py"
+          printf 'SEEDANCE_CHECKOUT_ROOT=%s\n' "$checkout_root" >> "$GITHUB_ENV"
       - name: Prove privileged filesystem and publication prerequisites
         id: privileged_proof
         shell: bash
@@ -90,7 +98,7 @@ jobs:
           import tempfile
           from pathlib import Path
 
-          workspace = Path(os.environ["GITHUB_WORKSPACE"])
+          workspace = Path(os.environ["SEEDANCE_CHECKOUT_ROOT"])
           sys.path.insert(0, str(workspace / "scripts"))
           import extract_last_frame as extractor
 
@@ -213,8 +221,10 @@ jobs:
           import sys
           import unittest
 
-          os.chdir(os.environ["GITHUB_WORKSPACE"])
-          sys.path.insert(0, os.path.join(os.environ["GITHUB_WORKSPACE"], "scripts"))
+          os.chdir(os.environ["SEEDANCE_CHECKOUT_ROOT"])
+          sys.path.insert(
+              0, os.path.join(os.environ["SEEDANCE_CHECKOUT_ROOT"], "scripts")
+          )
           import extract_last_frame as extractor
 
           assert extractor._posix_descriptor_xattrs_supported(), (
@@ -246,4 +256,9 @@ jobs:
           PY
       - name: Check diff whitespace
         working-directory: ${{ github.workspace }}
-        run: git diff --check
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEEDANCE_CHECKOUT_ROOT:-}"
+          test "$(git -C "$SEEDANCE_CHECKOUT_ROOT" rev-parse --is-inside-work-tree)" = true
+          git -C "$SEEDANCE_CHECKOUT_ROOT" diff --check

@@ -279,6 +279,8 @@ if os.name == "nt":
     _SACL_SECURITY_INFORMATION = 0x00000008
     _LABEL_SECURITY_INFORMATION = 0x00000010
     _SDDL_REVISION_1 = 1
+    _ACL_REVISION = 2
+    _INHERITED_ACE = 0x10
     _UNPROTECTED_DACL_SECURITY_INFORMATION = 0x20000000
     _PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
     _SE_FILE_OBJECT = 1
@@ -376,6 +378,20 @@ if os.name == "nt":
         ctypes.POINTER(wintypes.BOOL),
     )
     _GetSecurityDescriptorDacl.restype = wintypes.BOOL
+    _InitializeAcl = _advapi32.InitializeAcl
+    _InitializeAcl.argtypes = (
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+    )
+    _InitializeAcl.restype = wintypes.BOOL
+    _GetAce = _advapi32.GetAce
+    _GetAce.argtypes = (
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(ctypes.c_void_p),
+    )
+    _GetAce.restype = wintypes.BOOL
     _SetSecurityInfo = _advapi32.SetSecurityInfo
     _SetSecurityInfo.argtypes = (
         wintypes.HANDLE,
@@ -387,6 +403,22 @@ if os.name == "nt":
         ctypes.c_void_p,
     )
     _SetSecurityInfo.restype = wintypes.DWORD
+
+    class _Acl(ctypes.Structure):
+        _fields_ = (
+            ("AclRevision", wintypes.BYTE),
+            ("Sbz1", wintypes.BYTE),
+            ("AclSize", wintypes.WORD),
+            ("AceCount", wintypes.WORD),
+            ("Sbz2", wintypes.WORD),
+        )
+
+    class _AceHeader(ctypes.Structure):
+        _fields_ = (
+            ("AceType", wintypes.BYTE),
+            ("AceFlags", wintypes.BYTE),
+            ("AceSize", wintypes.WORD),
+        )
 
     class _FileRenameInfoEx(ctypes.Structure):
         _fields_ = (
@@ -748,18 +780,53 @@ def _restore_win32_dacl(
         )
 
     expected_security = _split_win32_security_policy(authorized_policy)
+    protected = "P" in expected_security[3]
     protection = (
         _PROTECTED_DACL_SECURITY_INFORMATION
-        if "P" in expected_security[3]
+        if protected
         else _UNPROTECTED_DACL_SECURITY_INFORMATION
     )
+    # SetSecurityInfo applies parent inheritance when UNPROTECTED is requested.
+    # Passing the captured inherited ACEs would therefore add or reclassify them
+    # a second time. An empty, valid ACL asks Windows to regenerate the sibling's
+    # authorized parent-inherited DACL exactly once. Protected DACLs have no such
+    # parent merge and retain the captured ACL verbatim.
+    applied_dacl = dacl
+    empty_acl = _Acl()
+    if not protected:
+        captured_acl = ctypes.cast(dacl, ctypes.POINTER(_Acl)).contents
+        for index in range(captured_acl.AceCount):
+            ace = ctypes.c_void_p()
+            ctypes.set_last_error(0)
+            if not _GetAce(dacl, index, ctypes.byref(ace)) or not ace.value:
+                error = ctypes.get_last_error()
+                raise OutputPolicyError(
+                    f"cannot inspect authorized Windows DACL ACE {index} for {out}: "
+                    f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+                )
+            header = ctypes.cast(ace, ctypes.POINTER(_AceHeader)).contents
+            if not header.AceFlags & _INHERITED_ACE:
+                raise OutputPolicyError(
+                    "authorized unprotected Windows DACL contains an explicit "
+                    f"ACE; replacement was refused: {out}"
+                )
+        ctypes.set_last_error(0)
+        if not _InitializeAcl(
+            ctypes.byref(empty_acl), ctypes.sizeof(empty_acl), _ACL_REVISION
+        ):
+            error = ctypes.get_last_error()
+            raise OutputPolicyError(
+                f"cannot initialize an empty Windows DACL for {out}: "
+                f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+            )
+        applied_dacl = ctypes.cast(ctypes.byref(empty_acl), ctypes.c_void_p)
     error = _SetSecurityInfo(
         wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
         _SE_FILE_OBJECT,
         _DACL_SECURITY_INFORMATION | protection,
         None,
         None,
-        dacl,
+        applied_dacl,
         None,
     )
     if error:
@@ -1380,10 +1447,9 @@ def _publish_win32_force_transaction(
                 f"({', '.join(backup_differences)})"
             )
         # ReplaceFileW intentionally merges the replaced file's DACL into the
-        # replacement.  Filesystem providers may rewrite inherited ACE layout
-        # and DACL control flags while doing so.  Restore the exact DACL read
-        # from the retained destination handle, then compare its canonical ACEs
-        # and control flags; no DACL difference is ignored.
+        # replacement. Restore the exact authorized DACL state through the
+        # retained output handle, then compare canonical ACEs and every DACL
+        # control flag; no DACL difference is ignored.
         if output_state.identity == stage_state.identity:
             try:
                 _restore_win32_dacl(

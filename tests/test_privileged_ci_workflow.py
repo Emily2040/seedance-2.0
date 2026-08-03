@@ -123,11 +123,27 @@ class PrivilegedWorkflowSecurityTests(unittest.TestCase):
 
     def test_privileged_diff_check_runs_inside_the_checkout(self) -> None:
         self.assertIn(
-            "      - name: Check diff whitespace\n"
-            "        working-directory: ${{ github.workspace }}\n"
-            "        run: git diff --check\n",
+            "      - name: Prove checked-out repository root\n"
+            "        shell: bash\n"
+            "        run: |\n"
+            "          set -euo pipefail\n"
+            '          checkout_root="$(git -C "$GITHUB_WORKSPACE" '
+            'rev-parse --show-toplevel)"\n',
             self.privileged,
         )
+        self.assertIn(
+            "      - name: Check diff whitespace\n"
+            "        working-directory: ${{ github.workspace }}\n"
+            "        shell: bash\n"
+            "        run: |\n"
+            "          set -euo pipefail\n"
+            '          test -n "${SEEDANCE_CHECKOUT_ROOT:-}"\n'
+            '          test "$(git -C "$SEEDANCE_CHECKOUT_ROOT" '
+            'rev-parse --is-inside-work-tree)" = true\n'
+            '          git -C "$SEEDANCE_CHECKOUT_ROOT" diff --check\n',
+            self.privileged,
+        )
+        self.assertNotIn('git diff --check "$GITHUB_WORKSPACE"', self.privileged)
 
 
 if __name__ == "__main__":
