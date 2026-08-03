@@ -499,14 +499,29 @@ non-canonical, missing, or mismatched provenance cannot produce a release pass.
 The canonical eval-suite and rubric digests are pinned so a structurally valid
 but semantically gutted replacement also fails closed.
 
-The material-criteria work tracked separately in
-[#29](https://github.com/Emily2040/seedance-2.0/issues/29) is intentionally not
-absorbed here. `failure_mode`, `expected_state_delta`,
-`expected_prompt_architecture`, and `expected_sequence_relation` remain
-prompt-inert in discovery, response, and judge calls; this snapshot makes no
-claim that those fields are independently scored.
+Every declared case oracle reaches the judge through a stable opaque criterion
+ID. Assertions, required output sections, forbidden behaviors, `expected_output`,
+`failure_mode`, `expected_state_delta`, and `expected_prompt_architecture` are
+scored as exact judge-only criteria; `expected_sequence_relation` is bound into
+the routing dimension. These oracle values remain hidden from discovery and
+response generation, so binding them does not undo the blind-selection boundary.
 
-This is the quality gate, not a shape gate, so it lives outside offline CI; the latest scored run is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
+Result rows have an explicit evidence status. `scored` means the judge returned
+a complete, strictly typed verdict with every criterion and dimension ID exactly
+once; only these rows enter quality floors and averages. A judge transport error,
+timeout, empty body, oversized body, malformed JSON, or incomplete/invalid
+verdict becomes `harness_error` with no numeric score or pass value. The harness
+continues the remaining selected cases, writes a fresh auditable ledger, excludes
+the error row from quality arithmetic, marks release evidence `NOT ELIGIBLE`, and
+exits 1. It never represents missing judge evidence as a poor-output score of 0.
+
+Case-contract or response-envelope failures are different: they are known before
+the first provider call, so the whole live run aborts with exit 2. If `--ledger`
+was requested, the stale artifact is atomically replaced by a bootstrap
+`harness_error` ledger. Post-run snapshot drift likewise makes every recorded row
+a non-scored harness error and exits 2.
+
+This is the quality gate, not a shape gate, so it lives outside offline CI; the latest run evidence is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
 
 ## Design Standard
 

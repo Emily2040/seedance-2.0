@@ -70,6 +70,7 @@ def result_row(
 ) -> dict:
     return {
         "id": case_id,
+        "status": "scored",
         "score": score,
         "pass": passed,
         "sequence": sequence,
@@ -85,6 +86,30 @@ def result_row(
             else []
         ),
     }
+
+
+def harness_error_row(
+    case_id: str = "case-1",
+    *,
+    sequence: bool = False,
+    critical: bool = False,
+    notes: str = "judge transport failed",
+) -> dict:
+    row = result_row(
+        case_id,
+        sequence=sequence,
+        critical=critical,
+    )
+    row.update(
+        {
+            "status": "harness_error",
+            "score": None,
+            "pass": None,
+            "notes": notes,
+            "dimension_scores": [],
+        }
+    )
+    return row
 
 
 def case_metadata(
@@ -154,6 +179,78 @@ class AggregateIntegrityTests(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertIn("failed verdict", output.lower())
+
+    def test_harness_errors_are_excluded_from_quality_averages(self) -> None:
+        expected_cases = {
+            **case_metadata("scored-case"),
+            **case_metadata("judge-down"),
+        }
+        report = eval_run.assess_run(
+            [
+                result_row("scored-case", score=3),
+                harness_error_row("judge-down"),
+            ],
+            expected_cases=expected_cases,
+            release_eligible=True,
+            total_expected=2,
+            source_manifest={},
+        )
+
+        self.assertEqual(report["scope"], "COMPLETE")
+        self.assertEqual(report["scored_count"], 1)
+        self.assertEqual(report["harness_errors"], ["judge-down"])
+        self.assertEqual(report["legacy_count"], 1)
+        self.assertEqual(report["legacy_average"], 3)
+        self.assertEqual(report["failed_verdicts"], [])
+        self.assertEqual(report["run_verdict"], "FAIL")
+        self.assertEqual(report["release_verdict"], "NOT ELIGIBLE")
+
+    def test_valid_zero_score_remains_scored_quality_evidence(self) -> None:
+        report = eval_run.assess_run(
+            [result_row(score=0, passed=False)],
+            expected_cases=case_metadata(),
+            release_eligible=True,
+            total_expected=1,
+            source_manifest={},
+        )
+
+        self.assertEqual(report["scored_count"], 1)
+        self.assertEqual(report["harness_errors"], [])
+        self.assertEqual(report["legacy_average"], 0)
+        self.assertEqual(report["failed_verdicts"], ["case-1"])
+        self.assertEqual(report["release_verdict"], "FAIL")
+
+    def test_harness_error_cannot_smuggle_a_numeric_score_or_pass(self) -> None:
+        row = harness_error_row()
+        row["score"] = 0
+        row["pass"] = False
+        report = eval_run.assess_run(
+            [row],
+            expected_cases=case_metadata(),
+            release_eligible=True,
+            total_expected=1,
+            source_manifest={},
+        )
+
+        self.assertIn("case-1: harness_error score must be null", report["integrity_errors"])
+        self.assertIn("case-1: harness_error pass must be null", report["integrity_errors"])
+        self.assertEqual(report["scored_count"], 0)
+        self.assertEqual(report["release_verdict"], "FAIL")
+
+    def test_result_status_is_required_and_harness_errors_need_a_reason(self) -> None:
+        missing_status = result_row()
+        del missing_status["status"]
+        blank_error = harness_error_row("blank-error", notes=" ")
+        report = eval_run.assess_run([missing_status, blank_error])
+
+        self.assertTrue(
+            any("status must be one of" in error for error in report["integrity_errors"])
+        )
+        self.assertIn(
+            "blank-error: harness_error notes must explain the failure",
+            report["integrity_errors"],
+        )
+        self.assertEqual(report["release_verdict"], "NOT ELIGIBLE")
 
     def test_valid_rows_without_release_universe_are_not_release_eligible(self) -> None:
         code, output = self.aggregate([result_row()])
@@ -599,13 +696,15 @@ class JudgeIntegrityTests(unittest.TestCase):
             max_tokens=900,
         )
 
-    def test_non_standard_json_constants_are_rejected(self) -> None:
-        raw = '{"overall_score":NaN,"pass":true,"notes":"bad"}'
+    def test_empty_judge_response_raises_instead_of_minting_a_zero_score(self) -> None:
         provider, endpoint, _model = eval_run.resolve_provider(
             "anthropic", "global_en", None
         )
-        with mock.patch.object(eval_run, "call_api", return_value=raw):
-            verdict = eval_run.judge(
+        with (
+            mock.patch.object(eval_run, "call_api", return_value="   "),
+            self.assertRaisesRegex(eval_run.HarnessError, "returned no JSON"),
+        ):
+            eval_run.judge(
                 self.CASE,
                 "candidate",
                 "model",
@@ -615,9 +714,24 @@ class JudgeIntegrityTests(unittest.TestCase):
                 endpoint,
             )
 
-        self.assertEqual(verdict["overall_score"], 0)
-        self.assertIs(verdict["pass"], False)
-        self.assertIn("unparseable", verdict["notes"])
+    def test_non_standard_json_constants_are_rejected(self) -> None:
+        raw = '{"overall_score":NaN,"pass":true,"notes":"bad"}'
+        provider, endpoint, _model = eval_run.resolve_provider(
+            "anthropic", "global_en", None
+        )
+        with (
+            mock.patch.object(eval_run, "call_api", return_value=raw),
+            self.assertRaisesRegex(eval_run.HarnessError, "unparseable"),
+        ):
+            eval_run.judge(
+                self.CASE,
+                "candidate",
+                "model",
+                "key",
+                "rubric",
+                provider,
+                endpoint,
+            )
 
     def test_duplicate_json_keys_are_rejected(self) -> None:
         raw = (
@@ -628,8 +742,11 @@ class JudgeIntegrityTests(unittest.TestCase):
         provider, endpoint, _model = eval_run.resolve_provider(
             "anthropic", "global_en", None
         )
-        with mock.patch.object(eval_run, "call_api", return_value=raw):
-            verdict = eval_run.judge(
+        with (
+            mock.patch.object(eval_run, "call_api", return_value=raw),
+            self.assertRaisesRegex(eval_run.HarnessError, "unparseable"),
+        ):
+            eval_run.judge(
                 self.CASE,
                 "candidate",
                 "model",
@@ -638,10 +755,6 @@ class JudgeIntegrityTests(unittest.TestCase):
                 provider,
                 endpoint,
             )
-
-        self.assertEqual(verdict["overall_score"], 0)
-        self.assertIs(verdict["pass"], False)
-        self.assertIn("unparseable", verdict["notes"])
 
     def test_unpaired_surrogate_in_judge_json_is_rejected(self) -> None:
         raw = (
@@ -652,8 +765,11 @@ class JudgeIntegrityTests(unittest.TestCase):
         provider, endpoint, _model = eval_run.resolve_provider(
             "anthropic", "global_en", None
         )
-        with mock.patch.object(eval_run, "call_api", return_value=raw):
-            verdict = eval_run.judge(
+        with (
+            mock.patch.object(eval_run, "call_api", return_value=raw),
+            self.assertRaisesRegex(eval_run.HarnessError, "unparseable"),
+        ):
+            eval_run.judge(
                 self.CASE,
                 "candidate",
                 "model",
@@ -662,10 +778,6 @@ class JudgeIntegrityTests(unittest.TestCase):
                 provider,
                 endpoint,
             )
-
-        self.assertEqual(verdict["overall_score"], 0)
-        self.assertIs(verdict["pass"], False)
-        self.assertIn("unparseable", verdict["notes"])
 
     def test_verdict_normalization_rejects_every_invalid_score_shape(self) -> None:
         bad_scores = (True, "3", 3.0, float("nan"), float("inf"), -1, 4)
@@ -684,8 +796,9 @@ class JudgeIntegrityTests(unittest.TestCase):
                         "dimension_scores": {},
                     },
                 )
-                self.assertEqual(verdict["overall_score"], 0)
-                self.assertIs(verdict["pass"], False)
+                self.assertEqual(verdict["status"], "harness_error")
+                self.assertIsNone(verdict["overall_score"])
+                self.assertIsNone(verdict["pass"])
                 self.assertIn("invalid judge verdict", verdict["notes"])
 
         verdict = eval_run.normalize_verdict(
@@ -701,8 +814,9 @@ class JudgeIntegrityTests(unittest.TestCase):
                 "dimension_scores": {},
             },
         )
-        self.assertEqual(verdict["overall_score"], 0)
-        self.assertIs(verdict["pass"], False)
+        self.assertEqual(verdict["status"], "harness_error")
+        self.assertIsNone(verdict["overall_score"])
+        self.assertIsNone(verdict["pass"])
         self.assertIn("pass must be a boolean", verdict["notes"])
 
     def test_criterion_scores_must_cover_each_contract_id_exactly_once(self) -> None:
@@ -729,8 +843,9 @@ class JudgeIntegrityTests(unittest.TestCase):
                         "dimension_scores": {},
                     },
                 )
-                self.assertEqual(verdict["overall_score"], 0)
-                self.assertIs(verdict["pass"], False)
+                self.assertEqual(verdict["status"], "harness_error")
+                self.assertIsNone(verdict["overall_score"])
+                self.assertIsNone(verdict["pass"])
                 self.assertIn("invalid judge verdict", verdict["notes"])
 
     def test_required_sections_and_forbidden_behaviors_are_scored_checks(self) -> None:
@@ -743,8 +858,9 @@ class JudgeIntegrityTests(unittest.TestCase):
             "forbidden_behaviors": ["invented dialogue"],
         }
         ordinary_only = eval_run.normalize_verdict(case, valid_verdict())
-        self.assertEqual(ordinary_only["overall_score"], 0)
-        self.assertFalse(ordinary_only["pass"])
+        self.assertEqual(ordinary_only["status"], "harness_error")
+        self.assertIsNone(ordinary_only["overall_score"])
+        self.assertIsNone(ordinary_only["pass"])
         self.assertIn("cover every judge criterion ID", ordinary_only["notes"])
 
         checks = eval_run.expected_judge_checks(case)
@@ -761,8 +877,9 @@ class JudgeIntegrityTests(unittest.TestCase):
                 "dimension_scores": {},
             },
         )
-        self.assertEqual(forbidden_unmet["overall_score"], 0)
-        self.assertFalse(forbidden_unmet["pass"])
+        self.assertEqual(forbidden_unmet["status"], "harness_error")
+        self.assertIsNone(forbidden_unmet["overall_score"])
+        self.assertIsNone(forbidden_unmet["pass"])
         self.assertIn("pass cannot be true", forbidden_unmet["notes"])
 
     def test_sequence_verdict_requires_every_rubric_dimension(self) -> None:
@@ -793,8 +910,9 @@ class JudgeIntegrityTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(verdict["overall_score"], 0)
-        self.assertFalse(verdict["pass"])
+        self.assertEqual(verdict["status"], "harness_error")
+        self.assertIsNone(verdict["overall_score"])
+        self.assertIsNone(verdict["pass"])
         self.assertIn("every sequence dimension ID", verdict["notes"])
 
 
@@ -1651,7 +1769,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                 ledger.read_text(encoding="utf-8"),
             )
 
-    def test_invalid_judge_fields_become_a_failed_fresh_artifact(self) -> None:
+    def test_invalid_judge_fields_become_a_harness_error_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.make_repo(
@@ -1674,11 +1792,15 @@ class LedgerIntegrityTests(unittest.TestCase):
             text = ledger.read_text(encoding="utf-8")
             self.assertEqual(code, 1)
             self.assertNotIn("stale passing artifact", text)
-            self.assertIn("Release verdict: **FAIL**", text)
+            self.assertIn("Release verdict: **NOT ELIGIBLE**", text)
+            self.assertIn("**0 scored**, **1 harness error(s)**", text)
             self.assertIn("invalid judge verdict", text.lower())
-            self.assertIn("| one | 0-3 | n/a | root only | 0 | NO |", text)
+            self.assertIn(
+                "| one | harness_error | 0-3 | n/a | root only | n/a | n/a |",
+                text,
+            )
 
-    def test_malformed_provider_response_becomes_failed_fresh_artifact(self) -> None:
+    def test_malformed_provider_response_becomes_harness_error_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.make_repo(
@@ -1725,9 +1847,120 @@ class LedgerIntegrityTests(unittest.TestCase):
             text = ledger.read_text(encoding="utf-8")
             self.assertEqual(code, 1)
             self.assertNotIn("stale passing artifact", text)
-            self.assertIn("Release verdict: **FAIL**", text)
-            self.assertIn("discovery error: invalid body", text)
+            self.assertIn("Release verdict: **NOT ELIGIBLE**", text)
+            self.assertIn("discovery transport error: invalid body", text)
+            self.assertIn("| one | harness_error |", text)
+            self.assertNotIn("| one | harness_error | 0-3 | n/a | discovery failed | 0 |", text)
             judge.assert_not_called()
+
+    def test_judge_transport_failure_is_auditable_but_not_scored(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_repo(
+                root,
+                [{"id": "one", "prompt": "test", "assertions": ["works"]}],
+            )
+            ledger = root / "evals" / "eval-run-ledger.md"
+            ledger.write_text("stale passing artifact\n", encoding="utf-8")
+            output = io.StringIO()
+            real_freeze = eval_run.freeze_repository
+
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "eval_run.py",
+                        str(root),
+                        "--ledger",
+                        "evals/eval-run-ledger.md",
+                    ],
+                ),
+                mock.patch.dict(
+                    os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
+                ),
+                mock.patch.object(
+                    eval_run,
+                    "freeze_repository",
+                    side_effect=lambda root: real_freeze(
+                        root, enforce_canonical_contract=False
+                    ),
+                ),
+                mock.patch.object(
+                    eval_run,
+                    "run_case",
+                    side_effect=eval_run.CaseRunError(
+                        "judge error: timed out before a verdict", []
+                    ),
+                ),
+                redirect_stdout(output),
+            ):
+                code = eval_run.main()
+
+            text = ledger.read_text(encoding="utf-8")
+            self.assertEqual(code, 1)
+            self.assertNotIn("stale passing artifact", text)
+            self.assertIn("Release verdict: **NOT ELIGIBLE**", text)
+            self.assertIn("judge error: timed out before a verdict", text)
+            self.assertIn(
+                "| one | harness_error | 0-3 | n/a | root only | n/a | n/a |",
+                text,
+            )
+            self.assertNotIn("Legacy (0-3):", output.getvalue())
+
+    def test_snapshot_drift_invalidates_every_score_without_zeroing_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_repo(
+                root,
+                [{"id": "one", "prompt": "test", "assertions": ["works"]}],
+            )
+            ledger = root / "evals" / "eval-run-ledger.md"
+            output = io.StringIO()
+            real_freeze = eval_run.freeze_repository
+
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "eval_run.py",
+                        str(root),
+                        "--ledger",
+                        "evals/eval-run-ledger.md",
+                    ],
+                ),
+                mock.patch.dict(
+                    os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
+                ),
+                mock.patch.object(
+                    eval_run,
+                    "freeze_repository",
+                    side_effect=lambda root: real_freeze(
+                        root, enforce_canonical_contract=False
+                    ),
+                ),
+                mock.patch.object(
+                    eval_run, "run_case", return_value=(valid_verdict(), [])
+                ),
+                mock.patch.object(
+                    eval_run,
+                    "verify_snapshot_unchanged",
+                    side_effect=eval_run.HarnessError("digest drift"),
+                ),
+                redirect_stdout(output),
+            ):
+                code = eval_run.main()
+
+            text = ledger.read_text(encoding="utf-8")
+            self.assertEqual(code, 2)
+            self.assertIn("Release verdict: **NOT ELIGIBLE**", text)
+            self.assertIn("snapshot verification failure: digest drift", text)
+            self.assertIn(
+                "| one | harness_error | 0-3 | n/a | root only | n/a | n/a |",
+                text,
+            )
+            self.assertNotIn("| one | harness_error | 0-3 | n/a | root only | 0 |", text)
 
     def test_atomic_replace_failure_preserves_previous_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2101,7 +2334,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                 self.assertIn("Release verdict: **FAIL**", text)
                 self.assertIn("unpaired surrogate", text)
 
-    def test_surrogate_judge_note_becomes_a_fresh_failed_artifact(self) -> None:
+    def test_surrogate_judge_note_becomes_a_fresh_harness_error_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.make_repo(
@@ -2126,7 +2359,8 @@ class LedgerIntegrityTests(unittest.TestCase):
             text = ledger.read_text(encoding="utf-8")
             self.assertEqual(code, 1)
             self.assertNotIn("stale passing artifact", text)
-            self.assertIn("Release verdict: **FAIL**", text)
+            self.assertIn("Release verdict: **NOT ELIGIBLE**", text)
+            self.assertIn("| one | harness_error |", text)
             self.assertIn("unpaired surrogate", text)
             self.assertNotIn("Traceback", output)
 

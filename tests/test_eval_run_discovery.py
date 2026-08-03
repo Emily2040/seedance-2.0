@@ -530,6 +530,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             }
             row = {
                 "id": "one",
+                "status": "scored",
                 "score": 3,
                 "pass": True,
                 "sequence": False,
@@ -574,6 +575,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
     def test_release_assessment_cannot_omit_the_frozen_manifest(self) -> None:
         row = {
             "id": "one",
+            "status": "scored",
             "score": 3,
             "pass": True,
             "sequence": False,
@@ -631,6 +633,8 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertNotIn("STALE PASS", text)
             self.assertIn("Release verdict: **NOT ELIGIBLE**", text)
+            self.assertIn(r"| \_\_harness\_\_ | harness_error |", text)
+            self.assertIn("| n/a | n/a |", text)
             self.assertEqual(text.count("# Eval Run Ledger"), 1)
             self.assertNotIn("\n# FORGED RELEASE PASS\n", text)
             self.assertNotIn("Traceback", output.getvalue())

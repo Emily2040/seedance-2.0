@@ -2,13 +2,13 @@
 
 This file is the **evidence layer** for the eval suite. The deterministic CI
 validators (`eval_schema_check.py`, `sequence_eval_check.py`, ...) prove the
-cases are well-formed; this ledger records that the skill's *output* was actually
-scored against the rubric in [`references/eval-rubric.md`](../references/eval-rubric.md)
-by the model-in-the-loop harness `scripts/eval_run.py`.
+cases are well-formed; this ledger records either the skill's scored output or an
+explicit non-score harness failure from `scripts/eval_run.py` against the rubric
+in [`references/eval-rubric.md`](../references/eval-rubric.md).
 
 ## How to regenerate
 
-A live scored pass needs network access and a key, so it runs outside the offline
+A live evaluation needs network access and a key, so it runs outside the offline
 CI gate:
 
 ```bash
@@ -42,10 +42,23 @@ and each selected responder path plus its frozen SHA-256 digest. Discovery
 failure remains distinct from a valid root-only selection. Focused `--id` or
 `--limit` runs are not release-eligible and cannot replace this canonical ledger.
 
-Issue #29 remains a separate dependency: `failure_mode`,
-`expected_state_delta`, `expected_prompt_architecture`, and
-`expected_sequence_relation` are prompt-inert here and are not claimed as
-independently scored criteria by this discovery change.
+Every declared oracle is judge-bound without entering discovery or response
+generation. Assertions, required sections, forbidden behaviors, `expected_output`,
+`failure_mode`, `expected_state_delta`, and `expected_prompt_architecture` use
+stable opaque criterion IDs; `expected_sequence_relation` is bound into the
+routing dimension. A valid judge response must score every required ID exactly
+once.
+
+Each result row is explicitly `scored` or `harness_error`. Only `scored` rows
+enter quality floors and averages. Judge transport failures, timeouts, empty or
+oversized bodies, malformed JSON, and incomplete/invalid verdicts are recorded
+with no numeric score or pass value, excluded from quality arithmetic, and make
+release evidence `NOT ELIGIBLE`; the harness continues remaining cases, writes
+the fresh failure ledger, and exits 1. A case-contract or worst-case response
+envelope that cannot bind aborts the whole run before provider calls with exit 2
+and atomically writes a bootstrap failure ledger when `--ledger` was requested.
+Post-run snapshot drift also exits 2 and invalidates every row as a non-scored
+harness error.
 
 Release assessment binds every result to canonical per-case `sequence` and
 `critical` metadata derived from `evals/evals.json`. Case IDs or a result count
@@ -54,12 +67,12 @@ rubric scale.
 
 The offline wiring is checked in CI via `python scripts/eval_run.py --self-test`.
 
-## Latest scored run
+## Latest run
 
 _Not yet scored live in this environment (no live provider credential is available offline)._
 Run the command above to populate the table below; the harness overwrites this
-file with per-case scores and a pass/fail verdict against the rubric thresholds.
+file with per-case scored verdicts or explicit non-scored harness errors.
 
-| id | scale | dimension scores | frozen sources (path@sha256) | score | pass | notes |
-|---|---|---|---|---|---|---|
-| _pending_ | — | — | — | — | — | run `eval_run.py --ledger` to populate |
+| id | status | scale | dimension scores | frozen sources (path@sha256) | score | pass | notes |
+|---|---|---|---|---|---|---|---|
+| _pending_ | — | — | — | — | — | — | run `eval_run.py --ledger` to populate |
