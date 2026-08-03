@@ -1261,6 +1261,37 @@ class PayloadManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "hard-linked"):
                 installer.load_payload_contract(root)
 
+    def test_manifest_rejects_archive_only_paths(self) -> None:
+        for relative in (
+            "references/migrated/README.md",
+            "REFERENCES/MIGRATED/README.md",
+        ):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                root = self.minimal_repo(Path(tmp), [relative])
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "archive-only path cannot be installed",
+                ):
+                    installer.load_payload_manifest(root)
+
+    def test_payload_contract_bounds_individual_and_total_source_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.minimal_repo(Path(tmp), [])
+            files = [path for path in root.rglob("*") if path.is_file()]
+            largest = max(path.stat().st_size for path in files)
+            total = sum(path.stat().st_size for path in files)
+
+            with mock.patch.object(installer, "MAX_INSTALL_FILE_BYTES", largest - 1):
+                with self.assertRaisesRegex(ValueError, "payload file exceeds"):
+                    installer.load_payload_contract(root)
+
+            with (
+                mock.patch.object(installer, "MAX_INSTALL_FILE_BYTES", largest),
+                mock.patch.object(installer, "MAX_INSTALL_PAYLOAD_BYTES", total - 1),
+            ):
+                with self.assertRaisesRegex(ValueError, "payload exceeds"):
+                    installer.load_payload_contract(root)
+
     def test_manifest_rejects_missing_declared_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.minimal_repo(Path(tmp), ["references/missing.md"])
