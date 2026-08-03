@@ -279,11 +279,9 @@ if os.name == "nt":
     _SACL_SECURITY_INFORMATION = 0x00000008
     _LABEL_SECURITY_INFORMATION = 0x00000010
     _SDDL_REVISION_1 = 1
-    _ACL_REVISION = 2
-    _INHERITED_ACE = 0x10
-    _UNPROTECTED_DACL_SECURITY_INFORMATION = 0x20000000
-    _PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
-    _SE_FILE_OBJECT = 1
+    _SE_DACL_AUTO_INHERIT_REQ = 0x0100
+    _SE_DACL_AUTO_INHERITED = 0x0400
+    _SE_DACL_PROTECTED = 0x1000
     _WINDOWS_POLICY_SECURITY_INFORMATION = (
         _OWNER_SECURITY_INFORMATION
         | _GROUP_SECURITY_INFORMATION
@@ -378,47 +376,31 @@ if os.name == "nt":
         ctypes.POINTER(wintypes.BOOL),
     )
     _GetSecurityDescriptorDacl.restype = wintypes.BOOL
-    _InitializeAcl = _advapi32.InitializeAcl
-    _InitializeAcl.argtypes = (
+    _GetSecurityDescriptorControl = _advapi32.GetSecurityDescriptorControl
+    _GetSecurityDescriptorControl.argtypes = (
         ctypes.c_void_p,
-        wintypes.DWORD,
-        wintypes.DWORD,
+        ctypes.POINTER(wintypes.WORD),
+        ctypes.POINTER(wintypes.DWORD),
     )
-    _InitializeAcl.restype = wintypes.BOOL
-    _GetAce = _advapi32.GetAce
-    _GetAce.argtypes = (
+    _GetSecurityDescriptorControl.restype = wintypes.BOOL
+    _SetSecurityDescriptorControl = _advapi32.SetSecurityDescriptorControl
+    _SetSecurityDescriptorControl.argtypes = (
         ctypes.c_void_p,
-        wintypes.DWORD,
-        ctypes.POINTER(ctypes.c_void_p),
+        wintypes.WORD,
+        wintypes.WORD,
     )
-    _GetAce.restype = wintypes.BOOL
-    _SetSecurityInfo = _advapi32.SetSecurityInfo
-    _SetSecurityInfo.argtypes = (
+    _SetSecurityDescriptorControl.restype = wintypes.BOOL
+    _ntdll = ctypes.WinDLL("ntdll")
+    _NtSetSecurityObject = _ntdll.NtSetSecurityObject
+    _NtSetSecurityObject.argtypes = (
         wintypes.HANDLE,
-        ctypes.c_int,
         wintypes.DWORD,
         ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
     )
-    _SetSecurityInfo.restype = wintypes.DWORD
-
-    class _Acl(ctypes.Structure):
-        _fields_ = (
-            ("AclRevision", wintypes.BYTE),
-            ("Sbz1", wintypes.BYTE),
-            ("AclSize", wintypes.WORD),
-            ("AceCount", wintypes.WORD),
-            ("Sbz2", wintypes.WORD),
-        )
-
-    class _AceHeader(ctypes.Structure):
-        _fields_ = (
-            ("AceType", wintypes.BYTE),
-            ("AceFlags", wintypes.BYTE),
-            ("AceSize", wintypes.WORD),
-        )
+    _NtSetSecurityObject.restype = wintypes.LONG
+    _RtlNtStatusToDosError = _ntdll.RtlNtStatusToDosError
+    _RtlNtStatusToDosError.argtypes = (wintypes.LONG,)
+    _RtlNtStatusToDosError.restype = wintypes.ULONG
 
     class _FileRenameInfoEx(ctypes.Structure):
         _fields_ = (
@@ -780,59 +762,52 @@ def _restore_win32_dacl(
         )
 
     expected_security = _split_win32_security_policy(authorized_policy)
-    protected = "P" in expected_security[3]
-    protection = (
-        _PROTECTED_DACL_SECURITY_INFORMATION
-        if protected
-        else _UNPROTECTED_DACL_SECURITY_INFORMATION
-    )
-    # UNPROTECTED makes Windows regenerate parent inheritance. Passing already
-    # inherited ACEs would duplicate or reclassify them, so first prove this is
-    # the pure-inherited sibling policy accepted before publication, then supply
-    # a valid empty ACL and let Windows inherit exactly once. Protected DACLs do
-    # not merge parent policy and retain the captured ACL verbatim.
-    applied_dacl = dacl
-    empty_acl = _Acl()
-    if not protected:
-        captured_acl = ctypes.cast(dacl, ctypes.POINTER(_Acl)).contents
-        for index in range(captured_acl.AceCount):
-            ace = ctypes.c_void_p()
-            ctypes.set_last_error(0)
-            if not _GetAce(dacl, index, ctypes.byref(ace)) or not ace.value:
-                error = ctypes.get_last_error()
-                raise OutputPolicyError(
-                    f"cannot inspect authorized Windows DACL ACE {index} for {out}: "
-                    f"[WinError {error}] {ctypes.FormatError(error).strip()}"
-                )
-            header = ctypes.cast(ace, ctypes.POINTER(_AceHeader)).contents
-            if not header.AceFlags & _INHERITED_ACE:
-                raise OutputPolicyError(
-                    "authorized unprotected Windows DACL contains an explicit "
-                    f"ACE; replacement was refused: {out}"
-                )
+    # SetSecurityInfo recomputes filesystem inheritance and can rewrite ID,
+    # AI, and AR history. NtSetSecurityObject applies the captured self-relative
+    # descriptor through the retained WRITE_DAC handle without P/UNP propagation
+    # flags. The kernel preserves SE_DACL_AUTO_INHERITED only when the matching
+    # request bit accompanies it, so add that request to this temporary copy.
+    control = wintypes.WORD()
+    revision = wintypes.DWORD()
+    ctypes.set_last_error(0)
+    if not _GetSecurityDescriptorControl(
+        raw, ctypes.byref(control), ctypes.byref(revision)
+    ):
+        error = ctypes.get_last_error()
+        raise OutputPolicyError(
+            f"cannot inspect authorized Windows DACL control for {out}: "
+            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+        )
+    if control.value & _SE_DACL_PROTECTED:
+        raise OutputPolicyError(
+            f"authorized protected Windows DACL is outside the proven restore path: {out}"
+        )
+    if control.value & _SE_DACL_AUTO_INHERITED:
         ctypes.set_last_error(0)
-        if not _InitializeAcl(
-            ctypes.byref(empty_acl), ctypes.sizeof(empty_acl), _ACL_REVISION
+        if not _SetSecurityDescriptorControl(
+            raw,
+            _SE_DACL_AUTO_INHERIT_REQ,
+            _SE_DACL_AUTO_INHERIT_REQ,
         ):
             error = ctypes.get_last_error()
             raise OutputPolicyError(
-                f"cannot initialize an empty Windows DACL for {out}: "
+                f"cannot request exact Windows DACL inheritance for {out}: "
                 f"[WinError {error}] {ctypes.FormatError(error).strip()}"
             )
-        applied_dacl = ctypes.cast(ctypes.byref(empty_acl), ctypes.c_void_p)
-    error = _SetSecurityInfo(
-        wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
-        _SE_FILE_OBJECT,
-        _DACL_SECURITY_INFORMATION | protection,
-        None,
-        None,
-        applied_dacl,
-        None,
+    status = int(
+        _NtSetSecurityObject(
+            wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
+            _DACL_SECURITY_INFORMATION,
+            ctypes.cast(raw, ctypes.c_void_p),
+        )
     )
-    if error:
+    if status < 0:
+        error = int(_RtlNtStatusToDosError(status))
+        status_code = ctypes.c_ulong(status).value
         raise OutputPolicyError(
             f"cannot restore the authorized Windows DACL for {out}: "
-            f"[WinError {error}] {ctypes.FormatError(error).strip()}"
+            f"[NTSTATUS 0x{status_code:08x}; WinError {error}] "
+            f"{ctypes.FormatError(error).strip()}"
         )
 
     observed_security = _split_win32_security_policy(
