@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import fnmatch
 import hashlib
 import json
@@ -38,11 +39,12 @@ PRIVATE_DELETE_ENTRY = "authorized-object"
 PRIVATE_DELETE_PREFIX = ".seedance-delete-"
 PRIVATE_DELETE_MARKER = "deletion-authority.json"
 PRIVATE_DELETE_FORMAT_VERSION = 1
-COPY_TEMP_PREFIX = ".seedance-copy-"
-COPY_TEMP_SUFFIX = ".partial"
 COPY_TEMP_COMPACT_PREFIX = ".c"
 COPY_TEMP_MIN_TOKEN_CHARS = 12
-WINDOWS_COMPONENT_NAME_MAX = 255
+COPY_TEMP_MAX_TOKEN_CHARS = 32
+COPY_TEMP_MAX_BASENAME_BYTES = (
+    len(COPY_TEMP_COMPACT_PREFIX) + COPY_TEMP_MAX_TOKEN_CHARS
+)
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -194,7 +196,74 @@ def _open_regular_read_descriptor(path: Path, *, allow_delete: bool = False) -> 
         raise
 
 
-def _regular_file_metadata(path: Path) -> dict[str, object]:
+def _assert_no_unmanaged_forks(path: Path) -> None:
+    """Refuse streams/xattrs that normal transaction manifests cannot represent."""
+    if os.name != "nt":
+        if hasattr(os, "listxattr"):
+            attributes = os.listxattr(path, follow_symlinks=False)
+            if attributes:
+                raise RuntimeError(
+                    "extended attributes are not representable in an install transaction: "
+                    f"{_bounded_diagnostic(path, 200)}"
+                )
+        return
+
+    import ctypes
+    from ctypes import wintypes
+
+    class Win32FindStreamData(ctypes.Structure):
+        _fields_ = [
+            ("StreamSize", ctypes.c_longlong),
+            ("cStreamName", ctypes.c_wchar * (260 + 36)),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    find_first = kernel32.FindFirstStreamW
+    find_first.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(Win32FindStreamData),
+        wintypes.DWORD,
+    ]
+    find_first.restype = wintypes.HANDLE
+    find_next = kernel32.FindNextStreamW
+    find_next.argtypes = [wintypes.HANDLE, ctypes.POINTER(Win32FindStreamData)]
+    find_next.restype = wintypes.BOOL
+    find_close = kernel32.FindClose
+    find_close.argtypes = [wintypes.HANDLE]
+    find_close.restype = wintypes.BOOL
+
+    data = Win32FindStreamData()
+    ctypes.set_last_error(0)
+    search = find_first(str(path), 0, ctypes.byref(data), 0)
+    invalid = ctypes.c_void_p(-1).value
+    if search == invalid:
+        error = ctypes.get_last_error()
+        # No streams, or a filesystem that cannot store streams, is safe.
+        if error in {38, 87}:  # ERROR_HANDLE_EOF | ERROR_INVALID_PARAMETER
+            return
+        raise ctypes.WinError(error)
+    try:
+        while True:
+            stream_name = data.cStreamName
+            if stream_name != "::$DATA":
+                raise RuntimeError(
+                    "named data stream is not representable in an install transaction: "
+                    f"{_bounded_diagnostic(path, 200)}"
+                )
+            ctypes.set_last_error(0)
+            if not find_next(search, ctypes.byref(data)):
+                error = ctypes.get_last_error()
+                if error == 38:  # ERROR_HANDLE_EOF
+                    break
+                raise ctypes.WinError(error)
+    finally:
+        find_close(search)
+
+
+def _regular_file_metadata(
+    path: Path, *, reject_unmanaged_forks: bool = False
+) -> dict[str, object]:
     """Hash one stable, non-link regular file and detect a concurrent swap."""
     before = path.lstat()
     if _is_reparse_stat(before) or stat.S_ISLNK(before.st_mode):
@@ -210,6 +279,11 @@ def _regular_file_metadata(path: Path) -> dict[str, object]:
             raise RuntimeError(f"file changed type while opening: {_bounded_diagnostic(path)}")
         if _stat_identity(opened) != _stat_identity(before):
             raise RuntimeError(f"file changed while opening: {_bounded_diagnostic(path)}")
+        # The open Windows handle denies concurrent write/delete handles, so
+        # stream enumeration is bound to the same stable file object hashed
+        # below. Deleting an unrecorded ADS would otherwise be silent data loss.
+        if reject_unmanaged_forks:
+            _assert_no_unmanaged_forks(path)
         while True:
             chunk = os.read(descriptor, 1024 * 1024)
             if not chunk:
@@ -246,7 +320,7 @@ def _regular_file_metadata(path: Path) -> dict[str, object]:
 def _bound_regular_file_metadata(path: Path) -> dict[str, object]:
     """Capture content plus the identity of the exact current path occupant."""
 
-    metadata = _regular_file_metadata(path)
+    metadata = _regular_file_metadata(path, reject_unmanaged_forks=True)
     info = path.lstat()
     if _is_reparse_stat(info) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
         raise RuntimeError(
@@ -354,9 +428,18 @@ def _capture_path_snapshot(path: Path) -> PathSnapshot:
         )
     if not stat.S_ISDIR(root_info.st_mode):
         raise RuntimeError(f"refusing special artifact: {_bounded_diagnostic(path)}")
+    _assert_no_unmanaged_forks(path)
 
     entries: dict[str, dict[str, object]] = {}
-    for current, directory_names, file_names in os.walk(path, topdown=True, followlinks=False):
+    def fail_walk(error: OSError) -> None:
+        raise error
+
+    for current, directory_names, file_names in os.walk(
+        path,
+        topdown=True,
+        onerror=fail_walk,
+        followlinks=False,
+    ):
         current_path = Path(current)
         current_info = current_path.lstat()
         if _is_reparse_stat(current_info) or not stat.S_ISDIR(current_info.st_mode):
@@ -388,6 +471,7 @@ def _capture_path_snapshot(path: Path) -> PathSnapshot:
                 raise RuntimeError(f"refusing link or reparse artifact: {_bounded_diagnostic(child)}")
             if not stat.S_ISDIR(info.st_mode):
                 raise RuntimeError(f"directory changed type: {_bounded_diagnostic(child)}")
+            _assert_no_unmanaged_forks(child)
             relative = child.relative_to(path).as_posix()
             device, inode = _object_identity(info)
             entries[relative] = {"type": "dir", "device": device, "inode": inode}
@@ -547,6 +631,7 @@ def _bound_json_record(path: Path) -> Iterator[BoundJsonRecord]:
                 or _stat_identity(opened) != _stat_identity(before)
             ):
                 raise ValueError("record changed while it was being opened")
+            _assert_no_unmanaged_forks(path)
             raw = _capture_record_descriptor(descriptor)
             os.lseek(descriptor, 0, os.SEEK_SET)
             repeated_raw = _capture_record_descriptor(descriptor)
@@ -754,20 +839,21 @@ def _validate_payload_manifest(value: object) -> dict[str, dict[str, object]]:
     return validated
 
 
-def _directory_component_name_max(path: Path) -> int:
-    """Return the byte limit for names created in one staging filesystem.
+def _copy_temp_component_budget(path: Path) -> int:
+    """Return a conservative byte budget for one atomic-copy sibling.
 
-    Copy temporaries use ASCII-only names, so the Win32 component limit can be
-    expressed directly in bytes.  POSIX is queried through an opened directory
-    so a final-component link is never followed while choosing the recovery
-    name.
+    Copy siblings are capped at 34 ASCII bytes even if the platform advertises
+    more.  That is shorter than the provenance marker already created in the
+    stage, so Windows never depends on an assumed 255-byte backing-volume
+    limit. POSIX may reduce the budget through ``fpathconf``; this helper does
+    not claim that the installer's longer stage and authority names fit there.
     """
 
     before = path.lstat()
     if _is_reparse_stat(before) or not stat.S_ISDIR(before.st_mode):
         raise RuntimeError("copy staging root is not a non-link directory")
     if os.name == "nt":
-        return WINDOWS_COMPONENT_NAME_MAX
+        return COPY_TEMP_MAX_BASENAME_BYTES
 
     flags = (
         os.O_RDONLY
@@ -798,7 +884,7 @@ def _directory_component_name_max(path: Path) -> int:
         raise RuntimeError("copy staging root changed while determining NAME_MAX")
     if name_max <= 0:
         raise RuntimeError("copy staging filesystem reported an invalid NAME_MAX")
-    return name_max
+    return min(name_max, COPY_TEMP_MAX_BASENAME_BYTES)
 
 
 def _copy_temp_relative(
@@ -829,17 +915,16 @@ def _copy_temp_relative_for_digest(
         }
     )
     parent, separator, _ = relative.rpartition("/")
-    preferred = f"{COPY_TEMP_PREFIX}{token}{COPY_TEMP_SUFFIX}"
-    if len(os.fsencode(preferred)) <= component_name_max:
-        basename = preferred
-    else:
-        available = component_name_max - len(os.fsencode(COPY_TEMP_COMPACT_PREFIX))
-        if available < COPY_TEMP_MIN_TOKEN_CHARS:
-            raise RuntimeError(
-                "copy staging filesystem component limit is too small for a "
-                "transaction-bound temporary name"
-            )
-        basename = COPY_TEMP_COMPACT_PREFIX + token[: min(available, len(token))]
+    available = min(
+        component_name_max - len(os.fsencode(COPY_TEMP_COMPACT_PREFIX)),
+        COPY_TEMP_MAX_TOKEN_CHARS,
+    )
+    if available < COPY_TEMP_MIN_TOKEN_CHARS:
+        raise RuntimeError(
+            "copy staging filesystem component limit is too small for a "
+            "transaction-bound temporary name"
+        )
+    basename = COPY_TEMP_COMPACT_PREFIX + token[:available]
     if len(os.fsencode(basename)) > component_name_max:
         raise RuntimeError("derived copy temporary name exceeds the filesystem limit")
     return f"{parent}/{basename}" if separator else basename
@@ -927,7 +1012,7 @@ def _copy_payload_file_atomic(
     elif transaction_digest != authenticated_digest:
         raise RuntimeError("copy transaction digest does not match its persisted record")
     if component_name_max is None:
-        component_name_max = _directory_component_name_max(absolute_stage)
+        component_name_max = _copy_temp_component_budget(absolute_stage)
     temp_relative = _copy_temp_relative_for_digest(
         relative, transaction_digest, component_name_max
     )
@@ -1143,6 +1228,21 @@ def _classify_existing_install_bound(
     if _path_exists(marker):
         valid, reason = validate_completed_install(destination)
         if valid:
+            try:
+                record, _ = _completion_record(destination)
+            except (OSError, RuntimeError, ValueError) as exc:
+                return ExistingInstallClassification(
+                    "unknown",
+                    "completion marker is untrusted: "
+                    f"{_bounded_diagnostic(exc, 280)}",
+                    snapshot,
+                )
+            if record["files"] != expected_manifest:
+                return ExistingInstallClassification(
+                    "unknown",
+                    "completion marker belongs to a different source payload",
+                    snapshot,
+                )
             return ExistingInstallClassification("complete", reason, snapshot)
         try:
             record, _ = _completion_record(destination)
@@ -1239,6 +1339,21 @@ def _open_install_lock(lock_path: Path):
         raise
 
 
+def _is_lock_contention_error(exc: OSError) -> bool:
+    """Return true only for errors that mean another process owns the lock."""
+    codes = {
+        value
+        for value in (getattr(exc, "errno", None), getattr(exc, "winerror", None))
+        if type(value) is int
+    }
+    if os.name == "nt":
+        # ERROR_SHARING_VIOLATION and ERROR_LOCK_VIOLATION are the only
+        # expected LockFileEx contention results. Unsupported locking,
+        # invalid handles, and permission failures must not be retried.
+        return bool(codes & {32, 33})
+    return bool(codes & {errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK})
+
+
 @contextmanager
 def exclusive_install_lock(skills_dir: Path) -> Iterator[None]:
     """Serialize cooperating installers and release automatically on process death."""
@@ -1254,7 +1369,9 @@ def exclusive_install_lock(skills_dir: Path) -> Iterator[None]:
                 candidate.__enter__()
                 lock_context = candidate
                 acquired = True
-            except (BlockingIOError, OSError) as exc:
+            except OSError as exc:
+                if not _is_lock_contention_error(exc):
+                    raise
                 if time.monotonic() >= deadline:
                     raise TimeoutError(
                         f"timed out waiting for installer lock {lock_path}"
@@ -1661,7 +1778,7 @@ def _inspect_owned_stage(
     expected_manifest = transaction["payload_manifest"]
     assert isinstance(expected_manifest, dict)
     expected_directories = set(transaction["payload_directories"])
-    component_name_max = _directory_component_name_max(path)
+    component_name_max = _copy_temp_component_budget(path)
     expected_copy_temps = _expected_copy_temps(
         transaction, transaction_raw, component_name_max
     )
@@ -2286,6 +2403,53 @@ def _delete_opened_posix_path(
             os.close(parent_descriptor)
 
 
+def _set_windows_delete_disposition(handle: int) -> None:
+    """Mark an opened Windows object for deletion, including read-only data."""
+    import ctypes
+    from ctypes import wintypes
+
+    class FileDispositionInfoEx(ctypes.Structure):
+        _fields_ = [("Flags", wintypes.DWORD)]
+
+    class FileDispositionInfo(ctypes.Structure):
+        _fields_ = [("DeleteFile", wintypes.BOOL)]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    set_information = kernel32.SetFileInformationByHandle
+    set_information.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+    ]
+    set_information.restype = wintypes.BOOL
+    disposition_ex = FileDispositionInfoEx(
+        0x00000001 | 0x00000010  # DELETE | IGNORE_READONLY_ATTRIBUTE
+    )
+    if set_information(
+        wintypes.HANDLE(handle),
+        21,  # FileDispositionInfoEx
+        ctypes.byref(disposition_ex),
+        ctypes.sizeof(disposition_ex),
+    ):
+        return
+    error = ctypes.get_last_error()
+    if error not in {50, 87}:  # ERROR_NOT_SUPPORTED | ERROR_INVALID_PARAMETER
+        raise ctypes.WinError(error)
+
+    # Compatibility for older filesystems/Windows versions. This path still
+    # fails closed for a read-only object rather than clearing attributes by
+    # a pathname that could have been swapped.
+    disposition = FileDispositionInfo(True)
+    if not set_information(
+        wintypes.HANDLE(handle),
+        4,  # FileDispositionInfo
+        ctypes.byref(disposition),
+        ctypes.sizeof(disposition),
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
 def _delete_regular_file_by_handle(
     path: Path,
     expected: Mapping[str, object],
@@ -2345,26 +2509,8 @@ def _delete_regular_file_by_handle(
                     f"quarantined file pathname changed before handle deletion: "
                     f"{_bounded_diagnostic(path.name, 180)}"
                 )
-
-            class FileDispositionInfo(ctypes.Structure):
-                _fields_ = [("DeleteFile", wintypes.BOOL)]
-
-            set_information = kernel32.SetFileInformationByHandle
-            set_information.argtypes = [
-                wintypes.HANDLE,
-                wintypes.DWORD,
-                wintypes.LPVOID,
-                wintypes.DWORD,
-            ]
-            set_information.restype = wintypes.BOOL
-            disposition = FileDispositionInfo(True)
-            if not set_information(
-                wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
-                4,  # FileDispositionInfo
-                ctypes.byref(disposition),
-                ctypes.sizeof(disposition),
-            ):
-                raise ctypes.WinError(ctypes.get_last_error())
+            _assert_no_unmanaged_forks(path)
+            _set_windows_delete_disposition(msvcrt.get_osfhandle(descriptor))
         finally:
             os.close(descriptor)
         return
@@ -2482,26 +2628,8 @@ def _delete_empty_directory_by_handle(
                 or (current.st_ino and current.st_ino != file_index)
             ):
                 raise RuntimeError("quarantined directory changed while it was opened")
-
-            class FileDispositionInfo(ctypes.Structure):
-                _fields_ = [("DeleteFile", wintypes.BOOL)]
-
-            set_information = kernel32.SetFileInformationByHandle
-            set_information.argtypes = [
-                wintypes.HANDLE,
-                wintypes.DWORD,
-                wintypes.LPVOID,
-                wintypes.DWORD,
-            ]
-            set_information.restype = wintypes.BOOL
-            disposition = FileDispositionInfo(True)
-            if not set_information(
-                handle,
-                4,  # FileDispositionInfo
-                ctypes.byref(disposition),
-                ctypes.sizeof(disposition),
-            ):
-                raise ctypes.WinError(ctypes.get_last_error())
+            _assert_no_unmanaged_forks(path)
+            _set_windows_delete_disposition(int(handle))
         finally:
             close_handle(handle)
         return
@@ -2837,30 +2965,12 @@ def _delete_bound_json_record(
         current = binding.path.lstat()
         if _stat_identity(current) != _stat_identity(binding.opened):
             raise RuntimeError("bound authority record changed before cleanup")
-        import ctypes
         import msvcrt
-        from ctypes import wintypes
 
-        class FileDispositionInfo(ctypes.Structure):
-            _fields_ = [("DeleteFile", wintypes.BOOL)]
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        set_information = kernel32.SetFileInformationByHandle
-        set_information.argtypes = [
-            wintypes.HANDLE,
-            wintypes.DWORD,
-            wintypes.LPVOID,
-            wintypes.DWORD,
-        ]
-        set_information.restype = wintypes.BOOL
-        disposition = FileDispositionInfo(True)
-        if not set_information(
-            wintypes.HANDLE(msvcrt.get_osfhandle(binding.descriptor)),
-            4,
-            ctypes.byref(disposition),
-            ctypes.sizeof(disposition),
-        ):
-            raise ctypes.WinError(ctypes.get_last_error())
+        _assert_no_unmanaged_forks(binding.path)
+        _set_windows_delete_disposition(
+            msvcrt.get_osfhandle(binding.descriptor)
+        )
         binding.permit_path_removal()
         return
 
@@ -3480,10 +3590,10 @@ def stage_validated_install(
             _provenance_record(transaction, transaction_raw),
         )
         transaction_digest = hashlib.sha256(transaction_raw).hexdigest()
-        component_name_max = _directory_component_name_max(stage)
-        # Derive the complete namespace before copying.  Truncation on a small
-        # NAME_MAX filesystem is safe only if every sibling remains unique and
-        # disjoint from authenticated payload/marker paths.
+        component_name_max = _copy_temp_component_budget(stage)
+        # Derive the complete copy-sibling namespace before copying. Any
+        # shortened digest must remain unique and disjoint from authenticated
+        # payload and marker paths.
         _expected_copy_temps(transaction, transaction_raw, component_name_max)
 
         def atomic_copy(source: str, destination: str) -> str:

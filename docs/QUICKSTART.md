@@ -43,9 +43,12 @@ transaction-derived in-progress copy sibling; exact torn prefixes of expected
 stage markers; and externally journaled deletion workspaces can be recovered.
 Payload bytes are synced and digest-checked under that sibling name before an
 atomic rename, so an expected final stage pathname is absent or complete, never
-partially written. Its basename is bounded for the staging filesystem, including
-POSIX `NAME_MAX=14`; a shortened transaction/path digest is accepted only when
-it is unique within the authenticated payload namespace. The exact empty
+partially written. The copy-sibling basename is capped at 34 ASCII bytes and
+shortens further on POSIX when the stage reports a smaller component limit; a
+shortened transaction/path digest is accepted only when it is unique within the
+authenticated payload namespace. This is a bound on copy siblings, not a claim
+that the installer's longer stage and authority names fit unusually small
+component limits. The exact empty
 terminal workspace left after journal removal is also recoverable. A truncated
 expected final file, an unbound temp-like file, malformed or swapped records,
 unexpected bytes, an unmarked

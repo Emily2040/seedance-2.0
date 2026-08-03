@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import io
 import json
@@ -208,6 +209,35 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             check=False,
         )
 
+    def communicate_process_group(
+        self, processes: list[subprocess.Popen[str]]
+    ) -> list[tuple[str, str]]:
+        """Collect every worker by one deadline and never leak timed-out children."""
+        deadline = time.monotonic() + installer.LOCK_TIMEOUT_SECONDS + 30
+        results: list[tuple[str, str]] = []
+        try:
+            for process in processes:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(process.args, 0)
+                results.append(process.communicate(timeout=remaining))
+            return results
+        finally:
+            running = [process for process in processes if process.poll() is None]
+            for process in running:
+                process.terminate()
+            for process in running:
+                try:
+                    process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                # Close every pipe even for workers that were not reached by
+                # the main collection loop. communicate() is safe to repeat.
+                process.communicate()
+
     def test_no_force_repairs_a_partial_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
@@ -313,6 +343,35 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertIn("Run again with --force to replace it.", later.stdout)
             self.assert_completed(skills_dir / SKILL_NAME)
 
+    def test_late_different_payload_winner_is_not_accepted_as_our_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            destination = skills_dir / SKILL_NAME
+
+            @contextlib.contextmanager
+            def publish_different_payload(_skills_dir: Path):
+                destination.mkdir()
+                alternate = destination / "SKILL.md"
+                alternate.write_text("different source revision\n", encoding="utf-8")
+                installer.write_completion_marker(
+                    destination, installer.payload_manifest(destination)
+                )
+                yield
+
+            with mock.patch.object(
+                installer, "exclusive_install_lock", publish_different_payload
+            ):
+                result, output = self.call_main(skills_dir)
+
+            self.assertEqual(result, 1, output)
+            self.assertIn("different source payload", output)
+            self.assertNotIn("another installer finished", output)
+            self.assertEqual(
+                (destination / "SKILL.md").read_text(encoding="utf-8"),
+                "different source revision\n",
+            )
+            self.assert_completed(destination)
+
     def test_complete_unmarked_legacy_install_with_extra_files_is_not_replaced(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
@@ -378,7 +437,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 )
                 for _ in range(workers)
             ]
-            results = [process.communicate(timeout=120) for process in processes]
+            results = self.communicate_process_group(processes)
 
             failures = [
                 (process.returncode, stdout, stderr)
@@ -571,6 +630,158 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(lock.read_bytes(), original)
+
+    def test_unsupported_lock_error_fails_immediately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+
+            @contextlib.contextmanager
+            def unsupported_lock(_descriptor: int):
+                raise OSError(errno.ENOTSUP, "locking is unsupported")
+                yield
+
+            with mock.patch.object(
+                installer, "_locked_record_descriptor", unsupported_lock
+            ), mock.patch.object(installer.time, "sleep") as sleep:
+                with self.assertRaisesRegex(OSError, "locking is unsupported"):
+                    with installer.exclusive_install_lock(skills_dir):
+                        self.fail("unsupported locking must not enter the critical section")
+
+            sleep.assert_not_called()
+
+    def test_snapshot_walk_error_is_not_treated_as_an_incomplete_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            destination = skills_dir / SKILL_NAME
+            destination.mkdir(parents=True)
+            shutil.copy2(ROOT / "SKILL.md", destination / "SKILL.md")
+            original_walk = installer.os.walk
+
+            def denied_walk(top, *args, onerror=None, **kwargs):
+                if Path(top) == destination:
+                    assert onerror is not None
+                    onerror(PermissionError(errno.EACCES, "subtree is unreadable"))
+                    return iter(())
+                return original_walk(top, *args, onerror=onerror, **kwargs)
+
+            with mock.patch.object(installer.os, "walk", denied_walk):
+                result, output = self.call_main(skills_dir)
+
+            self.assertEqual(result, 1, output)
+            self.assertIn("cannot be inspected safely", output)
+            self.assertTrue((destination / "SKILL.md").is_file())
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    @unittest.skipUnless(os.name == "nt", "NTFS named stream policy")
+    def test_no_force_refuses_payload_bytes_with_named_streams(self) -> None:
+        for target_kind in ("file", "root"):
+            with self.subTest(target_kind=target_kind), tempfile.TemporaryDirectory() as tmp:
+                skills_dir = Path(tmp) / "skills"
+                destination = skills_dir / SKILL_NAME
+                destination.mkdir(parents=True)
+                shutil.copy2(ROOT / "SKILL.md", destination / "SKILL.md")
+                base = destination / "SKILL.md" if target_kind == "file" else destination
+                stream = Path(f"{base}:usernote")
+                stream.write_text("MUST SURVIVE\n", encoding="utf-8")
+
+                result = self.run_installer(skills_dir)
+
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("not representable", result.stdout + result.stderr)
+                self.assertEqual(stream.read_text(encoding="utf-8"), "MUST SURVIVE\n")
+                self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    @unittest.skipUnless(os.name == "nt", "NTFS named stream policy")
+    def test_stream_added_after_classification_invalidates_no_force_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            destination = skills_dir / SKILL_NAME
+            destination.mkdir(parents=True)
+            skill_file = destination / "SKILL.md"
+            shutil.copy2(ROOT / "SKILL.md", skill_file)
+            stream = Path(f"{skill_file}:late-note")
+            original_classify = installer._classify_existing_install_bound
+
+            def classify_then_add_stream(path: Path, manifest):
+                classification = original_classify(path, manifest)
+                self.assertEqual(classification.state, "incomplete")
+                stream.write_text("MUST SURVIVE\n", encoding="utf-8")
+                return classification
+
+            with mock.patch.object(
+                installer,
+                "_classify_existing_install_bound",
+                classify_then_add_stream,
+            ):
+                result, output = self.call_main(skills_dir)
+
+            self.assertEqual(result, 1, output)
+            self.assertIn("not representable", output)
+            self.assertEqual(stream.read_text(encoding="utf-8"), "MUST SURVIVE\n")
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    @unittest.skipUnless(os.name == "nt", "Windows read-only deletion")
+    def test_force_replacement_recovers_read_only_live_file_and_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            initial = self.run_installer(skills_dir)
+            self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+            destination = skills_dir / SKILL_NAME
+            (destination / "SKILL.md").chmod(stat.S_IREAD)
+            (destination / "references").chmod(stat.S_IREAD)
+            destination.chmod(stat.S_IREAD)
+            try:
+                replacement = self.run_installer(skills_dir, "--force")
+                self.assertEqual(
+                    replacement.returncode,
+                    0,
+                    replacement.stdout + replacement.stderr,
+                )
+                self.assert_completed(destination)
+                self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+                self.assertEqual(
+                    list(skills_dir.glob(f"{installer.QUARANTINE_PREFIX}*")), []
+                )
+            finally:
+                # Keep TemporaryDirectory cleanup reliable if an assertion
+                # exposes a regression and leaves a read-only quarantine.
+                for candidate in sorted(
+                    skills_dir.rglob("*"), key=lambda item: len(item.parts), reverse=True
+                ):
+                    try:
+                        candidate.chmod(stat.S_IWRITE | stat.S_IREAD)
+                    except OSError:
+                        pass
+                try:
+                    destination.chmod(stat.S_IWRITE | stat.S_IREAD)
+                except OSError:
+                    pass
+
+    @unittest.skipUnless(
+        os.name != "nt" and hasattr(os, "setxattr"),
+        "POSIX extended-attribute policy",
+    )
+    def test_no_force_refuses_payload_bytes_with_extended_attributes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            destination = skills_dir / SKILL_NAME
+            destination.mkdir(parents=True)
+            skill_file = destination / "SKILL.md"
+            shutil.copy2(ROOT / "SKILL.md", skill_file)
+            try:
+                os.setxattr(skill_file, "user.seedance-test", b"MUST SURVIVE")
+            except OSError as exc:
+                self.skipTest(f"temporary filesystem does not support xattrs: {exc}")
+
+            result = self.run_installer(skills_dir)
+
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("not representable", result.stdout + result.stderr)
+            self.assertEqual(
+                os.getxattr(skill_file, "user.seedance-test"), b"MUST SURVIVE"
+            )
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
 
     def test_untrusted_reserved_quarantine_is_preserved_even_with_force(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1117,9 +1328,9 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             original_metadata = installer._regular_file_metadata
             target_checks = 0
 
-            def swap_after_last_validation(path: Path):
+            def swap_after_last_validation(path: Path, **kwargs):
                 nonlocal target_checks
-                metadata = original_metadata(path)
+                metadata = original_metadata(path, **kwargs)
                 if path == target:
                     target_checks += 1
                     if target_checks == 2:
@@ -1598,7 +1809,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 )
                 for _ in range(workers)
             ]
-            results = [process.communicate(timeout=120) for process in processes]
+            results = self.communicate_process_group(processes)
 
             self.assertEqual(sum(process.returncode == 0 for process in processes), workers)
             for process, (stdout, stderr) in zip(processes, results):
@@ -1743,7 +1954,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                     root, transaction_digit="abcdef0123456789"[index]
                 )
                 relative = source.relative_to(repo_root).as_posix()
-                component_name_max = installer._directory_component_name_max(stage)
+                component_name_max = installer._copy_temp_component_budget(stage)
                 temp_relative = installer._copy_temp_relative(
                     relative, transaction_raw, component_name_max
                 )
@@ -1813,7 +2024,96 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 self.assertFalse(stage.exists())
                 self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
 
-    def test_low_name_max_copy_temp_is_bounded_and_recoverable(self) -> None:
+    def test_copy_temp_stays_compact_across_windows_style_limit_hints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (
+                repo_root,
+                _skills_dir,
+                _stage,
+                _transaction,
+                transaction_raw,
+                source,
+                _destination,
+            ) = self.make_atomic_copy_fixture(Path(tmp), transaction_digit="6")
+            relative = source.relative_to(repo_root).as_posix()
+            with mock.patch.object(installer.os, "name", "nt"):
+                self.assertEqual(
+                    installer._copy_temp_component_budget(_stage),
+                    installer.COPY_TEMP_MAX_BASENAME_BYTES,
+                )
+            names = {
+                limit: installer._copy_temp_relative(
+                    relative, transaction_raw, limit
+                )
+                for limit in (36, 64, 86, 255)
+            }
+
+            self.assertEqual(len(set(names.values())), 1)
+            basename = names[255].rsplit("/", 1)[-1]
+            self.assertEqual(
+                len(os.fsencode(basename)),
+                installer.COPY_TEMP_MAX_BASENAME_BYTES,
+            )
+            self.assertLessEqual(
+                len(os.fsencode(basename)),
+                len(os.fsencode(installer.PROVENANCE_MARKER)),
+            )
+
+    def test_atomic_copy_does_not_trust_a_255_byte_windows_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (
+                repo_root,
+                _skills_dir,
+                stage,
+                transaction,
+                transaction_raw,
+                source,
+                destination,
+            ) = self.make_atomic_copy_fixture(Path(tmp), transaction_digit="7")
+            simulated_backing_limit = len(
+                os.fsencode(installer.PROVENANCE_MARKER)
+            )
+            original_open = installer.os.open
+            opened_siblings: list[str] = []
+
+            def enforce_backing_limit(path, flags, mode=0o777, *, dir_fd=None):
+                candidate = Path(path)
+                if candidate.parent == destination.parent:
+                    opened_siblings.append(candidate.name)
+                    if len(os.fsencode(candidate.name)) > simulated_backing_limit:
+                        raise OSError(
+                            "simulated Windows backing volume rejected component"
+                        )
+                if dir_fd is None:
+                    return original_open(path, flags, mode)
+                return original_open(path, flags, mode, dir_fd=dir_fd)
+
+            with mock.patch.object(installer.os, "open", enforce_backing_limit):
+                installer._copy_payload_file_atomic(
+                    source,
+                    destination,
+                    repo_root=repo_root,
+                    stage=stage,
+                    transaction=transaction,
+                    transaction_raw=transaction_raw,
+                    component_name_max=255,
+                )
+
+            self.assertEqual(destination.read_bytes(), source.read_bytes())
+            self.assertTrue(
+                any(
+                    name.startswith(installer.COPY_TEMP_COMPACT_PREFIX)
+                    for name in opened_siblings
+                )
+            )
+            self.assertTrue(
+                all(
+                    len(os.fsencode(name)) <= simulated_backing_limit
+                    for name in opened_siblings
+                )
+            )
+
+    def test_fourteen_byte_copy_temp_derivation_is_bounded_and_recoverable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (
@@ -1840,7 +2140,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
             with (
                 mock.patch.object(
-                    installer, "_directory_component_name_max", return_value=14
+                    installer, "_copy_temp_component_budget", return_value=14
                 ),
                 mock.patch.object(
                     installer, "_write_payload_chunk", fail_after_partial_write
@@ -1859,7 +2159,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertFalse(destination.exists())
             self.assertEqual(temp_path.stat().st_size, 19)
             with mock.patch.object(
-                installer, "_directory_component_name_max", return_value=14
+                installer, "_copy_temp_component_budget", return_value=14
             ):
                 snapshot = installer._inspect_owned_stage(
                     stage, transaction, transaction_raw, require_complete=False
@@ -1934,7 +2234,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
             with (
                 mock.patch.object(
-                    installer, "_directory_component_name_max", return_value=14
+                    installer, "_copy_temp_component_budget", return_value=14
                 ),
                 self.assertRaisesRegex(RuntimeError, "more than one"),
             ):
@@ -1992,8 +2292,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 del repo_root, transaction, transaction_raw, source
                 if artifact_kind == "unbound-temp":
                     artifact = stage / (
-                        f"{installer.COPY_TEMP_PREFIX}not-transaction-bound"
-                        f"{installer.COPY_TEMP_SUFFIX}"
+                        f"{installer.COPY_TEMP_COMPACT_PREFIX}not-transaction-bound"
                     )
                     artifact.write_bytes(b"user bytes")
                 else:
@@ -2090,7 +2389,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             expected_temps = installer._expected_copy_temps(
                 transaction,
                 transaction_raw,
-                installer._directory_component_name_max(stage),
+                installer._copy_temp_component_budget(stage),
             )
             snapshot = installer._inspect_owned_stage(
                 stage, transaction, transaction_raw, require_complete=False

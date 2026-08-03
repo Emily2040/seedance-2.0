@@ -356,10 +356,14 @@ directory durability for those record publications. Each payload file is first
 written under a transaction-derived sibling name, bounded by the recorded size,
 synced, checked against the recorded digest, and only then atomically published
 at its final stage pathname. A crash therefore leaves that final pathname either
-absent or complete, never truncated. The sibling basename is bounded by the
-staging filesystem's component limit (including POSIX `NAME_MAX=14`); shortened
-names retain a transaction-and-path digest, and any namespace collision makes
-staging fail closed before payload copying begins. Recoverable states include an
+absent or complete, never truncated. The copy-sibling basename is capped at 34
+ASCII bytes, shorter than the provenance marker already created before copying;
+on POSIX it shortens further if the stage reports a smaller component limit.
+Shortened names retain a transaction-and-path digest, and any namespace
+collision makes staging fail closed before payload copying begins. This bound
+applies only to copy siblings: the installer still requires the filesystem to
+represent its longer stage and authority names, so it makes no end-to-end claim
+for unusually small component limits. Recoverable states include an
 exact empty stage before provenance publication; after complete provenance
 publication, source-identical final payload files plus the one exact transaction-
 bound in-progress sibling; an exact torn prefix of the installer's expected
