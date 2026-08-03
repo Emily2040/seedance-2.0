@@ -15,7 +15,7 @@ import uuid
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Callable, Iterator, Mapping
+from typing import Callable, Iterator, Mapping, TextIO
 
 
 SKILL_NAME = "seedance-20"
@@ -63,6 +63,10 @@ README_GALLERY_START = "<!-- installed-readme-gallery:start -->"
 README_GALLERY_END = "<!-- installed-readme-gallery:end -->"
 README_VALIDATION_START = "<!-- installed-readme-validation:start -->"
 README_VALIDATION_END = "<!-- installed-readme-validation:end -->"
+WINDOWS_PORTABLE_DIRECTORY_LIMIT = 247
+WINDOWS_PORTABLE_FILE_LIMIT = 259
+WINDOWS_PORTABLE_COMPONENT_LIMIT = 255
+WINDOWS_MAX_PID_DIGITS = 10
 
 # Kept out of the installed payload because they are development-only and
 # network-capable. eval_run.py contacts a model provider and reads
@@ -135,6 +139,38 @@ def _bounded_diagnostic(value: object, limit: int = MAX_DIAGNOSTIC_CHARS) -> str
         return rendered
     omitted = len(rendered) - limit
     return f"{rendered[:limit]}... <{omitted} chars omitted>"
+
+
+def _text_for_stream(text: str, stream: TextIO) -> str:
+    """Preserve Unicode when possible and escape only unsupported characters."""
+    encoding = getattr(stream, "encoding", None)
+    if not isinstance(encoding, str) or not encoding:
+        return text
+    try:
+        text.encode(encoding, errors="strict")
+        return text
+    except UnicodeEncodeError:
+        return text.encode(encoding, errors="backslashreplace").decode(encoding)
+    except LookupError:
+        return text.encode("ascii", errors="backslashreplace").decode("ascii")
+
+
+def safe_print(message: object, *, stream: TextIO | None = None) -> None:
+    """Write one line without letting a narrow console encoding abort the CLI."""
+    output = sys.stdout if stream is None else stream
+    if output is None:
+        return
+    text = f"{message}\n"
+    prepared = _text_for_stream(text, output)
+    try:
+        written = output.write(prepared)
+    except UnicodeEncodeError:
+        prepared = text.encode("ascii", errors="backslashreplace").decode("ascii")
+        written = output.write(prepared)
+    if written is not None and written != len(prepared):
+        raise OSError(
+            f"short console write: expected {len(prepared)} characters, wrote {written}"
+        )
 
 
 def _is_reparse_stat(info: os.stat_result) -> bool:
@@ -983,6 +1019,169 @@ def payload_allowlist_filter(repo_root: Path, declared: tuple[str, ...]):
         return ignored
 
     return ignore_undeclared
+
+
+def windows_utf16_units(value: Path | str) -> int:
+    """Count Windows path units, where non-BMP characters consume two units."""
+    return len(str(value).encode("utf-16-le", errors="surrogatepass")) // 2
+
+
+def planned_windows_install_paths(
+    skills_dir: Path,
+    contract: PayloadContract,
+    existing_install: PathSnapshot | None = None,
+) -> Iterator[tuple[str, Path, bool]]:
+    """Yield every predictable live and transactional path the installer may use."""
+    if not isinstance(contract, PayloadContract):
+        raise TypeError("Windows path planning requires a frozen payload contract")
+    if existing_install is not None and not isinstance(existing_install, PathSnapshot):
+        raise TypeError("Windows path planning requires a bound existing-install snapshot")
+    root = _absolute_lexical(skills_dir)
+    transaction_id = "f" * 32
+    roots = (
+        ("live install", root / SKILL_NAME),
+        (
+            "transaction stage",
+            root / f"{STAGE_PREFIX}{'9' * WINDOWS_MAX_PID_DIGITS}-{transaction_id}",
+        ),
+        ("transaction quarantine", root / f"{QUARANTINE_PREFIX}{transaction_id}"),
+        ("transaction backup", root / BACKUP_NAME),
+    )
+    yield ("skills directory", root, True)
+    for label, filename in (
+        ("install lock", LOCK_NAME),
+        ("transaction record", TRANSACTION_NAME),
+        ("completed transaction record", f"{TRANSACTION_DONE_PREFIX}{transaction_id}"),
+    ):
+        yield (label, root / filename, False)
+
+    payload_directories = sorted(_implied_payload_directories(contract.declared))
+    internal_files = (COMPLETION_MARKER, PROVENANCE_MARKER)
+    existing_directories = (
+        sorted(
+            relative
+            for relative, metadata in existing_install.entries.items()
+            if relative and metadata.get("type") == "dir"
+        )
+        if existing_install is not None
+        else []
+    )
+    existing_files = (
+        sorted(
+            relative
+            for relative, metadata in existing_install.entries.items()
+            if relative and metadata.get("type") == "file"
+        )
+        if existing_install is not None
+        else []
+    )
+    for root_label, install_root in roots:
+        yield (f"{root_label} root", install_root, True)
+        for relative in payload_directories:
+            path = install_root.joinpath(*PurePosixPath(relative).parts)
+            yield (f"{root_label} payload directory: {relative}", path, True)
+        for relative in contract.declared:
+            path = install_root.joinpath(*PurePosixPath(relative).parts)
+            yield (f"{root_label} payload file: {relative}", path, False)
+        for relative in internal_files:
+            yield (f"{root_label} metadata file: {relative}", install_root / relative, False)
+        if root_label == "transaction quarantine":
+            yield (
+                f"{root_label} metadata file: {QUARANTINE_MARKER}",
+                install_root / QUARANTINE_MARKER,
+                False,
+            )
+        if root_label in {"transaction quarantine", "transaction backup"}:
+            for relative in existing_directories:
+                path = install_root.joinpath(*PurePosixPath(relative).parts)
+                yield (f"{root_label} existing install directory: {relative}", path, True)
+            for relative in existing_files:
+                path = install_root.joinpath(*PurePosixPath(relative).parts)
+                yield (f"{root_label} existing install file: {relative}", path, False)
+
+
+def _overlong_component(path: Path) -> tuple[str, int] | None:
+    anchor = path.anchor
+    for component in path.parts:
+        if component == anchor:
+            continue
+        units = windows_utf16_units(component)
+        if units > WINDOWS_PORTABLE_COMPONENT_LIMIT:
+            return component, units
+    return None
+
+
+def assert_windows_portable_install_path(
+    skills_dir: Path,
+    contract: PayloadContract,
+    existing_install: PathSnapshot | None = None,
+    *,
+    before_installer_writes: bool = True,
+) -> None:
+    """Refuse a plan that requires legacy-incompatible Windows paths."""
+    refusal_state = (
+        "No installer files were written."
+        if before_installer_writes
+        else "The live install was not changed."
+    )
+    worst: tuple[int, int, int, str, Path, str] | None = None
+    for label, path, is_directory in planned_windows_install_paths(
+        skills_dir,
+        contract,
+        existing_install,
+    ):
+        component = _overlong_component(path)
+        if component is not None:
+            name, units = component
+            raise ValueError(
+                "Windows portable component limit would be exceeded.\n"
+                f"Component uses {units} UTF-16 code units; safe limit is "
+                f"{WINDOWS_PORTABLE_COMPONENT_LIMIT}.\n"
+                "Choose a shorter --dest with components of 255 units or fewer. "
+                f"{refusal_state}\n"
+                f"Installer artifact: {label}\n"
+                f"Component: {_bounded_diagnostic(name, 180)}"
+            )
+        limit = (
+            WINDOWS_PORTABLE_DIRECTORY_LIMIT
+            if is_directory
+            else WINDOWS_PORTABLE_FILE_LIMIT
+        )
+        units = windows_utf16_units(path)
+        if units <= limit:
+            continue
+        kind = "directory" if is_directory else "file"
+        violation = (units - limit, units, limit, label, path, kind)
+        if worst is None or violation[:4] > worst[:4]:
+            worst = violation
+    if worst is None:
+        return
+    _excess, units, limit, label, path, kind = worst
+    raise ValueError(
+        "Windows portable path limit would be exceeded.\n"
+        f"Predicted {kind} path uses {units} UTF-16 code units; safe limit is {limit}.\n"
+        "Choose a shorter --dest (for example C:\\Codex\\skills), or set "
+        f"CODEX_HOME closer to the drive root. {refusal_state}\n"
+        f"Installer artifact: {label}\n"
+        f"Predicted path: {path}"
+    )
+
+
+def assert_platform_portable_install_path(
+    skills_dir: Path,
+    contract: PayloadContract,
+    existing_install: PathSnapshot | None = None,
+    *,
+    before_installer_writes: bool = True,
+) -> None:
+    """Apply Windows path policy to the exact contract and live tree in use."""
+    if os.name == "nt":
+        assert_windows_portable_install_path(
+            skills_dir,
+            contract,
+            existing_install,
+            before_installer_writes=before_installer_writes,
+        )
 
 
 def _capture_path_snapshot(path: Path) -> PathSnapshot:
@@ -4816,7 +5015,9 @@ def _recover_interrupted_transaction_bound(
                 str(transaction["transaction_id"]),
                 transaction_binding,
             )
-            print(f"Recovered the previous {SKILL_NAME} install after an interrupted update.")
+            safe_print(
+                f"Recovered the previous {SKILL_NAME} install after an interrupted update."
+            )
             return
         if live_is_new and stage_snapshot is None:
             _quarantine_and_delete(
@@ -5318,11 +5519,23 @@ def main() -> int:
     # Reported as a message rather than a traceback: this is the first command a
     # new user runs, and a stack trace reads as "the tool is broken".
     try:
-        preflight_contract = load_payload_contract(repo_root)
+        preflight_contract = _load_payload_contract_once(repo_root)
         build_install_payload_plan(repo_root, preflight_contract)
+        try:
+            assert_platform_portable_install_path(skills_dir, preflight_contract)
+        except ValueError:
+            # A pre-existing transaction record is only a reason to defer the
+            # portability refusal; its pathname grants no authority.  Reading
+            # or recovering it here would race another installer, so validate
+            # it only after taking the shared install lock below.  Malformed,
+            # incompatible, or attacker-created records then fail closed in
+            # recover_interrupted_transaction without stranding a trusted
+            # backup behind a newly introduced path-policy check.
+            if not _path_exists(_transaction_path(skills_dir)):
+                raise
         assert_safe_preflight(destination, skills_dir, repo_root)
     except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as exc:
-        print(f"Refusing to install: {_bounded_diagnostic(exc)}")
+        safe_print(f"Refusing to install: {_bounded_diagnostic(exc)}")
         return 1
 
     try:
@@ -5345,31 +5558,45 @@ def main() -> int:
             state, reason = classification.state, classification.reason
             if state == "complete" and not args.force:
                 if not destination_existed_at_start:
-                    print(
+                    safe_print(
                         f"{SKILL_NAME} is complete at {_bounded_diagnostic(destination, 240)}; "
                         "another installer finished or recovered it while this process waited."
                     )
                     return 0
-                print(
+                safe_print(
                     f"{SKILL_NAME} is already installed at "
                     f"{_bounded_diagnostic(destination, 240)}"
                 )
-                print("Run again with --force to replace it.")
+                safe_print("Run again with --force to replace it.")
                 return 1
             if state == "unknown" and not args.force:
-                print(
+                safe_print(
                     f"Refusing to replace the existing path at "
                     f"{_bounded_diagnostic(destination, 220)}: "
                     f"{_bounded_diagnostic(reason, 240)}"
                 )
-                print("Run again with --force only if replacing that path is intentional.")
+                safe_print(
+                    "Run again with --force only if replacing that path is intentional."
+                )
                 return 1
             if state == "incomplete" and not args.force:
-                print(
+                safe_print(
                     f"Detected an incomplete {SKILL_NAME} install at "
                     f"{_bounded_diagnostic(destination, 240)}; repairing it."
                 )
 
+            existing_install = (
+                _capture_path_snapshot(destination) if _path_exists(destination) else None
+            )
+            # The source may have changed while this process waited for the
+            # lock, and a managed install may contain undeclared caches or user
+            # notes that will move beneath the longer backup/quarantine roots.
+            assert_platform_portable_install_path(
+                skills_dir,
+                contract,
+                existing_install,
+                before_installer_writes=False,
+            )
             stage = stage_validated_install(
                 repo_root,
                 skills_dir,
@@ -5385,15 +5612,18 @@ def main() -> int:
                 installed_contract,
             )
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as exc:
-        print(f"Installation failed: {_bounded_diagnostic(exc)}", file=sys.stderr)
+        safe_print(
+            f"Installation failed: {_bounded_diagnostic(exc)}",
+            stream=sys.stderr,
+        )
         return 1
 
-    print(f"Installed {SKILL_NAME} to {_bounded_diagnostic(destination, 280)}")
-    print(f"Installed payload size: {payload_size(destination)}")
+    safe_print(f"Installed {SKILL_NAME} to {_bounded_diagnostic(destination, 280)}")
+    safe_print(f"Installed payload size: {payload_size(destination)}")
     # --dest sends this into any client's skills directory, so the closing line
     # cannot name one. Telling a Claude Code user to restart Codex is the kind
     # of instruction that makes a working install look broken.
-    print("Restart your agent client to pick up new skills.")
+    safe_print("Restart your agent client to pick up new skills.")
     return 0
 
 
