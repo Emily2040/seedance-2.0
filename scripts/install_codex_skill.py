@@ -2790,11 +2790,13 @@ def _inspect_owned_stage(
     transaction_raw: bytes,
     *,
     require_complete: bool,
+    require_portable_modes: bool = True,
 ) -> PathSnapshot:
     snapshot = _capture_path_snapshot(path)
     if snapshot.root_type != "dir":
         raise RuntimeError("owned stage is not a directory")
-    _assert_portable_snapshot_modes(path, snapshot)
+    if require_portable_modes:
+        _assert_portable_snapshot_modes(path, snapshot)
     provenance_path = path / PROVENANCE_MARKER
     expected_provenance_raw = _json_record_bytes(
         _provenance_record(transaction, transaction_raw)
@@ -4335,8 +4337,17 @@ def _recover_interrupted_transaction_bound(
         _remove_terminal_private_delete_workspace(expected_workspace)
     stage_snapshot = None
     if _path_exists(expected_stage):
+        # Recovery may encounter an authenticated stage whose directory modes
+        # were made read-only after a crash.  It is never eligible for
+        # promotion on this path: authenticate its transaction provenance and
+        # exact contents, then pass the captured identities to the bound
+        # quarantine/deletion machinery, which safely restores owner access.
         stage_snapshot = _inspect_owned_stage(
-            expected_stage, transaction, transaction_raw, require_complete=False
+            expected_stage,
+            transaction,
+            transaction_raw,
+            require_complete=False,
+            require_portable_modes=False,
         )
 
     old_snapshot = _snapshot_from_transaction(transaction)

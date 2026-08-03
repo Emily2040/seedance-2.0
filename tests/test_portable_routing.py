@@ -162,6 +162,130 @@ class PortableRouteValidationTests(unittest.TestCase):
                 errors,
             )
 
+    def test_record_writeback_auxiliaries_are_rejected(self) -> None:
+        variants = (
+            "You need to record the result in `references/source-registry.md`.",
+            "You are required to record the result in `references/source-registry.md`.",
+            "Be sure to record the result in `references/source-registry.md`.",
+            "Remember to record the result in `references/source-registry.md`.",
+        )
+        for prose in variants:
+            with self.subTest(prose=prose), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "references/source.md"
+                source.parent.mkdir(parents=True)
+                source.write_text(prose + "\n", encoding="utf-8")
+
+                errors = route_errors(source, root, require_routes=False)
+                self.assertEqual(
+                    sum("is code text, not a Markdown link" in error for error in errors),
+                    1,
+                    errors,
+                )
+
+    def test_mutation_routes_cover_headings_synonyms_and_indirect_destinations(self) -> None:
+        directives = (
+            "### Record the result in `references/source-registry.md`",
+            "Record the result in the designated registry, specifically `references/source-registry.md`",
+            "Write the result to `references/source-registry.md`",
+            "Append the result to `references/source-registry.md`",
+            "Save the result in `references/source-registry.md`",
+            "Store the result inside `references/source-registry.md`",
+            "Log the result at `references/source-registry.md`",
+            "Update `references/source-registry.md` after every run",
+            "Edit the registry at `references/source-registry.md`",
+            "When complete, add the result to `references/source-registry.md`",
+            "Record the result using `references/source-registry.md`",
+            "Please **record** the result in `references/source-registry.md`",
+            "You need to __append__ the result to `references/source-registry.md`",
+            "When complete, **save** the result in `references/source-registry.md`",
+        )
+        for prose in directives:
+            with self.subTest(prose=prose), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "references/source.md"
+                source.parent.mkdir(parents=True)
+                source.write_text(prose + "\n", encoding="utf-8")
+
+                errors = route_errors(source, root, require_routes=False)
+                self.assertEqual(
+                    sum("is code text, not a Markdown link" in error for error in errors),
+                    1,
+                    errors,
+                )
+
+    def test_mutation_nouns_and_prior_sentences_do_not_impersonate_directives(self) -> None:
+        descriptions = (
+            "Record `references/source-registry.md` appears in this grammar example.",
+            "Record labels include `references/source-registry.md` in the fixture.",
+            "Write format: `references/source-registry.md`.",
+            "The package writes `references/source-registry.md` in its manifest.",
+            "Record the result elsewhere. The example path is `references/source-registry.md`.",
+            "Record the result in another document; this example names `references/source-registry.md`.",
+        )
+        for prose in descriptions:
+            with self.subTest(prose=prose), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "references/source.md"
+                source.parent.mkdir(parents=True)
+                source.write_text(prose + "\n", encoding="utf-8")
+                self.assertEqual(route_errors(source, root, require_routes=False), [])
+
+    def test_multiline_record_writeback_targets_are_rejected(self) -> None:
+        variants = (
+            "Record the result in:\n- `references/source-registry.md`\n",
+            "Remember to record the result in:\n  `references/source-registry.md`\n",
+            "You need to record the result:\n  1. `references/source-registry.md`\n",
+        )
+        for prose in variants:
+            with self.subTest(prose=prose), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "references/source.md"
+                source.parent.mkdir(parents=True)
+                source.write_text(prose, encoding="utf-8")
+
+                errors = route_errors(source, root, require_routes=False)
+                self.assertEqual(
+                    sum("is code text, not a Markdown link" in error for error in errors),
+                    1,
+                    errors,
+                )
+
+    def test_record_directive_and_noun_mutations_stay_distinct(self) -> None:
+        cases = (
+            ("> Record the result in `references/source-registry.md`.", 1),
+            ("Record type: `references/source-registry.md`.", 0),
+            ("- [ ] Record the result in `references/source-registry.md`.", 1),
+            ("- [ ] Record field: `references/source-registry.md`.", 0),
+            ("Do not record the result in `references/source-registry.md`.", 1),
+            ("The do-not-record rule names `references/source-registry.md`.", 0),
+            ("Carefully record the result in `references/source-registry.md`.", 1),
+            ("Careful record keeping uses `references/source-registry.md`.", 0),
+            ("Record the result:\n- `references/source-registry.md`\n", 1),
+            ("Record type:\n- `references/source-registry.md`\n", 0),
+            ("Then record the count in `references/source-registry.md`.", 1),
+            ("Then record count is stored in `references/source-registry.md`.", 0),
+            ("**Record** the result in `references/source-registry.md`.", 1),
+            ("__Record__ the result in `references/source-registry.md`.", 1),
+            ("*Please record* the result in `references/source-registry.md`.", 1),
+            ("**Record type:** `references/source-registry.md`.", 0),
+            ("__Record__ `references/source-registry.md` is a noun example.", 0),
+            ("Record:\n- `references/source-registry.md`\n", 1),
+        )
+        for prose, expected in cases:
+            with self.subTest(prose=prose), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "references/source.md"
+                source.parent.mkdir(parents=True)
+                source.write_text(prose + "\n", encoding="utf-8")
+
+                errors = route_errors(source, root, require_routes=False)
+                self.assertEqual(
+                    sum("is code text, not a Markdown link" in error for error in errors),
+                    expected,
+                    errors,
+                )
+
     def test_record_nouns_and_descriptions_are_not_route_directives(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -170,7 +294,9 @@ class PortableRouteValidationTests(unittest.TestCase):
             source.write_text(
                 "The session record is `references/source-registry.md`. "
                 "The package records `references/source-registry.md` in its manifest. "
-                "A generated record named `references/source-registry.md` is test data.\n",
+                "A generated record named `references/source-registry.md` is test data.\n"
+                "Record `references/source-registry.md` is a noun phrase in this example.\n"
+                "Record keeping uses `references/source-registry.md` as test data.\n",
                 encoding="utf-8",
             )
 

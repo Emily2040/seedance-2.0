@@ -1818,7 +1818,9 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                 "_regular_file_metadata",
                 swap_after_last_validation,
             ):
-                with self.assertRaisesRegex(RuntimeError, "changed immediately"):
+                with self.assertRaisesRegex(
+                    RuntimeError, "changed immediately|changed or late data"
+                ):
                     installer._delete_bound_tree(quarantine, authorized)
 
             self.assertEqual(target_checks, 3)

@@ -175,9 +175,41 @@ UNLINKED_ROUTE_DIRECTIVE_RE = re.compile(
     r"\b(?:load|read|open|consult|follow|see|use|check|review|route\s+to)\b",
     re.IGNORECASE,
 )
-UNLINKED_ROUTE_RECORD_DIRECTIVE_RE = re.compile(
-    r"(?:^\s*(?:(?:[-*+]|\d+[.)])\s+)?(?:please\s+|always\s+|never\s+)?|"
-    r"\b(?:please|then|must|should|shall)\s+|[,;:]\s*)record\b",
+MUTATION_ROUTE_VERBS = r"(?:record|write|append|save|store|log|update|edit|add)"
+UNLINKED_ROUTE_MUTATION_DIRECTIVE_RE = re.compile(
+    r"(?P<directive>"
+    r"^[ \t]*(?:>[ \t]*)*(?:#{1,6}[ \t]+)?"
+    r"(?:(?:[-*+]|\d+[.)])[ \t]+)?(?:\[[ xX]\][ \t]+)?"
+    r"(?:\*{1,2}|_{1,2})?"
+    r"(?:(?:please|always|never|carefully|immediately|securely|promptly|finally|"
+    r"next|afterward|afterwards)[ \t]+)?"
+    r"(?:\*{1,2}|_{1,2})?"
+    rf"(?P<line_verb>{MUTATION_ROUTE_VERBS})(?:\*{{1,2}}|_{{1,2}})?(?!\w)|"
+    r"\b(?:you\s+need\s+to|you\s+are\s+required\s+to|be\s+sure\s+to|"
+    r"remember\s+to|do\s+not|please|then|must|should|shall|carefully|"
+    r"immediately|securely|promptly|finally|next|afterward|afterwards)[ \t]+"
+    r"(?:\*{1,2}|_{1,2})?"
+    rf"(?P<modal_verb>{MUTATION_ROUTE_VERBS})(?:\*{{1,2}}|_{{1,2}})?(?!\w)|"
+    rf"[,;:][ \t]*(?:\*{{1,2}}|_{{1,2}})?"
+    rf"(?P<punct_verb>{MUTATION_ROUTE_VERBS})(?:\*{{1,2}}|_{{1,2}})?(?!\w)"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
+)
+MUTATION_NOUN_PREDICATE_RE = re.compile(
+    r"^[ \t]+(?:is|are|was|were|means?|refers?|denotes?|names?|appears?|"
+    r"occurs?|exists?|serves?|contains?|includes?|lists?|shows?|stores?|defines?)\b",
+    re.IGNORECASE,
+)
+MUTATION_NOUN_TAIL_RE = re.compile(
+    r"(?:^[ \t]*(?:type|count|format|field|class|name|label|schema|entry|"
+    r"example|term|word|noun)s?\b(?:[ \t]*:|[^.!?;:\r\n]{0,100}\b"
+    r"(?:is|are|was|were|means?|refers?|denotes?|names?|contains?|includes?|"
+    r"lists?|shows?|stores?|defines?)\b)|"
+    r"\b(?:is|are|was|were)\s+(?:stored|listed|defined|shown|documented|named)\b)",
+    re.IGNORECASE,
+)
+RECORD_NOMINAL_TAIL_RE = re.compile(
+    r"^[ \t]+(?:keeping|management|formatting|layout|schema|structure|syntax)\b",
     re.IGNORECASE,
 )
 ROUTE_SEGMENT_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")
@@ -306,7 +338,9 @@ def _unlinked_route_instructions(
     A backticked Markdown filename is not automatically a route: runtime docs
     also describe package layouts, filenames, and generated artifacts. Treat it
     as an unlinked route only when the same sentence directs the agent to load,
-    read, open, consult, follow, see, use, check, review, or route to that file.
+    read, open, consult, follow, see, use, check, review, or route to that file,
+    or when a bounded imperative tells the agent to record, write, append, save,
+    store, log, update, edit, or add material at that path.
     Root-qualified ``skills/`` and ``references/`` paths are always route-shaped;
     a short filename is route-shaped only when it resolves inside those active
     runtime trees. Code-form labels that are already inside Markdown links are
@@ -356,9 +390,52 @@ def _unlinked_route_instructions(
         ):
             sentence_start = boundary.end()
         directive_prefix = text[sentence_start : match.start()]
+        # A write-back target may be placed on the next Markdown list line, for
+        # example ``Record the result in:\n- `references/...` ``.  Keep this
+        # grammar separate from read/load routing: widening the ordinary
+        # sentence window would turn unrelated filenames in later prose into
+        # routes.  The tail must bind the verb directly to the target, either
+        # immediately or through an explicit destination preposition/colon.
+        paragraph_break = text.rfind("\n\n", 0, match.start())
+        paragraph_start = paragraph_break + 2 if paragraph_break >= 0 else 0
+        record_context_start = max(paragraph_start, match.start() - 512)
+        record_prefix = text[record_context_start : match.start()]
+        mutation_directive = False
+        for mutation_match in UNLINKED_ROUTE_MUTATION_DIRECTIVE_RE.finditer(record_prefix):
+            tail = record_prefix[mutation_match.end() :]
+            boundary_tail = re.sub(
+                r"(?m)^[ \t]*\d+[.)][ \t]+", "", tail
+            )
+            if (
+                len(tail) > 240
+                or re.search(r"[.!?;]", boundary_tail)
+                or re.search(r"\r?\n[ \t]*\r?\n", tail)
+            ):
+                continue
+            if MUTATION_NOUN_TAIL_RE.search(tail):
+                continue
+            mutation_verb = next(
+                (
+                    mutation_match.group(name)
+                    for name in ("line_verb", "modal_verb", "punct_verb")
+                    if mutation_match.group(name) is not None
+                ),
+                "",
+            )
+            if mutation_verb.casefold() == "record" and RECORD_NOMINAL_TAIL_RE.match(tail):
+                continue
+            # ``Record `path` is a noun ...`` starts with the same spelling as
+            # the imperative.  A direct target followed by a copular or
+            # definitional predicate is descriptive prose, not a write action.
+            direct_target = tail.strip() == ""
+            target_suffix = text[match.end() :]
+            if direct_target and MUTATION_NOUN_PREDICATE_RE.match(target_suffix):
+                continue
+            mutation_directive = True
+            break
         if (
             UNLINKED_ROUTE_DIRECTIVE_RE.search(directive_prefix)
-            or UNLINKED_ROUTE_RECORD_DIRECTIVE_RE.search(directive_prefix)
+            or mutation_directive
         ):
             matches.append(match)
     return tuple(matches)
