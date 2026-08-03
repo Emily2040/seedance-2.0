@@ -349,10 +349,35 @@ python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skill
 The command stages and validates the repository before promoting it to
 `<dest>/seedance-20`, then prints where it landed. Concurrent installers
 sharing that destination are serialized. Add `--force` only to replace a
-complete existing install; an interrupted or otherwise incomplete managed
-install is repaired automatically. During replacement, the previous copy
-remains available for rollback until the validated stage is promoted. Restart
-your client afterwards so `seedance-20` appears in its skill list.
+complete existing install. Automatic retry is limited to states for which every
+authority record required by the phase reached is present, has flushed file
+contents, and still validates. This installer does not claim POSIX containing-
+directory durability for those record publications. Recoverable states include
+an exact empty stage before provenance publication, an
+exact partial stage only after complete provenance publication, an exact torn
+prefix of the installer's expected provenance or completion record, and a
+deletion workspace bound by its external transaction journal (plus the exact
+empty terminal workspace left if that journal was already removed). Malformed,
+swapped, or otherwise
+untrusted records and late or unexpected bytes are preserved for inspection.
+So are the deliberately fail-closed hard-death windows after a quarantine is
+renamed but before its authority marker is published, or after a private
+deletion workspace is created but before its external journal is published.
+During replacement, the previous copy remains available for rollback until the
+validated stage is promoted. Restart your client afterwards so `seedance-20`
+appears in its skill list.
+
+On Windows, authority and deletion handles share reads only and remain open
+through their consuming action; a pre-existing or newly requested writable or
+deletion handle therefore makes the installer fail closed. On POSIX, verified
+objects are moved into a journal-bound mode-`0700` workspace before unlink,
+which excludes other OS accounts and narrows the deletion namespace. POSIX
+`flock` and owner-only directory permissions are not mandatory isolation from a
+hostile process running as the same account. Such a process may retain or open
+writable descriptors and mutate either the workspace or its containing skills
+directory; all of those capabilities are outside the portable guarantee. The
+installer preserves mismatches it observes, but makes no stronger exclusion
+claim against that same-account adversary.
 
 Installs skip the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator — an agent needs the skill text, not the artwork. The gallery links in an installed copy's README therefore resolve only in this repository.
 

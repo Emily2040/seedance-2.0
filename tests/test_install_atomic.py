@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -182,6 +183,55 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertTrue((destination / "references" / "quick-ref.md").is_file())
             self.assertTrue((destination / "skills" / "seedance-prompt" / "SKILL.md").is_file())
             self.assert_completed(destination)
+
+    def test_nonforce_policy_snapshot_cannot_authorize_a_replacement_tree(self) -> None:
+        for initial_state in ("missing", "incomplete"):
+            with self.subTest(initial_state=initial_state), tempfile.TemporaryDirectory() as tmp:
+                skills_dir = Path(tmp) / "skills"
+                skills_dir.mkdir()
+                destination = skills_dir / SKILL_NAME
+                stashed = skills_dir / "classified-destination-stashed"
+                if initial_state == "incomplete":
+                    destination.mkdir()
+                    shutil.copy2(ROOT / "SKILL.md", destination / "SKILL.md")
+                original_classify = installer._classify_existing_install_bound
+                swapped = False
+
+                def classify_then_swap(path: Path, manifest):
+                    nonlocal swapped
+                    classification = original_classify(path, manifest)
+                    self.assertEqual(classification.state, initial_state)
+                    if path.exists():
+                        path.rename(stashed)
+                    path.mkdir()
+                    (path / "user-data.txt").write_text(
+                        "preserve\n", encoding="utf-8"
+                    )
+                    swapped = True
+                    return classification
+
+                with mock.patch.object(
+                    installer,
+                    "_classify_existing_install_bound",
+                    classify_then_swap,
+                ):
+                    result, output = self.call_main(skills_dir)
+
+                self.assertTrue(swapped)
+                self.assertEqual(result, 1, output)
+                self.assertIn("destination changed", output)
+                self.assertEqual(
+                    (destination / "user-data.txt").read_text(encoding="utf-8"),
+                    "preserve\n",
+                )
+                if initial_state == "incomplete":
+                    self.assertEqual(
+                        (stashed / "SKILL.md").read_bytes(),
+                        (ROOT / "SKILL.md").read_bytes(),
+                    )
+                self.assertFalse(
+                    (skills_dir / installer.TRANSACTION_NAME).exists()
+                )
 
     def test_no_force_refuses_a_partial_install_with_a_truncated_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -487,7 +537,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertLess(len(combined), 1200)
             self.assertTrue(marker.is_file())
 
-    def test_record_reader_rejects_same_length_atomic_replacement(self) -> None:
+    def test_record_reader_is_a_point_in_time_snapshot_after_handle_close(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             record = root / "record.json"
@@ -505,32 +555,346 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                     os.replace(replacement, record)
 
             with mock.patch.object(installer.os, "close", close_then_swap):
-                with self.assertRaisesRegex(ValueError, "record changed while it was being read"):
-                    installer._read_json_record(record)
+                value, raw = installer._read_json_record(record)
 
+            self.assertEqual(value, {"a": 1})
+            self.assertEqual(raw, b'{"a":1}')
             self.assertEqual(record.read_bytes(), b'{"b":2}')
 
-    def test_record_reader_rejects_same_inode_rewrite_with_restored_mtime(self) -> None:
+    @unittest.skipUnless(os.name == "nt", "Windows share-mode exclusion")
+    def test_record_handle_blocks_write_after_final_capture_and_unlock(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             record = Path(tmp) / "record.json"
             record.write_bytes(b'{"a":1}')
-            before = record.stat()
+            original_lock = installer._locked_record_descriptor
+            write_was_blocked = False
+
+            @contextlib.contextmanager
+            def attempt_after_unlock(descriptor: int):
+                nonlocal write_was_blocked
+                with original_lock(descriptor):
+                    yield
+                try:
+                    record.write_bytes(b'{"b":2}')
+                except PermissionError:
+                    write_was_blocked = True
+
+            with mock.patch.object(
+                installer, "_locked_record_descriptor", attempt_after_unlock
+            ):
+                value, raw = installer._read_json_record(record)
+
+            self.assertTrue(write_was_blocked)
+            self.assertEqual(value, {"a": 1})
+            self.assertEqual(raw, b'{"a":1}')
+            self.assertEqual(record.read_bytes(), b'{"a":1}')
+
+    def test_record_reader_rejects_same_tick_rewrite_with_restored_mtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "record.json"
+            record.write_bytes(b'{"a":1}')
             original_read = installer.os.read
-            rewritten = False
+            reads = 0
 
             def rewrite_then_read(descriptor: int, count: int) -> bytes:
-                nonlocal rewritten
-                if not rewritten:
-                    rewritten = True
-                    record.write_bytes(b'{"b":2}')
-                    os.utime(record, ns=(before.st_atime_ns, before.st_mtime_ns))
+                nonlocal reads
+                reads += 1
+                # Model an in-place same-length rewrite after the first EOF
+                # while all stat fields stay indistinguishable.  Supplying
+                # the second descriptor capture directly keeps this portable:
+                # Windows denies a real write while LockFileEx is held.
+                if reads == 3:
+                    return b'{"b":2}'
+                if reads == 4:
+                    return b""
                 return original_read(descriptor, count)
 
             with mock.patch.object(installer.os, "read", rewrite_then_read):
-                with self.assertRaises((OSError, RuntimeError, ValueError)):
+                with self.assertRaisesRegex(ValueError, "record content changed"):
                     installer._read_json_record(record)
 
-            self.assertTrue(rewritten)
+            self.assertEqual(reads, 4)
+
+    def test_retry_recovers_an_authorized_private_deletion_workspace_child(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            transaction_id = "a" * 32
+            payload = {
+                "SKILL.md": {
+                    "size": 1,
+                    "sha256": hashlib.sha256(b"x").hexdigest(),
+                }
+            }
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                payload,
+                None,
+            )
+            transaction_raw = installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            quarantine = skills_dir / str(transaction["quarantine_name"])
+            quarantine.mkdir()
+            owned = quarantine / "owned.txt"
+            owned.write_bytes(b"authorized installer bytes")
+            authorized = installer._capture_path_snapshot(quarantine)
+            installer._write_json_exclusive(
+                quarantine / installer.QUARANTINE_MARKER,
+                installer._quarantine_record(
+                    transaction, transaction_raw, "stage", authorized
+                ),
+            )
+            installer._start_private_delete_journal(
+                skills_dir,
+                transaction,
+                transaction_raw,
+                "stage",
+                authorized,
+            )
+            workspace, _ = installer._private_delete_paths(skills_dir, transaction)
+            os.replace(owned, workspace / installer.PRIVATE_DELETE_ENTRY)
+
+            installer.recover_interrupted_transaction(
+                skills_dir, skills_dir / SKILL_NAME
+            )
+
+            self.assertFalse(quarantine.exists())
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+            self.assertFalse(workspace.exists())
+
+    def test_retry_recovers_empty_private_workspace_after_child_unlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            transaction_id = "c" * 32
+            payload = {
+                "SKILL.md": {
+                    "size": 1,
+                    "sha256": hashlib.sha256(b"x").hexdigest(),
+                }
+            }
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                payload,
+                None,
+            )
+            transaction_raw = installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            quarantine = skills_dir / str(transaction["quarantine_name"])
+            quarantine.mkdir()
+            owned = quarantine / "owned.txt"
+            owned.write_bytes(b"authorized installer bytes")
+            authorized = installer._capture_path_snapshot(quarantine)
+            installer._write_json_exclusive(
+                quarantine / installer.QUARANTINE_MARKER,
+                installer._quarantine_record(
+                    transaction, transaction_raw, "stage", authorized
+                ),
+            )
+            installer._start_private_delete_journal(
+                skills_dir,
+                transaction,
+                transaction_raw,
+                "stage",
+                authorized,
+            )
+            workspace, journal = installer._private_delete_paths(
+                skills_dir, transaction
+            )
+            os.replace(owned, workspace / installer.PRIVATE_DELETE_ENTRY)
+            (workspace / installer.PRIVATE_DELETE_ENTRY).unlink()
+
+            original_delete_record = installer._delete_bound_json_record
+            journal_cleanup_observed = False
+
+            def assert_workspace_removed_first(binding, workspace_arg=None):
+                nonlocal journal_cleanup_observed
+                if binding.path == journal:
+                    journal_cleanup_observed = True
+                    self.assertFalse(workspace.exists())
+                    self.assertIsNone(workspace_arg)
+                return original_delete_record(binding, workspace_arg)
+
+            with mock.patch.object(
+                installer,
+                "_delete_bound_json_record",
+                assert_workspace_removed_first,
+            ):
+                installer.recover_interrupted_transaction(
+                    skills_dir, skills_dir / SKILL_NAME
+                )
+
+            self.assertTrue(journal_cleanup_observed)
+            self.assertFalse(quarantine.exists())
+            self.assertFalse(workspace.exists())
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    def test_retry_recovers_post_root_and_journal_only_delete_states(self) -> None:
+        for remove_workspace in (False, True):
+            with self.subTest(journal_only=remove_workspace), tempfile.TemporaryDirectory() as tmp:
+                skills_dir = Path(tmp) / "skills"
+                skills_dir.mkdir()
+                transaction_id = ("9" if remove_workspace else "6") * 32
+                payload = {
+                    "SKILL.md": {
+                        "size": 1,
+                        "sha256": hashlib.sha256(b"x").hexdigest(),
+                    }
+                }
+                transaction = installer._transaction_record(
+                    f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                    f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                    transaction_id,
+                    payload,
+                    None,
+                )
+                transaction_raw = installer._write_json_exclusive(
+                    skills_dir / installer.TRANSACTION_NAME, transaction
+                )
+                quarantine = skills_dir / str(transaction["quarantine_name"])
+                quarantine.mkdir()
+                owned = quarantine / "owned.txt"
+                owned.write_bytes(b"authorized installer bytes")
+                authorized = installer._capture_path_snapshot(quarantine)
+                installer._write_json_exclusive(
+                    quarantine / installer.QUARANTINE_MARKER,
+                    installer._quarantine_record(
+                        transaction, transaction_raw, "stage", authorized
+                    ),
+                )
+                installer._start_private_delete_journal(
+                    skills_dir,
+                    transaction,
+                    transaction_raw,
+                    "stage",
+                    authorized,
+                )
+                workspace, journal = installer._private_delete_paths(
+                    skills_dir, transaction
+                )
+                workspace_identity = installer._object_identity(workspace.lstat())
+                owned.unlink()
+                (quarantine / installer.QUARANTINE_MARKER).unlink()
+                quarantine.rmdir()
+                if remove_workspace:
+                    installer._remove_private_delete_workspace(
+                        workspace, workspace_identity
+                    )
+
+                with mock.patch.object(
+                    installer,
+                    "_create_private_delete_workspace",
+                    side_effect=AssertionError(
+                        "terminal record cleanup must not create an unjournaled workspace"
+                    ),
+                ):
+                    installer.recover_interrupted_transaction(
+                        skills_dir, skills_dir / SKILL_NAME
+                    )
+
+                self.assertFalse(workspace.exists())
+                self.assertFalse(journal.exists())
+                self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
+
+    def test_unjournaled_private_workspace_is_preserved_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            transaction_id = "e" * 32
+            payload = {
+                "SKILL.md": {
+                    "size": 1,
+                    "sha256": hashlib.sha256(b"x").hexdigest(),
+                }
+            }
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                payload,
+                None,
+            )
+            installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            workspace, _ = installer._private_delete_paths(skills_dir, transaction)
+            workspace.mkdir(mode=0o700)
+            (workspace / "user-data.txt").write_text(
+                "preserve\n", encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "no trusted journal"):
+                installer.recover_interrupted_transaction(
+                    skills_dir, skills_dir / SKILL_NAME
+                )
+
+            self.assertTrue(workspace.is_dir())
+            self.assertEqual(
+                (workspace / "user-data.txt").read_text(encoding="utf-8"),
+                "preserve\n",
+            )
+            self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
+
+    def test_retry_recovers_journal_removed_before_empty_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            transaction_id = "f" * 32
+            payload = {
+                "SKILL.md": {
+                    "size": 1,
+                    "sha256": hashlib.sha256(b"x").hexdigest(),
+                }
+            }
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                payload,
+                None,
+            )
+            transaction_raw = installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            quarantine = skills_dir / str(transaction["quarantine_name"])
+            quarantine.mkdir()
+            owned = quarantine / "owned.txt"
+            owned.write_bytes(b"authorized installer bytes")
+            authorized = installer._capture_path_snapshot(quarantine)
+            installer._write_json_exclusive(
+                quarantine / installer.QUARANTINE_MARKER,
+                installer._quarantine_record(
+                    transaction, transaction_raw, "stage", authorized
+                ),
+            )
+            installer._start_private_delete_journal(
+                skills_dir,
+                transaction,
+                transaction_raw,
+                "stage",
+                authorized,
+            )
+            workspace, journal = installer._private_delete_paths(
+                skills_dir, transaction
+            )
+            owned.unlink()
+            (quarantine / installer.QUARANTINE_MARKER).unlink()
+            quarantine.rmdir()
+            journal.unlink()
+
+            installer.recover_interrupted_transaction(
+                skills_dir, skills_dir / installer.SKILL_NAME
+            )
+
+            self.assertFalse(workspace.exists())
+            self.assertFalse(journal.exists())
+            self.assertFalse((skills_dir / installer.TRANSACTION_NAME).exists())
 
     def test_record_reader_rejects_oversize_before_opening(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -776,6 +1140,62 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             self.assertEqual(outside.read_bytes(), b"outside user bytes")
             self.assertFalse(done.exists())
 
+    @unittest.skipIf(os.name == "nt", "POSIX private-workspace cleanup")
+    def test_bound_record_cleanup_preserves_a_namespace_swap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / installer.TRANSACTION_NAME
+            record.write_bytes(b'{"authorized":true}')
+            stashed = root / "authorized-record-stashed"
+            outside = root / "outside-user-file"
+            outside.write_bytes(b"outside user bytes")
+            workspace_path = root / "private-workspace"
+            workspace_identity = installer._create_private_delete_workspace(
+                workspace_path
+            )
+            original_rename = os.rename
+            swapped = False
+
+            def swap_before_private_move(
+                source,
+                destination,
+                *args,
+                src_dir_fd=None,
+                dst_dir_fd=None,
+                **kwargs,
+            ):
+                nonlocal swapped
+                if (
+                    source == record.name
+                    and destination == installer.PRIVATE_DELETE_ENTRY
+                    and src_dir_fd is not None
+                    and not swapped
+                ):
+                    swapped = True
+                    original_rename(record, stashed)
+                    original_rename(outside, record)
+                return original_rename(
+                    source,
+                    destination,
+                    *args,
+                    src_dir_fd=src_dir_fd,
+                    dst_dir_fd=dst_dir_fd,
+                    **kwargs,
+                )
+
+            with installer._opened_private_delete_workspace(
+                workspace_path, workspace_identity
+            ) as workspace:
+                with mock.patch.object(installer.os, "rename", swap_before_private_move):
+                    with self.assertRaises((RuntimeError, ValueError)):
+                        with installer._bound_json_record(record) as binding:
+                            installer._delete_bound_json_record(binding, workspace)
+
+            self.assertTrue(swapped)
+            self.assertEqual(stashed.read_bytes(), b'{"authorized":true}')
+            preserved = workspace_path / installer.PRIVATE_DELETE_ENTRY
+            self.assertEqual(preserved.read_bytes(), b"outside user bytes")
+
     def test_directory_cleanup_never_rmdirs_a_swapped_outside_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -818,13 +1238,13 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             original_delete = installer._delete_regular_file_by_handle
             swapped = False
 
-            def swap_before_open(path: Path, expected):
+            def swap_before_open(path: Path, expected, *, workspace=None):
                 nonlocal swapped
                 if path == owned and not swapped:
                     swapped = True
                     path.rename(stashed)
                     outside.rename(path)
-                return original_delete(path, expected)
+                return original_delete(path, expected, workspace=workspace)
 
             with mock.patch.object(
                 installer,
@@ -851,13 +1271,17 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             original_delete = installer._delete_empty_directory_by_handle
             swapped = False
 
-            def swap_before_open(path: Path, expected_identity):
+            def swap_before_open(
+                path: Path, expected_identity, *, workspace=None
+            ):
                 nonlocal swapped
                 if path == owned and not swapped:
                     swapped = True
                     path.rename(stashed)
                     outside.rename(path)
-                return original_delete(path, expected_identity)
+                return original_delete(
+                    path, expected_identity, workspace=workspace
+                )
 
             with mock.patch.object(
                 installer,
@@ -887,6 +1311,50 @@ class AtomicInstallRegressionTests(unittest.TestCase):
 
             self.assertEqual(target.read_bytes(), b"authorized installer bytes")
             self.assertEqual(outside.read_bytes(), b"authorized installer bytes")
+
+    @unittest.skipUnless(os.name == "nt", "Windows share-mode exclusion")
+    def test_preopened_shared_writer_blocks_bound_file_deletion(self) -> None:
+        import ctypes
+        from ctypes import wintypes
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "owned.txt"
+            target.write_bytes(b"authorized installer bytes")
+            expected = installer._bound_regular_file_metadata(target)
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            create_file = kernel32.CreateFileW
+            create_file.argtypes = [
+                wintypes.LPCWSTR,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                wintypes.LPVOID,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                wintypes.HANDLE,
+            ]
+            create_file.restype = wintypes.HANDLE
+            handle = create_file(
+                str(target),
+                0x80000000 | 0x40000000,  # GENERIC_READ | GENERIC_WRITE
+                0x00000001 | 0x00000002 | 0x00000004,
+                None,
+                3,
+                0x08000000,
+                None,
+            )
+            self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = [wintypes.HANDLE]
+            close_handle.restype = wintypes.BOOL
+            try:
+                with self.assertRaises(OSError):
+                    installer._delete_regular_file_by_handle(target, expected)
+                self.assertEqual(target.read_bytes(), b"authorized installer bytes")
+            finally:
+                self.assertTrue(close_handle(handle))
+
+            installer._delete_regular_file_by_handle(target, expected)
+            self.assertFalse(target.exists())
 
     def test_kill_window_before_quarantine_marker_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -961,7 +1429,7 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             )
             self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
 
-    def test_transaction_record_swap_to_directory_is_preserved(self) -> None:
+    def test_transaction_record_cleanup_uses_its_bound_handle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skills_dir = Path(tmp) / "skills"
             transaction = skills_dir / installer.TRANSACTION_NAME
@@ -981,12 +1449,9 @@ class AtomicInstallRegressionTests(unittest.TestCase):
             with mock.patch.object(installer, "_rename_directory", swap_record_before_quarantine):
                 result, output = self.call_main(skills_dir)
 
-            self.assertEqual(result, 1, output)
-            done = list(skills_dir.glob(f"{installer.TRANSACTION_DONE_PREFIX}*"))
-            self.assertEqual(len(done), 1)
-            self.assertEqual(
-                (done[0] / "user-data.txt").read_text(encoding="utf-8"), "preserve\n"
-            )
+            self.assertEqual(result, 0, output)
+            self.assertFalse(swapped)
+            self.assertFalse(transaction.exists())
             self.assert_completed(skills_dir / SKILL_NAME)
 
     def test_reparse_stage_is_refused_and_preserved_when_supported(self) -> None:
@@ -1058,6 +1523,162 @@ class AtomicInstallRegressionTests(unittest.TestCase):
                     "Installed seedance-20" in stdout or "another installer finished" in stdout,
                     stdout,
                 )
+            self.assert_completed(skills_dir / SKILL_NAME)
+
+    def test_retry_recovers_stage_created_before_provenance_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            manifest = installer.payload_manifest(ROOT)
+            transaction_id = "7" * 32
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                manifest,
+                None,
+            )
+            installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            stage = skills_dir / str(transaction["stage_name"])
+            stage.mkdir(mode=0o700)
+
+            result = self.run_installer(skills_dir)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse(stage.exists())
+            self.assert_completed(skills_dir / SKILL_NAME)
+
+    def test_pre_provenance_stage_with_payload_is_preserved_fail_closed(self) -> None:
+        for torn_provenance in (False, True):
+            with self.subTest(torn=torn_provenance), tempfile.TemporaryDirectory() as tmp:
+                skills_dir = Path(tmp) / "skills"
+                skills_dir.mkdir()
+                payload_bytes = b"source-identical bytes"
+                manifest = {
+                    "SKILL.md": {
+                        "size": len(payload_bytes),
+                        "sha256": hashlib.sha256(payload_bytes).hexdigest(),
+                    }
+                }
+                transaction_id = ("4" if torn_provenance else "3") * 32
+                transaction = installer._transaction_record(
+                    f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                    f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                    transaction_id,
+                    manifest,
+                    None,
+                )
+                transaction_raw = installer._write_json_exclusive(
+                    skills_dir / installer.TRANSACTION_NAME, transaction
+                )
+                stage = skills_dir / str(transaction["stage_name"])
+                stage.mkdir(mode=0o700)
+                if torn_provenance:
+                    expected_raw = installer._json_record_bytes(
+                        installer._provenance_record(transaction, transaction_raw)
+                    )
+                    (stage / installer.PROVENANCE_MARKER).write_bytes(
+                        expected_raw[: len(expected_raw) // 2]
+                    )
+                (stage / "SKILL.md").write_bytes(payload_bytes)
+
+                with self.assertRaisesRegex(RuntimeError, "could not precede"):
+                    installer.recover_interrupted_transaction(
+                        skills_dir, skills_dir / SKILL_NAME
+                    )
+
+                self.assertEqual((stage / "SKILL.md").read_bytes(), payload_bytes)
+                self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
+
+    def test_torn_completion_with_partial_payload_is_preserved_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            first = b"first"
+            second = b"second"
+            manifest = {
+                "SKILL.md": {
+                    "size": len(first),
+                    "sha256": hashlib.sha256(first).hexdigest(),
+                },
+                "references/second.md": {
+                    "size": len(second),
+                    "sha256": hashlib.sha256(second).hexdigest(),
+                },
+            }
+            transaction_id = "5" * 32
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                manifest,
+                None,
+            )
+            transaction_raw = installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            stage = skills_dir / str(transaction["stage_name"])
+            stage.mkdir(mode=0o700)
+            installer._write_json_exclusive(
+                stage / installer.PROVENANCE_MARKER,
+                installer._provenance_record(transaction, transaction_raw),
+            )
+            (stage / "SKILL.md").write_bytes(first)
+            expected_completion = installer._json_record_bytes(
+                installer._completion_marker_record(manifest)
+            )
+            (stage / installer.COMPLETION_MARKER).write_bytes(
+                expected_completion[: len(expected_completion) // 2]
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "full payload"):
+                installer.recover_interrupted_transaction(
+                    skills_dir, skills_dir / installer.SKILL_NAME
+                )
+
+            self.assertEqual((stage / "SKILL.md").read_bytes(), first)
+            self.assertTrue((skills_dir / installer.TRANSACTION_NAME).is_file())
+
+    def test_retry_recovers_exact_torn_completion_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_dir = Path(tmp) / "skills"
+            skills_dir.mkdir()
+            manifest = installer.payload_manifest(ROOT)
+            transaction_id = "8" * 32
+            transaction = installer._transaction_record(
+                f"{installer.STAGE_PREFIX}123-{transaction_id}",
+                f"{installer.QUARANTINE_PREFIX}{transaction_id}",
+                transaction_id,
+                manifest,
+                None,
+            )
+            transaction_raw = installer._write_json_exclusive(
+                skills_dir / installer.TRANSACTION_NAME, transaction
+            )
+            stage = skills_dir / str(transaction["stage_name"])
+            stage.mkdir(mode=0o700)
+            installer._write_json_exclusive(
+                stage / installer.PROVENANCE_MARKER,
+                installer._provenance_record(transaction, transaction_raw),
+            )
+            shutil.copytree(
+                ROOT,
+                stage,
+                ignore=installer.ignore_runtime_noise,
+                dirs_exist_ok=True,
+            )
+            expected_raw = installer._json_record_bytes(
+                installer._completion_marker_record(manifest)
+            )
+            (stage / installer.COMPLETION_MARKER).write_bytes(
+                expected_raw[: len(expected_raw) // 2]
+            )
+
+            result = self.run_installer(skills_dir)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assert_completed(skills_dir / SKILL_NAME)
 
     def test_interrupted_fresh_stage_leaves_no_partial_live_install(self) -> None:

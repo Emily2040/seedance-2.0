@@ -36,8 +36,20 @@ python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skill
 It prints where the skill landed. Restart your client, then call `seedance-20`.
 Installs are staged and validated, and concurrent installers sharing one
 destination are serialized. Add `--force` only when replacing a complete
-existing install; an incomplete managed install is repaired automatically, and
-the previous complete copy is retained for rollback until promotion succeeds.
+existing install. Automatic retry applies only when every authority record
+required by the phase reached exists and validates: an exact empty stage before
+provenance, an exact partial stage after complete provenance, exact torn prefixes
+of expected stage markers, and externally journaled deletion workspaces can be
+recovered. The exact empty terminal workspace left after journal removal is also
+recoverable. Malformed or swapped records, unexpected bytes, an unmarked
+quarantine, and a nonempty unjournaled deletion workspace are preserved fail
+closed. Windows handles exclude writable/deletion sharing through the consuming
+action. On POSIX, a mode-`0700` workspace excludes other OS accounts, but
+advisory `flock` and owner permissions cannot exclude a hostile same-account
+process from existing or new writable opens or namespace mutation. See the
+[README install notes](../README.md#install)
+for the full recovery boundary. The previous complete copy is retained for
+rollback until promotion succeeds.
 A destination inside this repository is refused, since copying the tree into
 itself would recurse until the path length fails.
 
