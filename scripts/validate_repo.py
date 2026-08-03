@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,10 @@ from typing import Callable, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PYTHON_SOURCE_DIRECTORIES = ("scripts", "tests")
+MAX_PYTHON_SOURCE_FILES = 512
+MAX_PYTHON_SOURCE_FILE_BYTES = 1 * 1024 * 1024
+MAX_PYTHON_SOURCE_BYTES = 8 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -60,11 +65,106 @@ def validation_plan(*, release: bool) -> tuple[Check, ...]:
             ("scripts/extract_last_frame.py", "--self-test", "--strict"),
         ),
         Check("Run unit tests", ("-m", "unittest", "discover", "-s", "tests", "-v")),
-        Check("Compile Python files", ("-m", "compileall", "-q", "scripts", "tests")),
+        Check(
+            "Compile Python sources in memory",
+            ("scripts/validate_repo.py", "--compile-sources"),
+        ),
     )
 
 
 RunFunction = Callable[..., subprocess.CompletedProcess[object]]
+
+
+def compile_python_sources(root: Path) -> int:
+    """Compile the bounded repository source set without writing bytecode.
+
+    ``compileall`` mirrors each absolute source path beneath
+    ``PYTHONPYCACHEPREFIX``. On Windows, a valid deep extraction can therefore
+    become an invalid cache path even though every source path itself is usable.
+    Reading bounded source bytes and calling ``compile`` preserves the syntax
+    check without mutating an archive or amplifying its path length.
+    """
+
+    root = root.resolve()
+    sources: list[Path] = []
+    for relative in PYTHON_SOURCE_DIRECTORIES:
+        directory = root / relative
+        if not directory.is_dir():
+            print(f"FAILED: missing Python source directory: {relative}", file=sys.stderr)
+            return 2
+        for path in directory.rglob("*.py"):
+            sources.append(path)
+            if len(sources) > MAX_PYTHON_SOURCE_FILES:
+                print(
+                    "FAILED: Python source file count exceeds "
+                    f"{MAX_PYTHON_SOURCE_FILES}",
+                    file=sys.stderr,
+                )
+                return 2
+
+    total_bytes = 0
+    for path in sorted(sources):
+        relative = path.relative_to(root).as_posix()
+        try:
+            metadata = path.lstat()
+            if not stat.S_ISREG(metadata.st_mode):
+                print(f"FAILED: Python source is not a regular file: {relative}", file=sys.stderr)
+                return 2
+            if metadata.st_size > MAX_PYTHON_SOURCE_FILE_BYTES:
+                print(
+                    f"FAILED: Python source exceeds {MAX_PYTHON_SOURCE_FILE_BYTES} "
+                    f"bytes: {relative}",
+                    file=sys.stderr,
+                )
+                return 2
+            source = path.read_bytes()
+        except OSError as exc:
+            print(f"FAILED: could not read Python source {relative}: {exc}", file=sys.stderr)
+            return 2
+
+        if len(source) > MAX_PYTHON_SOURCE_FILE_BYTES:
+            print(
+                f"FAILED: Python source exceeds {MAX_PYTHON_SOURCE_FILE_BYTES} "
+                f"bytes: {relative}",
+                file=sys.stderr,
+            )
+            return 2
+        total_bytes += len(source)
+        if total_bytes > MAX_PYTHON_SOURCE_BYTES:
+            print(
+                "FAILED: total Python source size exceeds "
+                f"{MAX_PYTHON_SOURCE_BYTES} bytes",
+                file=sys.stderr,
+            )
+            return 2
+
+        try:
+            compile(source, relative, "exec", dont_inherit=True)
+        except SyntaxError as exc:
+            line = exc.lineno or 1
+            column = exc.offset or 1
+            print(
+                f"FAILED: {relative}:{line}:{column}: {exc.msg}",
+                file=sys.stderr,
+            )
+            return 1
+        except (MemoryError, OverflowError, ValueError) as exc:
+            print(
+                f"FAILED: could not compile Python source {relative}: "
+                f"{type(exc).__name__}",
+                file=sys.stderr,
+            )
+            return 2
+
+    if not sources:
+        print("FAILED: no Python sources found", file=sys.stderr)
+        return 2
+
+    print(
+        f"In-memory compilation passed: {len(sources)} files, "
+        f"{total_bytes} bytes; no bytecode written."
+    )
+    return 0
 
 
 def run_validation(
@@ -114,7 +214,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="print the archive-safe command plan without running it",
     )
+    parser.add_argument(
+        "--compile-sources",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args(argv)
+
+    if args.compile_sources:
+        if args.release or args.list:
+            parser.error("--compile-sources cannot be combined with another mode")
+        return compile_python_sources(REPO_ROOT)
 
     if args.list:
         for check in validation_plan(release=args.release):

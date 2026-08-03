@@ -409,7 +409,9 @@ python -m pip install --require-hashes --requirement requirements-validation.loc
 Run this from the repository root. It works in a Git checkout and in an
 extracted **Download ZIP** tree with no `.git` directory. The runner anchors its
 child processes to its own repository path, so parent folders containing spaces
-do not change what gets validated.
+do not change what gets validated. Its final syntax gate compiles bounded source
+bytes in memory, so it neither writes bytecode into the archive nor mirrors a
+deep absolute source path into a longer cache path.
 
 ```bash
 python scripts/validate_repo.py --release
@@ -418,7 +420,10 @@ python scripts/validate_repo.py --release
 CI calls the same runner without `--release`. That is the only suite difference:
 release validation enforces the checked-in source date; pull-request validation
 still validates the source registry and its claim labels without adding a
-wall-clock failure.
+wall-clock failure. The unit stage also extracts a real archive beneath a deep,
+space-containing path, removes Git from the child environment, and replays all
+19 stages; the two tests that intrinsically create a Git index report explicit
+skips in that replay.
 
 ### Git checkout-only hygiene
 

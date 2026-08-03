@@ -55,7 +55,8 @@ jobs:
       - name: Install validation dependencies
         run: python -m pip install --require-hashes --requirement requirements-validation.lock
       # README and CI call the same runner so the Download ZIP contract cannot
-      # silently lose a check when this workflow changes.
+      # silently lose a check when this workflow changes. Its unit stage also
+      # extracts and validates a deep, space-containing archive with Git absent.
       - name: Run canonical archive-safe validation suite
         run: python scripts/validate_repo.py
       - name: Check diff whitespace (Git checkout only)
