@@ -20,6 +20,28 @@ import install_codex_skill as installer  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LOCALIZED_TRANSACTIONAL_FORCE_COPY = {
+    "docs/QUICKSTART.es.md": (
+        ("--force", "respaldo", "transacción", "restaura", "cuarentena"),
+        "borra la copia anterior primero",
+    ),
+    "docs/QUICKSTART.ja.md": (
+        ("--force", "バックアップ", "トランザクション", "元に戻します", "隔離"),
+        "先に古いコピーを削除します",
+    ),
+    "docs/QUICKSTART.ko.md": (
+        ("--force", "백업", "트랜잭션", "롤백", "격리"),
+        "이전 사본을 먼저 지웁니다",
+    ),
+    "docs/QUICKSTART.ru.md": (
+        ("--force", "резервная", "транзакции", "возвращается", "карантин"),
+        "сначала удаляет старую копию",
+    ),
+    "docs/QUICKSTART.zh.md": (
+        ("--force", "备份", "事务", "回滚", "隔离区"),
+        "先删掉旧副本",
+    ),
+}
 MARKDOWN_TARGET = re.compile(
     r"!?\[[^\]]*\]\(\s*<?([^\s)>]+)>?(?:\s+['\"][^'\"]*['\"])?\s*\)"
 )
@@ -120,6 +142,30 @@ class RuntimePayloadContractTests(unittest.TestCase):
                 [],
                 "an installed README must not knowingly point at omitted local files",
             )
+
+    def test_installed_localized_quickstarts_describe_transactional_force(self) -> None:
+        active_localized_quickstarts = {
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "docs").glob("QUICKSTART.*.md")
+        }
+        self.assertEqual(
+            active_localized_quickstarts,
+            set(LOCALIZED_TRANSACTIONAL_FORCE_COPY),
+            "every active localized quickstart needs an explicit transaction-copy contract",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self.install(Path(tmp))
+            for relative, (required_terms, obsolete_claim) in (
+                LOCALIZED_TRANSACTIONAL_FORCE_COPY.items()
+            ):
+                with self.subTest(relative=relative):
+                    quickstart = payload.joinpath(*relative.split("/")).read_text(
+                        encoding="utf-8"
+                    )
+                    for term in required_terms:
+                        self.assertIn(term, quickstart)
+                    self.assertNotIn(obsolete_claim, quickstart)
 
     def test_installed_readme_routes_the_omitted_gallery_to_the_repository(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

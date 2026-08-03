@@ -33,7 +33,7 @@ python scripts/install_codex_skill.py --dest ~/.claude/skills
 python /ruta/a/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
-Imprime dónde quedó instalada. Reinicia tu cliente y llama a `seedance-20`. Añade `--force` solo para reemplazar una instalación existente: borra la copia anterior primero. Un destino dentro de este repositorio se rechaza: copiar el árbol de fuentes dentro de sí mismo recurre hasta que la longitud de la ruta falla.
+Imprime dónde quedó instalada. Reinicia tu cliente y llama a `seedance-20`. Añade `--force` solo para reemplazar una instalación completa existente; una instalación administrada incompleta se repara automáticamente. La nueva copia se prepara y valida antes del cambio. Durante la promoción, la copia completa anterior se conserva como respaldo vinculado a la transacción: si la promoción falla, se restaura; solo después de una promoción correcta se pone en cuarentena y se elimina de forma segura. Un destino dentro de este repositorio se rechaza: copiar el árbol de fuentes dentro de sí mismo recurre hasta que la longitud de la ruta falla.
 
 **Instalar desde GitHub (si tu cliente lo permite por URL)**
 
