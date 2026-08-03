@@ -31,6 +31,7 @@ final output.
 from __future__ import annotations
 
 import argparse
+import base64
 import ctypes
 import errno
 import hashlib
@@ -125,6 +126,16 @@ class PosixReplacementSnapshot:
     gid: int
     mode: int
     extended_attributes: tuple[tuple[str, bytes], ...]
+
+
+@dataclass
+class PosixProbeArtifact:
+    """One created exchange-probe inode, tracked before any fallible stat."""
+
+    name: str
+    directory_descriptor: int
+    descriptor: int
+    identity: tuple[int, int] | None = None
 
 
 if os.name == "nt":
@@ -646,11 +657,11 @@ def _create_output_stage(out: Path) -> OutputStage:
         ) from exc
 
 
-def _posix_stage_directory_name(out: Path, target_descriptor: int) -> str:
-    """Return a private staging component bounded by the target filesystem."""
+def _posix_name_max(directory_descriptor: int, out: Path) -> int:
+    """Return the byte limit for a component in an open directory."""
 
     try:
-        name_max = int(os.fpathconf(target_descriptor, "PC_NAME_MAX"))
+        name_max = int(os.fpathconf(directory_descriptor, "PC_NAME_MAX"))
     except (OSError, ValueError) as exc:
         raise OutputPolicyError(
             f"cannot determine the output filesystem name limit for {out}: {exc}"
@@ -659,6 +670,51 @@ def _posix_stage_directory_name(out: Path, target_descriptor: int) -> str:
         raise OutputPolicyError(
             f"output filesystem reported an invalid component limit for {out}: {name_max}"
         )
+    return name_max
+
+
+def _posix_random_component_token(character_count: int) -> str:
+    """Return at least six random bits per URL-safe output character."""
+
+    byte_count = (character_count * 3 + 3) // 4
+    encoded = base64.urlsafe_b64encode(secrets.token_bytes(byte_count))
+    token = encoded.rstrip(b"=").decode("ascii")
+    if len(token) < character_count:
+        raise OutputPolicyError("could not generate a bounded POSIX staging token")
+    return token[:character_count]
+
+
+def _posix_auxiliary_name(
+    tag: str,
+    directory_descriptor: int,
+    out: Path,
+) -> str:
+    """Return a collision-resistant probe/publication name within NAME_MAX."""
+
+    name_max = _posix_name_max(directory_descriptor, out)
+    preferred_token = _posix_random_component_token(22)
+    preferred = f".frame-{tag}-{preferred_token}"
+    if len(os.fsencode(preferred)) <= name_max:
+        return preferred
+
+    # POSIX permits NAME_MAX as low as 14. Reserve two ASCII bytes for a
+    # recognizable hidden-file prefix and use every remaining byte for a
+    # URL-safe token. At the minimum this retains 12 characters / 72 random
+    # bits; O_EXCL/link collision retries provide a second line of defense.
+    compact_prefix = ".x"
+    available = name_max - len(os.fsencode(compact_prefix))
+    if available < 12:
+        raise OutputPolicyError(
+            "output filesystem component limit is too small for a "
+            f"collision-resistant auxiliary name: {name_max}"
+        )
+    return compact_prefix + _posix_random_component_token(min(available, 22))
+
+
+def _posix_stage_directory_name(out: Path, target_descriptor: int) -> str:
+    """Return a private staging component bounded by the target filesystem."""
+
+    name_max = _posix_name_max(target_descriptor, out)
 
     token = secrets.token_hex(16)
     preferred = f".{out.stem}.atomic-{token}"
@@ -798,6 +854,48 @@ def _posix_link_open_stage(
         raise OutputPolicyError(
             "published output does not match the verified staging inode"
         )
+
+
+def _link_unique_posix_stage_anchor(stage: OutputStage, out: Path) -> str:
+    """Claim a bounded private link name, retrying collisions safely."""
+
+    if stage.directory_descriptor is None:
+        raise OutputPolicyError("output staging directory handle is unavailable")
+    for _attempt in range(64):
+        candidate = _posix_auxiliary_name(
+            "publish",
+            stage.directory_descriptor,
+            out,
+        )
+        try:
+            _posix_link_open_stage(
+                stage,
+                candidate,
+                stage.directory_descriptor,
+            )
+            return candidate
+        except FileExistsError:
+            # Never delete the colliding object unless it is provably a link
+            # to our open stage. A fresh random candidate is cheaper and keeps
+            # an unrelated same-name object untouched.
+            _unlink_open_posix_file(
+                stage.descriptor,
+                candidate,
+                stage.directory_descriptor,
+            )
+            continue
+        except BaseException:
+            # A wrapper or fallback may fail after creating the link. Bind
+            # cleanup to the open stage descriptor, not to the candidate name.
+            _unlink_open_posix_file(
+                stage.descriptor,
+                candidate,
+                stage.directory_descriptor,
+            )
+            raise
+    raise OutputPolicyError(
+        "could not allocate a unique bounded POSIX publication anchor"
+    )
 
 
 _CAP_SYS_ADMIN = 21
@@ -975,103 +1073,166 @@ def _prove_linux_privileged_xattr_visibility(descriptor: int, out: Path) -> None
         raise OutputPolicyError(f"{failure} for {out}; replacement was refused")
 
 
+def _cleanup_posix_probe_artifacts(
+    artifacts: list[PosixProbeArtifact],
+) -> tuple[str, ...]:
+    """Remove every tracked probe name by matching it to an open descriptor."""
+
+    failures: list[str] = []
+    for location in artifacts:
+        removed = False
+        # A one-way exchange may have swapped which descriptor owns this name.
+        # Try every still-open probe descriptor rather than relying on an
+        # identity capture that may itself have been the failing operation.
+        for opened in artifacts:
+            if _unlink_open_posix_file(
+                opened.descriptor,
+                location.name,
+                location.directory_descriptor,
+            ):
+                removed = True
+                break
+        if removed:
+            continue
+        try:
+            os.stat(
+                location.name,
+                dir_fd=location.directory_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            failures.append(f"{location.name!r}: inspection failed: {exc}")
+        else:
+            failures.append(f"{location.name!r}: exact descriptor match failed")
+
+    for artifact in artifacts:
+        try:
+            os.close(artifact.descriptor)
+        except OSError as exc:
+            failures.append(f"fd {artifact.descriptor}: close failed: {exc}")
+    return tuple(failures)
+
+
 def _probe_posix_atomic_exchange(stage: OutputStage, out: Path) -> None:
-    """Prove RENAME_EXCHANGE support on the actual output filesystem."""
+    """Prove cross-directory RENAME_EXCHANGE on the output filesystem."""
 
     if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
         raise OutputPolicyError("POSIX publication handles are unavailable")
-    names = (
-        f"exchange-probe-a-{secrets.token_hex(8)}",
-        f".frame-exchange-probe-{secrets.token_hex(8)}",
+    locations = (
+        ("exchange-private", stage.directory_descriptor),
+        ("exchange-public", stage.target_directory_descriptor),
     )
-    directories = (
-        stage.directory_descriptor,
-        stage.target_directory_descriptor,
-    )
-    descriptors: list[int] = []
-    identities: list[tuple[int, int]] = []
+    artifacts: list[PosixProbeArtifact] = []
     failure: Exception | None = None
+    cleanup_failures: tuple[str, ...] = ()
     try:
-        for name, directory_descriptor in zip(names, directories):
-            descriptor = os.open(
-                name,
-                os.O_RDWR
-                | os.O_CREAT
-                | os.O_EXCL
-                | getattr(os, "O_CLOEXEC", 0),
-                0o600,
-                dir_fd=directory_descriptor,
-            )
-            descriptors.append(descriptor)
-            identities.append(_identity(os.fstat(descriptor)))
+        for tag, directory_descriptor in locations:
+            for _attempt in range(64):
+                name = _posix_auxiliary_name(tag, directory_descriptor, out)
+                try:
+                    descriptor = os.open(
+                        name,
+                        os.O_RDWR
+                        | os.O_CREAT
+                        | os.O_EXCL
+                        | getattr(os, "O_CLOEXEC", 0),
+                        0o600,
+                        dir_fd=directory_descriptor,
+                    )
+                except FileExistsError:
+                    continue
+                artifact = PosixProbeArtifact(
+                    name=name,
+                    directory_descriptor=directory_descriptor,
+                    descriptor=descriptor,
+                )
+                # Track the created path and descriptor before fstat. Even if
+                # this very call fails, the finally block can retry the exact
+                # descriptor/name comparison and remove the artifact.
+                artifacts.append(artifact)
+                artifact.identity = _identity(os.fstat(descriptor))
+                break
+            else:
+                raise OutputPolicyError(
+                    "could not allocate a unique bounded atomic-exchange probe name"
+                )
 
+        left, right = artifacts
+        if left.identity is None or right.identity is None:
+            raise OutputPolicyError(
+                "atomic-exchange probe identities are incomplete"
+            )
         _posix_exchange_names(
-            names[0],
-            directories[0],
-            names[1],
-            directories[1],
+            left.name,
+            left.directory_descriptor,
+            right.name,
+            right.directory_descriptor,
         )
-        swapped = tuple(
+        swapped = (
             _identity(
                 os.stat(
-                    name,
-                    dir_fd=directory_descriptor,
+                    left.name,
+                    dir_fd=left.directory_descriptor,
                     follow_symlinks=False,
                 )
-            )
-            for name, directory_descriptor in zip(names, directories)
+            ),
+            _identity(
+                os.stat(
+                    right.name,
+                    dir_fd=right.directory_descriptor,
+                    follow_symlinks=False,
+                )
+            ),
         )
-        if swapped != (identities[1], identities[0]):
+        if swapped != (right.identity, left.identity):
             raise OutputPolicyError(
                 "Linux atomic-exchange probe returned unexpected identities"
             )
 
         _posix_exchange_names(
-            names[0],
-            directories[0],
-            names[1],
-            directories[1],
+            left.name,
+            left.directory_descriptor,
+            right.name,
+            right.directory_descriptor,
         )
-        restored = tuple(
+        restored = (
             _identity(
                 os.stat(
-                    name,
-                    dir_fd=directory_descriptor,
+                    left.name,
+                    dir_fd=left.directory_descriptor,
                     follow_symlinks=False,
                 )
-            )
-            for name, directory_descriptor in zip(names, directories)
+            ),
+            _identity(
+                os.stat(
+                    right.name,
+                    dir_fd=right.directory_descriptor,
+                    follow_symlinks=False,
+                )
+            ),
         )
-        if restored != tuple(identities):
+        if restored != (left.identity, right.identity):
             raise OutputPolicyError(
                 "Linux atomic-exchange probe could not restore its identities"
             )
     except (OSError, OutputPolicyError) as exc:
         failure = exc
     finally:
-        for name, directory_descriptor in zip(names, directories):
-            try:
-                named = os.stat(
-                    name,
-                    dir_fd=directory_descriptor,
-                    follow_symlinks=False,
-                )
-            except OSError:
-                continue
-            named_identity = _identity(named)
-            for descriptor, identity in zip(descriptors, identities):
-                if named_identity == identity:
-                    _unlink_open_posix_file(
-                        descriptor,
-                        name,
-                        directory_descriptor,
-                    )
-                    break
-        for descriptor in descriptors:
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass
+        cleanup_failures = _cleanup_posix_probe_artifacts(artifacts)
+
+    if cleanup_failures:
+        detail = "; ".join(cleanup_failures)
+        cleanup_error = OutputPolicyError(
+            f"could not remove exact atomic-exchange probe artifacts for {out}: {detail}"
+        )
+        if failure is None:
+            raise cleanup_error
+        raise OutputPolicyError(
+            "the output filesystem atomic-exchange probe failed and exact cleanup "
+            f"also failed for {out}: {detail}"
+        ) from failure
     if failure is not None:
         raise OutputPolicyError(
             f"the output filesystem cannot perform an identity-safe atomic exchange for "
@@ -1114,6 +1275,7 @@ def _prepare_posix_replacement_metadata(
         raise OutputPolicyError("output directory handle is unavailable")
     existing_descriptor = -1
     try:
+        _verify_posix_target_directory(stage, out)
         _verify_posix_force_directory_contract(stage, out)
         existing_descriptor = os.open(
             out.name,
@@ -1373,16 +1535,12 @@ def _publish_posix_force_exchange(
 
     if stage.directory_descriptor is None or stage.target_directory_descriptor is None:
         raise OutputPolicyError("POSIX publication handles are unavailable")
-    publish_name = f"publish-{secrets.token_hex(16)}{out.suffix or '.img'}"
+    publish_name: str | None = None
     linked = False
     exchanged = False
     try:
         _verify_posix_force_directory_contract(stage, out)
-        _posix_link_open_stage(
-            stage,
-            publish_name,
-            stage.directory_descriptor,
-        )
+        publish_name = _link_unique_posix_stage_anchor(stage, out)
         linked = True
         _verify_posix_replacement_metadata(replacement, stage, out)
         _verify_posix_staged_replacement_metadata(replacement, stage, out)
@@ -1411,14 +1569,14 @@ def _publish_posix_force_exchange(
         exchanged = False
     except (OSError, OutputPolicyError) as exc:
         rollback_error: OutputPolicyError | None = None
-        if exchanged:
+        if exchanged and publish_name is not None:
             try:
                 _rollback_posix_exchange(stage, publish_name, out)
                 linked = False
                 exchanged = False
             except OutputPolicyError as rollback_exc:
                 rollback_error = rollback_exc
-        elif linked:
+        elif linked and publish_name is not None:
             if _unlink_open_posix_file(
                 stage.descriptor,
                 publish_name,

@@ -60,7 +60,9 @@ class OutputPolicyTestCase(unittest.TestCase):
     def stage_paths(self, root: Path) -> list[Path]:
         return [
             *root.glob(".*.atomic-*"),
-            *root.glob(".frame-exchange-probe-*"),
+            *root.glob(".f-*"),
+            *root.glob(".frame-exchange-*"),
+            *root.glob(".x*"),
         ]
 
 
@@ -917,6 +919,90 @@ class PosixPublicationTests(OutputPolicyTestCase):
             self.assertEqual(victim.read_bytes(), b"KEEP")
             self.assertEqual(self.stage_paths(root), [])
 
+    def _assert_probe_fstat_failure_leaves_zero_residue(self, fault_index: int) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output = root / "frame.png"
+            stage = extractor._create_output_stage(output)
+            original_open = extractor.os.open
+            original_fstat = extractor.os.fstat
+            probe_names = ("probe-private", "probe-public")
+            probe_descriptors: list[int] = []
+            failed = False
+
+            def capture_probe_open(
+                path: str | os.PathLike[str],
+                flags: int,
+                mode: int = 0o777,
+                *,
+                dir_fd: int | None = None,
+            ) -> int:
+                descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+                if os.fspath(path) in probe_names:
+                    probe_descriptors.append(descriptor)
+                return descriptor
+
+            def fail_selected_probe_fstat(descriptor: int) -> os.stat_result:
+                nonlocal failed
+                if (
+                    not failed
+                    and len(probe_descriptors) > fault_index
+                    and descriptor == probe_descriptors[fault_index]
+                ):
+                    failed = True
+                    raise OSError(
+                        errno.EIO,
+                        f"injected probe {fault_index + 1} fstat failure",
+                    )
+                return original_fstat(descriptor)
+
+            def bounded_probe_name(
+                tag: str,
+                _directory_descriptor: int,
+                _out: Path,
+            ) -> str:
+                return probe_names[0] if tag == "exchange-private" else probe_names[1]
+
+            try:
+                with (
+                    mock.patch.object(
+                        extractor,
+                        "_posix_auxiliary_name",
+                        side_effect=bounded_probe_name,
+                    ),
+                    mock.patch.object(
+                        extractor.os,
+                        "open",
+                        side_effect=capture_probe_open,
+                    ),
+                    mock.patch.object(
+                        extractor.os,
+                        "fstat",
+                        side_effect=fail_selected_probe_fstat,
+                    ),
+                    self.assertRaisesRegex(
+                        extractor.OutputPolicyError,
+                        f"injected probe {fault_index + 1} fstat failure",
+                    ),
+                ):
+                    extractor._probe_posix_atomic_exchange(stage, output)
+
+                self.assertTrue(failed)
+                self.assertFalse((stage.directory_path / probe_names[0]).exists())
+                self.assertFalse((root / probe_names[1]).exists())
+                for descriptor in probe_descriptors:
+                    with self.assertRaises(OSError):
+                        os.fstat(descriptor)
+            finally:
+                extractor._cleanup_output_stage(stage)
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_first_probe_fstat_failure_leaves_zero_residue(self) -> None:
+        self._assert_probe_fstat_failure_leaves_zero_residue(0)
+
+    def test_second_probe_fstat_failure_leaves_zero_residue(self) -> None:
+        self._assert_probe_fstat_failure_leaves_zero_residue(1)
+
     def test_private_directory_creation_stays_bound_to_open_target_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             parent = Path(temp_dir)
@@ -1122,6 +1208,59 @@ class PosixPublicationTests(OutputPolicyTestCase):
             self.assertEqual(output.read_bytes(), b"GENERATED_FRAME")
             with self.assertRaises(OSError):
                 os.fstat(snapshots[0].descriptor)
+            self.assertEqual(self.stage_paths(root), [])
+
+    def test_force_auxiliary_names_fit_name_max_14_with_unicode_output(self) -> None:
+        if not extractor._posix_descriptor_xattrs_supported():
+            self.skipTest("complete Linux replacement contract unavailable")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            clip = root / "accepted-take.mp4"
+            output = root / "雪.png"
+            clip.write_bytes(b"clip")
+            output.write_bytes(b"old frame")
+            original_exchange = extractor._posix_exchange_names
+            exchange_names: list[str] = []
+
+            def capture_exchange(
+                left_name: str,
+                left_directory_descriptor: int,
+                right_name: str,
+                right_directory_descriptor: int,
+            ) -> None:
+                exchange_names.extend((left_name, right_name))
+                original_exchange(
+                    left_name,
+                    left_directory_descriptor,
+                    right_name,
+                    right_directory_descriptor,
+                )
+
+            with (
+                mock.patch.object(extractor.os, "fpathconf", return_value=14),
+                mock.patch.object(
+                    extractor,
+                    "_posix_exchange_names",
+                    side_effect=capture_exchange,
+                ),
+                mock.patch.object(
+                    extractor,
+                    "render_frame_png",
+                    return_value=b"GENERATED_FRAME",
+                ),
+            ):
+                result = extractor.extract_frame(
+                    "fake-ffmpeg", clip, output, False, True
+                )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(output.read_bytes(), b"GENERATED_FRAME")
+            auxiliary_names = [name for name in exchange_names if name.startswith(".x")]
+            self.assertGreaterEqual(len(auxiliary_names), 5)
+            self.assertTrue(
+                all(len(os.fsencode(name)) <= 14 for name in auxiliary_names),
+                exchange_names,
+            )
             self.assertEqual(self.stage_paths(root), [])
 
     def test_force_swap_after_final_verify_is_rolled_back_without_overwrite(self) -> None:
@@ -1748,9 +1887,12 @@ class PublicationPrimitiveTests(unittest.TestCase):
             extended_attributes=(),
         )
         with (
-            mock.patch.object(extractor.secrets, "token_hex", return_value="a" * 32),
             mock.patch.object(extractor, "_verify_posix_force_directory_contract"),
-            mock.patch.object(extractor, "_posix_link_open_stage"),
+            mock.patch.object(
+                extractor,
+                "_link_unique_posix_stage_anchor",
+                return_value="bounded-anchor-a",
+            ),
             mock.patch.object(extractor, "_verify_posix_replacement_metadata"),
             mock.patch.object(extractor, "_verify_posix_staged_replacement_metadata"),
             mock.patch.object(extractor, "_posix_exchange_names") as exchange,
@@ -1773,10 +1915,10 @@ class PublicationPrimitiveTests(unittest.TestCase):
                 Path("frame.png"),
             )
 
-        exchange.assert_called_once_with("publish-" + "a" * 32 + ".png", 42, "frame.png", 43)
+        exchange.assert_called_once_with("bounded-anchor-a", 42, "frame.png", 43)
         rollback.assert_called_once_with(
             stage,
-            "publish-" + "a" * 32 + ".png",
+            "bounded-anchor-a",
             Path("frame.png"),
         )
         self.assertFalse(stage.published)
@@ -1798,9 +1940,12 @@ class PublicationPrimitiveTests(unittest.TestCase):
             extended_attributes=(),
         )
         with (
-            mock.patch.object(extractor.secrets, "token_hex", return_value="b" * 32),
             mock.patch.object(extractor, "_verify_posix_force_directory_contract"),
-            mock.patch.object(extractor, "_posix_link_open_stage"),
+            mock.patch.object(
+                extractor,
+                "_link_unique_posix_stage_anchor",
+                return_value="bounded-anchor-b",
+            ),
             mock.patch.object(extractor, "_verify_posix_replacement_metadata"),
             mock.patch.object(extractor, "_verify_posix_staged_replacement_metadata"),
             mock.patch.object(extractor, "_posix_exchange_names"),
@@ -1819,10 +1964,60 @@ class PublicationPrimitiveTests(unittest.TestCase):
 
         unlink.assert_called_once_with(
             44,
-            "publish-" + "b" * 32 + ".png",
+            "bounded-anchor-b",
             42,
         )
         self.assertTrue(stage.published)
+
+    def test_auxiliary_name_fits_name_max_14_for_unicode_long_suffix(self) -> None:
+        output = Path("雪." + "界" * 180)
+        with (
+            mock.patch.object(
+                extractor.os,
+                "fpathconf",
+                return_value=14,
+                create=True,
+            ),
+            mock.patch.object(extractor.secrets, "token_bytes", return_value=b"A" * 32),
+        ):
+            name = extractor._posix_auxiliary_name("publish", 41, output)
+
+        self.assertEqual(len(os.fsencode(name)), 14)
+        self.assertTrue(name.startswith(".x"))
+        self.assertNotIn(output.suffix, name)
+
+    def test_publication_anchor_retries_a_bounded_name_collision(self) -> None:
+        stage = extractor.OutputStage(
+            Path("private/frame.png"),
+            (1, 2),
+            41,
+            directory_descriptor=42,
+        )
+        with (
+            mock.patch.object(
+                extractor,
+                "_posix_auxiliary_name",
+                side_effect=(".xfirsttoken12", ".xsecondtoken1"),
+            ),
+            mock.patch.object(
+                extractor,
+                "_posix_link_open_stage",
+                side_effect=(FileExistsError("collision"), None),
+            ) as link,
+            mock.patch.object(
+                extractor,
+                "_unlink_open_posix_file",
+                return_value=False,
+            ) as unlink,
+        ):
+            name = extractor._link_unique_posix_stage_anchor(
+                stage,
+                Path("雪.png"),
+            )
+
+        self.assertEqual(name, ".xsecondtoken1")
+        self.assertEqual(link.call_count, 2)
+        unlink.assert_called_once_with(41, ".xfirsttoken12", 42)
 
 
 class PngStreamTests(unittest.TestCase):

@@ -128,6 +128,7 @@ jobs:
               "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_user_extended_attributes",
               "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_extended_access_acl",
               "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_holds_verified_target_descriptor_through_decode",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_auxiliary_names_fit_name_max_14_with_unicode_output",
               "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_swap_after_final_verify_is_rolled_back_without_overwrite",
               "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_policy_error_after_anchor_link_cleans_owned_anchor",
               "tests.test_extract_last_frame.RealFfmpegFrameTests.test_existing_output_is_replaced_with_the_true_final_frame",
