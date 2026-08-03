@@ -77,6 +77,27 @@ class OutputPolicyTestCase(unittest.TestCase):
             *root.glob(".x*"),
         ]
 
+    def assert_effective_win32_security_equal(
+        self, expected: str, observed: str
+    ) -> None:
+        expected_parts = extractor._split_win32_security_policy(expected)
+        observed_parts = extractor._split_win32_security_policy(observed)
+        self.assertEqual(observed_parts[0], expected_parts[0], "owner")
+        self.assertEqual(observed_parts[1], expected_parts[1], "group")
+        self.assertEqual(observed_parts[4], expected_parts[4], "mandatory label")
+        self.assertEqual(
+            extractor._win32_effective_dacl_differences(expected, observed),
+            (),
+        )
+
+    def assert_effective_win32_policy_equal(
+        self,
+        expected: tuple[str, int, tuple[str, ...]],
+        observed: tuple[str, int, tuple[str, ...]],
+    ) -> None:
+        self.assert_effective_win32_security_equal(expected[0], observed[0])
+        self.assertEqual(observed[1:], expected[1:])
+
 
 class OutputCollisionCliTests(OutputPolicyTestCase):
     def test_existing_output_is_refused_without_force(self) -> None:
@@ -285,7 +306,7 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
             self.assertEqual(result, 0, stdout + stderr)
             render.assert_called_once_with("fake-ffmpeg", clip, False)
             self.assertEqual(output.read_bytes(), b"new complete frame")
-            self.assertEqual(after, before)
+            self.assert_effective_win32_policy_equal(before, after)
             self.assertEqual(self.stage_paths(root), [])
 
     @unittest.skipUnless(os.name == "nt", "Windows namespace locking is platform-specific")
@@ -613,17 +634,18 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
             ) -> int:
                 nonlocal calls
                 calls += 1
-                if calls == 1:
-                    stage_path = _from_extended_windows_path(replacement)
+                result = int(
+                    real_replace(replaced, replacement, backup, flags, exclude, reserved)
+                )
+                if result:
+                    target = _from_extended_windows_path(replaced)
                     subprocess.run(
-                        ["icacls", str(stage_path), "/grant", "*S-1-1-0:(R)"],
+                        ["icacls", str(target), "/grant", "*S-1-1-0:(R)"],
                         check=True,
                         capture_output=True,
                         text=True,
                     )
-                return int(
-                    real_replace(replaced, replacement, backup, flags, exclude, reserved)
-                )
+                return result
 
             with (
                 mock.patch.object(
@@ -632,6 +654,7 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                 mock.patch.object(
                     extractor, "_ReplaceFileW", side_effect=replace_with_attack
                 ),
+                mock.patch.object(extractor, "_SetSecurityInfo", return_value=0),
             ):
                 result, stdout, stderr = self.invoke(
                     str(clip),
@@ -647,9 +670,10 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
                 final_security = extractor._win32_security_policy(descriptor, output)
             finally:
                 os.close(descriptor)
-            self.assertEqual(result, 0, stdout + stderr)
+            self.assertEqual(result, 1, stdout + stderr)
+            self.assertIn("rolled back", stdout)
             self.assertEqual(calls, 1)
-            self.assertEqual(output.read_bytes(), b"generated frame")
+            self.assertEqual(output.read_bytes(), b"old frame")
             self.assertEqual(final_security, expected_security)
             self.assertEqual(self.stage_paths(root), [])
 
@@ -671,13 +695,7 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
             expected_dacl = extractor._split_win32_security_policy(
                 expected_security
             )
-            expected_flags = re.findall(
-                r"\([^;]+;([^;]*);", expected_dacl[2]
-            )
-            self.assertIn("AI", expected_dacl[3])
             self.assertNotIn("P", expected_dacl[3])
-            self.assertTrue(expected_flags)
-            self.assertTrue(all("ID" in flags for flags in expected_flags))
             real_replace = extractor._ReplaceFileW
             calls = 0
 
@@ -761,7 +779,9 @@ class OutputCollisionCliTests(OutputPolicyTestCase):
             self.assertEqual(result, 0, stdout + stderr)
             self.assertEqual(calls, 1)
             self.assertEqual(output.read_bytes(), b"generated frame")
-            self.assertEqual(final_security, expected_security)
+            self.assert_effective_win32_security_equal(
+                expected_security, final_security
+            )
             self.assertEqual(self.stage_paths(root), [])
 
     @unittest.skipUnless(os.name == "nt", "Windows replacement transactions are platform-specific")
@@ -2657,6 +2677,99 @@ class PublicationPrimitiveTests(unittest.TestCase):
         )
         self.assertEqual(all_differences, tuple(label for label, _ in cases))
         self.assertLessEqual(len(", ".join(all_differences)), 160)
+
+    def test_windows_effective_dacl_normalizes_only_inheritance_history(self) -> None:
+        expected = extractor.WindowsArtifactState(
+            identity=(1, 2),
+            security_policy=(
+                "O:SYG:BAD:AI"
+                "(OA;CIID;FA;11111111-1111-1111-1111-111111111111;"
+                "22222222-2222-2222-2222-222222222222;SY)"
+                "(D;ID;FR;;;BA)S:(ML;;NW;;;ME)"
+            ),
+            policy_attributes=0,
+            named_streams=(),
+            content_digest=b"digest",
+        )
+
+        def observed(dacl: str) -> extractor.WindowsArtifactState:
+            return extractor.WindowsArtifactState(
+                identity=expected.identity,
+                security_policy=f"O:SYG:BAD:{dacl}S:(ML;;NW;;;ME)",
+                policy_attributes=expected.policy_attributes,
+                named_streams=expected.named_streams,
+                content_digest=expected.content_digest,
+            )
+
+        authorized = (
+            "AR(OA;CI;FA;11111111-1111-1111-1111-111111111111;"
+            "22222222-2222-2222-2222-222222222222;SY)(D;;FR;;;BA)"
+        )
+        rewritten = observed(authorized)
+        self.assertEqual(
+            extractor._win32_artifact_differences(
+                expected, rewritten, effective_dacl=True
+            ),
+            (),
+        )
+        self.assertEqual(
+            extractor._win32_artifact_differences(expected, rewritten),
+            ("DACL entries", "DACL control flags"),
+        )
+
+        effective_changes = (
+            (
+                "DACL entries",
+                authorized.replace("OA;CI;FA", "A;CI;FA"),
+            ),
+            (
+                "DACL entries",
+                authorized.replace("OA;CI;FA", "OA;OI;FA"),
+            ),
+            (
+                "DACL entries",
+                authorized.replace("OA;CI;FA", "OA;CINPIO;FA"),
+            ),
+            (
+                "DACL entries",
+                authorized.replace("OA;CI;FA", "OA;CI;FR"),
+            ),
+            (
+                "DACL entries",
+                authorized.replace("11111111-1111", "33333333-3333"),
+            ),
+            (
+                "DACL entries",
+                authorized.replace("22222222-2222", "44444444-4444"),
+            ),
+            (
+                "DACL entries",
+                authorized.replace(";SY)(D", ";WD)(D"),
+            ),
+            (
+                "DACL entries",
+                authorized + "(A;;FR;;;WD)",
+            ),
+            (
+                "DACL entries",
+                "AR(D;;FR;;;BA)" + authorized[2 : authorized.index("(D;")],
+            ),
+            ("DACL control flags", "P" + authorized),
+        )
+        for label, dacl in effective_changes:
+            with self.subTest(label=label, dacl=dacl):
+                self.assertEqual(
+                    extractor._win32_artifact_differences(
+                        expected, observed(dacl), effective_dacl=True
+                    ),
+                    (label,),
+                )
+        self.assertEqual(
+            extractor._win32_artifact_differences(
+                expected, observed("NO_ACCESS_CONTROL"), effective_dacl=True
+            ),
+            ("DACL entries", "DACL control flags"),
+        )
 
     @unittest.skipUnless(os.name == "nt", "Windows security descriptors are platform-specific")
     def test_windows_security_policy_ignores_only_relative_layout(self) -> None:

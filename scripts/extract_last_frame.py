@@ -197,9 +197,128 @@ def _split_win32_security_policy(policy: str) -> tuple[str, str, str, str, str]:
     )
 
 
+def _split_sddl_aces(entries: str) -> tuple[str, ...]:
+    """Split canonical SDDL ACEs; malformed or quoted forms fail closed."""
+
+    aces: list[str] = []
+    cursor = 0
+    while cursor < len(entries):
+        if entries[cursor] != "(":
+            raise ValueError("unexpected text outside an SDDL ACE")
+        start = cursor
+        depth = 0
+        while cursor < len(entries):
+            character = entries[cursor]
+            if character == '"':
+                raise ValueError("conditional SDDL requires exact comparison")
+            if character == "(":
+                depth += 1
+            elif character == ")":
+                depth -= 1
+                if depth == 0:
+                    cursor += 1
+                    aces.append(entries[start:cursor])
+                    break
+                if depth < 0:
+                    raise ValueError("unbalanced SDDL ACE")
+            cursor += 1
+        else:
+            raise ValueError("unterminated SDDL ACE")
+    return tuple(aces)
+
+
+def _sddl_ace_flags(flags: str) -> tuple[str, ...]:
+    """Parse every ACE flag so only the ID provenance bit can be normalized."""
+
+    allowed = {"CI", "OI", "NP", "IO", "ID", "SA", "FA", "TP", "CR"}
+    if len(flags) % 2:
+        raise ValueError("malformed SDDL ACE flags")
+    tokens = tuple(flags[index : index + 2] for index in range(0, len(flags), 2))
+    if any(token not in allowed for token in tokens):
+        raise ValueError("unknown SDDL ACE flag")
+    return tokens
+
+
+def _effective_sddl_ace(ace: str) -> tuple[str, tuple[str, ...], str, str, str, str]:
+    """Keep ACE order and every field except inherited-history provenance."""
+
+    if not (ace.startswith("(") and ace.endswith(")")):
+        raise ValueError("malformed SDDL ACE")
+    fields = ace[1:-1].split(";", 5)
+    if len(fields) != 6:
+        raise ValueError("malformed SDDL ACE fields")
+    ace_type, raw_flags, rights, object_guid, inherited_guid, trustee = fields
+    flags = tuple(flag for flag in _sddl_ace_flags(raw_flags) if flag != "ID")
+    return ace_type, flags, rights, object_guid, inherited_guid, trustee
+
+
+def _effective_sddl_dacl_control(control: str) -> tuple[bool, bool]:
+    """Keep P/null boundaries while normalizing only AI/AR history bits."""
+
+    protected = False
+    null_dacl = False
+    remaining = control
+    seen: set[str] = set()
+    while remaining:
+        if remaining.startswith("NO_ACCESS_CONTROL"):
+            token = "NO_ACCESS_CONTROL"
+        elif remaining.startswith(("AR", "AI")):
+            token = remaining[:2]
+        elif remaining.startswith("P"):
+            token = "P"
+        else:
+            raise ValueError("unknown SDDL DACL control flag")
+        if token in seen:
+            raise ValueError("duplicate SDDL DACL control flag")
+        seen.add(token)
+        remaining = remaining[len(token) :]
+        if token == "P":
+            protected = True
+        elif token == "NO_ACCESS_CONTROL":
+            null_dacl = True
+    return protected, null_dacl
+
+
+def _effective_win32_dacl(
+    policy: str,
+) -> tuple[tuple[tuple[str, tuple[str, ...], str, str, str, str], ...], tuple[bool, bool]]:
+    """Return ordered effective ACEs and the access-affecting control state."""
+
+    _, _, entries, control, _ = _split_win32_security_policy(policy)
+    return (
+        tuple(_effective_sddl_ace(ace) for ace in _split_sddl_aces(entries)),
+        _effective_sddl_dacl_control(control),
+    )
+
+
+def _win32_effective_dacl_differences(
+    expected_policy: str,
+    observed_policy: str,
+) -> tuple[str, ...]:
+    """Compare effective DACLs, falling back to exact on unknown SDDL."""
+
+    expected_split = _split_win32_security_policy(expected_policy)
+    observed_split = _split_win32_security_policy(observed_policy)
+    try:
+        expected_entries, expected_control = _effective_win32_dacl(expected_policy)
+        observed_entries, observed_control = _effective_win32_dacl(observed_policy)
+    except ValueError:
+        expected_entries, observed_entries = expected_split[2], observed_split[2]
+        expected_control, observed_control = expected_split[3], observed_split[3]
+
+    differences: list[str] = []
+    if expected_entries != observed_entries:
+        differences.append("DACL entries")
+    if expected_control != observed_control:
+        differences.append("DACL control flags")
+    return tuple(differences)
+
+
 def _win32_artifact_differences(
     expected: WindowsArtifactState,
     observed: WindowsArtifactState,
+    *,
+    effective_dacl: bool = False,
 ) -> tuple[str, ...]:
     """Name mismatched postconditions without logging policy or file contents."""
 
@@ -211,21 +330,28 @@ def _win32_artifact_differences(
     if expected.security_policy != observed.security_policy:
         expected_security = _split_win32_security_policy(expected.security_policy)
         observed_security = _split_win32_security_policy(observed.security_policy)
-        labels = (
-            "owner",
-            "group",
-            "DACL entries",
-            "DACL control flags",
-            "mandatory label",
-        )
-        security_differences = [
-            label
-            for label, expected_value, observed_value in zip(
-                labels, expected_security, observed_security
+        security_differences: list[str] = []
+        if expected_security[0] != observed_security[0]:
+            security_differences.append("owner")
+        if expected_security[1] != observed_security[1]:
+            security_differences.append("group")
+        if effective_dacl:
+            security_differences.extend(
+                _win32_effective_dacl_differences(
+                    expected.security_policy, observed.security_policy
+                )
             )
-            if expected_value != observed_value
-        ]
-        differences.extend(security_differences or ("security descriptor",))
+        else:
+            if expected_security[2] != observed_security[2]:
+                security_differences.append("DACL entries")
+            if expected_security[3] != observed_security[3]:
+                security_differences.append("DACL control flags")
+        if expected_security[4] != observed_security[4]:
+            security_differences.append("mandatory label")
+        if security_differences:
+            differences.extend(security_differences)
+        elif not effective_dacl:
+            differences.append("security descriptor")
     if expected.named_streams != observed.named_streams:
         differences.append("named streams (ADS)")
     if expected.policy_attributes != observed.policy_attributes:
@@ -279,8 +405,6 @@ if os.name == "nt":
     _SACL_SECURITY_INFORMATION = 0x00000008
     _LABEL_SECURITY_INFORMATION = 0x00000010
     _SDDL_REVISION_1 = 1
-    _ACL_REVISION = 2
-    _INHERITED_ACE = 0x10
     _UNPROTECTED_DACL_SECURITY_INFORMATION = 0x20000000
     _PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
     _SE_FILE_OBJECT = 1
@@ -378,20 +502,6 @@ if os.name == "nt":
         ctypes.POINTER(wintypes.BOOL),
     )
     _GetSecurityDescriptorDacl.restype = wintypes.BOOL
-    _InitializeAcl = _advapi32.InitializeAcl
-    _InitializeAcl.argtypes = (
-        ctypes.c_void_p,
-        wintypes.DWORD,
-        wintypes.DWORD,
-    )
-    _InitializeAcl.restype = wintypes.BOOL
-    _GetAce = _advapi32.GetAce
-    _GetAce.argtypes = (
-        ctypes.c_void_p,
-        wintypes.DWORD,
-        ctypes.POINTER(ctypes.c_void_p),
-    )
-    _GetAce.restype = wintypes.BOOL
     _SetSecurityInfo = _advapi32.SetSecurityInfo
     _SetSecurityInfo.argtypes = (
         wintypes.HANDLE,
@@ -403,22 +513,6 @@ if os.name == "nt":
         ctypes.c_void_p,
     )
     _SetSecurityInfo.restype = wintypes.DWORD
-
-    class _Acl(ctypes.Structure):
-        _fields_ = (
-            ("AclRevision", wintypes.BYTE),
-            ("Sbz1", wintypes.BYTE),
-            ("AclSize", wintypes.WORD),
-            ("AceCount", wintypes.WORD),
-            ("Sbz2", wintypes.WORD),
-        )
-
-    class _AceHeader(ctypes.Structure):
-        _fields_ = (
-            ("AceType", wintypes.BYTE),
-            ("AceFlags", wintypes.BYTE),
-            ("AceSize", wintypes.WORD),
-        )
 
     class _FileRenameInfoEx(ctypes.Structure):
         _fields_ = (
@@ -780,53 +874,33 @@ def _restore_win32_dacl(
         )
 
     expected_security = _split_win32_security_policy(authorized_policy)
-    protected = "P" in expected_security[3]
-    protection = (
-        _PROTECTED_DACL_SECURITY_INFORMATION
-        if protected
-        else _UNPROTECTED_DACL_SECURITY_INFORMATION
-    )
-    # SetSecurityInfo applies parent inheritance when UNPROTECTED is requested.
-    # Passing the captured inherited ACEs would therefore add or reclassify them
-    # a second time. An empty, valid ACL asks Windows to regenerate the sibling's
-    # authorized parent-inherited DACL exactly once. Protected DACLs have no such
-    # parent merge and retain the captured ACL verbatim.
-    applied_dacl = dacl
-    empty_acl = _Acl()
-    if not protected:
-        captured_acl = ctypes.cast(dacl, ctypes.POINTER(_Acl)).contents
-        for index in range(captured_acl.AceCount):
-            ace = ctypes.c_void_p()
-            ctypes.set_last_error(0)
-            if not _GetAce(dacl, index, ctypes.byref(ace)) or not ace.value:
-                error = ctypes.get_last_error()
-                raise OutputPolicyError(
-                    f"cannot inspect authorized Windows DACL ACE {index} for {out}: "
-                    f"[WinError {error}] {ctypes.FormatError(error).strip()}"
-                )
-            header = ctypes.cast(ace, ctypes.POINTER(_AceHeader)).contents
-            if not header.AceFlags & _INHERITED_ACE:
-                raise OutputPolicyError(
-                    "authorized unprotected Windows DACL contains an explicit "
-                    f"ACE; replacement was refused: {out}"
-                )
-        ctypes.set_last_error(0)
-        if not _InitializeAcl(
-            ctypes.byref(empty_acl), ctypes.sizeof(empty_acl), _ACL_REVISION
-        ):
-            error = ctypes.get_last_error()
-            raise OutputPolicyError(
-                f"cannot initialize an empty Windows DACL for {out}: "
-                f"[WinError {error}] {ctypes.FormatError(error).strip()}"
-            )
-        applied_dacl = ctypes.cast(ctypes.byref(empty_acl), ctypes.c_void_p)
+    observed_before = _win32_security_policy(descriptor, out)
+    try:
+        expected_control = _effective_sddl_dacl_control(expected_security[3])
+        observed_control = _effective_sddl_dacl_control(
+            _split_win32_security_policy(observed_before)[3]
+        )
+    except ValueError as exc:
+        raise OutputPolicyError(
+            f"cannot interpret the authorized Windows DACL control for {out}"
+        ) from exc
+    # Reapplying captured inherited ACEs with UNPROTECTED makes Windows run
+    # inheritance again. Supply a protection flag only when the P boundary
+    # actually changed; otherwise apply the captured ACL without propagation.
+    protection = 0
+    if expected_control[0] != observed_control[0]:
+        protection = (
+            _PROTECTED_DACL_SECURITY_INFORMATION
+            if expected_control[0]
+            else _UNPROTECTED_DACL_SECURITY_INFORMATION
+        )
     error = _SetSecurityInfo(
         wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
         _SE_FILE_OBJECT,
         _DACL_SECURITY_INFORMATION | protection,
         None,
         None,
-        applied_dacl,
+        dacl,
         None,
     )
     if error:
@@ -835,20 +909,13 @@ def _restore_win32_dacl(
             f"[WinError {error}] {ctypes.FormatError(error).strip()}"
         )
 
-    observed_security = _split_win32_security_policy(
-        _win32_security_policy(descriptor, out)
-    )
-    differences = tuple(
-        label
-        for label, expected, observed in (
-            ("DACL entries", expected_security[2], observed_security[2]),
-            ("DACL control flags", expected_security[3], observed_security[3]),
-        )
-        if expected != observed
+    observed_policy = _win32_security_policy(descriptor, out)
+    differences = _win32_effective_dacl_differences(
+        authorized_policy, observed_policy
     )
     if differences:
         raise OutputPolicyError(
-            "authorized Windows DACL did not survive canonical reapplication "
+            "authorized Windows DACL did not survive effective reapplication "
             f"({', '.join(differences)}): {out}"
         )
 
@@ -1447,9 +1514,9 @@ def _publish_win32_force_transaction(
                 f"({', '.join(backup_differences)})"
             )
         # ReplaceFileW intentionally merges the replaced file's DACL into the
-        # replacement. Restore the exact authorized DACL state through the
-        # retained output handle, then compare canonical ACEs and every DACL
-        # control flag; no DACL difference is ignored.
+        # replacement. Restore the authorized DACL through the retained output
+        # handle, compare every effective ACE field and the P/null boundaries,
+        # and normalize only ID/AI/AR auto-inheritance history.
         if output_state.identity == stage_state.identity:
             try:
                 _restore_win32_dacl(
@@ -1460,10 +1527,13 @@ def _publish_win32_force_transaction(
                 )
             except OutputPolicyError:
                 violations.append(
-                    "the authorized destination DACL could not be restored exactly"
+                    "the authorized destination DACL could not be restored "
+                    "without an effective policy change"
                 )
             output_state = _snapshot_win32_artifact(output_descriptor, target)
-        output_differences = _win32_artifact_differences(stage_state, output_state)
+        output_differences = _win32_artifact_differences(
+            stage_state, output_state, effective_dacl=True
+        )
         if output_differences:
             violations.append(
                 "the replacement changed after commit "

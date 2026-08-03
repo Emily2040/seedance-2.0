@@ -127,6 +127,7 @@ class PrivilegedWorkflowSecurityTests(unittest.TestCase):
             "        shell: bash\n"
             "        run: |\n"
             "          set -euo pipefail\n"
+            '          git config --global --add safe.directory "$GITHUB_WORKSPACE"\n'
             '          checkout_root="$(git -C "$GITHUB_WORKSPACE" '
             'rev-parse --show-toplevel)"\n',
             self.privileged,
