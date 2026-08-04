@@ -4,7 +4,7 @@
   <img alt="Seedance 2.0 Skill OS — Direct the model. Don't micro-manage the frame." src="assets/hero-dark.svg" width="100%">
 </picture>
 
-An agent that reads the scene before it writes the prompt: text, image, video, and reference-to-video for Seedance 2.0, with native audio, IP-safe rewrites, source-dated platform facts, and native reader paths in six languages.
+An agent that reads the scene before it writes the prompt: text, image, video, and reference-to-video for Seedance 2.0, with native audio, IP-safe rewrites, source-dated platform facts, and reader paths in six languages.
 
 English · [中文](docs/README.zh.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md)
 
@@ -38,11 +38,16 @@ It then holds one directorial voice across every short clip of a long story, and
 
 > A reveal is not lit, framed, blocked, or performed like a goodbye. The engine refuses the generic answer and derives the specific one.
 
-## Native Language Start / 多语言入门 / 多言語スタート / 다국어 시작
+## Multilingual Start / 多语言入门 / 多言語スタート / 다국어 시작
 
-Seedance 2.0 Skill OS is English-readable, but the v6 line gives Chinese, Japanese, and Korean readers first-class entry points, active example skills, and native prompt guidance. Keep reference tags exactly as written (`@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`) in every language.
+Seedance 2.0 Skill OS is English-readable, but the v6 line gives Chinese, Japanese, and Korean readers first-class entry points, active example skills, and language-specific prompt guidance.
+Keep reference tags exactly as written (`@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`) in every language.
+Static checks preserve structure and tokens; linguistic and authorship questions follow the independent human-review protocol.
+Use the independent [`multilingual language review`](references/multilingual-native-review.md) rubric for language-quality review.
+Every material score must cite its pinned criterion-specific localized candidate text and carry a criterion-specific reason, never the common brief alone.
+Completed records belong in the CI-validated evidence artifact; it is currently empty, so no completed native-language review is claimed.
 
-| Language | Start path | Native reader note |
+| Language | Start path | Reader note |
 |---|---|---|
 | English | [`seedance-prompt`](skills/seedance-prompt/SKILL.md), [`seedance-sequence`](skills/seedance-sequence/SKILL.md), [`references/vocab/en.md`](references/vocab/en.md) | Use precise production English: one visible beat, one camera move, real light, and clear reference roles. |
 | 中文 | [`中文指南`](docs/README.zh.md), [`seedance-vocab-zh`](skills/seedance-vocab-zh/SKILL.md), [`seedance-examples-zh`](skills/seedance-examples-zh/SKILL.md), [`references/vocab/zh.md`](references/vocab/zh.md) | 中文用户可从角色锁定、首尾帧、运镜、动作节奏开始；提示词要短、具体、保留参考标签，不把字幕交给模型生成。 |
@@ -70,7 +75,7 @@ This skill package turns Seedance 2.0 work into a repeatable assistant workflow:
 - Keeps model and platform claims source-dated so API, pricing, region, quota, and model-ID details are not guessed.
 - Plans into model strengths before drafting: a capability map, a fidelity-allocation model, and a working model of the generator's mechanics that explains why every rule works.
 - Runs the shoot like a producer after generation: five-verdict take triage, one-variable retakes, attempt budgets, and cost-aware drafting.
-- Provides native-reader front-page paths plus deeper multilingual cinematic vocabulary in English, 中文, 日本語, 한국어, Spanish, and Russian, including role binding, first/last-frame phrasing, edit/extend wording, safety wording, audio cues, continuation wording, and post-production text handling.
+- Provides front-page reader paths plus deeper multilingual cinematic vocabulary in English, 中文, 日本語, 한국어, Spanish, and Russian, including role binding, first/last-frame phrasing, edit/extend wording, safety wording, audio cues, continuation wording, and post-production text handling.
 - Adds original community-informed examples for Chinese, Japanese, Korean, Russian-English, and Spanish-English prompt structures.
 - Adds professional filmmaker workflows for treatment-to-shot-list planning, shot contracts, continuity ledgers, ACES/color handoff, audio post, subtitles/localization, aspect-ratio variants, campaign cutdowns, delivery/QC, and client review packets.
 - Handles safe false-positive repairs by clarifying benign production context, not by hiding unsafe intent.
@@ -294,7 +299,9 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`delivery-qc.md`](references/delivery-qc.md) | Professional preflight for picture, color, audio, captions, rights, metadata, versioning, and human QC. |
 | [`examples-by-mode.md`](references/examples-by-mode.md) | Mode-specific prompt examples for T2V, I2V, V2V, R2V, FLF2V, edit, extend, and troubleshooting. |
 | [`multilingual-community-examples.md`](references/multilingual-community-examples.md) | Original Chinese, Russian, Japanese, Korean, Spanish, and mixed-language prompt structures from safe community pattern mining. |
-| [`interview-starters.md`](references/interview-starters.md) | Native blank-slate starting-point menus and invites for the director interview in English, 中文, 日本語, 한국어, Spanish, and Russian. |
+| [`multilingual-native-review.md`](references/multilingual-native-review.md) | Independent human-review rubric and evidence contract for three zh-CN, ja-JP, and ko-KR fixture prompts; it is not authorship proof. |
+| [`multilingual-native-review-evidence.json`](evals/multilingual-native-review-evidence.json) | CI-validated review-record structure; the shipped empty list means no language-quality review has been submitted. |
+| [`interview-starters.md`](references/interview-starters.md) | Localized blank-slate starting-point menus and invites for the director interview in English, 中文, 日本語, 한국어, Spanish, and Russian. |
 | [`platform-surface-matrix.md`](references/platform-surface-matrix.md) | Model-vs-surface claim boundaries. |
 | [`model-name-map.md`](references/model-name-map.md) | Seedance naming, Fast variant, and Pro-label caveats. |
 | [`first-last-frame-guide.md`](references/first-last-frame-guide.md) | FLF2V, first-frame, and last-frame prompting. |
@@ -533,7 +540,20 @@ traceability beyond generic production words, explicit camera/light/sound/action
 contradictions, and repetition or padding patterns. Comparative creative quality
 still requires blinded model evaluation and native-language human review.
 
-The CI workflow runs this same list on push and pull request, with the one deliberate difference noted above: it omits `--enforce-freshness`. These checks are deterministic and offline — they prove the package is well-formed.
+The CI workflow runs this same list on push and pull request, with the one
+deliberate difference noted above: it omits `--enforce-freshness`. These checks
+are deterministic and offline — they prove the package is well-formed.
+
+The multilingual fixture check proves byte-exact reference-token preservation,
+canonical common-brief and candidate bindings, non-derived complete review-input
+pins, literal identical-string overlap across locale realizations, and the exact
+path, bytes, and digest of the canonical limitation disclaimer. It also runs a
+best-effort English known-phrase lint across declared public text surfaces. That
+lint is defense in depth, not proof that arbitrary prose or every supported
+language contains no semantic overclaim. Translated or paraphrased template
+detection, semantic differentiation, and reviewer-reasoning adequacy remain
+independent human-review questions under
+[`multilingual-native-review.md`](references/multilingual-native-review.md).
 
 ### Checked-in source metadata age
 
@@ -654,7 +674,13 @@ was requested, the stale artifact is atomically replaced by a bootstrap
 `harness_error` ledger. Post-run snapshot drift likewise makes every recorded row
 a non-scored harness error and exits 2.
 
-This is the quality gate, not a shape gate, so it lives outside offline CI; the latest run evidence is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
+This is the model-response quality gate, not a shape gate or a language/rendering
+certification, so it lives outside offline CI; the latest run evidence is
+recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
+Language-quality review uses the independent evidence protocol in
+[`multilingual-native-review.md`](references/multilingual-native-review.md). CI
+validates recorded bindings and scoring, while the truth and adequacy of
+reviewer reasoning remain manual judgments.
 
 <!-- installed-readme-validation:end -->
 

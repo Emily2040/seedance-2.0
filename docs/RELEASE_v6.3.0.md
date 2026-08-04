@@ -1,6 +1,6 @@
 # Seedance 2.0 Skill OS — v6.3.0
 
-A modular agent-skill operating system for directing ByteDance **Seedance 2.0** video. It turns vague ideas into production-ready prompts, **directs each scene like a filmmaker**, keeps platform facts source-dated, rewrites unsafe IP, and plans long-form stories across many clips — with native-reader paths for English, 中文, 日本語, and 한국어.
+A modular agent-skill operating system for directing ByteDance **Seedance 2.0** video. It turns vague ideas into production-ready prompts, **directs each scene like a filmmaker**, keeps platform facts source-dated, rewrites unsafe IP, and plans long-form stories across many clips — with localized reader paths for English, 中文, 日本語, and 한국어.
 
 ## What's new in v6.3.0 — audio, done honestly
 
@@ -17,7 +17,7 @@ A deep, skeptical research pass on Seedance 2.0's **native audio and dialogue**,
 - **Stateful long-form** — plan globally, generate locally: connected clips, continued strictly from accepted footage.
 - **Beginner fast lane** — the common single-clip idea skips the full gate loop.
 - **Real eval harness** — a model-in-the-loop scorer grades skill *output* against each case's assertions; the quality bar is measured, not asserted.
-- **Multilingual + safety** — native docs and examples for zh/ja/ko, cinematic vocab for zh/ja/ko/es/ru, IP-safe rewrites, source-dated platform facts.
+- **Multilingual + safety** — localized docs and examples for zh/ja/ko, cinematic vocab for zh/ja/ko/es/ru, IP-safe rewrites, source-dated platform facts.
 
 ## Quality bar
 

@@ -11,6 +11,8 @@ Score each case from 0 to 3:
 
 A release passes when every legacy case scores at least 2 and the legacy average score is at least 2.6.
 
+This model-judge score is evidence about the sampled response against declared assertions, not a language, culture, authorship, reviewer, or rendering certification. Chinese, Japanese, and Korean language-quality claims require the independent human protocol in [`multilingual-native-review.md`](multilingual-native-review.md); its canonical fixture remains pending until that review happens.
+
 ## V6 Sequence Rubric
 
 Use a 0-4 scale for sequence-state evals:
