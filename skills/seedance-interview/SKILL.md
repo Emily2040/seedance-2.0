@@ -49,7 +49,7 @@ This is the translator between a scene that exists in someone's head and one tha
 
 ## Starting Points
 
-For a blank-slate user, offer these as vivid, pickable directions - not as a form. Present them in the user's language; native menus and invites for 中文 / 日本語 / 한국어 / Español / Русский are in [interview-starters](../../references/interview-starters.md).
+For a blank-slate user, offer these as vivid, pickable directions - not as a form. Present them in the user's language; localized menus and invites for 中文 / 日本語 / 한국어 / Español / Русский are in [interview-starters](../../references/interview-starters.md).
 
 | Pick a lane | What it becomes |
 |---|---|
@@ -69,7 +69,7 @@ Then invite: "Pick one, mix two, or describe your own - or say *surprise me* and
 3. Every question ships with a default. End it with `(not sure? I'll go with [default] - it works well)`. "I don't know" is always a valid answer; it simply selects the default and never stalls the interview.
 4. One question, one decision. Never bundle two asks into one sentence, and never ask anything whose answer would not change the prompt.
 5. Keep their words. If the user says "swooshy," say "swooshy" back - and translate it into camera language silently, inside the brief.
-6. Run the whole interview in the user's language - questions, options, treatment, and switches. Keep imported reference tags literal (`@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`). For native starting-point menus and feeling-to-craft cues in the six supported languages, load [interview-starters](../../references/interview-starters.md).
+6. Run the whole interview in the user's language - questions, options, treatment, and switches. Keep imported reference tags literal (`@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`). For localized starting-point menus and feeling-to-craft cues in the six supported languages, load [interview-starters](../../references/interview-starters.md).
 7. Honor professional direction. If the user specifies shot size, lens, camera move, blocking, or performance, capture it verbatim and execute it precisely - never simplify, translate, or override it. Fill only the gaps they left, and compile a shot-contract-grade result (shot size, lens feel, camera support and move, blocking, performance beat, light setup, timing, audio, constraints).
 8. Expert detect: if the user speaks production language fluently (shot list, lens, deliverables, LUT, coverage) or works for an agency or production, drop plain mode, load [pro-filmmaking-standards](../../references/pro-filmmaking-standards.md), and run the professional intake instead.
 
@@ -95,7 +95,7 @@ For a sequence project, determine whether the request is the complete video or p
 
 ## Feeling-to-Film Translation
 
-Translate everyday answers into production language inside the brief - never out loud as a quiz. Native feeling-to-craft cues for the six supported languages live in [interview-starters](../../references/interview-starters.md) and the per-language `references/vocab/*` files.
+Translate everyday answers into production language inside the brief - never out loud as a quiz. Localized feeling-to-craft cues for the six supported languages live in [interview-starters](../../references/interview-starters.md) and the per-language `references/vocab/*` files.
 
 | User says | Brief writes |
 |---|---|

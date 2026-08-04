@@ -540,7 +540,20 @@ traceability beyond generic production words, explicit camera/light/sound/action
 contradictions, and repetition or padding patterns. Comparative creative quality
 still requires blinded model evaluation and native-language human review.
 
-The CI workflow runs this same list on push and pull request, with the one deliberate difference noted above: it omits `--enforce-freshness`. These checks are deterministic and offline — they prove the package is well-formed.
+The CI workflow runs this same list on push and pull request, with the one
+deliberate difference noted above: it omits `--enforce-freshness`. These checks
+are deterministic and offline — they prove the package is well-formed.
+
+The multilingual fixture check proves byte-exact reference-token preservation,
+canonical common-brief and candidate bindings, non-derived complete review-input
+pins, literal identical-string overlap across locale realizations, and the exact
+path, bytes, and digest of the canonical limitation disclaimer. It also runs a
+best-effort English known-phrase lint across declared public text surfaces. That
+lint is defense in depth, not proof that arbitrary prose or every supported
+language contains no semantic overclaim. Translated or paraphrased template
+detection, semantic differentiation, and reviewer-reasoning adequacy remain
+independent human-review questions under
+[`multilingual-native-review.md`](references/multilingual-native-review.md).
 
 ### Checked-in source metadata age
 
@@ -661,7 +674,13 @@ was requested, the stale artifact is atomically replaced by a bootstrap
 `harness_error` ledger. Post-run snapshot drift likewise makes every recorded row
 a non-scored harness error and exits 2.
 
-This is the quality gate, not a shape gate, so it lives outside offline CI; the latest run evidence is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
+This is the model-response quality gate, not a shape gate or a language/rendering
+certification, so it lives outside offline CI; the latest run evidence is
+recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
+Language-quality review uses the independent evidence protocol in
+[`multilingual-native-review.md`](references/multilingual-native-review.md). CI
+validates recorded bindings and scoring, while the truth and adequacy of
+reviewer reasoning remain manual judgments.
 
 <!-- installed-readme-validation:end -->
 
