@@ -6,6 +6,10 @@ Current active release: **6.7.0**. Older entries below are preserved as release 
 
 ## Unreleased
 
+### Changed
+
+- Closed the root of `take-review.schema.json` with `additionalProperties: false`. This is a compatibility change: local take-review records with custom root-level annotations now fail schema validation. A rejected take (`verdict: "reject"`) with non-empty `accepted_deviations` is now invalid as well, because rejected deviations cannot be accepted. Nested `observed_start_state` and `observed_end_state` objects remain extensible.
+
 ### Fixed
 
 - Made every advertised validator `--strict` flag behavioral. Eleven validators that always ran the same checks now reject the cosmetic flag and use their real command or dedicated option (`--self-test` or `--enforce-freshness`); the five retained strict modes document and test the additional failure condition they activate. CI and the validation guide now expose only those truthful interfaces, and the integrated eval source manifest is rebound to the exact repaired source set.
