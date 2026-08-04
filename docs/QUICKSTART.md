@@ -121,7 +121,7 @@ Length matters the same way: this is 71 words. Aim for roughly **40–110 words*
 ## 6. Safety
 
 - **Content safety:** if your idea uses a protected character, celebrity, brand, logo, song, or a real person's face or voice, don't hide it in another language — rewrite it into an original, licensed, or post-production equivalent with `seedance-copyright`.
-- **Agent safety:** this package makes **no network calls and ships no telemetry**; its scripts are deterministic and offline. Never paste API keys, account cookies, or private footage into an agent you don't trust. See [SECURITY.md](../SECURITY.md).
+- **Agent safety:** the **installed payload** makes no network calls and ships no telemetry; its installed scripts run locally without contacting external services. A repository checkout also contains the development-only `scripts/eval_run.py`, which can contact a model provider and is excluded by the installer. Never paste API keys, account cookies, or private footage into an agent you don't trust. See [SECURITY.md](../SECURITY.md).
 
 ## 7. Go deeper
 

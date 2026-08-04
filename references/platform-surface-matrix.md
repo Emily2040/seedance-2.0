@@ -4,7 +4,7 @@ last_verified: 2026-08-01
 
 Seedance 2.0 capability claims must separate the model from the product surface. A feature can be true for the model while still being gated, unavailable, renamed, priced differently, or policy-limited on a specific surface.
 
-**Reviewed 2026-08-01: the matrix now has a model-line axis as well as a surface axis.** Every row below describes **Seedance 2.0**. Seedance 2.5 launched on consumer surfaces on 2026-07-31 with API access reported from mid-July, so a surface named here may now expose either line, or both, under similar product naming. Before reading any row as current, establish which model line the user's surface is running — a 2.0 row is not evidence about 2.5, and the two are reported to differ on duration, reference count, and resolution. See [api-status](api-status.md) and [model-name-map](model-name-map.md).
+**Reviewed 2026-08-01: the matrix now has a model-line axis as well as a surface axis.** Every row below describes **Seedance 2.0**. ByteDance's official page confirms Seedance 2.5, and Dreamina's official page says it is live on Dreamina; the exact launch date and API or other-surface availability remain unconfirmed. A surface named here may expose either line, both, or neither under similar product naming, so verify the live model selector before reading any row as current. A 2.0 row is not evidence about 2.5. See [api-status](api-status.md) and [model-name-map](model-name-map.md).
 
 Access note (2026-06-13): the overseas Seedance 2.0 API is contested following a copyright-driven suspension — see [api-status](api-status.md). Verify live access on any third-party surface before relying on it, and add no surface here without independently confirming it hosts Seedance 2.0.
 

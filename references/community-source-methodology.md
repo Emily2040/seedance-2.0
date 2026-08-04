@@ -4,7 +4,7 @@ last_verified: 2026-08-01
 
 Use this when mining prompt corpora, forums, Reddit posts, Chinese guides, Russian guides, or wrapper documentation.
 
-Reviewed 2026-08-01. The extraction rules are unchanged, and one hazard is now sharper: with two Seedance model lines in circulation since 2026-07-31, community posts increasingly do not say which line they used. A tip mined from a 2.5 session is not evidence about 2.0, and the reverse is equally false. Record the model line alongside the date when mining, and when a post does not state it, label the finding `unverified` rather than guessing from the post's date.
+Reviewed 2026-08-01. The extraction rules are unchanged, and one hazard is now sharper: community posts may refer to Seedance 2.0 or the separately promoted 2.5 line without saying which one they used. A tip mined from a claimed 2.5 session is not evidence about 2.0, and the reverse is equally false. Record the model line alongside the date when mining, and when a post does not state it, label the finding `unverified` rather than guessing from the post's date.
 
 ## Allowed Extraction
 
