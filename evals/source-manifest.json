@@ -19,7 +19,7 @@
     {
       "path": "references/agent-compatibility.md",
       "role": "responder",
-      "sha256": "7d6d9819e5efaf47aed476fcdf55cd3d68f037f05312e1946bbe653521a741eb"
+      "sha256": "eea713ec0e587c810f3c11e19c87b6e4898cf8ed0468a3b29bd72ff4ac5b32f5"
     },
     {
       "path": "references/allocation-model.md",
@@ -389,7 +389,7 @@
     {
       "path": "references/source-registry.md",
       "role": "responder",
-      "sha256": "8ad19bbbe4eb2944bab556750dad66601dd70344a083b814318f3217b66434c8"
+      "sha256": "ee07eaa544b40fd8f0369813b9aa80e5cff9d365b20369a682dd58134e179925"
     },
     {
       "path": "references/storytelling-framework.md",
