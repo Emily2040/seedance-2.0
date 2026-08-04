@@ -42,7 +42,9 @@ import shutil
 import stat
 import subprocess
 import sys
+import sysconfig
 import tempfile
+import venv
 import zipfile
 from email.parser import Parser
 from io import BytesIO
@@ -699,15 +701,35 @@ def trusted_file_fingerprint(path: str | Path) -> dict[str, object]:
 
 
 def windows_venv_runner_source(
-    scripts: str | Path,
+    base_python: str | Path,
+    venv_dir: str | Path,
     version_info: tuple[int, int],
+    *,
+    gil_disabled: bool,
+    python_build: bool,
 ) -> Path:
-    """Return the exact console launcher copied by a supported Windows ``venv``."""
-    # CPython 3.13 moved the copied console launcher from ``python.exe`` to
-    # ``venvlauncher.exe``. Select by interpreter version instead of accepting
-    # whichever executable happens to exist: a missing expected launcher must
-    # fail closed rather than silently changing the trust anchor.
-    runner_name = "venvlauncher.exe" if version_info >= (3, 13) else "python.exe"
+    """Return the exact console launcher selected by Windows ``venv``."""
+    base = Path(base_python)
+    if not (3, 11) <= version_info <= (3, 13):
+        raise SystemExit(
+            "trusted stdlib venv runner supports CPython 3.11 through 3.13; "
+            f"found {version_info[0]}.{version_info[1]}"
+        )
+    debug_suffix = "_d" if os.path.normcase(base.stem).endswith("_d") else ""
+    if version_info >= (3, 13):
+        threaded_suffix = "t" if gil_disabled else ""
+        runner_name = f"venvlauncher{threaded_suffix}{debug_suffix}.exe"
+    else:
+        if gil_disabled:
+            raise SystemExit(
+                "trusted stdlib venv runner has an impossible pre-3.13 free-threaded layout"
+            )
+        runner_name = f"python{debug_suffix}.exe"
+
+    # CPython source builds copy from the directory containing the trusted
+    # base executable. Installed builds copy from Lib/venv/scripts/nt. Keep
+    # this decision semantic: never accept a different existing variant.
+    scripts = base.parent if python_build else Path(venv_dir) / "scripts" / "nt"
     source = Path(scripts) / runner_name
     if not source.is_file():
         raise SystemExit(f"trusted stdlib venv runner is missing: {source}")
@@ -717,8 +739,13 @@ def windows_venv_runner_source(
 def trusted_venv_runner_source() -> Path:
     """Return the stdlib launcher/base executable that `venv` must install."""
     if os.name == "nt":
-        scripts = Path(sys.base_prefix) / "Lib" / "venv" / "scripts" / "nt"
-        source = windows_venv_runner_source(scripts, tuple(sys.version_info[:2]))
+        source = windows_venv_runner_source(
+            trusted_base_python(),
+            Path(venv.__file__).resolve().parent,
+            tuple(sys.version_info[:2]),
+            gil_disabled=bool(sysconfig.get_config_var("Py_GIL_DISABLED")),
+            python_build=sysconfig.is_python_build(),
+        )
     else:
         source = trusted_base_python()
     if not source.is_file():

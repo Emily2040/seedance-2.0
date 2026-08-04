@@ -45,6 +45,27 @@ class PythonSupportContractTests(unittest.TestCase):
         for job in workflow.split("    steps:\n")[:-1]:
             self.assertNotIn("${{ runner.", job)
 
+    def test_windows_job_runs_masthead_runner_trust_regressions(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "validate-skills.yml"
+        ).read_text(encoding="utf-8")
+        _, windows_job = workflow.split("  windows-frame-publication:\n", 1)
+        tests = (
+            "test_windows_venv_runner_source_selects_the_exact_upstream_variant",
+            "test_windows_venv_runner_source_refuses_the_wrong_variant",
+            "test_external_trust_rejects_runner_config_marker_and_script_tampering",
+            "test_forged_runner_and_self_authored_marker_lack_external_trust",
+            "test_in_venv_sitecustomize_cannot_short_circuit_a_check",
+            "test_pip_bootstrap_verifies_initialized_runner_and_config_before_execution",
+        )
+        for test in tests:
+            with self.subTest(test=test):
+                self.assertIn(test, windows_job)
+        self.assertLess(
+            windows_job.index("Run Windows masthead runner trust regressions"),
+            windows_job.index("Provision and verify FFmpeg"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
