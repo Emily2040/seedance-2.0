@@ -34,6 +34,7 @@ import argparse
 import base64
 import ctypes
 import errno
+import functools
 import hashlib
 import os
 import secrets
@@ -2975,6 +2976,7 @@ _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _MAX_PNG_CHUNK_BYTES = 256 * 1024 * 1024
 _MAX_FRAME_BYTES = 512 * 1024 * 1024
 _PNG_PROBE_TIMEOUT_SECONDS = 60
+_FFMPEG_OPTION_PROBE_TIMEOUT_SECONDS = 15
 _OUTPUT_CODECS = {
     ".png": "png",
     ".jpg": "mjpeg",
@@ -3083,6 +3085,44 @@ def _probe_decodable_png(ffmpeg: str, png_frame: bytes) -> None:
         )
 
 
+@functools.lru_cache(maxsize=16)
+def _frame_sync_options(ffmpeg: str) -> tuple[str, str]:
+    """Select the frame-sync spelling supported by this FFmpeg binary."""
+
+    try:
+        completed = subprocess.run(
+            [ffmpeg, "-nostdin", "-hide_banner", "-h", "full"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=_FFMPEG_OPTION_PROBE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise FrameExtractionError(
+            "ffmpeg option probe exceeded the safety timeout"
+        ) from exc
+    except OSError as exc:
+        raise FrameExtractionError(f"could not probe ffmpeg options: {exc}") from exc
+
+    help_text = completed.stdout.decode("utf-8", errors="replace")
+    option_fields = {
+        line.lstrip().split(maxsplit=1)[0]
+        for line in help_text.splitlines()
+        if line.lstrip().startswith("-")
+    }
+    if any(field == "-fps_mode" or field.startswith("-fps_mode[") for field in option_fields):
+        return "-fps_mode", "passthrough"
+    if "-vsync" in option_fields:
+        return "-vsync", "0"
+
+    detail = help_text[-800:].strip()
+    if completed.returncode != 0:
+        raise FrameExtractionError(detail or "ffmpeg option probe failed")
+    raise FrameExtractionError(
+        "ffmpeg supports neither -fps_mode nor the legacy -vsync frame-sync option"
+    )
+
+
 def _frame_stream_command(ffmpeg: str, clip: Path, first: bool) -> list[str]:
     cmd = [
         ffmpeg,
@@ -3095,10 +3135,11 @@ def _frame_stream_command(ffmpeg: str, clip: Path, first: bool) -> list[str]:
     ]
     if first:
         cmd += ["-frames:v", "1"]
+    sync_option, sync_value = _frame_sync_options(ffmpeg)
     cmd += [
         "-an",
-        "-fps_mode",
-        "passthrough",
+        sync_option,
+        sync_value,
         "-f",
         "image2pipe",
         "-vcodec",

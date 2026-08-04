@@ -2936,15 +2936,76 @@ class PngStreamTests(unittest.TestCase):
         self.assertIsNone(extractor._read_png_frame(stream))
 
     def test_frame_stream_uses_current_passthrough_option(self) -> None:
-        command = extractor._frame_stream_command(
-            "ffmpeg",
-            Path("clip.mp4"),
-            first=False,
-        )
+        with mock.patch.object(
+            extractor,
+            "_frame_sync_options",
+            return_value=("-fps_mode", "passthrough"),
+        ):
+            command = extractor._frame_stream_command(
+                "ffmpeg",
+                Path("clip.mp4"),
+                first=False,
+            )
 
         self.assertNotIn("-vsync", command)
         option = command.index("-fps_mode")
         self.assertEqual(command[option + 1], "passthrough")
+
+    def test_frame_stream_falls_back_to_legacy_vsync_option(self) -> None:
+        with mock.patch.object(
+            extractor,
+            "_frame_sync_options",
+            return_value=("-vsync", "0"),
+        ):
+            command = extractor._frame_stream_command(
+                "legacy-ffmpeg",
+                Path("clip.mp4"),
+                first=False,
+            )
+
+        self.assertNotIn("-fps_mode", command)
+        option = command.index("-vsync")
+        self.assertEqual(command[option + 1], "0")
+
+    def test_frame_sync_probe_is_cached_and_prefers_current_option(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=(
+                b"-vsync <> set video sync method globally\n"
+                b"-fps_mode[:<stream_spec>] set framerate mode\n"
+            ),
+        )
+        extractor._frame_sync_options.cache_clear()
+        try:
+            with mock.patch.object(extractor.subprocess, "run", return_value=completed) as run:
+                self.assertEqual(
+                    extractor._frame_sync_options("probe-ffmpeg"),
+                    ("-fps_mode", "passthrough"),
+                )
+                self.assertEqual(
+                    extractor._frame_sync_options("probe-ffmpeg"),
+                    ("-fps_mode", "passthrough"),
+                )
+            run.assert_called_once()
+        finally:
+            extractor._frame_sync_options.cache_clear()
+
+    def test_frame_sync_probe_accepts_legacy_only_help(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=b"-vsync <> set video sync method globally\n",
+        )
+        extractor._frame_sync_options.cache_clear()
+        try:
+            with mock.patch.object(extractor.subprocess, "run", return_value=completed):
+                self.assertEqual(
+                    extractor._frame_sync_options("legacy-probe-ffmpeg"),
+                    ("-vsync", "0"),
+                )
+        finally:
+            extractor._frame_sync_options.cache_clear()
 
     def test_truncated_stream_is_rejected(self) -> None:
         with self.assertRaises(extractor.FrameExtractionError):
