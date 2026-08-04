@@ -458,6 +458,11 @@ Several of these clients share the `.agents/skills/` convention — Codex, Googl
 
 <!-- installed-readme-validation:start -->
 
+The validation toolchain supports **CPython 3.11 through 3.13**. CI exercises
+both endpoints on Ubuntu and Windows; intermediate CPython 3.12 releases remain
+inside the supported range. Python 3.10 and 3.14 are outside this lock's
+supported range.
+
 Run these checks before every release. The offline source-metadata check runs with
 `--enforce-freshness` here so an old checked-in registry stamp blocks a release;
 per-pull-request validation deliberately omits the flag, because metadata age
