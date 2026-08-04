@@ -78,7 +78,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "6a15f89e06919620202c59323e1f158fb29fd1646f9522cb05cdc3ac128384bf"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "359ce581dd8b25d62a4c1d724d4007a776f56d82aeaeb2cfa5f65f237d7b2fb5"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -3809,6 +3809,119 @@ def _unlink_bound_atomic_artifact(
     _fsync_parent_directory(path)
 
 
+def _open_bound_new_ledger_descriptor(path: Path) -> int:
+    """Open one writable inode while allowing its atomic publication rename."""
+
+    flags = os.O_RDWR | getattr(os, "O_BINARY", 0)
+    if os.name != "nt":
+        flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+        return os.open(path, flags)
+
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    absolute = str(path.resolve())
+    if not absolute.startswith("\\\\?\\"):
+        absolute = (
+            "\\\\?\\UNC\\" + absolute[2:]
+            if absolute.startswith("\\\\")
+            else "\\\\?\\" + absolute
+        )
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+    handle = create_file(
+        absolute,
+        0x80000000 | 0x40000000,  # GENERIC_READ | GENERIC_WRITE
+        0x1 | 0x2 | 0x4,  # FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
+        None,
+        3,  # OPEN_EXISTING
+        0x00200000,  # FILE_FLAG_OPEN_REPARSE_POINT
+        None,
+    )
+    if handle == wintypes.HANDLE(-1).value:
+        error = ctypes.get_last_error()
+        raise OSError(error, ctypes.FormatError(error), str(path))
+    try:
+        descriptor = msvcrt.open_osfhandle(int(handle), flags)
+    except BaseException:
+        close_handle(handle)
+        raise
+    try:
+        os.set_inheritable(descriptor, False)
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _verify_bound_new_ledger_descriptor(
+    descriptor: int,
+    signature: tuple[int, int, int, int],
+    link_count: int,
+    label: str,
+    *,
+    require_unchanged_content: bool,
+) -> os.stat_result:
+    try:
+        status = os.fstat(descriptor)
+    except OSError as exc:
+        raise HarnessError(f"cannot verify {label} descriptor") from exc
+    if (
+        not stat.S_ISREG(status.st_mode)
+        or (status.st_dev, status.st_ino) != signature[:2]
+        or status.st_nlink != link_count
+    ):
+        raise HarnessError(f"{label} descriptor identity changed")
+    if require_unchanged_content and _ledger_status_signature(status) != signature:
+        raise HarnessError(f"{label} descriptor content changed")
+    return status
+
+
+def _invalidate_bound_new_ledger_descriptor(
+    descriptor: int,
+    signature: tuple[int, int, int, int],
+    link_count: int,
+) -> None:
+    """Fail closed by emptying only the inode retained before publication."""
+
+    _verify_bound_new_ledger_descriptor(
+        descriptor,
+        signature,
+        link_count,
+        "unverified new ledger",
+        require_unchanged_content=False,
+    )
+    try:
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        os.ftruncate(descriptor, 0)
+        os.fsync(descriptor)
+    except OSError as exc:
+        raise HarnessError("could not invalidate unverified new ledger") from exc
+    status = _verify_bound_new_ledger_descriptor(
+        descriptor,
+        signature,
+        link_count,
+        "invalidated new ledger",
+        require_unchanged_content=False,
+    )
+    if status.st_size != 0:
+        raise HarnessError("unverified new ledger was not invalidated")
+
+
 def _atomic_write_text(
     path: Path,
     text: str,
@@ -3845,6 +3958,7 @@ def _atomic_write_text(
     backup_link_count = 0
     restore: Path | None = None
     restore_descriptor = -1
+    new_destination_descriptor = -1
     replaced = False
     commit_verified = False
 
@@ -3870,20 +3984,6 @@ def _atomic_write_text(
             destination_state,
             "replacement ledger",
         )
-
-    def verify_replacement_namespace_identity() -> None:
-        """Refuse to clean a different object substituted at the destination."""
-
-        if temporary_signature is None:
-            raise HarnessError("temporary ledger identity was not captured")
-        status = _ledger_destination_status(path, "replacement ledger")
-        if (
-            (status.st_dev, status.st_ino) != temporary_signature[:2]
-            or status.st_nlink != temporary_link_count
-        ):
-            raise HarnessError(
-                "replacement ledger identity changed during atomic ledger write"
-            )
 
     def cleanup_temporary_after_failure() -> None:
         """Delete a new-ledger quarantine only while it names our original file."""
@@ -3917,6 +4017,17 @@ def _atomic_write_text(
         descriptor = -1
         backup_descriptor = -1
         restore_descriptor = -1
+
+    def close_new_destination_descriptor() -> None:
+        nonlocal new_destination_descriptor
+        if new_destination_descriptor < 0:
+            return
+        value = new_destination_descriptor
+        new_destination_descriptor = -1
+        try:
+            os.close(value)
+        except OSError:
+            pass
 
     def rollback_existing_destination() -> None:
         nonlocal backup, restore, restore_descriptor, replaced
@@ -4024,38 +4135,16 @@ def _atomic_write_text(
             return
         backup = None
 
-    def remove_unverified_new_destination() -> None:
+    def invalidate_unverified_new_destination() -> None:
         nonlocal replaced
-        # Byte tampering of the same file is still quarantined, but a different
-        # object substituted at this pathname belongs to the concurrent writer.
-        verify_replacement_namespace_identity()
-        try:
-            os.replace(path, temporary)
-            replaced = False
-            _fsync_parent_directory(path)
-        except FileNotFoundError:
-            replaced = False
-        except BaseException as move_error:
-            try:
-                verify_replacement_namespace_identity()
-                path.unlink()
-                replaced = False
-                _fsync_parent_directory(path)
-            except BaseException as unlink_error:
-                raise HarnessError(
-                    "unverified new ledger could not be removed after post-check failure"
-                ) from unlink_error
-            if path.exists():
-                raise HarnessError(
-                    "unverified new ledger still exists after cleanup"
-                ) from move_error
-        try:
-            path.lstat()
-        except FileNotFoundError:
-            return
-        except OSError as exc:
-            raise HarnessError("cannot verify removal of unverified new ledger") from exc
-        raise HarnessError("unverified new ledger still exists after cleanup")
+        if temporary_signature is None or new_destination_descriptor < 0:
+            raise HarnessError("bound unverified new ledger is unavailable")
+        _invalidate_bound_new_ledger_descriptor(
+            new_destination_descriptor,
+            temporary_signature,
+            temporary_link_count,
+        )
+        replaced = False
 
     try:
         handle = os.fdopen(descriptor, "wb")
@@ -4156,6 +4245,15 @@ def _atomic_write_text(
                 destination_state.sha256,
                 "rollback ledger",
             )
+        if not destination_state.existed:
+            new_destination_descriptor = _open_bound_new_ledger_descriptor(temporary)
+            _verify_bound_new_ledger_descriptor(
+                new_destination_descriptor,
+                temporary_signature,
+                temporary_link_count,
+                "temporary ledger",
+                require_unchanged_content=True,
+            )
         destination_made_writable = False
         try:
             if destination_state.windows_read_only:
@@ -4187,10 +4285,19 @@ def _atomic_write_text(
                     ) from restore_error
             raise
         verify_replacement()
+        if not destination_state.existed:
+            _verify_bound_new_ledger_descriptor(
+                new_destination_descriptor,
+                temporary_signature,
+                temporary_link_count,
+                "published new ledger",
+                require_unchanged_content=True,
+            )
         if after_replace is not None:
             after_replace()
         verify_replacement()
         commit_verified = True
+        close_new_destination_descriptor()
         if backup is not None:
             try:
                 if backup_signature is None or destination_state.sha256 is None:
@@ -4228,23 +4335,27 @@ def _atomic_write_text(
             backup = None
     except BaseException as original_error:
         close_pending_descriptors()
-        if replaced and not commit_verified:
-            try:
-                if destination_state.existed:
-                    rollback_existing_destination()
-                else:
-                    remove_unverified_new_destination()
-            except BaseException as rollback_error:
-                if restore is not None:
-                    _best_effort_unlink_atomic_artifact(restore)
-                if destination_state.existed and backup is not None:
+        try:
+            if replaced and not commit_verified:
+                try:
+                    if destination_state.existed:
+                        rollback_existing_destination()
+                    else:
+                        invalidate_unverified_new_destination()
+                except BaseException as rollback_error:
+                    if restore is not None:
+                        _best_effort_unlink_atomic_artifact(restore)
+                    if destination_state.existed and backup is not None:
+                        raise HarnessError(
+                            "ledger post-check failed and rollback could not be verified; "
+                            f"recovery retained at {backup}"
+                        ) from rollback_error
                     raise HarnessError(
-                        "ledger post-check failed and rollback could not be verified; "
-                        f"recovery retained at {backup}"
+                        "ledger post-check failed and unverified new ledger could not "
+                        "be invalidated"
                     ) from rollback_error
-                raise HarnessError(
-                    "ledger post-check failed and unverified destination cleanup failed"
-                ) from rollback_error
+        finally:
+            close_new_destination_descriptor()
         cleanup_temporary_after_failure()
         if restore is not None:
             _best_effort_unlink_atomic_artifact(restore)

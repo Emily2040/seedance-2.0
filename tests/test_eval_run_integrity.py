@@ -2527,7 +2527,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                 len(list(path.parent.glob(".ledger.md.*.rollback"))), 1
             )
 
-    def test_failed_post_check_never_leaves_a_new_destination(self) -> None:
+    def test_failed_post_check_invalidates_owned_new_destination(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ledger.md"
 
@@ -2536,7 +2536,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     eval_run.Path,
                     "unlink",
                     side_effect=OSError("unlink blocked"),
-                ),
+                ) as unlink,
                 self.assertRaisesRegex(eval_run.HarnessError, "post-check failed"),
             ):
                 eval_run._atomic_write_text(
@@ -2547,11 +2547,12 @@ class LedgerIntegrityTests(unittest.TestCase):
                     ),
                 )
 
-            self.assertFalse(path.exists())
-            for artifact in path.parent.glob(".ledger.md.*.tmp"):
-                artifact.unlink()
+            unlink.assert_not_called()
+            self.assertTrue(path.exists())
+            self.assertEqual(path.read_bytes(), b"")
+            self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
 
-    def test_tampered_new_destination_is_quarantined_after_post_check_failure(self) -> None:
+    def test_tampered_new_destination_is_invalidated_after_post_check_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ledger.md"
 
@@ -2568,10 +2569,37 @@ class LedgerIntegrityTests(unittest.TestCase):
                     after_replace=tamper_then_reject,
                 )
 
-            self.assertFalse(path.exists())
+            self.assertEqual(path.read_bytes(), b"")
             self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
 
-    def test_new_destination_rollback_preserves_namespace_substitute(self) -> None:
+    def test_new_destination_invalidation_failure_is_reported_without_path_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            payload = "new evidence\n"
+
+            with (
+                mock.patch.object(
+                    eval_run.os,
+                    "ftruncate",
+                    side_effect=OSError("truncate blocked"),
+                ),
+                self.assertRaisesRegex(
+                    eval_run.HarnessError,
+                    "unverified new ledger could not be invalidated",
+                ),
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    payload,
+                    after_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("post-check failed")
+                    ),
+                )
+
+            self.assertEqual(path.read_text(encoding="utf-8"), payload)
+            self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
+
+    def test_new_destination_invalidation_preserves_old_replace_boundary_swap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             path = root / "ledger.md"
@@ -2581,34 +2609,87 @@ class LedgerIntegrityTests(unittest.TestCase):
             substitute.write_text(payload, encoding="utf-8")
             substitute_status = substitute.stat()
             substitute_identity = (substitute_status.st_dev, substitute_status.st_ino)
+            real_invalidate = eval_run._invalidate_bound_new_ledger_descriptor
 
-            def substitute_then_reject() -> None:
+            def swap_then_invalidate(
+                descriptor: int,
+                signature: tuple[int, int, int, int],
+                link_count: int,
+            ) -> None:
                 os.replace(path, published)
                 os.replace(substitute, path)
-                raise eval_run.HarnessError("post-check failed")
+                real_invalidate(descriptor, signature, link_count)
 
-            with self.assertRaisesRegex(
-                eval_run.HarnessError,
-                "post-check failed and unverified destination cleanup failed",
-            ) as raised:
+            with (
+                mock.patch.object(
+                    eval_run,
+                    "_invalidate_bound_new_ledger_descriptor",
+                    side_effect=swap_then_invalidate,
+                ) as invalidate,
+                self.assertRaisesRegex(eval_run.HarnessError, "post-check failed"),
+            ):
                 eval_run._atomic_write_text(
                     path,
                     payload,
-                    after_replace=substitute_then_reject,
+                    after_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("post-check failed")
+                    ),
                 )
 
-            self.assertIsInstance(raised.exception.__cause__, eval_run.HarnessError)
-            self.assertIn(
-                "replacement ledger identity changed",
-                str(raised.exception.__cause__),
-            )
+            invalidate.assert_called_once()
             self.assertEqual(path.read_text(encoding="utf-8"), payload)
             current_status = path.stat()
             self.assertEqual(
                 (current_status.st_dev, current_status.st_ino),
                 substitute_identity,
             )
-            self.assertEqual(published.read_text(encoding="utf-8"), payload)
+            self.assertEqual(published.read_bytes(), b"")
+
+    def test_new_destination_invalidation_preserves_old_unlink_boundary_swap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "ledger.md"
+            published = root / "published-ledger.md"
+            substitute = root / "substitute.md"
+            payload = "new evidence\n"
+            substitute.write_text(payload, encoding="utf-8")
+            substitute_status = substitute.stat()
+            substitute_identity = (substitute_status.st_dev, substitute_status.st_ino)
+            real_ftruncate = os.ftruncate
+            swapped = False
+
+            def swap_then_truncate(descriptor: int, size: int) -> None:
+                nonlocal swapped
+                self.assertFalse(swapped)
+                os.replace(path, published)
+                os.replace(substitute, path)
+                swapped = True
+                real_ftruncate(descriptor, size)
+
+            with (
+                mock.patch.object(
+                    eval_run.os,
+                    "ftruncate",
+                    side_effect=swap_then_truncate,
+                ),
+                self.assertRaisesRegex(eval_run.HarnessError, "post-check failed"),
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    payload,
+                    after_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("post-check failed")
+                    ),
+                )
+
+            self.assertTrue(swapped)
+            self.assertEqual(path.read_text(encoding="utf-8"), payload)
+            current_status = path.stat()
+            self.assertEqual(
+                (current_status.st_dev, current_status.st_ino),
+                substitute_identity,
+            )
+            self.assertEqual(published.read_bytes(), b"")
 
     def test_verified_commit_reports_cleanup_failure_as_committed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
