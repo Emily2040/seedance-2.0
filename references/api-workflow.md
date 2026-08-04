@@ -4,7 +4,7 @@ last_verified: 2026-08-01
 
 Use this reference for Seedance 2.0 operational planning on Volcengine, BytePlus, Runway, fal, provider/router surfaces, or wrappers. It is not a static API contract. Always recheck the active provider docs or console before implementation.
 
-**Reviewed 2026-08-01.** The task lifecycle, role separation, and recheck discipline below are unchanged. One thing did change around this file: a newer model line, Seedance 2.5, launched on consumer surfaces 2026-07-31 with API access reported through BytePlus from mid-July. Endpoints, model IDs, duration ceilings, and reference limits in this file are **Seedance 2.0** values — confirm which line an endpoint serves before reusing any of them, and see [api-status](api-status.md) for what is established versus merely reported.
+**Reviewed 2026-08-01.** The task lifecycle, role separation, and recheck discipline below are unchanged. ByteDance's official page confirms a newer model line, Seedance 2.5, and Dreamina says it is live on that surface; the exact launch date and any API or other-surface availability remain unconfirmed here. Endpoints, model IDs, duration ceilings, and reference limits in this file are **Seedance 2.0** values — confirm which line an endpoint serves before reusing any of them, and see [api-status](api-status.md) for what is established versus merely reported.
 
 ## Surface Gate
 

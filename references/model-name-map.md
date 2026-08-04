@@ -13,7 +13,7 @@ Reviewed 2026-08-01. Seedance 2.5 is a **different model line**, not a Seedance 
 | Name | Meaning | Guidance |
 |---|---|---|
 | Seedance 2.0 | ByteDance Seed video generation model line | Correct public name for the v2 video model family, and the line this repository targets. Use this as the default wording. |
-| Seedance 2.5 | A different, newer model line — **not covered by this skill** *(launched 2026-07-31, tech-press)* | Keep the name; never normalize to 2.0. Say plainly that this skill is built and verified for 2.0, keep the craft guidance, and withhold every platform number. |
+| Seedance 2.5 | A different, newer model line — **not covered by this skill** *(official ByteDance model page; live on Dreamina; exact launch date and other-surface availability unconfirmed)* | Keep the name; never normalize to 2.0. Say plainly that this skill is built and verified for 2.0, keep the craft guidance, and withhold every platform number. |
 | Seedance 2.0 Fast | Faster Seedance 2.0 variant reported by official/product and wrapper surfaces | Use for draft, iteration, or low-latency discussion when the active surface exposes it. Recheck exact resolution, duration, and pricing. |
 | Seedance 2.0 Mini | Lighter official Seedance 2.0 series lane exposed on Volcengine, BytePlus, and Dreamina surfaces | Use only when the active surface exposes Mini. Treat `Seedance V2 Mini` as shorthand, not canonical wording. Recheck API availability, duration, resolution, pricing, and account gates live. |
 | Doubao Seedance 2.0 | Volcengine/Doubao-flavored surface naming | Treat as a product/API surface label, not a different creative method. |

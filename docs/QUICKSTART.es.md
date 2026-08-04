@@ -91,7 +91,7 @@ La longitud funciona igual: esto son 89 palabras. Para un solo clip, apunta a un
 ## 6. Seguridad
 
 - **Seguridad del contenido:** si tu idea usa un personaje protegido, una celebridad, una marca, un logo, una canción o el rostro o la voz de una persona real, no lo escondas en otro idioma: reescríbelo con `seedance-copyright` en un equivalente original, con licencia o de posproducción.
-- **Seguridad del agente:** este paquete **no hace ninguna llamada de red ni envía telemetría**; sus scripts son deterministas y funcionan sin conexión. No pegues nunca claves de API, cookies de cuenta ni material privado en un agente en el que no confíes. Consulta [SECURITY.md](../SECURITY.md).
+- **Seguridad del agente:** el **contenido instalado** no hace llamadas de red ni envía telemetría; los scripts instalados se ejecutan localmente sin contactar servicios externos. La copia de trabajo del repositorio también contiene `scripts/eval_run.py`, una herramienta solo para desarrollo que puede contactar a un proveedor de modelos y que el instalador excluye. No pegues nunca claves de API, cookies de cuenta ni material privado en un agente en el que no confíes. Consulta [SECURITY.md](../SECURITY.md).
 
 ## 7. Para profundizar
 
