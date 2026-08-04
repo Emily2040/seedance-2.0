@@ -627,7 +627,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             self.assertIn("archive=23", text)
             self.assertIn("evaluator=4", text)
             self.assertIn("fixture=1", text)
-            self.assertIn("responder=89", text)
+            self.assertIn("responder=90", text)
             self.assertIn("root=1", text)
 
             mismatched_repository = dict(repository_manifest)

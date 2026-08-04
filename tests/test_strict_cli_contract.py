@@ -228,6 +228,20 @@ Avoid empty quality words.
             vocab.mkdir(parents=True)
             for language in ("en", "zh", "ru", "ja", "ko", "es"):
                 (vocab / f"{language}.md").write_text(minimal_vocab, encoding="utf-8")
+            for relative in (
+                "evals/multilingual-native-review.json",
+                "evals/multilingual-native-review-evidence.json",
+                "references/multilingual-native-review.md",
+                "skills/seedance-examples-zh/SKILL.md",
+                "skills/seedance-examples-ja/SKILL.md",
+                "skills/seedance-examples-ko/SKILL.md",
+                "docs/README.zh.md",
+                "docs/README.ja.md",
+                "docs/README.ko.md",
+            ):
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, destination)
             normal = run_script("vocab_schema_check.py", str(root))
             strict = run_script("vocab_schema_check.py", str(root), "--strict")
 
