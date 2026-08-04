@@ -10,8 +10,8 @@ Use this document when checking the active front page before merge.
 
 ## Front Page Checks
 
-- The README has a visible native-language start section for English, Chinese, Japanese, and Korean readers.
-- The README links to full native reader guides: `docs/README.zh.md`, `docs/README.ja.md`, and `docs/README.ko.md`.
+- The README has a visible multilingual start section for English, Chinese, Japanese, and Korean readers.
+- The README links to full localized reader guides: `docs/README.zh.md`, `docs/README.ja.md`, and `docs/README.ko.md`.
 - Chinese, Japanese, and Korean rows link to active skill files and active vocabulary references.
 - Japanese and Korean have active examples skills, not only vocabulary skills.
 - The old planning documents are no longer part of the active docs directory.

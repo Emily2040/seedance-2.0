@@ -1,0 +1,633 @@
+{
+  "schema_version": "1.0",
+  "rubric": "references/multilingual-native-review.md",
+  "review_evidence": "evals/multilingual-native-review-evidence.json",
+  "rubric_sha256": "214fb2dcf10ef24195ee16873f43b86b6edccf9bbda0c868b65f3bfeafec2e16",
+  "review_protocol_sha256": "131618e662fe7074aa344b18041a690888ee5ab98c81394754d63bd6b8574c9e",
+  "purpose": "Route multilingual language-quality claims to independent human review while keeping machine-checkable invariants separate and making no inference about author provenance.",
+  "review_state": "pending_native_review",
+  "model_output_state": "not_evaluated",
+  "generated_video_state": "not_evaluated",
+  "native_quality_verified": false,
+  "static_validation_scope": [
+    "fixture structure",
+    "source-path existence",
+    "byte-exact reference-token preservation",
+    "canonical reference-binding span integrity",
+    "non-derived canonical review-input pins",
+    "literal cross-locale realization overlap",
+    "pending-review claim boundary",
+    "best-effort English known-phrase lint on declared public text surfaces"
+  ],
+  "static_checks_do_not_establish": [
+    "native fluency",
+    "cultural authenticity",
+    "native authorship",
+    "author provenance",
+    "semantic differentiation across locales",
+    "reference-role semantic correctness",
+    "reviewer identity",
+    "reviewer qualifications",
+    "truth or adequacy of reviewer reasoning",
+    "model output quality",
+    "generated-video quality"
+  ],
+  "review_policy": {
+    "review_evidence_schema_version": "1.0",
+    "canonical_review_input_pins_required": true,
+    "public_claim_allowlist_version": "public-claim-disclaimer-v1",
+    "public_claim_allowlist": [
+      {
+        "path": "references/multilingual-native-review.md",
+        "text_lf": "Static validation cannot establish native fluency, native-language quality, cultural authenticity, native authorship, author provenance, reviewer identity or qualifications, model-output quality, or generated-video quality;\nindependent human review remains required.",
+        "sha256_lf": "6b678ea969ed788b8968d55eba0a8f2806570edbd623b6ab025872c8c0e9ef2c",
+        "line_endings": "LF_or_CRLF_only"
+      }
+    ],
+    "public_claim_lint_policy": {
+      "version": "public-claim-lint-v1",
+      "guarantee": "best_effort_english_known_phrase_lint_only",
+      "included_files": "tracked_or_unignored_regular_utf8_outside_excluded_roots",
+      "excluded_roots": [
+        ".git",
+        ".seedance_backups",
+        "__pycache__",
+        "assets",
+        "evals",
+        "scripts",
+        "tests"
+      ],
+      "max_bytes": 2000000
+    },
+    "public_claim_dash_set_version": "public-claim-dashes-v1",
+    "public_claim_dash_codepoints": [
+      "U+002D",
+      "U+00AD",
+      "U+058A",
+      "U+05BE",
+      "U+1400",
+      "U+1806",
+      "U+2010",
+      "U+2011",
+      "U+2012",
+      "U+2013",
+      "U+2014",
+      "U+2015",
+      "U+2043",
+      "U+2053",
+      "U+207B",
+      "U+208B",
+      "U+2212",
+      "U+2E17",
+      "U+2E1A",
+      "U+2E3A",
+      "U+2E3B",
+      "U+2E40",
+      "U+2E43",
+      "U+2E5D",
+      "U+301C",
+      "U+3030",
+      "U+30A0",
+      "U+FE31",
+      "U+FE32",
+      "U+FE58",
+      "U+FE63",
+      "U+FF0D",
+      "U+10EAD"
+    ],
+    "required_independent_reviewers_per_locale": 2,
+    "required_roles": [
+      "target-locale language editor",
+      "target-locale culture and production reviewer"
+    ],
+    "criterion_quote_sources": {
+      "brief_and_reference_fidelity": "candidate_prompt",
+      "idiomatic_production_language": "candidate_prompt",
+      "language_register_and_relationship": "candidate_prompt",
+      "creative_lens_realization": "candidate_prompt",
+      "production_directability": "candidate_prompt",
+      "representation_and_stereotype_risk": "candidate_prompt"
+    },
+    "minimum_target_script_characters_per_quote": 8,
+    "criterion_evidence_anchor_required": true,
+    "quotes_unique_per_reviewer": true,
+    "reviewer_id_format": "visible_canonical_ascii",
+    "minimum_reason_characters": 32,
+    "minimum_reason_alphanumeric_characters": 12,
+    "reason_prefix": "<criterion_id>: ",
+    "reason_body_forbids_unicode_controls": true,
+    "reason_body_comparison": "nfkc_casefold_alphanumeric_tokens",
+    "reasons_unique_per_reviewer": true,
+    "minimum_target_script_characters_per_revision": 8,
+    "score_3_revision_must_be_empty": true,
+    "specimen_authors_may_not_review": true,
+    "reviewers_must_record_conflicts": true,
+    "material_conflicts_block_review": true,
+    "adjudication": "Do not average a material disagreement away; revise the specimen and run a new independent review round.",
+    "evidence_fields": [
+      "case_id",
+      "locale",
+      "review_evidence_schema_version",
+      "fixture_schema_version",
+      "fixture_revision",
+      "candidate_sha256",
+      "common_brief_sha256",
+      "review_input_sha256",
+      "rubric_sha256",
+      "review_protocol_sha256",
+      "reference_token_bytes",
+      "review_round",
+      "reviewer_id",
+      "reviewer_role",
+      "authorship_disclosure",
+      "is_specimen_author",
+      "conflict_disclosure",
+      "has_material_conflict",
+      "criterion_id",
+      "score_0_to_3",
+      "quoted_source",
+      "quoted_span",
+      "reason",
+      "proposed_revision",
+      "verdict",
+      "disagreement_status",
+      "disagreement_summary"
+    ],
+    "pass_derivation": {
+      "owned_dimension_minimum": 2,
+      "both_role_hard_dimensions_minimum": 3,
+      "not_applicable_allowed": false,
+      "unresolved_disagreement_blocks_pass": true,
+      "all_reviewer_verdicts_must_pass": true,
+      "all_multiscored_dimension_disagreements_must_be_recorded": true
+    }
+  },
+  "rubric_dimensions": [
+    {
+      "id": "brief_and_reference_fidelity",
+      "owner": "both",
+      "not_applicable_allowed": false,
+      "hard_fail": true
+    },
+    {
+      "id": "idiomatic_production_language",
+      "owner": "target-locale language editor",
+      "not_applicable_allowed": false,
+      "hard_fail": false
+    },
+    {
+      "id": "language_register_and_relationship",
+      "owner": "target-locale language editor",
+      "not_applicable_allowed": false,
+      "hard_fail": false
+    },
+    {
+      "id": "creative_lens_realization",
+      "owner": "target-locale culture and production reviewer",
+      "not_applicable_allowed": false,
+      "hard_fail": false
+    },
+    {
+      "id": "production_directability",
+      "owner": "target-locale culture and production reviewer",
+      "not_applicable_allowed": false,
+      "hard_fail": false
+    },
+    {
+      "id": "representation_and_stereotype_risk",
+      "owner": "both",
+      "not_applicable_allowed": false,
+      "hard_fail": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "zh_cn_bowl_pause_closing_time",
+      "locale": "zh-CN",
+      "script": "Hans",
+      "fixture_revision": 2,
+      "review_round": 2,
+      "source_paths": [
+        "references/vocab/zh.md",
+        "skills/seedance-examples-zh/SKILL.md",
+        "docs/README.zh.md"
+      ],
+      "common_brief": "Direct one restrained closing-time beat at a small food counter. Duration is fixed at eight seconds by the surface, outside prompt prose. An older proprietor silently shows care to a younger regular. Use one visible action, one camera move with an endpoint, one motivated practical light, and room tone. @Image1 owns identity and wardrobe. @Video1 controls camera rhythm only. @Audio1 controls tempo only. Do not generate on-screen text.",
+      "common_brief_sha256": "7afa25cc5964bda50e6997f34a24b632ea0433b36e4f4062777d1a6762323ce9",
+      "external_controls": {
+        "duration_seconds": 8,
+        "duration_owner": "surface_setting_not_prompt_prose"
+      },
+      "reference_token_bytes": [
+        {
+          "token": "@Image1",
+          "utf8_hex": "40496d61676531"
+        },
+        {
+          "token": "@Video1",
+          "utf8_hex": "40566964656f31"
+        },
+        {
+          "token": "@Audio1",
+          "utf8_hex": "40417564696f31"
+        }
+      ],
+      "reference_bindings": [
+        {
+          "token": "@Image1",
+          "role": "identity_and_wardrobe",
+          "candidate_span": "@Image1锁定店主与年轻熟客的身份和衣着",
+          "candidate_span_sha256": "603bfee74fe746487f3accd227a7c8840ca4617f01b2c16919ac2dbff8514b7a"
+        },
+        {
+          "token": "@Video1",
+          "role": "camera_rhythm_only",
+          "candidate_span": "@Video1仅控制镜头节奏，不转移人物、地点或色调",
+          "candidate_span_sha256": "2d19fc1020c7f720160e808921c7fdbba1013dab2fa3e6ad96299f99480edde8"
+        },
+        {
+          "token": "@Audio1",
+          "role": "tempo_only",
+          "candidate_span": "@Audio1仅控制节拍",
+          "candidate_span_sha256": "7838e72447b4b17ca988aa8dbef028bae3596c071e110cebd7403d1b61ef2b47"
+        }
+      ],
+      "creative_lens_hypothesis": {
+        "label": "递碗后的停顿",
+        "hypothesis_status": "requires_native_review",
+        "label_required_in_candidate": false,
+        "intent": "A restrained pause after the handoff, built from a held hand, a camera endpoint, and room tone rather than a generic warm look.",
+        "physical_realizations": [
+          "收银台边缘留着一小块擦拭后的水痕",
+          "把最后一碗热汤推到年轻熟客面前，手停在碗沿",
+          "两只手与碗同时进入画面后保持两拍"
+        ],
+        "anti_flattening_failures": [
+          "Writing only 递碗后的停顿 without a held hand, endpoint, and timed hold.",
+          "Replacing the specific counter action with generic street-stall or prestige imagery.",
+          "Silently converting the declared zh-CN Simplified-script specimen into a different regional delivery variant."
+        ]
+      },
+      "language_register": {
+        "dialogue_mode": "no_dialogue",
+        "regional_variant": "zh-CN / Hans",
+        "review_question": "Are the compact production clauses idiomatic for zh-CN rather than calqued from English?"
+      },
+      "production_contract": {
+        "action": "把最后一碗热汤推到年轻熟客面前",
+        "camera_endpoint": "到碗与两只手同框时停住",
+        "practical_light": "光源只用柜台上方的裸灯泡",
+        "room_tone": "保留现场环境声",
+        "textless_delivery": "不生成画面文字"
+      },
+      "criterion_evidence_anchors": {
+        "brief_and_reference_fidelity": [
+          "@Image1锁定店主与年轻熟客的身份和衣着"
+        ],
+        "idiomatic_production_language": [
+          "镜头从双人中景缓慢推进，到碗与两只手同框时停住"
+        ],
+        "language_register_and_relationship": [
+          "店主不说话，把最后一碗热汤推到年轻熟客面前"
+        ],
+        "creative_lens_realization": [
+          "两只手与碗同时进入画面后保持两拍"
+        ],
+        "production_directability": [
+          "到碗与两只手同框时停住"
+        ],
+        "representation_and_stereotype_risk": [
+          "收银台边缘留着一小块擦拭后的水痕"
+        ]
+      },
+      "candidate_prompt": "@Image1锁定店主与年轻熟客的身份和衣着；@Video1仅控制镜头节奏，不转移人物、地点或色调；@Audio1仅控制节拍。关门前的小餐馆，收银台边缘留着一小块擦拭后的水痕。光源只用柜台上方的裸灯泡。店主不说话，把最后一碗热汤推到年轻熟客面前，手停在碗沿；镜头从双人中景缓慢推进，到碗与两只手同框时停住。两只手与碗同时进入画面后保持两拍。保留现场环境声，不生成画面文字。",
+      "candidate_sha256": "d4137600b8e20533886e64f0260ab6732dcdf3c68c9e69c43125b162d533e0dd",
+      "review_input_sha256": "19eab52fd794813e899e53e34602332ba15402db3b02f5ca753a3c8de83e86ce",
+      "review_record": {
+        "case_id": "zh_cn_bowl_pause_closing_time",
+        "locale": "zh-CN",
+        "fixture_schema_version": "1.0",
+        "fixture_revision": 2,
+        "common_brief_sha256": "7afa25cc5964bda50e6997f34a24b632ea0433b36e4f4062777d1a6762323ce9",
+        "candidate_sha256": "d4137600b8e20533886e64f0260ab6732dcdf3c68c9e69c43125b162d533e0dd",
+        "review_input_sha256": "19eab52fd794813e899e53e34602332ba15402db3b02f5ca753a3c8de83e86ce",
+        "reference_token_bytes": [
+          {
+            "token": "@Image1",
+            "utf8_hex": "40496d61676531"
+          },
+          {
+            "token": "@Video1",
+            "utf8_hex": "40566964656f31"
+          },
+          {
+            "token": "@Audio1",
+            "utf8_hex": "40417564696f31"
+          }
+        ],
+        "review_round": 2,
+        "status": "pending_native_review",
+        "reviewers": [],
+        "verdict": null,
+        "criterion_results": [],
+        "evidence": []
+      }
+    },
+    {
+      "id": "ja_jp_two_beat_hold_closing_time",
+      "locale": "ja-JP",
+      "script": "Jpan",
+      "fixture_revision": 2,
+      "review_round": 2,
+      "source_paths": [
+        "references/vocab/ja.md",
+        "skills/seedance-examples-ja/SKILL.md",
+        "docs/README.ja.md"
+      ],
+      "common_brief": "Direct one restrained closing-time beat at a small food counter. Duration is fixed at eight seconds by the surface, outside prompt prose. An older proprietor silently shows care to a younger regular. Use one visible action, one camera move with an endpoint, one motivated practical light, and room tone. @Image1 owns identity and wardrobe. @Video1 controls camera rhythm only. @Audio1 controls tempo only. Do not generate on-screen text.",
+      "common_brief_sha256": "7afa25cc5964bda50e6997f34a24b632ea0433b36e4f4062777d1a6762323ce9",
+      "external_controls": {
+        "duration_seconds": 8,
+        "duration_owner": "surface_setting_not_prompt_prose"
+      },
+      "reference_token_bytes": [
+        {
+          "token": "@Image1",
+          "utf8_hex": "40496d61676531"
+        },
+        {
+          "token": "@Video1",
+          "utf8_hex": "40566964656f31"
+        },
+        {
+          "token": "@Audio1",
+          "utf8_hex": "40417564696f31"
+        }
+      ],
+      "reference_bindings": [
+        {
+          "token": "@Image1",
+          "role": "identity_and_wardrobe",
+          "candidate_span": "@Image1で店主と若い常連客の顔・髪・衣装を固定する",
+          "candidate_span_sha256": "15ce0659570eab244374cbcac9699ffe451c62601eab0570afbdcb7241e2097b"
+        },
+        {
+          "token": "@Video1",
+          "role": "camera_rhythm_only",
+          "candidate_span": "@Video1はカメラの移動タイミングだけを参照し、人物・場所・色調は移さない",
+          "candidate_span_sha256": "8bf6f9085ecc66876aacb4e5afcabd1198f9646006879c49b00170b19509de81"
+        },
+        {
+          "token": "@Audio1",
+          "role": "tempo_only",
+          "candidate_span": "@Audio1はテンポだけを参照する",
+          "candidate_span_sha256": "a562f29025fd65c91cbbdc5e261fff7780488199980238f58f965b3fec2dd32e"
+        }
+      ],
+      "creative_lens_hypothesis": {
+        "label": "手が離れた後の二拍",
+        "hypothesis_status": "requires_native_review",
+        "label_required_in_candidate": false,
+        "intent": "A two-beat hold after the hand leaves frame, made through a stopped camera and room tone rather than a generic slow or emotional look.",
+        "physical_realizations": [
+          "店主は会計皿の横に温かいおしぼりを一枚置く",
+          "手が画面を離れたところでカメラを止める",
+          "動作の後も二拍そのまま保持する"
+        ],
+        "anti_flattening_failures": [
+          "Writing only 手が離れた後の二拍 as a label without a stopped camera and timed hold.",
+          "Replacing the two-beat pause with generic slow motion or sentimental grading.",
+          "Adding dialogue without reviewing pronoun, relationship, speech level, and mora budget."
+        ]
+      },
+      "language_register": {
+        "dialogue_mode": "no_dialogue",
+        "speech_level": "not_applicable_unless_dialogue_is_added",
+        "review_question": "Do the production clauses and timing read naturally in ja-JP without relying on translated English syntax?"
+      },
+      "production_contract": {
+        "action": "店主は会計皿の横に温かいおしぼりを一枚置く",
+        "camera_endpoint": "手が画面を離れたところでカメラを止める",
+        "practical_light": "光源は天井の蛍光灯だけ",
+        "room_tone": "換気扇と引き出しが閉まる音だけ",
+        "textless_delivery": "画面内文字は生成しない"
+      },
+      "criterion_evidence_anchors": {
+        "brief_and_reference_fidelity": [
+          "@Image1で店主と若い常連客の顔・髪・衣装を固定する"
+        ],
+        "idiomatic_production_language": [
+          "カメラは入口側からカウンターに沿ってゆっくり横移動し"
+        ],
+        "language_register_and_relationship": [
+          "会話なし、換気扇と引き出しが閉まる音だけ"
+        ],
+        "creative_lens_realization": [
+          "動作の後も二拍そのまま保持する"
+        ],
+        "production_directability": [
+          "手が画面を離れたところでカメラを止める"
+        ],
+        "representation_and_stereotype_risk": [
+          "店主は会計皿の横に温かいおしぼりを一枚置く"
+        ]
+      },
+      "candidate_prompt": "@Image1で店主と若い常連客の顔・髪・衣装を固定する。@Video1はカメラの移動タイミングだけを参照し、人物・場所・色調は移さない。@Audio1はテンポだけを参照する。閉店前の小さな食堂。光源は天井の蛍光灯だけ。店主は会計皿の横に温かいおしぼりを一枚置く。カメラは入口側からカウンターに沿ってゆっくり横移動し、手が画面を離れたところでカメラを止める。動作の後も二拍そのまま保持する。会話なし、換気扇と引き出しが閉まる音だけ。画面内文字は生成しない。",
+      "candidate_sha256": "6b32e63be46a5d41674488b0a5c89aa73b0758b5ae7aeaedd4494b8181a7eb3d",
+      "review_input_sha256": "9d2f4e2538477f223889b06b6b401cc43b39b18c4ca46f6b6e76b9a7ee1a87ba",
+      "review_record": {
+        "case_id": "ja_jp_two_beat_hold_closing_time",
+        "locale": "ja-JP",
+        "fixture_schema_version": "1.0",
+        "fixture_revision": 2,
+        "common_brief_sha256": "7afa25cc5964bda50e6997f34a24b632ea0433b36e4f4062777d1a6762323ce9",
+        "candidate_sha256": "6b32e63be46a5d41674488b0a5c89aa73b0758b5ae7aeaedd4494b8181a7eb3d",
+        "review_input_sha256": "9d2f4e2538477f223889b06b6b401cc43b39b18c4ca46f6b6e76b9a7ee1a87ba",
+        "reference_token_bytes": [
+          {
+            "token": "@Image1",
+            "utf8_hex": "40496d61676531"
+          },
+          {
+            "token": "@Video1",
+            "utf8_hex": "40566964656f31"
+          },
+          {
+            "token": "@Audio1",
+            "utf8_hex": "40417564696f31"
+          }
+        ],
+        "review_round": 2,
+        "status": "pending_native_review",
+        "reviewers": [],
+        "verdict": null,
+        "criterion_results": [],
+        "evidence": []
+      }
+    },
+    {
+      "id": "ko_kr_glove_bag_closing_time",
+      "locale": "ko-KR",
+      "script": "Kore",
+      "fixture_revision": 2,
+      "review_round": 2,
+      "source_paths": [
+        "references/vocab/ko.md",
+        "skills/seedance-examples-ko/SKILL.md",
+        "docs/README.ko.md"
+      ],
+      "common_brief": "Direct one restrained closing-time beat at a small food counter. Duration is fixed at eight seconds by the surface, outside prompt prose. An older proprietor silently shows care to a younger regular. Use one visible action, one camera move with an endpoint, one motivated practical light, and room tone. @Image1 owns identity and wardrobe. @Video1 controls camera rhythm only. @Audio1 controls tempo only. Do not generate on-screen text.",
+      "common_brief_sha256": "7afa25cc5964bda50e6997f34a24b632ea0433b36e4f4062777d1a6762323ce9",
+      "external_controls": {
+        "duration_seconds": 8,
+        "duration_owner": "surface_setting_not_prompt_prose"
+      },
+      "reference_token_bytes": [
+        {
+          "token": "@Image1",
+          "utf8_hex": "40496d61676531"
+        },
+        {
+          "token": "@Video1",
+          "utf8_hex": "40566964656f31"
+        },
+        {
+          "token": "@Audio1",
+          "utf8_hex": "40417564696f31"
+        }
+      ],
+      "reference_bindings": [
+        {
+          "token": "@Image1",
+          "role": "identity_and_wardrobe",
+          "candidate_span": "@Image1로 주인과 젊은 단골의 얼굴·머리·의상을 고정한다",
+          "candidate_span_sha256": "dd4b6aadbedb538e7be82c2dd09525d3a7d3eeac6589577a157411a1962ee989"
+        },
+        {
+          "token": "@Video1",
+          "role": "camera_rhythm_only",
+          "candidate_span": "@Video1은 카메라 이동 리듬만 참고하고 인물·장소·색조는 가져오지 않는다",
+          "candidate_span_sha256": "82b0be6ed180478ea541b01dc9a9d5476a20056bdc876234ea112b0346ab41e8"
+        },
+        {
+          "token": "@Audio1",
+          "role": "tempo_only",
+          "candidate_span": "@Audio1은 템포만 참고한다",
+          "candidate_span_sha256": "5791ae30eaf0823dc38e4bedc40a61f536b51475f5398da19878a2b96f09c961"
+        }
+      ],
+      "creative_lens_hypothesis": {
+        "label": "장갑 봉투를 건 뒤의 멈춤",
+        "hypothesis_status": "requires_native_review",
+        "label_required_in_candidate": false,
+        "intent": "A practical return gesture completed in one frame, followed by a clear stop and a motivated paper sound rather than generic sentiment.",
+        "physical_realizations": [
+          "단골이 두고 간 장갑을 종이봉투에 넣어 가방 손잡이에 건다",
+          "봉투 손잡이가 단골의 가방 손잡이에 걸리면 멈춘다",
+          "종이봉투가 접히는 소리"
+        ],
+        "anti_flattening_failures": [
+          "Writing only 장갑 봉투를 건 뒤의 멈춤 without the return gesture and endpoint.",
+          "Replacing the specific return gesture with generic tears, backlight, or drama shorthand.",
+          "Adding dialogue without locking one speech level and the relationship that licenses it."
+        ]
+      },
+      "language_register": {
+        "dialogue_mode": "no_dialogue",
+        "speech_level": "not_applicable_unless_dialogue_is_added",
+        "review_question": "Do the action and camera clauses read naturally in ko-KR without generic drama shorthand or translated English syntax?"
+      },
+      "production_contract": {
+        "action": "단골이 두고 간 장갑을 종이봉투에 넣어 가방 손잡이에 건다",
+        "camera_endpoint": "봉투 손잡이가 단골의 가방 손잡이에 걸리면 멈춘다",
+        "practical_light": "광원은 계산대 위 형광등 하나만 사용한다",
+        "room_tone": "환풍기와 종이봉투가 접히는 소리만 남긴다",
+        "textless_delivery": "화면 속 글자는 생성하지 않는다"
+      },
+      "criterion_evidence_anchors": {
+        "brief_and_reference_fidelity": [
+          "@Image1로 주인과 젊은 단골의 얼굴·머리·의상을 고정한다"
+        ],
+        "idiomatic_production_language": [
+          "카메라는 두 사람의 미디엄 숏에서 봉투 쪽으로 천천히 틸트 다운하고"
+        ],
+        "language_register_and_relationship": [
+          "주인은 말없이 단골이 두고 간 장갑을 종이봉투에 넣어 가방 손잡이에 건다"
+        ],
+        "creative_lens_realization": [
+          "대사 없이 환풍기와 종이봉투가 접히는 소리만 남긴다"
+        ],
+        "production_directability": [
+          "봉투 손잡이가 단골의 가방 손잡이에 걸리면 멈춘다"
+        ],
+        "representation_and_stereotype_risk": [
+          "단골이 두고 간 장갑을 종이봉투에 넣어 가방 손잡이에 건다"
+        ]
+      },
+      "candidate_prompt": "@Image1로 주인과 젊은 단골의 얼굴·머리·의상을 고정한다. @Video1은 카메라 이동 리듬만 참고하고 인물·장소·색조는 가져오지 않는다. @Audio1은 템포만 참고한다. 문 닫기 전 작은 식당. 광원은 계산대 위 형광등 하나만 사용한다. 주인은 말없이 단골이 두고 간 장갑을 종이봉투에 넣어 가방 손잡이에 건다. 카메라는 두 사람의 미디엄 숏에서 봉투 쪽으로 천천히 틸트 다운하고, 봉투 손잡이가 단골의 가방 손잡이에 걸리면 멈춘다. 대사 없이 환풍기와 종이봉투가 접히는 소리만 남긴다. 화면 속 글자는 생성하지 않는다.",
+      "candidate_sha256": "07f38b3460ebb9c3f435941b7a24ea1e29c1a8f9684df3342fdd9cc679b13438",
+      "review_input_sha256": "3edaafa0cd9413ef78e6a7bf92e82f513a5773b9402d975fdc5c469ce3b4b7b0",
+      "review_record": {
+        "case_id": "ko_kr_glove_bag_closing_time",
+        "locale": "ko-KR",
+        "fixture_schema_version": "1.0",
+        "fixture_revision": 2,
+        "common_brief_sha256": "7afa25cc5964bda50e6997f34a24b632ea0433b36e4f4062777d1a6762323ce9",
+        "candidate_sha256": "07f38b3460ebb9c3f435941b7a24ea1e29c1a8f9684df3342fdd9cc679b13438",
+        "review_input_sha256": "3edaafa0cd9413ef78e6a7bf92e82f513a5773b9402d975fdc5c469ce3b4b7b0",
+        "reference_token_bytes": [
+          {
+            "token": "@Image1",
+            "utf8_hex": "40496d61676531"
+          },
+          {
+            "token": "@Video1",
+            "utf8_hex": "40566964656f31"
+          },
+          {
+            "token": "@Audio1",
+            "utf8_hex": "40417564696f31"
+          }
+        ],
+        "review_round": 2,
+        "status": "pending_native_review",
+        "reviewers": [],
+        "verdict": null,
+        "criterion_results": [],
+        "evidence": []
+      }
+    }
+  ],
+  "adversarial_contract": [
+    {
+      "id": "reference-token-confusable",
+      "gate": "machine_fixture_check",
+      "failure": "A reference token is translated, normalized, duplicated, reordered, or replaced with a lookalike byte sequence."
+    },
+    {
+      "id": "pan-cjk-template-copy",
+      "gate": "machine_literal_overlap_and_independent_review",
+      "failure": "Locale fixtures reuse the same register decomposition or merely translate one generic template."
+    },
+    {
+      "id": "bare-register-label",
+      "gate": "native_review",
+      "failure": "A cultural or aesthetic label appears without physical, audible, temporal, or relational realization."
+    },
+    {
+      "id": "stereotype-substitution",
+      "gate": "native_review",
+      "failure": "A locale is signaled through generic props, prestige imagery, or media shorthand instead of situated craft."
+    },
+    {
+      "id": "static-native-quality-claim",
+      "gate": "claim_boundary",
+      "failure": "A passing parser or fixture test is reported as proof of native fluency, cultural authenticity, or native authorship."
+    },
+    {
+      "id": "model-output-inference",
+      "gate": "claim_boundary",
+      "failure": "Repository-authored fixture text is reported as evidence about model responses or generated-video quality."
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Interview Starting Points (Multilingual)
 
-Native versions of the `seedance-interview` blank-slate menu and its invites, so the front door speaks the user's language. Use these for a user who has no idea yet; skip them when the idea already has a direction. Run the whole interview - questions, options, treatment, switches - in the user's language, and keep reference tags literal (`@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`).
+Localized versions of the `seedance-interview` blank-slate menu and its invites, so the front door speaks the user's language. Use these for a user who has no idea yet; skip them when the idea already has a direction. Run the whole interview - questions, options, treatment, switches - in the user's language, and keep reference tags literal (`@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`).
 
 Each language gives the same six lanes, one invite line, and one "simple or precise" offer so a professional can opt into a precise spec.
 

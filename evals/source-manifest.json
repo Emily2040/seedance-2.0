@@ -114,7 +114,7 @@
     {
       "path": "references/eval-rubric.md",
       "role": "evaluator",
-      "sha256": "b0bef41783fd05dc24cb09ade62c24126ba69c1534dc12ae787ac4316dfbfcea"
+      "sha256": "10247feac85df8e5f59a13e2588ac4c28d17380f83a11adc6124e4142a4277c9"
     },
     {
       "path": "references/event-density.md",
@@ -169,7 +169,7 @@
     {
       "path": "references/interview-starters.md",
       "role": "responder",
-      "sha256": "8223c3efccd860ef69e7b529cdaf56f82d7ad17c8e0a85fe8aff3bbbafd90af9"
+      "sha256": "c661d8990707850671f84080f7e72a1956123d58ba73a4a4502d5b6deea37303"
     },
     {
       "path": "references/json-schema.md",
@@ -304,7 +304,12 @@
     {
       "path": "references/multilingual-community-examples.md",
       "role": "responder",
-      "sha256": "60b4378ced62e5e90942c0446156fe0f40a9e7a1c999860bdbdb310e8196e2e2"
+      "sha256": "4d5da3b83718f12ee67e9ae775f2ec2fc8515ddc03afe9c7f462f46ec941dfb4"
+    },
+    {
+      "path": "references/multilingual-native-review.md",
+      "role": "responder",
+      "sha256": "214fb2dcf10ef24195ee16873f43b86b6edccf9bbda0c868b65f3bfeafec2e16"
     },
     {
       "path": "references/multishot-grammar.md",
@@ -439,12 +444,12 @@
     {
       "path": "SKILL.md",
       "role": "root",
-      "sha256": "c0aa286c88ad7e5d478749602471537c485c1e341aaf4a3aebba696434906696"
+      "sha256": "627e6f58b21514fc65438d36893b4c593b5177bed47f57b6b02a4c9a2bee37df"
     },
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "be817c3076639b212c6ab902d38779ae26f208b492e76a93fb0d3387d0efd0ff"
+      "sha256": "20943a6e4a35ef5af559b82bb21aa0333a7a6140c36e594e8e9750c32043c832"
     },
     {
       "path": "skills/seedance-antislop/SKILL.md",
@@ -479,17 +484,17 @@
     {
       "path": "skills/seedance-examples-ja/SKILL.md",
       "role": "responder",
-      "sha256": "de6483e7cc2837945fd28e301018291b98abf84b59800eb9412a0c0c2aa4baba"
+      "sha256": "f1ac8498697f40f9a4b78401868bc13a9b3154864f72cfa27c9e357db43618a0"
     },
     {
       "path": "skills/seedance-examples-ko/SKILL.md",
       "role": "responder",
-      "sha256": "b00d19ce6c81e045b8b270d87ca47c08d15b46472d4e8c6d0649644081508452"
+      "sha256": "19633d37bb759c8493d976744906ba2288351718f7fd1c064d3c52d87bdbf919"
     },
     {
       "path": "skills/seedance-examples-zh/SKILL.md",
       "role": "responder",
-      "sha256": "1a05696db490a48e9cea5d42bc81e2487eb481bc4030a098d074056e757d0db5"
+      "sha256": "51ddd2139b43ad3a272a2ac6347645c98dedf5f48b944f1a741d3e25380fcef2"
     },
     {
       "path": "skills/seedance-filter/SKILL.md",
@@ -499,12 +504,12 @@
     {
       "path": "skills/seedance-interview/SKILL.md",
       "role": "responder",
-      "sha256": "e0d450cb74961356c27ea20c05ef1471fec922f72f98bc820075f11b3efdf334"
+      "sha256": "cc6dd4994bc5df8c4c16c883b46fe03ba16b21cfc98b1d8b1a587c58be91e6b3"
     },
     {
       "path": "skills/seedance-interview-short/SKILL.md",
       "role": "responder",
-      "sha256": "62a71c608399c022a27be43ca31e2366dc07dce6a6cd3aad414be0f555d085aa"
+      "sha256": "a14ae92b52afd2903059d2eee6559ef73001abfbf66bc80341b5329508175f76"
     },
     {
       "path": "skills/seedance-lighting/SKILL.md",
@@ -564,27 +569,27 @@
     {
       "path": "skills/seedance-vocab-es/SKILL.md",
       "role": "responder",
-      "sha256": "da7a63da0cbe9387b151bca1ac792db7d17b0aba1179c34cb982cb2b39fbb1c3"
+      "sha256": "56f8d9a98606183eb716dc19c6c6caf7be107bc970db54a01f48c79b340c8468"
     },
     {
       "path": "skills/seedance-vocab-ja/SKILL.md",
       "role": "responder",
-      "sha256": "456f99de1b8ddf6829793d4cf106ad9c8828b858c25e76094caeabda640ac8a6"
+      "sha256": "eccce36c130efe126c25e16f312dd0794b88176a262d7944e5a828edb2fe9e25"
     },
     {
       "path": "skills/seedance-vocab-ko/SKILL.md",
       "role": "responder",
-      "sha256": "08699f5afa3c6904cc87e491167d622131132e7629ca013d9ca9f75cd5fd35cc"
+      "sha256": "15fcecae9550395abd2bfed959e40e970a3e5e619df676137261db85758bd817"
     },
     {
       "path": "skills/seedance-vocab-ru/SKILL.md",
       "role": "responder",
-      "sha256": "c0712c2063953e6842c3497400aec4c44e8db4a14cc61358b1d24d3389a864bb"
+      "sha256": "c7b5eee164753475387adb4eda410a0bf6736726f24a4ef449fac4e76171e079"
     },
     {
       "path": "skills/seedance-vocab-zh/SKILL.md",
       "role": "responder",
-      "sha256": "e77364130e73ec0c63bebb99cf56eda4569564d0c8d6bf27471c469984228d4e"
+      "sha256": "a24b47bdcafb54b990c7237e27693742c58fa7b50cc9841445fe7a3f5f00f3d2"
     }
   ]
 }

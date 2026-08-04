@@ -1,6 +1,6 @@
 # Seedance 2.0 Skill OS — v6.7.0
 
-A modular agent-skill operating system for directing ByteDance **Seedance 2.0** video. It turns vague ideas into production-ready prompts, **directs each scene like a filmmaker**, keeps platform facts source-dated, rewrites unsafe IP, and plans long-form stories across many clips — with native-reader paths for English, 中文, 日本語, and 한국어.
+A modular agent-skill operating system for directing ByteDance **Seedance 2.0** video. It turns vague ideas into production-ready prompts, **directs each scene like a filmmaker**, keeps platform facts source-dated, rewrites unsafe IP, and plans long-form stories across many clips — with localized reader paths for English, 中文, 日本語, and 한국어.
 
 ## What's new in v6.7.0 — the outside world moved
 

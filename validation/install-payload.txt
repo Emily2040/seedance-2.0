@@ -38,6 +38,8 @@ docs/v6-release-readiness.md
 evals/eval-run-ledger.md
 evals/evals.json
 evals/generation-benchmark.json
+evals/multilingual-native-review-evidence.json
+evals/multilingual-native-review.json
 evals/prompt-architecture-stress.json
 examples/golden-prompts/compact-i2v.md
 examples/golden-prompts/continuation-observed-deviation.md
@@ -96,6 +98,7 @@ references/json-schema.md
 references/model-mechanics.md
 references/model-name-map.md
 references/multilingual-community-examples.md
+references/multilingual-native-review.md
 references/multishot-grammar.md
 references/platform-constraints.md
 references/platform-surface-matrix.md

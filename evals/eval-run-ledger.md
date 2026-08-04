@@ -6,6 +6,10 @@ cases are well-formed; this ledger records either the skill's scored output or a
 explicit non-score harness failure from `scripts/eval_run.py` against the rubric
 in [`references/eval-rubric.md`](../references/eval-rubric.md).
 
+That score is not a certification of the writing, its origin, or the rendered result.
+Those claims require separate evidence; see
+[`references/multilingual-native-review.md`](../references/multilingual-native-review.md).
+
 ## How to regenerate
 
 A live evaluation needs network access and a key, so it runs outside the offline

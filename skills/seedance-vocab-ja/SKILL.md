@@ -26,7 +26,7 @@ Use Japanese cinematic vocabulary when the user asks for Japanese prompt wording
 
 ## Intent
 
-The user working in Japanese often lives closest to the anime tradition this model loves to render. Serve both registers - the politeness-shaped natural sentence and the production term - and let the vocabulary feel native, never translated.
+Japanese prompt direction can combine concise clauses with established production loanwords. Choose one readable clause order, keep each term attached to a concrete shot instruction, and avoid literal English syntax where a shorter production construction is available. The shipped independent review artifact is empty, so treat these choices as working production wording pending locale-specialist review.
 
 ## Usage Rule
 

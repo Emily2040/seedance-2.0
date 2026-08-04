@@ -85,7 +85,7 @@ Current active release: **6.7.0**. Older entries below are preserved as release 
 ### Fixed
 
 - Stopped `validate_skills.py` from reporting gitignored bytecode as committed. Importing any module writes `__pycache__`, so running the tests before the validators — the obvious order, and the one the README lists — produced a wall of "compiled Python cache must not be committed" errors naming files that were gitignored and had never been committed. The check now asks git what it actually tracks, and treats a non-checkout (an unpacked ZIP) as having nothing committed. CI never reproduced this because the workflow sets `PYTHONDONTWRITEBYTECODE`; a first-time user has no such setting.
-- Native-level proofreading pass across all six languages. Chinese: 编钟余震 -> 余音 (aftershock -> lingering resonance), 湿地 (wetland) -> 潮湿地面/湿润地面/湿滑地面 for "wet ground" (3 files), the missed 三分之二 -> 四分之三 three-quarter angle in the community-examples file, 表面 -> 平台 (surface translationese), 轮廓 -> 剪影 (silhouette), 后退揭示镜头 -> 镜头后拉揭示空间, 宽幅远景 -> 远景定场镜头 (establishing shot), a missing 仅 to match its "only" gloss, and full-width quotes in two Chinese sentences. Japanese: the same fraction bug 三分の二 -> 四分の三, 主体 -> 被写体 (photographic subject), 実用照明 -> プラクティカルライト (practical light, 2 files), 開示 -> 種明かし（リビール） (cinematic reveal), two grammar repairs, 開いた動き -> 進行中の動き, 顔を向けて -> 振り向いて, 日本語入口 -> 日本語の入り口, だけで止めず -> だけにとどめず, 電気の弧 -> 電気アーク. Korean: 실용 조명 -> 프랙티컬 조명 (practical light, 4 files), 천천히 돌리 인 -> 느린 돌리 인, 머리 회전 -> 고개를 돌리지 않고, 중간 샷/중간 클로즈업 -> 미디엄 샷/미디엄 클로즈업, 주체 -> 피사체, a particle-spacing fix, 영화같은 -> 영화 같은, register fix 마세요 -> 마십시오, 멀리 -> 멀리서, 낮은 앵글 -> 로우 앵글, 틸앤오렌지 -> 틸 앤 오렌지, and one unstacked modifier. Spanish: bloqueo -> puesta en escena (film blocking, not blockage), caen en el pulso -> siguen el pulso. Russian: макро-крупный план -> макросъемка крупным планом, and one stray ё normalized to the file's е-style.
+- Language-focused internal proofreading pass across all six languages; this was an internal proofreading pass, not evidence about who wrote the material. Chinese: 编钟余震 -> 余音 (aftershock -> lingering resonance), 湿地 (wetland) -> 潮湿地面/湿润地面/湿滑地面 for "wet ground" (3 files), the missed 三分之二 -> 四分之三 three-quarter angle in the community-examples file, 表面 -> 平台 (surface translationese), 轮廓 -> 剪影 (silhouette), 后退揭示镜头 -> 镜头后拉揭示空间, 宽幅远景 -> 远景定场镜头 (establishing shot), a missing 仅 to match its "only" gloss, and full-width quotes in two Chinese sentences. Japanese: the same fraction bug 三分の二 -> 四分の三, 主体 -> 被写体 (photographic subject), 実用照明 -> プラクティカルライト (practical light, 2 files), 開示 -> 種明かし（リビール） (cinematic reveal), two grammar repairs, 開いた動き -> 進行中の動き, 顔を向けて -> 振り向いて, 日本語入口 -> 日本語の入り口, だけで止めず -> だけにとどめず, 電気の弧 -> 電気アーク. Korean: 실용 조명 -> 프랙티컬 조명 (practical light, 4 files), 천천히 돌리 인 -> 느린 돌리 인, 머리 회전 -> 고개를 돌리지 않고, 중간 샷/중간 클로즈업 -> 미디엄 샷/미디엄 클로즈업, 주체 -> 피사체, a particle-spacing fix, 영화같은 -> 영화 같은, register fix 마세요 -> 마십시오, 멀리 -> 멀리서, 낮은 앵글 -> 로우 앵글, 틸앤오렌지 -> 틸 앤 오렌지, and one unstacked modifier. Spanish: bloqueo -> puesta en escena (film blocking, not blockage), caen en el pulso -> siguen el pulso. Russian: макро-крупный план -> макросъемка крупным планом, and one stray ё normalized to the file's е-style.
 
 ## [6.6.0] — 2026-07-04
 
@@ -193,7 +193,7 @@ Current active release: **6.7.0**. Older entries below are preserved as release 
 
 ### Added
 
-- Added full native-reader entry docs for Chinese, Japanese, and Korean: `docs/README.zh.md`, `docs/README.ja.md`, and `docs/README.ko.md`.
+- Added full localized entry docs for Chinese, Japanese, and Korean: `docs/README.zh.md`, `docs/README.ja.md`, and `docs/README.ko.md`.
 - Added `seedance-examples-ja` and `seedance-examples-ko` so Japanese and Korean users have active example/rewrite skills, not only vocabulary translation.
 - Added CJK sequence/continuation, accepted-footage, textless-localization, and safety rewrite phrases to the active Chinese, Japanese, and Korean vocabulary references.
 - Added eval coverage for the CJK front page, Japanese examples, Korean examples, and localized CJK continuation behavior.
@@ -201,7 +201,7 @@ Current active release: **6.7.0**. Older entries below are preserved as release 
 ### Changed
 
 - Bumped active release metadata, README badges, eval metadata, validator expectations, and example prompt versions to v6.0.1.
-- Tightened README routing so Chinese, Japanese, and Korean readers start from native docs and active skills rather than migrated legacy references.
+- Tightened README routing so Chinese, Japanese, and Korean readers start from localized docs and active skills rather than migrated legacy references.
 
 ## [6.0.0] — 2026-06-20
 
@@ -220,7 +220,7 @@ Historical base v6 sequence-compiler release.
 - Root routing now runs a Sequence Gate before the Mode Gate and requires accepted source footage or an observed final state before continuation prompts.
 - Interview, prompt, short-prompt, troubleshooting, camera, motion, characters, audio, lighting, style, and recipe skills now inherit sequence state, continuity locks, completed beats, reserved future beats, and exact reference tags when present.
 - README, skill map, reference library, validation commands, agent compatibility notes, eval rubric, JSON schema reference, and CI workflow now reflect v6.0.0.
-- README introduces native-reader start paths, beginning with Chinese, that link into the active vocabulary and example system; full Japanese and Korean parity (native docs and example skills) followed in v6.0.1.
+- README introduces localized start paths, beginning with Chinese, that link into the active vocabulary and example system; full Japanese and Korean parity (localized docs and example skills) followed in v6.0.1.
 - Prompt budget guidance is surface-specific instead of treating any character count as universal.
 
 ## [5.5.2] — 2026-06-12

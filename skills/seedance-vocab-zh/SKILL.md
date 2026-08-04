@@ -26,7 +26,7 @@ Use Chinese vocabulary when the user asks for Chinese prompts, Mandarin cinemati
 
 ## Intent
 
-Chinese can say in four characters what English needs a sentence for - and the user choosing Chinese is choosing that compression and its culture. Serve the density without losing the directing: every 成语-tight phrase still names something a camera can see.
+Chinese production wording can use compact compounds, but compression is useful only when the shot instruction remains explicit. Keep each concise phrase tied to a visible action, camera behavior, light source, sound, or preservation constraint. The shipped independent review artifact is empty, so treat these choices as working production wording pending locale-specialist review.
 
 ## Usage Rule
 

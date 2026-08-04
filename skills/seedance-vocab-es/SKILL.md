@@ -26,7 +26,7 @@ Use Spanish cinematic vocabulary when the user asks for Spanish prompts, bilingu
 
 ## Intent
 
-Spanish carries rhythm even in technical direction. Serve users who think in Spanish with vocabulary that keeps its musicality while staying camera-precise - they should never feel that directing in their language is a downgrade.
+Spanish prompt direction should preserve production meaning and clause clarity before stylistic cadence. Keep the subject, visible action, camera endpoint, light, sound, and constraint unambiguous. The shipped independent review artifact is empty, so treat these choices as working production wording pending locale-specialist review.
 
 ## Usage Rule
 

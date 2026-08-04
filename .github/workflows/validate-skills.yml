@@ -68,7 +68,7 @@ jobs:
         run: python -I -S -B scripts/build_hero.py --check
       - name: Validate source freshness and claim labels
         run: python scripts/source_registry_check.py
-      - name: Validate multilingual vocabulary schema
+      - name: Validate multilingual vocabulary and native-review boundary
         run: python scripts/vocab_schema_check.py --strict
       - name: Validate sequence project state
         run: python scripts/project_state_check.py --strict
