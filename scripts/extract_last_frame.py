@@ -3083,9 +3083,7 @@ def _probe_decodable_png(ffmpeg: str, png_frame: bytes) -> None:
         )
 
 
-def render_frame_png(ffmpeg: str, clip: Path, first: bool) -> bytes:
-    """Stream every decoded frame and retain only the final complete PNG."""
-
+def _frame_stream_command(ffmpeg: str, clip: Path, first: bool) -> list[str]:
     cmd = [
         ffmpeg,
         "-nostdin",
@@ -3097,7 +3095,23 @@ def render_frame_png(ffmpeg: str, clip: Path, first: bool) -> bytes:
     ]
     if first:
         cmd += ["-frames:v", "1"]
-    cmd += ["-an", "-vsync", "0", "-f", "image2pipe", "-vcodec", "png", "pipe:1"]
+    cmd += [
+        "-an",
+        "-fps_mode",
+        "passthrough",
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "png",
+        "pipe:1",
+    ]
+    return cmd
+
+
+def render_frame_png(ffmpeg: str, clip: Path, first: bool) -> bytes:
+    """Stream every decoded frame and retain only the final complete PNG."""
+
+    cmd = _frame_stream_command(ffmpeg, clip, first)
 
     with tempfile.TemporaryFile(mode="w+b") as stderr_file:
         try:

@@ -2935,6 +2935,17 @@ class PngStreamTests(unittest.TestCase):
         self.assertEqual(extractor._read_png_frame(stream), last)
         self.assertIsNone(extractor._read_png_frame(stream))
 
+    def test_frame_stream_uses_current_passthrough_option(self) -> None:
+        command = extractor._frame_stream_command(
+            "ffmpeg",
+            Path("clip.mp4"),
+            first=False,
+        )
+
+        self.assertNotIn("-vsync", command)
+        option = command.index("-fps_mode")
+        self.assertEqual(command[option + 1], "passthrough")
+
     def test_truncated_stream_is_rejected(self) -> None:
         with self.assertRaises(extractor.FrameExtractionError):
             extractor._read_png_frame(io.BytesIO(extractor._PNG_SIGNATURE + b"\x00"))
