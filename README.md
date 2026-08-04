@@ -513,28 +513,28 @@ python -I -S -B scripts/build_masthead_outlines.py --install-build-deps
 ```
 
 ```bash
-python scripts/validate_skills.py
-python scripts/content_audit.py
-python scripts/eval_schema_check.py
-python scripts/schema_check.py
-python scripts/design_audit.py
 python -I -S -B scripts/build_masthead_outlines.py --check
-python -I -S -B scripts/build_hero.py --check
-python scripts/source_registry_check.py --enforce-freshness
-python scripts/vocab_schema_check.py --strict
-python scripts/project_state_check.py --strict
-python scripts/continuity_chain_check.py --strict
-python scripts/behavior_contract_check.py
-python scripts/sequence_eval_check.py
-python scripts/generation_run_check.py
-python scripts/prompt_architecture_stress.py --strict
-python scripts/prompt_lint.py --self-test --strict
-python scripts/eval_run.py --self-test
-python scripts/extract_last_frame.py --self-test
-python -m unittest discover -s tests -v
-python -m compileall scripts tests
+python scripts/validate_repo.py --release
+```
+
+`validate_repo.py` resolves the repository from its own file location and does
+not call Git, so this release path also works from a Download ZIP extraction,
+from a nested caller directory, and from a path containing spaces. The separate
+masthead-outline check preserves its sealed build-environment trust boundary;
+the runner covers the remaining canonical validators, tests, and an in-memory
+source compilation that writes no bytecode.
+
+### Git checkout-only hygiene
+
+After the archive-safe checks, a maintainer working in a Git checkout should
+also run:
+
+```bash
 git diff --check
 ```
+
+This whitespace check requires Git metadata. Do not run it in a Download ZIP
+extraction.
 
 `prompt_architecture_stress.py` is a deterministic failure gate, not a creativity
 or originality judge. In strict mode, every applicable dimension on every
@@ -545,9 +545,10 @@ traceability beyond generic production words, explicit camera/light/sound/action
 contradictions, and repetition or padding patterns. Comparative creative quality
 still requires blinded model evaluation and native-language human review.
 
-The CI workflow runs this same list on push and pull request, with the one
-deliberate difference noted above: it omits `--enforce-freshness`. These checks
-are deterministic and offline — they prove the package is well-formed.
+The CI workflow runs the same archive-safe runner on push and pull request, with
+the one deliberate difference noted above: it omits `--enforce-freshness`.
+Checkout-only whitespace hygiene remains a separate CI step. These checks are
+deterministic and offline — they prove the package is well-formed.
 
 The multilingual fixture check proves byte-exact reference-token preservation,
 canonical common-brief and candidate bindings, non-derived complete review-input

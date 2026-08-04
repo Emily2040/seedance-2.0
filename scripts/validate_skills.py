@@ -109,6 +109,7 @@ REQUIRED_FILES = [
     "CHANGELOG.md",
     "requirements-masthead.lock",
     "V6_SEQUENCE_PROMPT_COMPILER_MANIFEST.md",
+    "scripts/validate_repo.py",
     "scripts/validate_skills.py",
     "scripts/content_audit.py",
     "scripts/eval_schema_check.py",
@@ -861,6 +862,7 @@ def main() -> int:
             errors.append("evals/evals.json must contain at least 16 cases")
 
     for rel in [
+        "scripts/validate_repo.py",
         "scripts/validate_skills.py",
         "scripts/content_audit.py",
         "scripts/eval_schema_check.py",

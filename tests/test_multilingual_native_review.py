@@ -96,8 +96,17 @@ class NativeReviewBoundaryTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/validate-skills.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("python scripts/vocab_schema_check.py --strict", workflow)
-        self.assertIn("python -m unittest discover -s tests -v", workflow)
+        self.assertIn("run: python scripts/validate_repo.py", workflow)
+        canonical_runner = (ROOT / "scripts/validate_repo.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            '("scripts/vocab_schema_check.py", "--strict")', canonical_runner
+        )
+        self.assertIn(
+            '("-m", "unittest", "discover", "-s", "tests", "-v")',
+            canonical_runner,
+        )
         required_file_validator = (ROOT / "scripts/validate_skills.py").read_text(
             encoding="utf-8"
         )

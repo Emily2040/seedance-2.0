@@ -1111,6 +1111,7 @@ class OutlinedTypeTests(unittest.TestCase):
     def test_masthead_install_is_hash_enforced_everywhere_it_is_documented(self) -> None:
         """Release, CI, and script help must not regress to unconstrained installs."""
         import build_masthead_outlines as gen
+        import validate_repo
 
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         release_setup = readme.split("## Validation", 1)[1].split("## Design Standard", 1)[0]
@@ -1122,8 +1123,13 @@ class OutlinedTypeTests(unittest.TestCase):
         self.assertNotIn("$RUNNER_TEMP", CI_BUILD_ENV)
         self.assertIn(MASTHEAD_INSTALL, release_setup)
         self.assertGreaterEqual(readme.count(MASTHEAD_INSTALL), 2)
-        self.assertGreaterEqual(readme.count(HERO_COMMAND), 3)
-        self.assertIn(HERO_COMMAND + " --check", workflow)
+        self.assertGreaterEqual(readme.count(HERO_COMMAND), 2)
+        archive_plan = {
+            check.display_command()
+            for check in validate_repo.validation_plan(release=False)
+        }
+        self.assertIn(HERO_COMMAND + " --check", archive_plan)
+        self.assertIn("python scripts/validate_repo.py", workflow)
         self.assertIn(HERO_COMMAND + " --check", security)
         for public_document in (readme, workflow, security):
             self.assertNotIn("python scripts/build_hero.py", public_document)
