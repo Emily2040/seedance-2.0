@@ -468,6 +468,52 @@ class ExecutionTests(unittest.TestCase):
             self.assertLessEqual(max(map(len, errors)), 1024)
             self.assertLessEqual(sum(map(len, errors)), 16384)
 
+    def test_text_waiver_arrays_reject_non_string_items(self) -> None:
+        cases = (
+            (
+                "examples/standalone-clip/project-state.json",
+                "allowed_changes",
+                True,
+            ),
+            (
+                "examples/standalone-clip/project-state.json",
+                "continuity_breaks",
+                True,
+            ),
+            (
+                "examples/standalone-clip/project-state.json",
+                "accepted_deviations",
+                True,
+            ),
+            (
+                "examples/sequence-airport-arrival/clip-01-contract.json",
+                "allowed_changes",
+                False,
+            ),
+            (
+                "examples/sequence-airport-arrival/clip-01-take-review.json",
+                "continuity_breaks",
+                False,
+            ),
+            (
+                "examples/sequence-airport-arrival/clip-01-take-review.json",
+                "accepted_deviations",
+                False,
+            ),
+        )
+        for relative, field, nested_clip in cases:
+            with self.subTest(instance=relative, field=field), tempfile.TemporaryDirectory() as tmp:
+                repo = self._copy_repo(tmp)
+                target = repo / relative
+                data = json.loads(target.read_text("utf-8"))
+                owner = data["clips"][0] if nested_clip else data
+                owner[field] = [{"not": "text"}]
+                target.write_text(json.dumps(data), encoding="utf-8")
+
+                errors = schema_check.check(repo)
+
+                self.assertTrue(any(field in error for error in errors), errors)
+
     def test_schema_requiring_a_field_no_example_has_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = self._copy_repo(tmp)

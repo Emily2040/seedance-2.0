@@ -32,8 +32,8 @@
     "completed_beats": {"type": "array", "items": {"type": "string"}},
     "incomplete_beats": {"type": "array", "items": {"type": "string"}},
     "unexpected_completed_beats": {"type": "array", "items": {"type": "string"}},
-    "continuity_breaks": {"type": "array"},
-    "accepted_deviations": {"type": "array"},
+    "continuity_breaks": {"type": "array", "items": {"type": "string"}},
+    "accepted_deviations": {"type": "array", "items": {"type": "string"}},
     "observation_confidence": {"enum": ["low", "medium", "high"]},
     "uncertainties": {"type": "array", "items": {"type": "string"}},
     "requires_user_confirmation": {"type": "boolean"}

@@ -193,7 +193,10 @@
         "gauge_state": "two amber pulses complete, needle still at forty"
       },
       "continuity_locks": ["gauge identity", "needle at forty", "amber diode", "reference tags"],
-      "allowed_changes": ["diode may pulse exactly twice"],
+      "allowed_changes": [
+        "diode may pulse exactly twice",
+        "reference_tags"
+      ],
       "continuity_breaks": [],
       "accepted_deviations": [],
       "transition_in": "intentional macro insert",
@@ -251,7 +254,11 @@
       "observed_start_state": null,
       "observed_end_state": null,
       "continuity_locks": ["technician identity", "blue notched card", "green signature", "reference tags"],
-      "allowed_changes": ["card may enter signed stack", "metal clip may close"],
+      "allowed_changes": [
+        "card may enter signed stack",
+        "metal clip may close",
+        "reference_tags"
+      ],
       "continuity_breaks": [],
       "accepted_deviations": [],
       "transition_in": "intentional next shot from utility insert",
