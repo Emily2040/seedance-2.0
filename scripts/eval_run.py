@@ -78,7 +78,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "4049c47a0e7db7770225d602fff8c31d453ce196152ab1a3e0a6bd1e5b96d490"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "6a15f89e06919620202c59323e1f158fb29fd1646f9522cb05cdc3ac128384bf"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -3871,6 +3871,40 @@ def _atomic_write_text(
             "replacement ledger",
         )
 
+    def verify_replacement_namespace_identity() -> None:
+        """Refuse to clean a different object substituted at the destination."""
+
+        if temporary_signature is None:
+            raise HarnessError("temporary ledger identity was not captured")
+        status = _ledger_destination_status(path, "replacement ledger")
+        if (
+            (status.st_dev, status.st_ino) != temporary_signature[:2]
+            or status.st_nlink != temporary_link_count
+        ):
+            raise HarnessError(
+                "replacement ledger identity changed during atomic ledger write"
+            )
+
+    def cleanup_temporary_after_failure() -> None:
+        """Delete a new-ledger quarantine only while it names our original file."""
+
+        if destination_state.existed or temporary_signature is None:
+            _best_effort_unlink_atomic_artifact(temporary)
+            return
+        try:
+            status = temporary.lstat()
+            if (
+                stat.S_ISLNK(status.st_mode)
+                or not stat.S_ISREG(status.st_mode)
+                or (status.st_dev, status.st_ino) != temporary_signature[:2]
+                or status.st_nlink != temporary_link_count
+            ):
+                return
+            temporary.unlink()
+            _fsync_parent_directory(temporary)
+        except (HarnessError, OSError):
+            pass
+
     def close_pending_descriptors() -> None:
         nonlocal descriptor, backup_descriptor, restore_descriptor
         for value in (descriptor, backup_descriptor, restore_descriptor):
@@ -3992,6 +4026,9 @@ def _atomic_write_text(
 
     def remove_unverified_new_destination() -> None:
         nonlocal replaced
+        # Byte tampering of the same file is still quarantined, but a different
+        # object substituted at this pathname belongs to the concurrent writer.
+        verify_replacement_namespace_identity()
         try:
             os.replace(path, temporary)
             replaced = False
@@ -4000,6 +4037,7 @@ def _atomic_write_text(
             replaced = False
         except BaseException as move_error:
             try:
+                verify_replacement_namespace_identity()
                 path.unlink()
                 replaced = False
                 _fsync_parent_directory(path)
@@ -4207,7 +4245,7 @@ def _atomic_write_text(
                 raise HarnessError(
                     "ledger post-check failed and unverified destination cleanup failed"
                 ) from rollback_error
-        _best_effort_unlink_atomic_artifact(temporary)
+        cleanup_temporary_after_failure()
         if restore is not None:
             _best_effort_unlink_atomic_artifact(restore)
         if backup is not None and not commit_verified:

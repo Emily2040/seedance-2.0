@@ -2571,6 +2571,45 @@ class LedgerIntegrityTests(unittest.TestCase):
             self.assertFalse(path.exists())
             self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
 
+    def test_new_destination_rollback_preserves_namespace_substitute(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "ledger.md"
+            published = root / "published-ledger.md"
+            substitute = root / "substitute.md"
+            payload = "new evidence\n"
+            substitute.write_text(payload, encoding="utf-8")
+            substitute_status = substitute.stat()
+            substitute_identity = (substitute_status.st_dev, substitute_status.st_ino)
+
+            def substitute_then_reject() -> None:
+                os.replace(path, published)
+                os.replace(substitute, path)
+                raise eval_run.HarnessError("post-check failed")
+
+            with self.assertRaisesRegex(
+                eval_run.HarnessError,
+                "post-check failed and unverified destination cleanup failed",
+            ) as raised:
+                eval_run._atomic_write_text(
+                    path,
+                    payload,
+                    after_replace=substitute_then_reject,
+                )
+
+            self.assertIsInstance(raised.exception.__cause__, eval_run.HarnessError)
+            self.assertIn(
+                "replacement ledger identity changed",
+                str(raised.exception.__cause__),
+            )
+            self.assertEqual(path.read_text(encoding="utf-8"), payload)
+            current_status = path.stat()
+            self.assertEqual(
+                (current_status.st_dev, current_status.st_ino),
+                substitute_identity,
+            )
+            self.assertEqual(published.read_text(encoding="utf-8"), payload)
+
     def test_verified_commit_reports_cleanup_failure_as_committed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ledger.md"
