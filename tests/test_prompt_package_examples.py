@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def section(text: str, heading: str, next_heading: str) -> str:
     return text.split(heading, 1)[1].split(next_heading, 1)[0]
+
+
+def copyable_prompt(text: str) -> str:
+    prompts = re.findall(r"`([^`\r\n]+)`", text)
+    if len(prompts) != 1:
+        raise AssertionError(f"expected exactly one copyable prompt, found {len(prompts)}")
+    return prompts[0]
 
 
 class ReferenceExampleTests(unittest.TestCase):
@@ -37,11 +45,13 @@ class ReferenceExampleTests(unittest.TestCase):
 
         for name, example in (("v2v", v2v), ("sequence", sequence)):
             with self.subTest(example=name):
-                self.assertIn("accepted", example)
-                self.assertIn("observed end state", example)
-                self.assertIn("review", example)
-                self.assertNotIn("[Video 1]", example)
-                self.assertNotIn("@Image 1", example)
+                prompt = copyable_prompt(example)
+                self.assertIn("@Video1", prompt)
+                self.assertRegex(prompt, r"actual (?:observed )?opening state")
+                self.assertIn("reviewed ending", prompt)
+                self.assertNotRegex(prompt.lower(), r"\b(?:planned|unobserved)\b")
+                self.assertNotIn("[Video 1]", prompt)
+                self.assertNotIn("@Image 1", prompt)
 
 
 class NarrativePromptExampleTests(unittest.TestCase):
