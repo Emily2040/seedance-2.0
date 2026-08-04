@@ -24,7 +24,9 @@ Surfaces: [ByteDance Seedance 2.0](https://seed.bytedance.com/en/seedance2_0) ·
 
 Most tools ask the model for a "cinematic look." A director asks what the scene is *doing* — then makes the camera, lens, light, blocking, performance, and sound all serve one intention, in a single recognizable voice, across an entire story.
 
-The [**directing engine**](references/directing-engine.md) encodes that judgment. It reads a scene's dramatic function — the turn, the point of view, the power, the subtext — names one intention, and derives a coherent setup instead of stacking adjectives.
+The mandatory [**Director's Read**](references/directors-read.md) encodes that judgment before every narrative, story, or performance prompt: function, turn, POV, power shift, objective, obstacle/tactic, contradiction, one visible suppressed behavior, one non-transferable detail, and one explicit genre refusal.
+
+Utility, packshot, functional product, and abstract work take a separate lane so the skill does not invent drama. The deeper [**directing engine**](references/directing-engine.md) then turns the read into a coherent camera, light, blocking, performance, and sound setup instead of stacking adjectives.
 
 **Ask for "cinematic":** `epic cinematic shot of a woman reading a letter, emotional, beautiful lighting`
 
@@ -116,6 +118,7 @@ For these requests, the skill should not stop at a single prompt. It should retu
 | “Continue this video / make the next part.” | [`seedance-continuation`](skills/seedance-continuation/SKILL.md) | A source-gated continuation from accepted footage or a request for the missing clip/final frame. |
 | “I know the scene I want.” | [`seedance-prompt`](skills/seedance-prompt/SKILL.md) | A production-ready Seedance prompt. |
 | “Make it actually feel directed, not just cinematic.” | [`directing-engine`](references/directing-engine.md) | One intention per scene, a coherent camera/light/blocking/performance/sound setup, and one directorial voice across the story. |
+| “Make the story or performance specific before writing the prompt.” | [`directors-read`](references/directors-read.md) | A mandatory narrative read, a no-fabricated-drama utility boundary, and visible or audible prompt carriers. |
 | “Make it short and strong.” | [`seedance-prompt-short`](skills/seedance-prompt-short/SKILL.md) | A compressed 30–100 word prompt. |
 | “I have an image/video/audio reference.” | [`reference-workflow`](references/reference-workflow.md) | A role map for every reference asset. |
 | “Use this as first frame and that as final frame.” | [`first-last-frame-guide`](references/first-last-frame-guide.md) | A continuous transition with endpoint locks. |
@@ -178,6 +181,8 @@ The diagram is the contract: every request passes the gates, the root routes it,
 
 ## Visual Gallery
 
+<!-- installed-readme-gallery:start -->
+
 Concept art for the system, generated and curated. Every image is paired with searchable alt text so the gallery stays auditable; the README's working visuals above are hand-built vector assets that follow the design standard.
 
 ### Hero Shots
@@ -203,6 +208,8 @@ Concept art for the system, generated and curated. Every image is paired with se
 ![Seedance 2.0 Skill OS infographic: source registry, prompt router, multimodal references, safety gates, and eval loop](assets/skill-os-infographic.png)
 
 ![Seedance 2.0 cinematic skill map: modular skill clusters around an AI filmmaking director console](assets/skill-map-cinematic.png)
+
+<!-- installed-readme-gallery:end -->
 
 ## Skill Map
 
@@ -259,6 +266,7 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`agent-compatibility.md`](references/agent-compatibility.md) | Agent Skills structure, Codex compatibility, and packaging notes. |
 | [`api-workflow.md`](references/api-workflow.md) | Volcengine, BytePlus, Runway, provider/router APIs, async task, reference-file, pricing, and production workflow checklist. |
 | [`capability-map.md`](references/capability-map.md) | Design into model strengths and around known limits before prompting. |
+| [`directors-read.md`](references/directors-read.md) | Mandatory narrative/story/performance read, non-narrative refusal boundary, and internal-to-visible compilation contract. |
 | [`directing-engine.md`](references/directing-engine.md) | Read the scene, choose one intention, make every instrument cohere, hold one directorial voice, and shape the look across a long story. |
 | [`directing-engine-genre-library.md`](references/directing-engine-genre-library.md) | 33 fully worked genre examples (product, music video, horror, anime, action, documentary, and more), loaded on demand. |
 | [`model-mechanics.md`](references/model-mechanics.md) | Why the rules work: eight mechanisms of the generator, novel-case derivation, mechanism-indexed diagnosis. |
@@ -346,11 +354,68 @@ python scripts/install_codex_skill.py --dest ~/.claude/skills
 python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
 ```
 
-The command copies the repository to `<dest>/seedance-20` and prints where it landed. Add `--force` only to replace an install that already exists — it deletes the previous copy first, so it is not the flag to start with. Restart your client afterwards so `seedance-20` appears in its skill list.
+The command stages and validates the repository before promoting it to
+`<dest>/seedance-20`, then prints where it landed. Concurrent installers
+sharing that destination are serialized. Add `--force` only to replace a
+complete existing install. Automatic retry is limited to states for which every
+authority record required by the phase reached is present, has flushed file
+contents and, on POSIX, a flushed containing-directory publication, and still
+validates. Each payload file is first written under a transaction-derived
+sibling name, bounded by the recorded size, synced, checked against the recorded
+digest, atomically published at its final stage pathname, and followed by a
+containing-directory sync on POSIX. A crash therefore leaves that final pathname
+absent or complete, never truncated. The copy-sibling basename is capped at 34
+ASCII bytes, shorter than the provenance marker already created before copying;
+on POSIX it shortens further if the stage reports a smaller component limit.
+Shortened names retain a transaction-and-path digest, and any namespace
+collision makes staging fail closed before payload copying begins. This bound
+applies only to copy siblings: the installer still requires the filesystem to
+represent its longer stage and authority names, so it makes no end-to-end claim
+for unusually small component limits. Recoverable states include an
+exact empty stage before provenance publication; after complete provenance
+publication, source-identical final payload files plus the one exact transaction-
+bound in-progress sibling; an exact torn prefix of the installer's expected
+provenance or completion record; and a deletion workspace bound by its external
+transaction journal (plus the exact empty terminal workspace left if that
+journal was already removed). Malformed, swapped, or otherwise untrusted records
+and late or unexpected bytes are preserved for inspection. A truncated file at
+an expected final payload pathname and an unbound temp-like file are likewise
+never claimed for automatic cleanup.
+So are the deliberately fail-closed hard-death windows after a quarantine is
+renamed but before its authority marker is published, or after a private
+deletion workspace is created but before its external journal is published.
+During replacement, the previous copy remains available for rollback until the
+validated stage is promoted. Restart your client afterwards so `seedance-20`
+appears in its skill list.
 
-Installs skip the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator — an agent needs the skill text, not the artwork. The gallery links in an installed copy's README therefore resolve only in this repository.
+On Windows, authority and deletion handles share reads only and remain open
+through their consuming action; a pre-existing or newly requested writable or
+deletion handle therefore makes the installer fail closed. On POSIX, verified
+objects are moved into a journal-bound mode-`0700` workspace before unlink,
+which excludes other OS accounts and narrows the deletion namespace. POSIX
+`flock` and owner-only directory permissions are not mandatory isolation from a
+hostile process running as the same account. Such a process may retain or open
+writable descriptors and mutate either the workspace or its containing skills
+directory; all of those capabilities are outside the portable guarantee. The
+installer preserves mismatches it observes, but makes no stronger exclusion
+claim against that same-account adversary.
 
-A destination inside this repository is refused rather than attempted: copying the source tree into a directory inside itself recurses until the path length fails. For a project-local install, run the script from the project you are installing into, by absolute path, as above.
+On POSIX, authority records are flushed before their containing directory, and
+transaction namespace renames and removals are followed by directory `fsync`.
+Each copied payload file is individually `fsync`ed before its atomic rename, and
+that file's containing stage directory is `fsync`ed after the rename. The
+transaction does not recursively flush the supplied skills-directory ancestry;
+that ancestry is assumed to have the durability expected by the caller.
+
+Only manifest-declared files and their implied directories are created. Source
+permissions are not inherited: POSIX stage/live directories are normalized to
+`0700` and files to `0600`. Named streams, extended attributes, and resource
+forks on the source root, declared files, or implied directories are refused
+before transaction authority is published, because the portable install
+contract cannot represent them.
+Installs skip the quarantined `references/migrated/` history, the image gallery (about 18 MB of PNGs), the test suite, and the network-capable evaluator. The installer replaces the omitted gallery embeds with one repository link, so the installed README does not contain broken local asset targets.
+
+A destination inside this repository is refused rather than attempted because it would mutate the source authority domain while the payload is being authenticated. For a project-local install, run the script from the project you are installing into, by absolute path, as above.
 
 This repository keeps dense facts in references so the active skill stays small.
 
@@ -384,45 +449,93 @@ Several of these clients share the `.agents/skills/` convention — Codex, Googl
 
 ## Validation
 
-Run these checks before every release. The source-registry check runs with
-`--enforce-freshness` here so a stale registry blocks a release; per-pull-request
-validation deliberately omits the flag, because staleness depends on the calendar
-rather than on the change under test.
+<!-- installed-readme-validation:start -->
 
-Every check is offline. Exactly one of them, `schema_check.py`, needs a
-third-party library, so install the hash-pinned lock first — on a clean checkout
-that step otherwise stops the run:
+Run these checks before every release. The offline source-metadata check runs with
+`--enforce-freshness` here so an old checked-in registry stamp blocks a release;
+per-pull-request validation deliberately omits the flag, because metadata age
+depends on the calendar rather than on the change under test.
+
+The checks themselves are offline after their build dependencies are installed.
+Two maintainer checks need third-party libraries: `schema_check.py` executes JSON
+Schema instances, while `build_masthead_outlines.py --check` reproduces the
+outlined masthead type. Install both hash-pinned toolchains first — the masthead
+installer rebuilds a dedicated checkout-specific temp venv, resolves the lock
+from the checkout, and creates it with `--without-pip`. Before that new venv's
+launcher can bootstrap pip or install anything, the parent publishes and re-reads
+an external initialized trust record for the runner and config. Only that
+verified path may run bundled `ensurepip` and force-reinstall the locked wheels.
+The installer retains the exact selected wheel bytes, validates pip's
+install-report hashes against the lock, and seals
+every installed distribution file from `RECORD`. Each installed import payload
+must also match the retained locked wheel byte-for-byte. Verification and
+rendering then require an external, checkout-keyed trust record that binds the
+venv runner, `pyvenv.cfg`, builder script, lock, and sealed marker; the runner
+must independently match the current Python installation's stdlib venv launcher.
+They run in a fresh `python -I -S -B` child that exposes the sealed site-packages
+only after startup, so `PYTHONPATH`, `sitecustomize`, `.pth` processing, a forged
+venv runner, a parent preload, or a same-version replacement cannot skip hash
+verification or shape the output:
+
+`schema_check.py` proves structure and record-local constraints; it does not and
+cannot prove graph-wide lineage. `project_state_check.py` and
+`continuity_chain_check.py` are mandatory alongside it for duplicate IDs,
+parent existence and order, cycles, executable parent-state continuity, and
+binding every post-review clip status to its current take history and sibling
+take-review record. Both semantic validators share the same bounded review
+index; authority candidates must be stable regular non-link files no larger
+than 1 MiB, their captured bytes are capped at 16 MiB per directory, and neither
+validator accepts a project-state document as its own review.
+Passing the schema alone is never a valid release or handoff gate.
+
+`source_registry_check.py` parses the explicit `last_verified` field, rejects
+missing, malformed, duplicate, or future stamps, and compares the checked-in
+metadata dates of freshness-critical references. It does not fetch URLs and it
+does not prove that any upstream claim is still true. A human or separately
+authorized live-verification process must re-read the cited sources and update
+the claims before changing a stamp.
 
 ```bash
 python -m pip install --require-hashes --requirement requirements-validation.lock
+python -I -S -B scripts/build_masthead_outlines.py --install-build-deps
 ```
 
 ```bash
-python scripts/validate_skills.py --strict
-python scripts/content_audit.py --strict
-python scripts/eval_schema_check.py --strict
-python scripts/schema_check.py --strict
-python scripts/design_audit.py --strict
-python scripts/build_hero.py --check
-python scripts/source_registry_check.py --strict --enforce-freshness
+python scripts/validate_skills.py
+python scripts/content_audit.py
+python scripts/eval_schema_check.py
+python scripts/schema_check.py
+python scripts/design_audit.py
+python -I -S -B scripts/build_masthead_outlines.py --check
+python -I -S -B scripts/build_hero.py --check
+python scripts/source_registry_check.py --enforce-freshness
 python scripts/vocab_schema_check.py --strict
 python scripts/project_state_check.py --strict
 python scripts/continuity_chain_check.py --strict
-python scripts/behavior_contract_check.py --strict
-python scripts/sequence_eval_check.py --strict
-python scripts/generation_run_check.py --strict
+python scripts/behavior_contract_check.py
+python scripts/sequence_eval_check.py
+python scripts/generation_run_check.py
 python scripts/prompt_architecture_stress.py --strict
 python scripts/prompt_lint.py --self-test --strict
-python scripts/eval_run.py --self-test --strict
-python scripts/extract_last_frame.py --self-test --strict
+python scripts/eval_run.py --self-test
+python scripts/extract_last_frame.py --self-test
 python -m unittest discover -s tests -v
 python -m compileall scripts tests
 git diff --check
 ```
 
+`prompt_architecture_stress.py` is a deterministic failure gate, not a creativity
+or originality judge. In strict mode, every applicable dimension on every
+`skill_formula` case must score at least 3, the arm average must remain at least
+3.5, and materially different briefs may not reuse duplicate or near-duplicate
+prompts. Its mechanical checks cover shooting-brief structure, brief-specific
+traceability beyond generic production words, explicit camera/light/sound/action
+contradictions, and repetition or padding patterns. Comparative creative quality
+still requires blinded model evaluation and native-language human review.
+
 The CI workflow runs this same list on push and pull request, with the one deliberate difference noted above: it omits `--enforce-freshness`. These checks are deterministic and offline — they prove the package is well-formed.
 
-### Source freshness
+### Checked-in source metadata age
 
 Whether `references/source-registry.md` is stale depends on today's date, not on
 the change being tested, so it is not asked per pull request — that would fail
@@ -430,8 +543,8 @@ unrelated work on a calendar boundary. It is asked in two places instead:
 
 | Where | Behaviour |
 |---|---|
-| Release checklist above | `--enforce-freshness` blocks a release on a registry older than 30 days |
-| `source-freshness-review.yml` | Runs Mondays 09:00 UTC on the default branch and reports clean, drifting (past 14 days), or stale (past 30) |
+| Release checklist above | `--enforce-freshness` blocks a release when the checked-in registry stamp is older than 30 days |
+| `source-freshness-review.yml` | Runs Mondays 09:00 UTC on the default branch and reports metadata age as clean, drifting (past 14 days), or stale (past 30) |
 
 Drift and staleness are tracked in a single automatically maintained issue. It
 opens when the registry first drifts, is refreshed in place each week rather
@@ -440,22 +553,160 @@ window.
 
 The scheduled job never edits the registry. Re-stamping `last_verified` without
 actually re-reading the upstream sources would record a verification that never
-happened, so refreshing it is deliberately a human step.
+happened, so refreshing it is deliberately a human step. A clean metadata-age
+result means only that the recorded review date is recent enough; it is not a
+live source or claim verification.
 
-To prove the package is also *good*, run the model-in-the-loop harness, which sends each eval case through the real skill content and scores the response against the case's assertions using [`eval-rubric.md`](references/eval-rubric.md):
+To prove the package is also *good*, run the model-in-the-loop harness. Its
+discovery phase sees the root router and a safe catalog, not the expected route
+labels; the responder receives only the sources it selected, and the judge then
+scores the answer against [`eval-rubric.md`](references/eval-rubric.md):
 
 ```bash
-export ANTHROPIC_API_KEY=...   # required for a live scored pass
-python scripts/eval_run.py --run --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+export ANTHROPIC_API_KEY=...
+python scripts/eval_run.py --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+
+# The harness defaults to the current documented MiniMax-M3. The endpoint also
+# accepts the documented MiniMax-M2.7, M2.5, M2.1, M2 and highspeed variants.
+export MINIMAX_API_KEY=...
+python scripts/eval_run.py --provider minimax --region global_en \
+  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 \
+  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
 ```
 
-This is the quality gate, not a shape gate, so it lives outside offline CI; the latest scored run is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
+The harness uses `Authorization: Bearer <API_KEY>` as documented by both the
+[global](https://platform.minimax.io/docs/api-reference/text-chat-anthropic) and
+[CN](https://platform.minimaxi.com/docs/api-reference/text-chat-anthropic)
+Anthropic-compatible Messages endpoints. Those provider contracts were checked
+directly on 2026-08-01: both list the same eight supported models and the common
+successful-response fields (`id`, `type`, `role`, `model`, `content`,
+`stop_reason`, and `usage`), without requiring either `base_resp` or
+`stop_sequence`. Anthropic's own response contract is validated separately,
+including its required `stop_sequence` field.
+
+Successful bodies are validated fail-closed: documented optional usage,
+citation, thinking, and tool-call structures are type-checked with unknown
+fields rejected, while optional MiniMax legacy `base_resp`/`stop_sequence`
+fields cannot contradict an otherwise successful response. M2.x thinking
+blocks are accepted only in their documented shape; unrequested tool calls and
+Anthropic/M3 thinking are rejected as non-final evidence. Transport errors name
+the failed open, context-entry, or read phase and redact API keys before console
+or ledger output. Generated ledger commands are emitted separately for POSIX
+shells and PowerShell, and are omitted when metadata is not safe to round-trip.
+
+Before either offline or live evaluation starts, the harness resolves every eval
+input through [`evals/source-manifest.json`](evals/source-manifest.json), rejects
+unclassified files, symlinks/reparse aliases, hard-link aliases, and digest
+drift, then freezes the verified UTF-8 bytes for the whole run. The root router,
+rubric, eval suite, fixture data, evaluator harness, planner catalog, responder
+context, judge, and ledger therefore share one immutable source view. State
+fixtures are strict JSON objects under `evals/fixtures/`; models receive the data
+but never the fixture path. The judge receives the rubric, case prompt, expected
+output, checks, and candidate response, but never expected route labels or
+selected source paths. The harness also compiles the frozen evaluator source and
+requires it to equal the module code object Python actually executed, with the
+same physical `scripts/eval_run.py` path. Every recheck derives path, role, and
+digest metadata again from the frozen manifest so a constructed snapshot cannot
+reclassify responder files as evaluator-only inputs. A post-run check plus checks
+immediately before and after the atomic ledger replace refuse release evidence
+if any input changed after the snapshot; a failed post-replace check restores the
+prior ledger or removes the newly written one. Existing ledger permission modes
+are bound before the copy and preserved on both replacement and rollback; a new
+POSIX ledger remains owner-only, while the Windows read-only attribute is retained
+without modifying linked inputs. Bootstrap failure ledgers also
+refuse direct, hard-link, symlink, or source-boundary aliases of repository
+inputs before writing.
+
+Blind discovery is scored, not merely recorded: after the planner returns, its
+selected skill paths must exactly match the hidden
+`skills_expected_to_activate` oracle. Missing, wrong, extra, duplicate, unknown,
+or non-responder selections fail before response generation. Generated ledger
+rows bind every selected responder path to its frozen SHA-256 digest; fabricated,
+non-canonical, missing, or mismatched provenance cannot produce a release pass.
+The ledger also records one canonical SHA-256 over the complete frozen
+path/role/hash map, including `SKILL.md`, fixtures, evaluator files, and the
+source manifest itself, plus per-role file counts. Release assessment accepts
+that provenance only from the verified `FrozenRepository`; caller-supplied
+digest maps cannot stand in for the evaluated checkout.
+The canonical eval-suite and rubric digests are pinned so a structurally valid
+but semantically gutted replacement also fails closed.
+
+Every declared case oracle reaches the judge through a stable opaque criterion
+ID. Assertions, required output sections, forbidden behaviors, `expected_output`,
+`failure_mode`, `expected_state_delta`, and `expected_prompt_architecture` are
+scored as exact judge-only criteria; `expected_sequence_relation` is bound into
+the routing dimension. These oracle values remain hidden from discovery and
+response generation, so binding them does not undo the blind-selection boundary.
+
+Result rows have an explicit evidence status. `scored` means the judge returned
+a complete, strictly typed verdict with every criterion and dimension ID exactly
+once; only these rows enter quality floors and averages. A judge transport error,
+timeout, empty body, oversized body, malformed JSON, or incomplete/invalid
+verdict becomes `harness_error` with no numeric score or pass value. The harness
+continues the remaining selected cases, writes a fresh auditable ledger, excludes
+the error row from quality arithmetic, marks release evidence `NOT ELIGIBLE`, and
+exits 1. It never represents missing judge evidence as a poor-output score of 0.
+
+Case-contract or response-envelope failures are different: they are known before
+the first provider call, so the whole live run aborts with exit 2. If `--ledger`
+was requested, the stale artifact is atomically replaced by a bootstrap
+`harness_error` ledger. Post-run snapshot drift likewise makes every recorded row
+a non-scored harness error and exits 2.
+
+This is the quality gate, not a shape gate, so it lives outside offline CI; the latest run evidence is recorded in [`evals/eval-run-ledger.md`](evals/eval-run-ledger.md).
+
+<!-- installed-readme-validation:end -->
 
 ## Design Standard
 
 The front page follows an editorial design system rather than default AI styling: warm ink and paper themes, a serif display face paired with monospace specification labels, a single amber accent, and hairline rules — no gradients, no glow. Camera motifs are deliberately retired: no viewfinder marks, timecode, record dots, or aspect badges. They depict the tool rather than the work, and they are the visual cliché of every AI-video product.
 
-The masthead is generated from one geometry by [`scripts/build_hero.py`](scripts/build_hero.py), so its dark and light variants cannot drift apart; `--check` proves the committed SVGs still match the generator, and it runs in CI.
+The masthead is generated from one geometry by [`scripts/build_hero.py`](scripts/build_hero.py), so its dark and light variants cannot drift apart; the isolated `python -I -S -B scripts/build_hero.py --check` command proves the committed SVGs still match the generator, and it runs in CI.
+
+The outlined display type has a separate, build-only toolchain. Before changing
+the wordmark or tagline geometry, run `python -I -S -B scripts/build_masthead_outlines.py`
+and then `python -I -S -B scripts/build_hero.py`. A writing run first recreates a
+dedicated, marker-protected venv outside the checkout. The clear target is rejected when it
+is inside the repository, trust directory, Python installation, or a non-temp
+home subtree; equals a protected root; or would contain the repository, home
+directory, Python prefix, system temp root, or external trust directory. A
+dedicated descendant of the system temp directory remains allowed. The installer
+then uses pip's `--force-reinstall --require-hashes` against the resolved lock.
+The selected wheel artifacts are retained in the build venv; their hashes, pip's install
+report, and the sha256 of every locked-distribution file are sealed together,
+and the installed import bytes are compared directly with those retained wheel
+archives. The venv is created with `--without-pip`, so creation never starts its
+runner. The parent then stores and re-verifies a separate trust record outside
+the venv that binds the runner, config, trusted base Python, current builder
+script, lock, and initialized marker; the runner bytes must match the trusted
+stdlib venv launcher. Only then can the verified runner bootstrap bundled pip and
+perform the hash-locked installation. After sealing, the parent promotes that
+record only if those inputs are unchanged and binds the sealed marker too. A
+no-site `python -I -S -B` child verifies the package seal before adding the dedicated
+site-packages path or importing FontTools and uharfbuzz.
+Inherited loader, Python, pip, and virtualenv hooks are removed from child
+environments. The generator records the exact lock digest plus the FontTools,
+uharfbuzz, and HarfBuzz versions in
+`assets/masthead-outlines.json`. The current lock pins `uharfbuzz==0.55.0`, the
+latest stable release shown by [official PyPI metadata](https://pypi.org/project/uharfbuzz/0.55.0/)
+when the lock was reviewed on 2026-08-02; the newer 0.56 line was prerelease-only.
+Its six hashes are the published CPython abi3 wheels for Windows x86-64, Linux
+glibc/musl on x86-64 and ARM64, and macOS universal2. Before either SVG is
+written, `build_hero.py` independently requires the exact lock path, lock-byte
+digest, install policy, and builder-version map recorded in the outline asset,
+then renders both themes in memory so a second-theme failure cannot leave a
+half-updated pair.
+To prepare a later read-only check without regenerating, run
+`python -I -S -B scripts/build_masthead_outlines.py --install-build-deps` once and then
+use `python -I -S -B scripts/build_masthead_outlines.py --check` offline. Both commands
+resolve the same checkout-specific temp venv by default; CI passes an explicit
+run-attempt-specific `--build-env` under `/tmp`, because the hosted Linux
+`$RUNNER_TEMP` is below `$HOME` and the clear guard deliberately rejects home
+descendants. The wheelhouse remains under `$RUNNER_TEMP`; it is read, not cleared.
+A changed distribution file, retained wheel, install report, lock, runner, venv
+config, builder script, marker, startup hook, external trust record, or structured
+child result makes the offline check fail closed and requires a fresh install.
 
 The masthead and the hand-built operating diagram (`assets/hero-dark.svg`, `assets/hero-light.svg`, `assets/skill-map.svg`) are served through a `prefers-color-scheme` picture element; generated bitmap art lives only in the curated visual gallery, including the text-rich infographics.
 

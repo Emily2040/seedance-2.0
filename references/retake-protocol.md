@@ -1,6 +1,6 @@
 # Retake Protocol — the iteration economy
 
-*What happens after a generation comes back. The rest of this skill plans the shot and repairs outright failure; this governs everything in between — the partially good take, which is most of real production. Labels: [heuristic] = default to test · [internal] = workflow guidance. Cost figures are surface-specific and volatile: load `api-status.md` and verify live before budgeting.*
+*What happens after a generation comes back. The rest of this skill plans the shot and repairs outright failure; this governs everything in between — the partially good take, which is most of real production. Labels: [heuristic] = default to test · [internal] = workflow guidance. Cost figures are surface-specific and volatile: load [api-status](api-status.md) and verify live before budgeting.*
 
 ## Triage every take — five verdicts
 

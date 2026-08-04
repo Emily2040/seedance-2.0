@@ -1,0 +1,265 @@
+name: validate-privileged-frame-publication
+
+# SECURITY: this checked-in revision intentionally excludes pull-request events.
+# That trigger list is not an immutable repository-wide boundary: a fork PR can
+# propose changing any workflow. Repository administrators must require approval
+# for all outside collaborators' workflow runs, and approvers must inspect every
+# `.github/workflows/**` diff before allowing a run. The weaker first-time-only
+# approval policy lets established outside contributors run a modified workflow
+# without a fresh gate. Same-repository branches receive this check on push;
+# this revision gives fork PRs only the ordinary unprivileged validation job.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-privileged-frame-publication-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-privileged-frame-publication:
+    # Request a privileged container with a digest-pinned base, but never infer
+    # filesystem prerequisites from UID 0 or the Docker option: hosted-runner
+    # policy can still remove them. The prerequisite step gates success-path
+    # regressions and explicitly verifies fail-closed behavior when any are
+    # absent.
+    # The ordinary PR workflow also proves unprivileged refusal, including on
+    # forks.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      # ubuntu:24.04 linux/amd64 manifest published 2026-07-02.
+      image: ubuntu@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
+      options: --privileged
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPYCACHEPREFIX: /tmp/seedance-privileged-pycache
+    steps:
+      - name: Provision privileged test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          # Only the Ubuntu base manifest is immutable. Resolve these explicit
+          # packages from Ubuntu 24.04's signed current repositories and print
+          # every relevant tool version below so package drift stays visible.
+          apt-get update
+          apt-get install --yes --no-install-recommends \
+            acl \
+            attr \
+            ca-certificates \
+            ffmpeg \
+            git \
+            libcap2-bin \
+            python3
+          python3 --version
+          ffmpeg -hide_banner -version
+          setfacl --version
+          getfacl --version
+          setfattr --version
+          getfattr --version
+          capsh --print
+          {
+            printf 'SEEDANCE_TEST_FFMPEG=%s\n' "$(command -v ffmpeg)"
+            printf 'SEEDANCE_CI_FFMPEG_PROVISIONED=1\n'
+          } >> "$GITHUB_ENV"
+      # Checkout is pinned and removes its token before any repository code
+      # runs in the privileged container.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Prove checked-out repository root
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          checkout_root="$(git -C "$GITHUB_WORKSPACE" rev-parse --show-toplevel)"
+          test "$(git -C "$checkout_root" rev-parse --is-inside-work-tree)" = true
+          test -f "$checkout_root/scripts/extract_last_frame.py"
+          printf 'SEEDANCE_CHECKOUT_ROOT=%s\n' "$checkout_root" >> "$GITHUB_ENV"
+      - name: Prove privileged filesystem and publication prerequisites
+        id: privileged_proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -eq 0
+          command -v python3
+          command -v ffmpeg
+          command -v setfacl
+          command -v getfacl
+          command -v setfattr
+          command -v getfattr
+          python3 - <<'PY'
+          import os
+          import subprocess
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          workspace = Path(os.environ["SEEDANCE_CHECKOUT_ROOT"])
+          sys.path.insert(0, str(workspace / "scripts"))
+          import extract_last_frame as extractor
+
+          assert os.geteuid() == 0, os.geteuid()
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          summary_path = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          prerequisites = (
+              (
+                  "descriptor-bound extended-attribute APIs",
+                  extractor._posix_descriptor_xattr_api_supported(),
+              ),
+              (
+                  "renameat2(RENAME_EXCHANGE)",
+                  extractor._posix_atomic_exchange_supported(),
+              ),
+              (
+                  "effective CAP_SYS_ADMIN",
+                  extractor._linux_has_effective_cap_sys_admin(),
+              ),
+          )
+          unavailable = [name for name, available in prerequisites if not available]
+          if unavailable:
+              # Any missing prerequisite makes complete metadata visibility or
+              # atomic rollback unprovable. Prove the application refuses that
+              # environment, publish an explicit skip reason, and do not
+              # pretend the privileged success path ran.
+              assert not extractor._posix_descriptor_xattrs_supported()
+              reason = (
+                  "privileged publication prerequisites unavailable on this "
+                  f"hosted runner: {', '.join(unavailable)}; "
+                  "the helper's force-replacement contract failed closed and the "
+                  "privileged success-path regressions were skipped"
+              )
+              print(f"::notice title=Privileged frame tests skipped::{reason}")
+              summary_path.write_text(
+                  f"### Privileged frame tests skipped\n\n{reason}.\n",
+                  encoding="utf-8",
+              )
+              with output_path.open("a", encoding="utf-8") as stream:
+                  stream.write("available=false\n")
+              raise SystemExit(0)
+
+          with tempfile.TemporaryDirectory(prefix="seedance-privileged-proof-") as raw:
+              root = Path(raw)
+              probe = root / "policy-probe"
+              probe.write_bytes(b"descriptor-bound")
+              descriptor = os.open(probe, os.O_RDWR)
+              try:
+                  trusted_name = "trusted.seedance-ci-proof"
+                  trusted_value = b"visible"
+                  os.setxattr(descriptor, trusted_name, trusted_value)
+                  assert trusted_name in os.listxattr(descriptor)
+                  assert os.getxattr(descriptor, trusted_name) == trusted_value
+                  os.removexattr(descriptor, trusted_name)
+                  assert trusted_name not in os.listxattr(descriptor)
+              finally:
+                  os.close(descriptor)
+
+              subprocess.run(
+                  ["setfattr", "-n", "user.seedance-ci-proof", "-v", "visible", probe],
+                  check=True,
+              )
+              subprocess.run(
+                  ["getfattr", "-n", "user.seedance-ci-proof", probe], check=True
+              )
+              subprocess.run(
+                  ["setfacl", "-m", "u:12345:r--", probe], check=True
+              )
+              subprocess.run(["getfacl", probe], check=True)
+              assert "system.posix_acl_access" in os.listxattr(probe)
+
+              distinct_uid = 65534 if os.geteuid() != 65534 else 65533
+              distinct_gid = 65534 if os.getegid() != 65534 else 65533
+              os.chown(probe, distinct_uid, distinct_gid)
+              changed = probe.stat()
+              assert changed.st_uid == distinct_uid, changed
+              assert changed.st_gid == distinct_gid, changed
+
+              left = root / "exchange-left"
+              right = root / "exchange-right"
+              left.write_bytes(b"left")
+              right.write_bytes(b"right")
+              directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+              try:
+                  extractor._posix_exchange_names(
+                      left.name, directory, right.name, directory
+                  )
+                  assert left.read_bytes() == b"right"
+                  assert right.read_bytes() == b"left"
+                  extractor._posix_exchange_names(
+                      left.name, directory, right.name, directory
+                  )
+                  assert left.read_bytes() == b"left"
+                  assert right.read_bytes() == b"right"
+              finally:
+                  os.close(directory)
+
+          assert extractor._posix_descriptor_xattrs_supported()
+          with output_path.open("a", encoding="utf-8") as stream:
+              stream.write("available=true\n")
+          print(
+              "proved CAP_SYS_ADMIN, descriptor trusted.* xattrs, POSIX ACLs, "
+              "distinct UID/GID ownership, and renameat2(RENAME_EXCHANGE)"
+          )
+          PY
+      - name: Report unavailable privileged publication prerequisites
+        if: steps.privileged_proof.outputs.available != 'true'
+        shell: bash
+        run: |
+          printf '%s\n' \
+            'Privileged success-path tests were explicitly skipped.' \
+            'The prerequisite step proved force replacement fails closed without the complete prerequisite contract.'
+      - name: Run privileged Linux metadata-preservation regressions
+        if: steps.privileged_proof.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import sys
+          import unittest
+
+          os.chdir(os.environ["SEEDANCE_CHECKOUT_ROOT"])
+          sys.path.insert(
+              0, os.path.join(os.environ["SEEDANCE_CHECKOUT_ROOT"], "scripts")
+          )
+          import extract_last_frame as extractor
+
+          assert extractor._posix_descriptor_xattrs_supported(), (
+              "effective CAP_SYS_ADMIN, descriptor xattrs, or atomic exchange unavailable"
+          )
+          names = [
+              "tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_force_replaces_only_after_successful_decode",
+              "tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_force_decode_failure_preserves_existing_output",
+              "tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_force_publish_error_preserves_old_output_and_cleans_stage",
+              "tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_force_rechecks_a_late_input_alias",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_verify_to_link_stage_rename_swap_cannot_publish_attacker_inode",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_existing_owner_group_and_mode",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_user_extended_attributes",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_preserves_extended_access_acl",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_holds_verified_target_descriptor_through_decode",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_auxiliary_names_fit_name_max_14_with_unicode_output",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_swap_after_final_verify_is_rolled_back_without_overwrite",
+              "tests.test_extract_frame_output_policy.PosixPublicationTests.test_force_policy_error_after_anchor_link_cleans_owned_anchor",
+              "tests.test_extract_last_frame.RealFfmpegFrameTests.test_existing_output_is_replaced_with_the_true_final_frame",
+          ]
+          suite = unittest.defaultTestLoader.loadTestsFromNames(names)
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if result.skipped:
+              for test, reason in result.skipped:
+                  print(f"PRIVILEGED REGRESSION SKIPPED: {test}: {reason}", file=sys.stderr)
+              raise SystemExit("privileged metadata regressions must not skip")
+          if not result.wasSuccessful():
+              raise SystemExit(1)
+          PY
+      - name: Check diff whitespace
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEEDANCE_CHECKOUT_ROOT:-}"
+          test "$(git -C "$SEEDANCE_CHECKOUT_ROOT" rev-parse --is-inside-work-tree)" = true
+          git -C "$SEEDANCE_CHECKOUT_ROOT" diff --check

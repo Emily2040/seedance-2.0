@@ -31,7 +31,11 @@ def table_rows(text: str) -> list[list[str]]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="require at least 40 rows and the complete production-function set",
+    )
     args = parser.parse_args()
 
     root = Path(args.repo).resolve()

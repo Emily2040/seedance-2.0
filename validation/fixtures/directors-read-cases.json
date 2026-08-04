@@ -1,0 +1,80 @@
+[
+  {
+    "id": "silent-breakup",
+    "brief": "At breakfast, a woman silently returns her partner's spare key and keeps buttering toast.",
+    "expected_lane": "narrative",
+    "directors_read": {
+      "dramatic function": "End the relationship through an ordinary shared ritual.",
+      "turn": "Habitual intimacy to acknowledged separation.",
+      "POV": "The partner receiving the key.",
+      "power shift": "She controls the decision; the returned key transfers the burden of response to him.",
+      "hidden want/objective": "Finish leaving without asking permission or inviting an argument.",
+      "obstacle/tactic": "Their breakfast routine keeps pulling them toward normality; she continues buttering toast after returning the key.",
+      "subtext/contradiction": "Her calm domestic action contradicts the finality of the key.",
+      "visible suppressed behavior": "She scrapes the same bare corner of toast twice without looking up.",
+      "non-transferable detail": "The spare key is still tied to the faded blue bakery string they used as a key ring.",
+      "stock solution refused": "No tearful close-up, shouted explanation, or swelling breakup score."
+    },
+    "compiled_carriers": "Hold from his side of the breakfast table as she slides over the spare key on its faded blue bakery string and keeps buttering toast, scraping the same bare corner twice without looking up; end when his hand reaches the key but stops short."
+  },
+  {
+    "id": "perfume-turntable",
+    "brief": "Macro turntable shot of a perfume bottle while condensation forms; preserve the label.",
+    "expected_lane": "non_narrative",
+    "directors_read": null,
+    "utility_intent": "Prove the glass texture and label legibility through the condensation change.",
+    "refusal": "No invented character, desire, rivalry, seduction, or emotional reveal."
+  },
+  {
+    "id": "product-with-performer-choice",
+    "brief": "A watchmaker recognizes an old inscription inside a customer's watch and chooses not to mention it.",
+    "expected_lane": "narrative",
+    "directors_read": {
+      "dramatic function": "Reveal a private history without exposition.",
+      "turn": "Routine repair to deliberate concealment.",
+      "POV": "The watchmaker.",
+      "power shift": "The customer begins as owner of the transaction; the watchmaker gains secret knowledge and withholds it.",
+      "hidden want/objective": "Finish the repair without exposing his connection to the inscription.",
+      "obstacle/tactic": "The open case displays the inscription; he rotates the watch away while polishing the crystal.",
+      "subtext/contradiction": "His professional calm hides recognition.",
+      "visible suppressed behavior": "His thumb covers the final engraved initial for one beat too long.",
+      "non-transferable detail": "The scratched inscription ends with a tiny hand-cut swallow mark.",
+      "stock solution refused": "No flashback, ghosted memory image, or spoken explanation of the inscription."
+    },
+    "compiled_carriers": "From the watchmaker's bench, reveal the hand-cut swallow mark inside the open case; his thumb covers the last initial for one beat too long, then he rotates the watch away and resumes polishing as the customer waits out of focus."
+  },
+  {
+    "id": "abstract-logo-reveal",
+    "brief": "Black ink currents merge into a supplied white logo over six seconds.",
+    "expected_lane": "non_narrative",
+    "directors_read": null,
+    "utility_intent": "Make the supplied logo resolve cleanly from one continuous fluid transformation.",
+    "refusal": "No invented hero journey, conflict, desire, or character psychology for the ink."
+  },
+  {
+    "id": "dancer-masks-missed-cue",
+    "brief": "A lead dancer misses one cue, disguises it as choreography, and the ensemble follows her recovery.",
+    "expected_lane": "narrative",
+    "directors_read": {
+      "dramatic function": "Turn a visible mistake into earned leadership.",
+      "turn": "Loss of control to collective recovery.",
+      "POV": "The lead dancer catching the missed cue.",
+      "power shift": "The ensemble's timing exposes her error, then her recovery redirects the ensemble.",
+      "hidden want/objective": "Protect the performance and keep the audience from reading the mistake.",
+      "obstacle/tactic": "She lands late; she extends the stumble into a low sweep that creates a new count.",
+      "subtext/contradiction": "The apparent flourish is emergency repair.",
+      "visible suppressed behavior": "Her eyes snap once toward the wing while her smile stays fixed.",
+      "non-transferable detail": "A loose silver ankle ribbon strikes the floor on the recovered count.",
+      "stock solution refused": "No slow-motion triumph insert, applause cutaway, or generic lens flare."
+    },
+    "compiled_carriers": "Track at stage height as the lead lands one count late, glances once toward the wing without losing her smile, and converts the stumble into a low sweep; her loose silver ankle ribbon strikes the floor, and the ensemble adopts the new count behind her."
+  },
+  {
+    "id": "hands-only-assembly-demo",
+    "brief": "Top-down hands assemble a flat-pack stool in five numbered steps with exact part continuity.",
+    "expected_lane": "non_narrative",
+    "directors_read": null,
+    "utility_intent": "Make part order, orientation, and completed assembly legible without continuity drift.",
+    "refusal": "No invented frustration, rivalry, personality, dramatic hesitation, or emotional payoff."
+  }
+]

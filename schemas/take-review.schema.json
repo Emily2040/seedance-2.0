@@ -3,6 +3,7 @@
   "$id": "https://github.com/Emily2040/seedance-2.0/schemas/take-review.schema.json",
   "title": "Seedance Take Review",
   "type": "object",
+  "additionalProperties": false,
   "required": [
     "project_id",
     "clip_id",
@@ -21,9 +22,9 @@
     "requires_user_confirmation"
   ],
   "properties": {
-    "project_id": {"type": "string"},
-    "clip_id": {"type": "string"},
-    "take_id": {"type": "string"},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+    "clip_id": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+    "take_id": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
     "source_status": {"enum": ["generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]},
     "verdict": {"enum": ["accept", "accept_with_deviation", "repair", "reject"]},
     "observed_start_state": {"type": "object"},
@@ -36,5 +37,16 @@
     "observation_confidence": {"enum": ["low", "medium", "high"]},
     "uncertainties": {"type": "array", "items": {"type": "string"}},
     "requires_user_confirmation": {"type": "boolean"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["verdict"],
+        "properties": {"verdict": {"const": "reject"}}
+      },
+      "then": {
+        "properties": {"accepted_deviations": {"maxItems": 0}}
+      }
+    }
+  ]
 }

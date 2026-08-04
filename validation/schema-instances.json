@@ -12,6 +12,7 @@
       "examples/sequence-airport-arrival/project-state.json",
       "examples/sequence-observed-deviation/project-state-before.json",
       "examples/sequence-observed-deviation/project-state-after.json",
+      "examples/sequence-mixed-lane/project-state.json",
       "examples/standalone-clip/project-state.json"
     ],
     "prompt-spec.schema.json": [

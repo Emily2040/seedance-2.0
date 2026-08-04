@@ -21,7 +21,11 @@ metadata:
 
 # seedance-interview-short
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use this when speed matters more than exhaustive creative discovery. The goal is to turn a vague idea into a compact director brief with no more than three questions, then route to prompt writing.
+
+Speed does not bypass story judgment. Load the [Director's Read](../../references/directors-read.md) before producing the compact brief. Complete its ten-field internal record for every narrative, story, or performance idea; for a utility, product-only, abstract, VFX, or ambient idea with no requested agency or performance, record its two-line non-narrative intent and refusal instead. Never reconstruct the read from remembered craft.
 
 ## Intent
 
@@ -37,18 +41,18 @@ Ask at most three questions, and only ask them if the answer materially changes 
 
 If the user already supplied enough information, do not ask. Produce a brief immediately. If the user speaks production language fluently, drop the plain phrasing and ask in director terms.
 
-Run the interview and brief in the user's language; for native starting-point menus and invites, load `[ref:interview-starters]`. If the user gives explicit shot, lens, camera, blocking, or performance direction, keep it verbatim and compile it into a shot-contract-grade brief - never simplify or override a professional's spec. When the user has no idea at all, offer a starting-point menu to react to instead of asking a question they cannot answer.
+Run the interview and brief in the user's language; for native starting-point menus and invites, load [interview-starters](../../references/interview-starters.md). If the user gives explicit shot, lens, camera, blocking, or performance direction, keep it verbatim and compile it into a shot-contract-grade brief - never simplify or override a professional's spec. When the user has no idea at all, offer a starting-point menu to react to instead of asking a question they cannot answer.
 
-Even in fast mode, the brief states one motivated intention, not a generic "cinematic" look: name what the scene is doing and let the camera, light, and performance serve that. Load `[ref:directing-engine]` only when the right setup for the scene is genuinely unclear; otherwise apply its coherence rule inline.
+Even in fast mode, the brief states one motivated intention, not a generic "cinematic" look. For narrative work, derive it from the completed [Director's Read](../../references/directors-read.md) record and translate the turn, visible suppressed behavior, and non-transferable detail into filmable or audible carriers. For non-narrative work, serve the utility intent without inventing want, power, conflict, or subtext. Load [directing-engine](../../references/directing-engine.md) only when the right setup for the scene is genuinely unclear.
 
 ## Compact Brief Pattern
 
-`Mode: [T2V/I2V/V2V/R2V]. Subject: [anchor]. Beat: [before -> action -> final state]. Camera: [one move]. Light/style: [physical source and safe descriptor]. Sound: [dialogue/ambience/SFX/music/silence]. Constraints: [identity, IP, safety, product, prompt budget].`
+Internal lane record from the [Director's Read](../../references/directors-read.md), then: `Mode: [T2V/I2V/V2V/R2V]. Subject: [anchor]. Beat: [before -> action -> final state]. Camera: [one move]. Light/style: [physical source and safe descriptor]. Sound: [dialogue/ambience/SFX/music/silence]. Constraints: [identity, IP, safety, product, prompt budget].`
 
 ## Routing Rule
 
-Route to `[skill:seedance-sequence]` for connected clips, long scenes, unclear total duration, or continuation-ready planning; `[skill:seedance-continuation]` for accepted-footage continuation; `[skill:seedance-prompt]` for a full standalone production prompt; `[skill:seedance-prompt-short]` for a compact prompt; `[skill:seedance-copyright]` for IP/likeness risk; or `[skill:seedance-troubleshoot]` when the user starts from a bad result.
+Route to [seedance-sequence](../seedance-sequence/SKILL.md) for connected clips, long scenes, unclear total duration, or continuation-ready planning; [seedance-continuation](../seedance-continuation/SKILL.md) for accepted-footage continuation; [seedance-prompt](../seedance-prompt/SKILL.md) for a full standalone production prompt; [seedance-prompt-short](../seedance-prompt-short/SKILL.md) for a compact prompt; [seedance-copyright](../seedance-copyright/SKILL.md) for IP/likeness risk; or [seedance-troubleshoot](../seedance-troubleshoot/SKILL.md) when the user starts from a bad result.
 
 ## Output Contract
 
-Return one compact brief under 150 words, any missing high-impact question, and a recommended skill route. If the request is a sequence, include the complete story ending, likely clip count, current clip job, and the fact that future prompts stay provisional until accepted footage is reviewed.
+Return one compact brief under 150 words, any missing high-impact question, and a recommended skill route. Keep Director's Read labels out of final generation prose; show the internal record only when the user requests the planning rationale or when another agent needs the handoff. If the request is a sequence, include the complete story ending, likely clip count, current clip job, and the fact that future prompts stay provisional until accepted footage is reviewed.

@@ -51,10 +51,13 @@ This section records the inspected historical baseline for the original v6 migra
 - `tests/test_behavior_contract.py`
 - `tests/test_sequence_eval.py`
 - `tests/test_generation_run_check.py`
+- `tests/test_authoring_state.py`
+- `validation/authoring-state-provenance-ledger.json`
 - `evals/generation-benchmark.json`
 - `data/generation-runs.example.jsonl`
 - `examples/sequence-airport-arrival/*`
 - `examples/sequence-observed-deviation/*`
+- `examples/sequence-mixed-lane/*`
 - `examples/standalone-clip/*`
 - `examples/golden-prompts/*`
 
@@ -85,6 +88,7 @@ This section records the inspected historical baseline for the original v6 migra
 - Preserves exact reference tags byte-for-byte.
 - Keeps final Seedance prompts natural language unless the user requests structured output.
 - Adds a portable Project State Capsule for cross-session continuation.
+- Protects exported terminal standalone-contract state, status, and prompt history with an append-only ledger whose canonical digest and revision are independently pinned by the validator; terminal records that exist only inside project-state fixtures are explicitly outside that claim until their contract and prompt artifacts are published and ledgered.
 
 ## Migrations
 

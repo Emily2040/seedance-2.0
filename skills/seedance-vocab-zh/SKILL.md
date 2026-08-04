@@ -20,6 +20,8 @@ metadata:
 
 # seedance-vocab-zh
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use Chinese vocabulary when the user asks for Chinese prompts, Mandarin cinematic wording, role binding, first/last-frame workflow, or maximum compactness. Chinese prompt wording is often efficient, but it must still preserve mode, reference tags, action, camera, lighting, audio, and constraints.
 
 ## Intent
@@ -30,7 +32,7 @@ Chinese can say in four characters what English needs a sentence for - and the u
 
 Do not translate reference tags. Keep `@Image1`, `@Video1`, and `@Audio1` unchanged. Use short production phrases instead of abstract adjectives.
 
-Load `[ref:vocab/zh]` for dense role-binding, first/last-frame, camera, lighting, audio, edit/extend, constraint, and safety vocabulary.
+Load [vocab/zh](../../references/vocab/zh.md) for dense role-binding, first/last-frame, camera, lighting, audio, edit/extend, constraint, and safety vocabulary.
 
 | Function | Chinese wording |
 |---|---|
@@ -47,11 +49,11 @@ Load `[ref:vocab/zh]` for dense role-binding, first/last-frame, camera, lighting
 
 ## Script Variant Rule
 
-When the deliverable targets 台灣, 香港, or any Traditional-script audience, load Script Variant (简繁) in `references/vocab/zh.md` before writing subtitle or delivery text. Prompt in Simplified; declare the delivery script separately - and never convert between them by find-and-replace (头发 → 頭髮, not 頭發).
+When the deliverable targets 台灣, 香港, or any Traditional-script audience, load Script Variant (简繁) in [Chinese vocabulary](../../references/vocab/zh.md) before writing subtitle or delivery text. Prompt in Simplified; declare the delivery script separately - and never convert between them by find-and-replace (头发 → 頭髮, not 頭發).
 
 ## De-Slop Rule
 
-When the prompt leans on `电影感`, `氛围感`, `高级感`, `大片感`, or bare `质感`, load the Slop Traps table in `references/vocab/zh.md` and decompose each into the physical elements that produce it - 材质, 光线, 色彩, 空气.
+When the prompt leans on `电影感`, `氛围感`, `高级感`, `大片感`, or bare `质感`, load the Slop Traps table in [Chinese vocabulary](../../references/vocab/zh.md) and decompose each into the physical elements that produce it - 材质, 光线, 色彩, 空气.
 
 ## Output Contract
 

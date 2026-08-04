@@ -2,6 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Emily2040/seedance-2.0/schemas/project-state.schema.json",
   "title": "Seedance Sequence Project State",
+  "description": "Structural and record-local validation only. Graph-wide lineage semantics require project_state_check.py and continuity_chain_check.py.",
+  "$comment": "JSON Schema cannot enforce clip-id uniqueness, parent existence, self-parent rejection, parent-before-child ordering, cycle freedom, or parent status/endpoint usability. Run both semantic validators.",
   "type": "object",
   "required": [
     "schema_version",
@@ -25,7 +27,12 @@
   "properties": {
     "schema_version": {"type": "string"},
     "state_revision": {"type": "integer", "minimum": 1},
-    "project_id": {"type": "string", "minLength": 1},
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "\\S"
+    },
     "project_mode": {"enum": ["standalone_clip", "sequence_project"]},
     "surface": {"type": "object"},
     "clip_budget_sec": {"type": ["number", "null"]},
@@ -36,12 +43,40 @@
     "scenes": {"type": "array", "items": {"$ref": "#/$defs/scene"}},
     "beats": {"type": "array", "items": {"$ref": "#/$defs/beat"}},
     "clips": {"type": "array", "items": {"$ref": "#/$defs/clip"}},
-    "take_history": {"type": "array"},
+    "take_history": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {"$ref": "#/$defs/take_history_item"}
+    },
     "current_clip_id": {"type": "string"},
     "canon_revision": {"type": "integer", "minimum": 1},
     "updated_at": {"type": "string"}
   },
   "$defs": {
+    "take_history_item": {
+      "type": "object",
+      "required": ["take_id", "clip_id", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "take_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        },
+        "clip_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        },
+        "verdict": {
+          "enum": ["accept", "accept_with_deviation", "repair", "reject"]
+        },
+        "evidence": {"type": "string", "maxLength": 4096}
+      }
+    },
+    "visible_one_line_text": {"type": "string", "minLength": 1, "pattern": "^(?=.*[^\\s\\u0021-\\u0023\\u0025-\\u002a\\u002c-\\u002f\\u003a-\\u003b\\u003f-\\u0040\\u005b-\\u005d\\u005f\\u007b\\u007d\\u00a1\\u00a7\\u00ab\\u00b6-\\u00b7\\u00bb\\u00bf\\u037e\\u0387\\u055a-\\u055f\\u0589-\\u058a\\u05be\\u05c0\\u05c3\\u05c6\\u05f3-\\u05f4\\u0609-\\u060a\\u060c-\\u060d\\u061b\\u061e-\\u061f\\u066a-\\u066d\\u06d4\\u0700-\\u070d\\u07f7-\\u07f9\\u0830-\\u083e\\u085e\\u0964-\\u0965\\u0970\\u09fd\\u0a76\\u0af0\\u0c77\\u0c84\\u0df4\\u0e4f\\u0e5a-\\u0e5b\\u0f04-\\u0f12\\u0f14\\u0f3a-\\u0f3d\\u0f85\\u0fd0-\\u0fd4\\u0fd9-\\u0fda\\u104a-\\u104f\\u10fb\\u1360-\\u1368\\u1400\\u166e\\u169b-\\u169c\\u16eb-\\u16ed\\u1735-\\u1736\\u17d4-\\u17d6\\u17d8-\\u17da\\u1800-\\u180a\\u1944-\\u1945\\u1a1e-\\u1a1f\\u1aa0-\\u1aa6\\u1aa8-\\u1aad\\u1b5a-\\u1b60\\u1bfc-\\u1bff\\u1c3b-\\u1c3f\\u1c7e-\\u1c7f\\u1cc0-\\u1cc7\\u1cd3\\u2010-\\u2027\\u2030-\\u2043\\u2045-\\u2051\\u2053-\\u205e\\u207d-\\u207e\\u208d-\\u208e\\u2308-\\u230b\\u2329-\\u232a\\u2768-\\u2775\\u27c5-\\u27c6\\u27e6-\\u27ef\\u2983-\\u2998\\u29d8-\\u29db\\u29fc-\\u29fd\\u2cf9-\\u2cfc\\u2cfe-\\u2cff\\u2d70\\u2e00-\\u2e2e\\u2e30-\\u2e4f\\u2e52\\u3001-\\u3003\\u3008-\\u3011\\u3014-\\u301f\\u3030\\u303d\\u30a0\\u30fb\\ua4fe-\\ua4ff\\ua60d-\\ua60f\\ua673\\ua67e\\ua6f2-\\ua6f7\\ua874-\\ua877\\ua8ce-\\ua8cf\\ua8f8-\\ua8fa\\ua8fc\\ua92e-\\ua92f\\ua95f\\ua9c1-\\ua9cd\\ua9de-\\ua9df\\uaa5c-\\uaa5f\\uaade-\\uaadf\\uaaf0-\\uaaf1\\uabeb\\ufd3e-\\ufd3f\\ufe10-\\ufe19\\ufe30-\\ufe52\\ufe54-\\ufe61\\ufe63\\ufe68\\ufe6a-\\ufe6b\\uff01-\\uff03\\uff05-\\uff0a\\uff0c-\\uff0f\\uff1a-\\uff1b\\uff1f-\\uff20\\uff3b-\\uff3d\\uff3f\\uff5b\\uff5d\\uff5f-\\uff65\\u00ad\\u034f\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u08e2\\u115f-\\u1160\\u17b4-\\u17b5\\u180b-\\u180f\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\u2800\\u3164\\ufe00-\\ufe0f\\ufeff\\uffa0\\ufff0-\\ufffb\ud804\udcbd\ud804\udccd\ud80d\udc30-\ud80d\udc38\ud82f\udca0-\ud82f\udca3\ud834\udd73-\ud834\udd7a\udb40\udc00-\udb43\udfff])[^\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+$"},
     "story": {
       "type": "object",
       "required": ["logline", "story_promise", "objective", "initial_condition", "final_outcome", "target_duration_sec", "tone", "medium"],
@@ -78,7 +113,7 @@
         "anchor_source": {"type": "array", "items": {"type": "string"}},
         "max_chain_depth": {"type": "integer", "minimum": 0, "maximum": 3},
         "audio_plan": {"type": "string"},
-        "assigned_clip_ids": {"type": "array", "items": {"type": "string"}},
+        "assigned_clip_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "transition_out": {"type": "string"},
         "status": {"enum": ["planned", "current", "completed", "omitted", "replaced"]}
       }
@@ -99,7 +134,6 @@
       "type": "object",
       "required": [
         "clip_id",
-        "parent_clip_id",
         "scene_id",
         "sequence_index",
         "prompt_version",
@@ -125,8 +159,8 @@
         "extension_depth"
       ],
       "properties": {
-        "clip_id": {"type": "string"},
-        "parent_clip_id": {"type": ["string", "null"]},
+        "clip_id": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+        "parent_clip_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 256, "pattern": "\\S"},
         "scene_id": {"type": "string"},
         "sequence_index": {"type": "integer", "minimum": 1},
         "prompt_version": {"type": "string"},
@@ -134,7 +168,14 @@
         "source_clip_tag": {"type": ["string", "null"]},
         "status": {"enum": ["planned", "ready", "generated", "reviewed", "accepted", "accepted_with_deviation", "repair", "rejected"]},
         "narrative_job": {"type": "string"},
-        "felt_intent": {"type": "string", "minLength": 1},
+        "felt_intent": {"$ref": "#/$defs/visible_one_line_text"},
+        "directors_read_lane": {"enum": ["narrative", "non_narrative"]},
+        "authoring_state": {"$ref": "#/$defs/authoring_state"},
+        "contract_authoring_state_snapshots": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/authoring_state_provenance"},
+          "uniqueItems": true
+        },
         "already_happened": {"type": "array", "items": {"type": "string"}},
         "this_clip_only": {"type": "array", "items": {"type": "string"}},
         "reserved_for_later": {"type": "array", "items": {"type": "string"}},
@@ -151,7 +192,173 @@
         "open_motion_vectors": {"type": "array"},
         "handoff_requirements": {"type": "array"},
         "extension_depth": {"type": "integer", "minimum": 0}
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"sequence_index": {"const": 1}},
+            "required": ["sequence_index"]
+          },
+          "then": {
+            "properties": {"parent_clip_id": {"type": "null"}}
+          },
+          "else": {
+            "required": ["parent_clip_id"],
+            "properties": {
+              "parent_clip_id": {"type": "string", "minLength": 1, "pattern": "\\S"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {"enum": ["accepted", "accepted_with_deviation"]}
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "observed_end_state": {"type": "object", "minProperties": 1}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "rejected"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {"observed_end_state": {"type": "null"}}
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {"required": ["authoring_state"]},
+              {"required": ["contract_authoring_state_snapshots"]}
+            ]
+          },
+          "then": {
+            "required": ["directors_read_lane", "authoring_state"]
+          }
+        },
+        {
+          "if": {
+            "required": ["directors_read_lane"],
+            "properties": {"directors_read_lane": {"const": "narrative"}}
+          },
+          "then": {
+            "required": ["authoring_state"],
+            "properties": {"authoring_state": {"$ref": "#/$defs/narrative_authoring_state"}}
+          }
+        },
+        {
+          "if": {
+            "required": ["directors_read_lane"],
+            "properties": {"directors_read_lane": {"const": "non_narrative"}}
+          },
+          "then": {
+            "required": ["authoring_state"],
+            "properties": {"authoring_state": {"$ref": "#/$defs/non_narrative_authoring_state"}}
+          }
+        }
+      ]
+    },
+    "authoring_state_provenance": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "clip_id",
+        "canon_revision",
+        "state_revision",
+        "authoring_state_sha256"
+      ],
+      "properties": {
+        "project_id": {"type": "string", "minLength": 1},
+        "clip_id": {"type": "string", "minLength": 1},
+        "canon_revision": {"type": "integer", "minimum": 1},
+        "state_revision": {"type": "integer", "minimum": 1},
+        "authoring_state_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "authoring_state": {
+      "oneOf": [
+        {"$ref": "#/$defs/narrative_authoring_state"},
+        {"$ref": "#/$defs/non_narrative_authoring_state"}
+      ]
+    },
+    "narrative_authoring_state": {
+      "type": "object",
+      "description": "Complete canonical narrative Director's Read plus explicit value endpoints and auditable prompt carriers.",
+      "required": [
+        "dramatic_function",
+        "turn",
+        "pov",
+        "power_shift",
+        "hidden_want_objective",
+        "obstacle_tactic",
+        "subtext_contradiction",
+        "visible_suppressed_behavior",
+        "non_transferable_detail",
+        "non_transferable_detail_provenance",
+        "non_transferable_detail_source",
+        "stock_solution_refused",
+        "value_before",
+        "value_after",
+        "prompt_carriers"
+      ],
+      "properties": {
+        "dramatic_function": {"$ref": "#/$defs/visible_one_line_text"},
+        "turn": {"$ref": "#/$defs/visible_one_line_text"},
+        "pov": {"$ref": "#/$defs/visible_one_line_text"},
+        "power_shift": {"$ref": "#/$defs/visible_one_line_text"},
+        "hidden_want_objective": {"$ref": "#/$defs/visible_one_line_text"},
+        "obstacle_tactic": {"$ref": "#/$defs/visible_one_line_text"},
+        "subtext_contradiction": {"$ref": "#/$defs/visible_one_line_text"},
+        "visible_suppressed_behavior": {"$ref": "#/$defs/visible_one_line_text"},
+        "non_transferable_detail": {"$ref": "#/$defs/visible_one_line_text"},
+        "non_transferable_detail_provenance": {"enum": ["source_bound", "authored_choice"]},
+        "non_transferable_detail_source": {"type": ["string", "null"]},
+        "stock_solution_refused": {"$ref": "#/$defs/visible_one_line_text"},
+        "value_before": {"$ref": "#/$defs/visible_one_line_text"},
+        "value_after": {"$ref": "#/$defs/visible_one_line_text"},
+        "prompt_carriers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/visible_one_line_text"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"non_transferable_detail_provenance": {"const": "source_bound"}}},
+          "then": {
+            "properties": {
+              "non_transferable_detail_source": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?:@[A-Za-z][A-Za-z0-9]*(?:[ \\t]+[0-9]+)?|\\[[^\\]\\r\\n\\u000b\\u000c\\u001c\\u001d\\u001e\\u0085\\u2028\\u2029]+\\]|https?://\\S+|(?:file|ref|evidence):\\S+)$"
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"non_transferable_detail_provenance": {"const": "authored_choice"}}},
+          "then": {"properties": {"non_transferable_detail_source": {"const": null}}}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "non_narrative_authoring_state": {
+      "type": "object",
+      "description": "Complete canonical two-line non-narrative Director's Read.",
+      "required": ["utility_intent", "non_narrative_refusal"],
+      "properties": {
+        "utility_intent": {"$ref": "#/$defs/visible_one_line_text"},
+        "non_narrative_refusal": {"$ref": "#/$defs/visible_one_line_text"}
+      },
+      "additionalProperties": false
     }
   }
 }

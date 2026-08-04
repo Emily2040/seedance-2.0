@@ -99,4 +99,4 @@ English carries the heaviest moderation. Use this only for safe prompts being mi
 
 Anything genuinely risky - minors, real-person likeness, sexual or graphic content - is not a wording problem; route it to the filter skill's boundary for a plain refusal.
 
-Load `filter-vocab.md` for the full false-positive repair table and `anti-slop-lexicon.md` for the core replacement rule.
+Load [filter-vocab](../filter-vocab.md) for the full false-positive repair table and [anti-slop-lexicon](../anti-slop-lexicon.md) for the core replacement rule.

@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "ledger_revision": 1,
+  "append_only": true,
+  "entries": [
+    {
+      "entry_sequence": 1,
+      "project_id": "seq_airport_arrival",
+      "clip_id": "clip_01",
+      "canon_revision": 1,
+      "state_revision": 1,
+      "contract_status": "accepted_with_deviation",
+      "authoring_state_sha256": "d71f3ea0b9c44d243b102b396cce28b83d921582f5fc409eb3209a82257aa045",
+      "contract_sha256": "d1d007fd0d9e3949258d82db7f9952c1df2bfbc9b7a02b294f2e1de93153f8da",
+      "prompt_sha256": "8747f760d2fac3ca3516998037120bca31d63bebe2570ba092133b2236d5d55b"
+    }
+  ]
+}

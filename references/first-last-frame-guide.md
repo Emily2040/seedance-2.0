@@ -4,7 +4,7 @@ last_verified: 2026-08-01
 
 Use this guide for FLF2V, first-frame/last-frame transitions, Chinese `首帧/尾帧`, or requests to generate the motion between two images.
 
-Reviewed 2026-08-01. The endpoint-lock craft below is unchanged and model-independent. One boundary was added: these are Seedance 2.0 surface behaviours, and the newer 2.5 line is reported to offer region-level editing — a different tool for a different job, not a replacement for first/last-frame control. Do not assume either mode exists on the other line without checking the active surface. See `[ref:api-status]`.
+Reviewed 2026-08-01. The endpoint-lock craft below is unchanged and model-independent. One boundary was added: these are Seedance 2.0 surface behaviours, and the newer 2.5 line is reported to offer region-level editing — a different tool for a different job, not a replacement for first/last-frame control. Do not assume either mode exists on the other line without checking the active surface. See [api-status](api-status.md).
 
 Source boundary: official ByteDance material supports multimodal references, editing, extension, and R2V examples. Volcengine now documents first-frame and last-frame roles on its video-generation surface. The exact `FLF2V` label is still product-surface vocabulary, so use the active surface's field names when implementing.
 

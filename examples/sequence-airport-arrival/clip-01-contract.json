@@ -5,7 +5,36 @@
   "scene_id": "scene_01",
   "sequence_index": 1,
   "narrative_job": "Exit terminal and approach the open rear car door.",
-  "felt_intent": "The viewer feels the quiet relief of arrival - a long journey resolving toward a waiting car.",
+  "felt_intent": "The viewer notices that her pace never changes even when the waiting car comes within reach.",
+  "directors_read_lane": "narrative",
+  "authoring_state": {
+    "dramatic_function": "Turn public transit endurance into self-directed arrival at a chosen shelter.",
+    "turn": "Rigid public endurance at the terminal becomes composure carried intact to the open car door.",
+    "pov": "The traveler; the waiting car becomes legible through her fixed gaze before the crowd notices it.",
+    "power_shift": "Rain and curb traffic dictate her pace at the threshold; at the car she controls the final approach by refusing to rush.",
+    "hidden_want_objective": "Reach the waiting car without letting the curbside crowd see how exhausted she is.",
+    "obstacle_tactic": "The long exposed curb, rain, and rolling suitcase invite a hurried release; she keeps one measured tempo and fixes her eyes on the open door.",
+    "subtext_contradiction": "The car means relief, but her unchanged pace denies the crowd any performance of it.",
+    "visible_suppressed_behavior": "At the last curb seam, her thumb hooks beneath the creased airline tag, then releases it without looking down.",
+    "non_transferable_detail": "A creased paper airline tag looped around the suitcase handle catches under her thumb at the last curb seam.",
+    "non_transferable_detail_provenance": "authored_choice",
+    "non_transferable_detail_source": null,
+    "stock_solution_refused": "No relieved smile, sagging shoulders, or backward glance; replace them with the thumb catching and releasing the tag while her pace stays even.",
+    "value_before": "arrival is public endurance with shelter still distant",
+    "value_after": "shelter is reached while public composure remains intact",
+    "prompt_carriers": [
+      "She sees the open rear door but keeps the same measured walking tempo.",
+      "At the last curb seam, her thumb hooks beneath the creased airline tag, then releases it without looking down.",
+      "She reaches the open rear door with her face and shoulders held at the same level."
+    ]
+  },
+  "authoring_state_provenance": {
+    "project_id": "seq_airport_arrival",
+    "clip_id": "clip_01",
+    "canon_revision": 1,
+    "state_revision": 1,
+    "authoring_state_sha256": "d71f3ea0b9c44d243b102b396cce28b83d921582f5fc409eb3209a82257aa045"
+  },
   "target_duration_sec": null,
   "generation_mode": "T2V",
   "shot_structure": "phased_single_take",
@@ -28,11 +57,15 @@
     "traveler identity",
     "charcoal coat",
     "left-to-right travel",
+    "creased paper airline tag",
     "black sedan"
   ],
   "allowed_changes": [
     "crowd parts around traveler",
     "rain reflections shift"
   ],
-  "status": "ready"
+  "observed_end_state": {
+    "summary": "traveler remains two steps from the open rear car door, still moving left-to-right"
+  },
+  "status": "accepted_with_deviation"
 }

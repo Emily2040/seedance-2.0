@@ -1,0 +1,271 @@
+{
+  "schema_version": "6.6.0",
+  "state_revision": 3,
+  "project_id": "seq_mixed_lane_calibration",
+  "project_mode": "sequence_project",
+  "surface": {
+    "name": "unknown",
+    "profile": "conservative_generic",
+    "verified_at": null
+  },
+  "clip_budget_sec": null,
+  "prompt_budget": null,
+  "story": {
+    "logline": "A technician discovers a calibration error, verifies the instrument, and chooses to document it.",
+    "story_promise": "A private technical doubt becomes a shared record.",
+    "objective": "Verify the error and place it on the supervisor's record.",
+    "initial_condition": "The technician is alone with an instrument that should read forty.",
+    "final_outcome": "The notched calibration card is clipped beneath the supervisor's signed sheet.",
+    "target_duration_sec": 24,
+    "tone": "observational procedural tension",
+    "medium": "live_action"
+  },
+  "world_bible": {
+    "location": "fluorescent calibration bench",
+    "instrument": "gray analog pressure gauge with amber warning diode",
+    "authored_object": "blue calibration card with one asymmetric pencil notch",
+    "authored_object_provenance": "authored_choice"
+  },
+  "reference_registry": [
+    {
+      "tag": "@Image 1",
+      "role": "technician identity, uniform, and calibration bench",
+      "preserve_exact_tag": true
+    },
+    {
+      "tag": "[Video 1]",
+      "role": "accepted Clip 01 continuity source",
+      "preserve_exact_tag": true
+    },
+    {
+      "tag": "[Video 2]",
+      "role": "accepted utility insert continuity source",
+      "preserve_exact_tag": true
+    }
+  ],
+  "scenes": [
+    {
+      "scene_id": "scene_01",
+      "scene_index": 1,
+      "narrative_function": "Move a private calibration doubt into a documented handoff.",
+      "arc_position": "turn",
+      "location": "fluorescent calibration bench",
+      "time_of_day": "night shift",
+      "anchor_source": ["@Image 1"],
+      "max_chain_depth": 2,
+      "audio_plan": "Bench hum, switch clicks, and paper contact only; no score.",
+      "assigned_clip_ids": ["clip_01", "clip_02", "clip_03"],
+      "transition_out": "cut on card clip",
+      "status": "current"
+    }
+  ],
+  "beats": [
+    {
+      "beat_id": "beat_notice_error",
+      "description": "Technician recognizes that the reading is wrong.",
+      "narrative_function": "private recognition",
+      "status": "completed",
+      "assigned_clip_id": "clip_01",
+      "dependencies": []
+    },
+    {
+      "beat_id": "beat_verify_cycle",
+      "description": "Instrument cycle proves the diode pattern and fixed needle position.",
+      "narrative_function": "evidence insert",
+      "status": "completed",
+      "assigned_clip_id": "clip_02",
+      "dependencies": ["beat_notice_error"]
+    },
+    {
+      "beat_id": "beat_document_error",
+      "description": "Technician places the notched card beneath the supervisor's sheet.",
+      "narrative_function": "decision",
+      "status": "current",
+      "assigned_clip_id": "clip_03",
+      "dependencies": ["beat_verify_cycle"]
+    }
+  ],
+  "clips": [
+    {
+      "clip_id": "clip_01",
+      "parent_clip_id": null,
+      "scene_id": "scene_01",
+      "sequence_index": 1,
+      "prompt_version": "6.6.0",
+      "generation_mode": "I2V",
+      "source_clip_tag": null,
+      "status": "accepted",
+      "narrative_job": "Recognize the calibration error without announcing it.",
+      "felt_intent": "The viewer notices a practiced hand repeat one measurement it normally trusts.",
+      "directors_read_lane": "narrative",
+      "authoring_state": {
+        "dramatic_function": "Turn routine measurement into private recognition of an error.",
+        "turn": "A trusted reading is routine, then its repeated mismatch becomes undeniable to the technician.",
+        "pov": "The technician through the measuring hand; the gauge becomes suspect only after the pencil returns to the same notch.",
+        "power_shift": "Routine procedure controls the opening; the repeated mismatch controls the technician's next action.",
+        "hidden_want_objective": "Verify the error without making a claim that could still be dismissed as operator mistake.",
+        "obstacle_tactic": "The first mismatch could be hand error; reset the pencil at the asymmetric notch and repeat the measurement without looking toward the supervisor's empty chair.",
+        "subtext_contradiction": "The technician performs an ordinary repeat while the exact placement admits the first reading mattered.",
+        "visible_suppressed_behavior": "The thumb starts to cover the notched number, then moves aside so the mismatch remains visible.",
+        "non_transferable_detail": "A blue calibration card has one asymmetric pencil notch beside the forty mark.",
+        "non_transferable_detail_provenance": "authored_choice",
+        "non_transferable_detail_source": null,
+        "stock_solution_refused": "No shocked face, alarm sting, or furtive glance; replace them with the pencil returning to the same asymmetric notch and the thumb moving away.",
+        "value_before": "calibration doubt is private and deniable",
+        "value_after": "calibration error is privately recognized but not disclosed",
+        "prompt_carriers": [
+          "The pencil returns to the asymmetric notch beside forty for a second measurement.",
+          "The technician's thumb starts to cover the notched number, then moves aside.",
+          "The empty supervisor chair remains outside the technician's eyeline."
+        ]
+      },
+      "already_happened": [],
+      "this_clip_only": ["beat_notice_error"],
+      "reserved_for_later": ["beat_verify_cycle", "beat_document_error"],
+      "planned_start_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1"],
+        "gauge_state": "awaiting measurement"
+      },
+      "planned_end_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1"],
+        "gauge_state": "mismatch repeated"
+      },
+      "observed_start_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1"],
+        "gauge_state": "awaiting measurement"
+      },
+      "observed_end_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1"],
+        "gauge_state": "mismatch repeated",
+        "card_state": "notched number visible"
+      },
+      "continuity_locks": ["technician identity", "gauge identity", "blue notched card", "reference tags"],
+      "allowed_changes": ["pencil may repeat measurement"],
+      "continuity_breaks": [],
+      "accepted_deviations": [],
+      "transition_in": "first clip",
+      "transition_out": "cut from visible notch to gauge face",
+      "open_motion_vectors": [],
+      "handoff_requirements": ["preserve mismatch and visible notch"],
+      "extension_depth": 0
+    },
+    {
+      "clip_id": "clip_02",
+      "parent_clip_id": "clip_01",
+      "scene_id": "scene_01",
+      "sequence_index": 2,
+      "prompt_version": "6.6.0",
+      "generation_mode": "V2V",
+      "source_clip_tag": "[Video 1]",
+      "status": "accepted",
+      "narrative_job": "Show the instrument's verification cycle as a legible utility insert.",
+      "felt_intent": "The viewer can read two amber pulses while the needle remains fixed at forty.",
+      "directors_read_lane": "non_narrative",
+      "authoring_state": {
+        "utility_intent": "Prove that the amber diode cycles exactly twice while the gauge needle remains fixed at forty.",
+        "non_narrative_refusal": "No invented agency, menace, anxiety, or emotional reaction for the instrument."
+      },
+      "already_happened": ["beat_notice_error"],
+      "this_clip_only": ["beat_verify_cycle"],
+      "reserved_for_later": ["beat_document_error"],
+      "planned_start_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1", "[Video 1]"],
+        "gauge_state": "needle at forty"
+      },
+      "planned_end_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1", "[Video 1]"],
+        "gauge_state": "two amber pulses complete, needle still at forty"
+      },
+      "observed_start_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1", "[Video 1]"],
+        "gauge_state": "needle at forty"
+      },
+      "observed_end_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1", "[Video 1]"],
+        "gauge_state": "two amber pulses complete, needle still at forty"
+      },
+      "continuity_locks": ["gauge identity", "needle at forty", "amber diode", "reference tags"],
+      "allowed_changes": ["diode may pulse exactly twice"],
+      "continuity_breaks": [],
+      "accepted_deviations": [],
+      "transition_in": "intentional macro insert",
+      "transition_out": "cut from second pulse to calibration card",
+      "open_motion_vectors": [],
+      "handoff_requirements": ["do not move the gauge needle", "do not invent a performer reaction"],
+      "extension_depth": 1
+    },
+    {
+      "clip_id": "clip_03",
+      "parent_clip_id": "clip_02",
+      "scene_id": "scene_01",
+      "sequence_index": 3,
+      "prompt_version": "6.6.0",
+      "generation_mode": "V2V",
+      "source_clip_tag": "[Video 2]",
+      "status": "ready",
+      "narrative_job": "Document the verified error on the supervisor's record.",
+      "felt_intent": "The viewer sees responsibility change hands when the notched card enters the signed stack.",
+      "directors_read_lane": "narrative",
+      "authoring_state": {
+        "dramatic_function": "Turn private recognition into a documented decision another person must inherit.",
+        "turn": "The calibration error is privately known, then the notched card makes it part of the supervisor's signed record.",
+        "pov": "The technician through the card hand; the supervisor is represented by the signed top sheet rather than a reaction.",
+        "power_shift": "The technician alone controls whether the error stays private; clipping the card beneath the signed sheet transfers responsibility to the record.",
+        "hidden_want_objective": "Make the error impossible to overlook without staging an accusation.",
+        "obstacle_tactic": "A loose note could disappear; align the asymmetric notch beneath the supervisor's signature and close the metal clip through both sheets.",
+        "subtext_contradiction": "The technician avoids confrontation by making the evidence physically inseparable from the supervisor's own page.",
+        "visible_suppressed_behavior": "The card pauses above the waste slot, then crosses to the signed stack without the hand changing speed.",
+        "non_transferable_detail": "The asymmetric pencil notch remains visible directly beneath the supervisor's green signature.",
+        "non_transferable_detail_provenance": "authored_choice",
+        "non_transferable_detail_source": null,
+        "stock_solution_refused": "No confession, accusatory look, or evidence close-up with music; replace them with the waste-slot pause and one metal clip closing through both sheets.",
+        "value_before": "calibration error is privately recognized but not disclosed",
+        "value_after": "calibration error is documented and responsibility becomes shared",
+        "prompt_carriers": [
+          "The blue card pauses above the waste slot, then crosses to the supervisor's signed stack without the hand changing speed.",
+          "The asymmetric pencil notch aligns directly beneath the green signature.",
+          "One metal clip closes through the signed sheet and the notched card together."
+        ]
+      },
+      "already_happened": ["beat_notice_error", "beat_verify_cycle"],
+      "this_clip_only": ["beat_document_error"],
+      "reserved_for_later": [],
+      "planned_start_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1", "[Video 2]"],
+        "card_state": "loose beside signed stack"
+      },
+      "planned_end_state": {
+        "location": "fluorescent calibration bench",
+        "reference_tags": ["@Image 1", "[Video 2]"],
+        "card_state": "clipped beneath signed sheet"
+      },
+      "observed_start_state": null,
+      "observed_end_state": null,
+      "continuity_locks": ["technician identity", "blue notched card", "green signature", "reference tags"],
+      "allowed_changes": ["card may enter signed stack", "metal clip may close"],
+      "continuity_breaks": [],
+      "accepted_deviations": [],
+      "transition_in": "intentional next shot from utility insert",
+      "transition_out": "hold on clipped papers",
+      "open_motion_vectors": [],
+      "handoff_requirements": ["do not repeat diode cycle", "keep notch and signature legible"],
+      "extension_depth": 2
+    }
+  ],
+  "take_history": [
+    {"take_id": "take_clip01_a", "clip_id": "clip_01", "verdict": "accept"},
+    {"take_id": "take_clip02_a", "clip_id": "clip_02", "verdict": "accept"}
+  ],
+  "current_clip_id": "clip_03",
+  "canon_revision": 3,
+  "updated_at": "2026-08-01"
+}

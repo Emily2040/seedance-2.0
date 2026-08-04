@@ -20,6 +20,8 @@ metadata:
 
 # seedance-antislop
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Remove filler that hides missing visual decisions. A strong Seedance prompt uses observable nouns, verbs, camera moves, light sources, sound cues, and constraints. A weak prompt asks for excellence without saying what excellence looks or sounds like.
 
 ## Intent
@@ -57,7 +59,7 @@ First, underline all superlatives and vague style labels and classify each by sl
 
 Do not remove useful genre language when it is paired with concrete direction. `Noir hallway with hard venetian-blind shadows` is useful; `dramatic cinematic noir vibes` is not. Keep terms that communicate medium, era, palette, or lens behavior.
 
-Load `[ref:anti-slop-lexicon]` for the slop-class taxonomy and extended replacement table, and `[skill:seedance-vocab-en]` with `references/vocab/en.md` for the full function-organized English precision vocabulary. For non-English prompts, load the matching vocab file's Slop Traps table (`references/vocab/zh.md`, `ja.md`, `ko.md`, `es.md`, `ru.md`) - each language community has its own empty-quality words and decompositions.
+Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for the slop-class taxonomy and extended replacement table, and [seedance-vocab-en](../seedance-vocab-en/SKILL.md) with [English vocabulary](../../references/vocab/en.md) for the full function-organized English precision vocabulary. For non-English prompts, load the matching vocab file's Slop Traps table: [Chinese](../../references/vocab/zh.md), [Japanese](../../references/vocab/ja.md), [Korean](../../references/vocab/ko.md), [Spanish](../../references/vocab/es.md), or [Russian](../../references/vocab/ru.md). Each language community has its own empty-quality words and decompositions.
 
 ## Output Contract
 

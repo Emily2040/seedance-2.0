@@ -20,6 +20,8 @@ metadata:
 
 # seedance-vocab-ko
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use Korean cinematic vocabulary when the user asks for Korean prompt wording, bilingual delivery, compact translation, or production vocabulary for camera, lighting, action, VFX, audio, and constraints. Preserve reference tags exactly: `@Image1`, `@Video1`, and `@Audio1` must not be translated.
 
 ## Intent
@@ -44,11 +46,11 @@ Translate the production intention rather than every English word. Keep the Kore
 
 ## Speech Level Rule
 
-The moment a prompt contains dialogue, load Speech Level (말투) in `references/vocab/ko.md` and declare one level per speaker - 합니다체, 해요체, or 반말. Korean has no neutral register, and the syllable cost differs enough to break the sync budget (고마워 3 → 감사합니다 5).
+The moment a prompt contains dialogue, load Speech Level (말투) in [Korean vocabulary](../../references/vocab/ko.md) and declare one level per speaker - 합니다체, 해요체, or 반말. Korean has no neutral register, and the syllable cost differs enough to break the sync budget (고마워 3 → 감사합니다 5).
 
 ## De-Slop Rule
 
-When the prompt leans on `영화 같은`, `감성적인`, `분위기 있는`, `웅장한`, or `고퀄리티`, load the Slop Traps table in `references/vocab/ko.md` and decompose each into the physical elements that produce it - 카메라 동사+속도+시점, 광원+방향+행동.
+When the prompt leans on `영화 같은`, `감성적인`, `분위기 있는`, `웅장한`, or `고퀄리티`, load the Slop Traps table in [Korean vocabulary](../../references/vocab/ko.md) and decompose each into the physical elements that produce it - 카메라 동사+속도+시점, 광원+방향+행동.
 
 ## Output Contract
 

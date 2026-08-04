@@ -1164,7 +1164,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1197,7 +1197,7 @@
         "seedance-continuation"
       ],
       "critical": false,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1230,7 +1230,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1263,7 +1263,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1296,7 +1296,7 @@
         "seedance-continuation"
       ],
       "critical": false,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1329,7 +1329,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1362,7 +1362,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1395,7 +1395,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1428,7 +1428,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1461,7 +1461,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1494,7 +1494,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1527,7 +1527,7 @@
         "seedance-continuation"
       ],
       "critical": false,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1560,7 +1560,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1593,7 +1593,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1725,7 +1725,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1758,7 +1758,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1791,7 +1791,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1824,7 +1824,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1857,7 +1857,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1890,7 +1890,7 @@
         "seedance-continuation"
       ],
       "critical": false,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -1923,7 +1923,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -2121,7 +2121,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -2286,7 +2286,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",
@@ -2319,7 +2319,7 @@
         "seedance-continuation"
       ],
       "critical": true,
-      "state_fixture": "examples/sequence-airport-arrival/project-state.json",
+      "state_fixture": "evals/fixtures/sequence-airport-arrival-project-state.json",
       "expected_state_delta": "state changes only through accepted observed footage; rejected footage leaves canon unchanged",
       "forbidden_behaviors": [
         "writing a continuation without accepted source evidence",

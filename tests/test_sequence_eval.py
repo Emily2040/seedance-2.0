@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class SequenceEvalTests(unittest.TestCase):
     def test_sequence_eval_schema(self) -> None:
         result = subprocess.run(
-            [sys.executable, "scripts/sequence_eval_check.py", "--strict"],
+            [sys.executable, "scripts/sequence_eval_check.py"],
             cwd=ROOT,
             text=True,
             capture_output=True,

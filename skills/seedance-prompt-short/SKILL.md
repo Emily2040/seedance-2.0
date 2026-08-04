@@ -20,7 +20,11 @@ metadata:
 
 # seedance-prompt-short
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Compress Seedance prompts without losing the production signal. A short prompt still needs mode, subject, action, camera, light, sound when useful, and constraints. Remove filler before removing physical details.
+
+Load the [Director's Read](../../references/directors-read.md) before compression, even when the requested output is only one line. Narrative, story, and performance briefs complete its ten-field internal record first; non-narrative utility, product-only, abstract, VFX, and ambient briefs use its two-line utility intent and refusal without fabricated drama. Short means compressed output, not skipped judgment.
 
 When sequence state is present, compression must preserve continuity locks, exact reference tags, actual opening state, current clip action, endpoint, completed beat exclusions, and reserved future beats. Do not compress away the words that keep a continuation from replaying completed action or leaking future action.
 
@@ -35,15 +39,16 @@ Preserve in this order:
 1. Reference tags and their role.
 2. Subject or product identity.
 3. Action verb and visible endpoint.
-4. One camera move.
-5. Physical light source or atmosphere.
-6. Audio cue or silence instruction.
-7. Safety, IP, or continuity constraint.
-8. Sequence state clauses: actual opening state, continuity locks, completed beats, and reserved beats.
+4. For narrative work, the visible suppressed behavior and non-transferable detail that carry the Director's Read.
+5. One camera move.
+6. Physical light source or atmosphere.
+7. Audio cue or silence instruction.
+8. Safety, IP, or continuity constraint.
+9. Sequence state clauses: actual opening state, continuity locks, completed beats, and reserved beats.
 
 Delete generic adjectives, duplicate style labels, obvious background details, secondary camera moves, and secondary actions before deleting preservation constraints.
 
-For bilingual or mixed-language compression, load `[ref:multilingual-community-examples]`. Keep only the language mix that clarifies reference roles, dialogue, camera terms, or safe production constraints.
+For bilingual or mixed-language compression, load [multilingual-community-examples](../../references/multilingual-community-examples.md). Keep only the language mix that clarifies reference roles, dialogue, camera terms, or safe production constraints.
 
 ## Compact Templates
 
@@ -56,4 +61,4 @@ For bilingual or mixed-language compression, load `[ref:multilingual-community-e
 
 ## Output Contract
 
-Return one compact prompt, ideally 30-100 English words or an equivalent Chinese prompt when the user asks for Chinese or maximum compression. Include a one-line note only if something important was removed.
+Return one compact prompt, ideally 30-100 English words or an equivalent Chinese prompt when the user asks for Chinese or maximum compression. Translate the Director's Read into visible or audible carriers and keep its internal labels out of the prompt. Include a one-line note only if something important was removed.

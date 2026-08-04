@@ -140,7 +140,7 @@ Chinese carries genre-aesthetic registers with no one-word English equivalent. T
 
 "Chinese" is not one script. This file is Simplified (zh-Hans); a deliverable for 台灣, 香港, or 澳門 needs Traditional (zh-Hant). Leaving it undeclared means the mainland variant ships to a Traditional-script audience by default, which reads as a foreign cut rather than a localized one.
 
-**Prompt script and delivery script are separate decisions.** The surfaces this skill targets (即梦/Dreamina、豆包、火山方舟) are mainland-trained, and Simplified is the safer prompt language — `[ref:audio-guide]` ranks Mandarin the strongest lip-sync tier on that basis. The audience-facing text is a different question. Prompting in Simplified while delivering Traditional subtitles is a legitimate and common combination; conflating the two either weakens the prompt or ships the wrong script to the viewer.
+**Prompt script and delivery script are separate decisions.** The surfaces this skill targets (即梦/Dreamina、豆包、火山方舟) are mainland-trained, and Simplified is the safer prompt language — [audio-guide](../audio-guide.md) ranks Mandarin the strongest lip-sync tier on that basis. The audience-facing text is a different question. Prompting in Simplified while delivering Traditional subtitles is a legitimate and common combination; conflating the two either weakens the prompt or ships the wrong script to the viewer.
 
 Where it bites hardest is exactly where this repo is already weakest. Hands-on tests report 字幕乱码 (garbled subtitles), and every vocab file's standing advice is to keep the frame textless and add subtitles in post - so the variant is primarily a **delivery** parameter, set on the post/subtitle path rather than requested from the model.
 

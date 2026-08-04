@@ -1,5 +1,5 @@
 {
-  "_comment": "Display type for the masthead, stored as vector outlines rather than live text. Regenerate with scripts/build_masthead_outlines.py only when the wordmark or tagline copy changes, then re-run scripts/build_hero.py.",
+  "_comment": "Display type for the masthead, stored as vector outlines rather than live text. Regenerate with python -I -S -B scripts/build_masthead_outlines.py only when the wordmark or tagline copy changes, then run python -I -S -B scripts/build_hero.py.",
   "provenance": {
     "font_family": "Bodoni Moda",
     "font_version": "Version 2.005",
@@ -14,6 +14,16 @@
     ],
     "instances": "opsz tracks rendered size clamped to 6-96; wght=400 throughout",
     "shaping": "HarfBuzz with kern and liga features enabled",
+    "builder_versions": {
+      "fonttools": "4.63.0",
+      "uharfbuzz": "0.55.0",
+      "harfbuzz": "14.2.1"
+    },
+    "build_lock": {
+      "path": "requirements-masthead.lock",
+      "sha256": "bd7187005d023d73fce7fb2df2d7d962df696d3044312618a79c6dceb982346f",
+      "install_policy": "generator writes only after pip --force-reinstall --require-hashes; preinstalled distributions are not reused"
+    },
     "note": "Outlines are glyph geometry, not font software. The OFL permits both these outlines and the bundled originals in assets/fonts/; attribution is retained here."
   },
   "glyphs": {

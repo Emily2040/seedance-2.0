@@ -2,8 +2,39 @@
 from __future__ import annotations
 
 import argparse
-import json
+import os
 from pathlib import Path
+
+if __package__:
+    from .lineage_contract import (
+        analyze_lineage,
+        build_take_review_indexes,
+        bound_validation_diagnostics,
+        load_project_document,
+        TakeReviewIndex,
+        validate_take_reconciliation,
+    )
+    from .strict_json import (
+        bound_diagnostics,
+        diagnostic_path,
+        diagnostic_text,
+        validate_repo_input_path,
+    )
+else:
+    from lineage_contract import (
+        analyze_lineage,
+        build_take_review_indexes,
+        bound_validation_diagnostics,
+        load_project_document,
+        TakeReviewIndex,
+        validate_take_reconciliation,
+    )
+    from strict_json import (
+        bound_diagnostics,
+        diagnostic_path,
+        diagnostic_text,
+        validate_repo_input_path,
+    )
 
 
 IMMUTABLE_KEYS = [
@@ -29,10 +60,6 @@ TRANSIENT_KEYS = [
 ]
 
 
-def load(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def has_allowance(clip: dict, key: str) -> bool:
     blob = " ".join(str(item).lower() for item in (
         clip.get("transition_in", ""),
@@ -54,30 +81,25 @@ def state_value(state: dict | None, key: str):
     return None
 
 
-def validate(path: Path, root: Path) -> tuple[list[str], list[str]]:
-    rel = path.relative_to(root).as_posix()
-    data = load(path)
-    clips = {clip["clip_id"]: clip for clip in data.get("clips", [])}
-    errors: list[str] = []
+def validate(
+    path: Path,
+    root: Path,
+    review_index: TakeReviewIndex | None = None,
+) -> tuple[list[str], list[str]]:
+    data, rel, errors = load_project_document(path, root)
     warnings: list[str] = []
-    for clip in data.get("clips", []):
-        parent_id = clip.get("parent_clip_id")
-        if not parent_id:
-            continue
-        parent = clips.get(parent_id)
-        if not parent:
-            errors.append(f"{rel}: clip {clip['clip_id']} parent {parent_id} missing")
-            continue
-        if clip.get("status") == "planned" and parent.get("status") not in {"accepted", "accepted_with_deviation"}:
-            continue
-        if parent.get("status") not in {"accepted", "accepted_with_deviation"}:
-            errors.append(f"{rel}: clip {clip['clip_id']} parent {parent_id} is not accepted")
-            continue
+    if data is None:
+        return bound_validation_diagnostics(errors, rel), warnings
+    lineage = analyze_lineage(data.get("clips"), rel)
+    errors.extend(lineage.errors)
+    if review_index is None:
+        review_index = build_take_review_indexes([path])[path.resolve().parent]
+    errors.extend(
+        validate_take_reconciliation(data, lineage.clips_by_id, rel, review_index)
+    )
+    for clip, parent in lineage.accepted_links:
         end_state = parent.get("observed_end_state")
         start_state = clip.get("planned_start_state")
-        if not end_state:
-            errors.append(f"{rel}: parent {parent_id} missing observed_end_state")
-            continue
         if not start_state:
             errors.append(f"{rel}: clip {clip['clip_id']} missing planned_start_state")
             continue
@@ -91,33 +113,73 @@ def validate(path: Path, root: Path) -> tuple[list[str], list[str]]:
             b = state_value(start_state, key)
             if a is not None and b is not None and a != b and not has_allowance(clip, key):
                 warnings.append(f"{rel}: transient {key} changes from {a!r} to {b!r} without allowance")
-    return errors, warnings
+    return (
+        bound_validation_diagnostics(errors, rel),
+        bound_validation_diagnostics(warnings, rel),
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="treat transient continuity warnings as validation errors",
+    )
     args = parser.parse_args()
     root = Path(args.repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
-    for path in sorted((root / "examples").rglob("*project-state*.json")) if (root / "examples").exists() else []:
-        e, w = validate(path, root)
+    examples = root / "examples"
+    if os.path.lexists(examples):
+        try:
+            examples = validate_repo_input_path(root, examples)
+        except ValueError as exc:
+            errors.append(f"examples: {exc}")
+            examples = None
+    else:
+        examples = None
+    candidates = (
+        sorted(examples.rglob("*project-state*.json"))
+        if examples is not None
+        else []
+    )
+    paths: list[Path] = []
+    for path in candidates:
+        try:
+            paths.append(validate_repo_input_path(root, path))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            errors.append(
+                f"{diagnostic_path(path.relative_to(root))}: "
+                f"invalid project state: {exc}"
+            )
+    review_indexes = build_take_review_indexes(paths)
+    for path in paths:
+        try:
+            e, w = validate(path, root, review_indexes[path.resolve().parent])
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            errors.append(
+                f"{diagnostic_path(path.relative_to(root))}: "
+                f"invalid project state: {exc}"
+            )
+            continue
         errors.extend(e)
         warnings.extend(w)
+    warnings = bound_diagnostics(warnings, "additional continuity warnings omitted")
+    errors = bound_diagnostics(errors, "additional continuity errors omitted")
     if warnings:
         print("Continuity warnings:")
         for warning in warnings:
-            print(f"- {warning}")
+            print(diagnostic_text(f"- {warning}"))
         print()
     if errors or (args.strict and warnings):
         print("Continuity errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         if args.strict:
             for warning in warnings:
-                print(f"- {warning}")
+                print(diagnostic_text(f"- {warning}"))
         return 1
     print("Continuity chain check passed.")
     return 0

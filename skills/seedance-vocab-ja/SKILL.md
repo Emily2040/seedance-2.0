@@ -20,6 +20,8 @@ metadata:
 
 # seedance-vocab-ja
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use Japanese cinematic vocabulary when the user asks for Japanese prompt wording, bilingual delivery, compact translation, or production vocabulary for camera, lighting, motion, VFX, and audio. Preserve reference tags exactly: `@Image1`, `@Video1`, and `@Audio1` remain in English brackets.
 
 ## Intent
@@ -44,11 +46,11 @@ Prefer concise production Japanese over literal translation. Keep the structure 
 
 ## Register Rule
 
-The moment a prompt contains dialogue, load Register (文体) in `references/vocab/ja.md` and declare one register per speaker - 敬語, です・ます体, or 普通体 - with a first-person pronoun that matches it. An unstated register is a decision handed to the model, and the mora cost differs enough to break the sync budget (ありがとう 5 → ありがとうございます 10).
+The moment a prompt contains dialogue, load Register (文体) in [Japanese vocabulary](../../references/vocab/ja.md) and declare one register per speaker - 敬語, です・ます体, or 普通体 - with a first-person pronoun that matches it. An unstated register is a decision handed to the model, and the mora cost differs enough to break the sync budget (ありがとう 5 → ありがとうございます 10).
 
 ## De-Slop Rule
 
-When the prompt leans on `映画のような`, `エモい`, `雰囲気のある`, `壮大な`, or `高画質`, load the Slop Traps table in `references/vocab/ja.md` and decompose each into the physical elements that produce it - 動作動詞＋速度＋視点, 光源＋方向＋挙動.
+When the prompt leans on `映画のような`, `エモい`, `雰囲気のある`, `壮大な`, or `高画質`, load the Slop Traps table in [Japanese vocabulary](../../references/vocab/ja.md) and decompose each into the physical elements that produce it - 動作動詞＋速度＋視点, 光源＋方向＋挙動.
 
 ## Output Contract
 

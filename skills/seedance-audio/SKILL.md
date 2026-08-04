@@ -21,9 +21,11 @@ metadata:
 
 # seedance-audio
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use this for dialogue, lip-sync, sound layers, music, ambience, beat-sync, audio-reference mapping, desync troubleshooting, or sound-driven visual timing. Audio should support the visible beat instead of becoming a second competing prompt.
 
-Load `[ref:audio-guide]` for how the audio model behaves, per-language dialogue capacity, the voice-reference lip-sync path, beat-sync, desync repair, audio-reference conflicts, and multi-character workarounds. Load `[ref:audio-post-delivery]` when the user needs stems, M&E, dubbing, loudness, sync, mix, or delivery guidance.
+Load [audio-guide](../../references/audio-guide.md) for how the audio model behaves, per-language dialogue capacity, the voice-reference lip-sync path, beat-sync, desync repair, audio-reference conflicts, and multi-character workarounds. Load [audio-post-delivery](../../references/audio-post-delivery.md) when the user needs stems, M&E, dubbing, loudness, sync, mix, or delivery guidance.
 
 ## Intent
 
@@ -33,7 +35,7 @@ Half of every emotion enters through the ears, and users almost always forget so
 
 Keep dialogue short, quote spoken lines, and assign every line to a named speaker. Prefer locked or stable framing for lip-sync. Remove head-turning, large face motion, extreme camera moves, or busy hand gestures while mouth accuracy matters. Treat `@Audio1` as a rhythm, pacing, mood, voice-tone, or ambience reference unless the active platform documents exact playback behavior; on surfaces that accept a spoken-voice reference, field reports indicate an attached voice clip can drive lip-sync directly: the model syncs to your audio instead of synthesizing speech - the most reliable field-reported path for non-English dialogue. Use only rights-cleared voices.
 
-Reliability is probabilistic and language-dependent: field reports rank Mandarin strongest for lip-sync, English a close second, with Japanese, Korean, Russian, and others weaker. Keep non-English lines very short or use a voice reference, and budget retakes rather than promising a clean voiced take. See `[ref:audio-guide]` for the field-observed per-language dialogue-capacity table.
+Reliability is probabilistic and language-dependent: field reports rank Mandarin strongest for lip-sync, English a close second, with Japanese, Korean, Russian, and others weaker. Keep non-English lines very short or use a voice reference, and budget retakes rather than promising a clean voiced take. See [audio-guide](../../references/audio-guide.md) for the field-observed per-language dialogue-capacity table.
 
 ## Sound Layer Pattern
 

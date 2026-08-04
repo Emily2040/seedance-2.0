@@ -17,11 +17,32 @@ label-over-value fields. No viewfinder chrome, no gradients, no second hue.
 from __future__ import annotations
 
 import argparse
-import json
+import hashlib
+import os
 import sys
 from pathlib import Path
 
+# Isolated mode intentionally omits the script directory from ``sys.path``.
+# Add only this resolved sibling directory, never an inherited search path.
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from build_masthead_outlines import (
+    BUILD_INSTALL_POLICY,
+    BUILD_LOCK_PROVENANCE_PATH,
+    LOCKED_PYTHON_BUILDERS,
+    PINNED_BUILDER_VERSIONS,
+    locked_python_builder_versions,
+)
+
+if __package__:
+    from .strict_json import diagnostic_path, diagnostic_text, load_json, read_repo_text
+else:
+    from strict_json import diagnostic_path, diagnostic_text, load_json, read_repo_text
+
 ROOT = Path(__file__).resolve().parents[1]
+PUBLIC_COMMAND = "python -I -S -B scripts/build_hero.py"
 
 # The display type is vector outlines, not live text. The previous stack
 # (Didot, Bodoni MT, Hoefler Text, Baskerville, Palatino Linotype, Georgia)
@@ -32,6 +53,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # script wordmark was retired for; the stack had it too and outlasted it.
 # Outlines render identically everywhere and depend on no installed font.
 OUTLINES = ROOT / "assets/masthead-outlines.json"
+LOCK = ROOT / BUILD_LOCK_PROVENANCE_PATH
 
 MONO = "ui-monospace, SFMono-Regular, &apos;SF Mono&apos;, Menlo, Consolas, monospace"
 
@@ -67,13 +89,81 @@ FIELDS = [
 ]
 
 
+def provenance_failure(detail: str) -> SystemExit:
+    """Return one stable fail-closed error for all untrusted outline metadata."""
+    return SystemExit(
+        f"masthead outline provenance validation failed: {detail}; "
+        "regenerate with python -I -S -B scripts/build_masthead_outlines.py"
+    )
+
+
+def validated_outline_document() -> dict:
+    """Read the outline asset only after binding it to this checkout's build lock.
+
+    The SVG generator is a release writer too: accepting path-shaped metadata,
+    a merely plausible policy sentence, or versions that do not match the
+    declared shaper would let tampered geometry be laundered into both themes.
+    Every provenance field is therefore an exact value, and the digest is
+    recomputed from the lock bytes in this checkout.
+    """
+    try:
+        document = load_json(OUTLINES, expected_type=dict, root=ROOT)
+    except (OSError, UnicodeError, ValueError, TypeError) as exc:
+        raise provenance_failure(f"cannot read {OUTLINES}: {exc}") from exc
+
+    provenance = document.get("provenance")
+    if not isinstance(provenance, dict):
+        raise provenance_failure("provenance must be a JSON object")
+
+    builder_versions = provenance.get("builder_versions")
+    if builder_versions != PINNED_BUILDER_VERSIONS:
+        raise provenance_failure(
+            f"builder_versions must equal {PINNED_BUILDER_VERSIONS!r}"
+        )
+
+    build_lock = provenance.get("build_lock")
+    if not isinstance(build_lock, dict):
+        raise provenance_failure("build_lock must be a JSON object")
+    if build_lock.get("path") != BUILD_LOCK_PROVENANCE_PATH:
+        raise provenance_failure(
+            f"build_lock.path must equal {BUILD_LOCK_PROVENANCE_PATH!r}"
+        )
+    if build_lock.get("install_policy") != BUILD_INSTALL_POLICY:
+        raise provenance_failure("build_lock.install_policy does not match the required policy")
+
+    try:
+        lock_bytes = LOCK.read_bytes()
+    except OSError as exc:
+        raise provenance_failure(f"cannot read build lock {LOCK}: {exc}") from exc
+    try:
+        locked_versions = locked_python_builder_versions(lock_bytes)
+    except SystemExit as exc:
+        raise provenance_failure(f"invalid build-lock package pins: {exc}") from exc
+    expected_locked_versions = {
+        name: PINNED_BUILDER_VERSIONS[name] for name in LOCKED_PYTHON_BUILDERS
+    }
+    if locked_versions != expected_locked_versions:
+        raise provenance_failure(
+            "build-lock package pins do not match the required builder versions"
+        )
+
+    expected_digest = hashlib.sha256(lock_bytes).hexdigest()
+    if build_lock.get("sha256") != expected_digest:
+        raise provenance_failure("build_lock.sha256 does not match requirements-masthead.lock")
+
+    glyph_runs = document.get("glyphs")
+    if not isinstance(glyph_runs, dict):
+        raise provenance_failure("glyphs must be a JSON object")
+    return document
+
+
 def glyphs() -> dict[str, dict]:
-    return json.loads(OUTLINES.read_text(encoding="utf-8"))["glyphs"]
+    return validated_outline_document()["glyphs"]
 
 
-def build(theme: str) -> str:
+def render(theme: str, glyph_runs: dict[str, dict]) -> str:
     c = THEMES[theme]
-    g = glyphs()
+    g = glyph_runs
     o: list[str] = []
     add = o.append
 
@@ -136,29 +226,59 @@ def build(theme: str) -> str:
     return "\n".join(o) + "\n"
 
 
+def build(theme: str) -> str:
+    """Build one theme only after its outline provenance passes."""
+    return render(theme, glyphs())
+
+
 def targets() -> dict[Path, str]:
-    return {ROOT / f"assets/hero-{theme}.svg": build(theme) for theme in THEMES}
+    # Validate once and render every target in memory before the first write.
+    # This ordering is deliberate: invalid provenance may never partially
+    # replace one theme before failing on the other.
+    glyph_runs = glyphs()
+    return {
+        ROOT / f"assets/hero-{theme}.svg": render(theme, glyph_runs)
+        for theme in THEMES
+    }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="verify committed files match the source")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+
+    try:
+        built_targets = targets()
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(diagnostic_text(f"Cannot build masthead from repository inputs: {exc}"))
+        return 1
 
     drift: list[str] = []
-    for path, content in targets().items():
+    for path, content in built_targets.items():
         if args.check:
-            current = path.read_text(encoding="utf-8") if path.exists() else ""
+            try:
+                current = (
+                    read_repo_text(root=ROOT, path=path)
+                    if os.path.lexists(path)
+                    else ""
+                )
+            except ValueError as exc:
+                print(
+                    diagnostic_text(
+                        f"Cannot inspect {diagnostic_path(path.relative_to(ROOT))}: {exc}"
+                    )
+                )
+                return 1
             if current != content:
-                drift.append(path.relative_to(ROOT).as_posix())
+                drift.append(diagnostic_path(path.relative_to(ROOT)))
         else:
             path.write_text(content, encoding="utf-8")
 
     if args.check:
         if drift:
-            print("Masthead is out of date; re-run scripts/build_hero.py:")
+            print(f"Masthead is out of date; re-run {PUBLIC_COMMAND}:")
             for name in drift:
-                print(f"- {name}")
+                print(diagnostic_text(f"- {name}"))
             return 1
         print("Masthead check passed: committed SVGs match the generator.")
         return 0

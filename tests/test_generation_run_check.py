@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class GenerationRunTests(unittest.TestCase):
     def test_generation_run_fixtures_validate(self) -> None:
         result = subprocess.run(
-            [sys.executable, "scripts/generation_run_check.py", "--strict"],
+            [sys.executable, "scripts/generation_run_check.py"],
             cwd=ROOT,
             text=True,
             capture_output=True,

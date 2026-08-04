@@ -21,6 +21,8 @@ metadata:
 
 # seedance-style
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Translate style requests into production descriptors. Style should describe medium, texture, palette, lens or render behavior, period cues, and composition. Do not rely on studio, franchise, artist, or living-creator names when a safer descriptive style can preserve the user's intent.
 
 ## Intent
@@ -47,7 +49,7 @@ Separate style into layers instead of one broad label: **medium** (live action, 
 
 If the user asks for a hybrid, assign each style to a layer: `live-action product photography with illustrated UI overlays` is clearer than mixing many named influences. Keep character design, environment, lighting, and VFX in compatible registers.
 
-Load `[ref:2d-anime-grammar]` when the style is 2D, anime, or cel-based — it covers layer grammar, burst-versus-held motion, impact frames, smears, rostrum-camera language, and the no-lens rule for stylized work.
+Load [2d-anime-grammar](../../references/2d-anime-grammar.md) when the style is 2D, anime, or cel-based — it covers layer grammar, burst-versus-held motion, impact frames, smears, rostrum-camera language, and the no-lens rule for stylized work.
 
 ## Source-Look Lock
 

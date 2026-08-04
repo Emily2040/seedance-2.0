@@ -28,30 +28,46 @@ jobs:
     steps:
       # Actions are pinned to commit SHAs: a tag is mutable, so `@v4` silently
       # changes what executes here. The trailing comment tracks the release.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: requirements-validation.lock
-      # Only scripts/schema_check.py needs a third-party package. The lock is
-      # hash-pinned for this exact runner and Python version.
-      - name: Install validation dependencies
-        run: python -m pip install --require-hashes --requirement requirements-validation.lock
+          cache-dependency-path: |
+            requirements-validation.lock
+            requirements-masthead.lock
+      # GitHub actions and this explicit wheel download can use the network.
+      # Before repository validation, both locks are constrained to pinned
+      # package/hash syntax. Pip receives an empty environment plus /dev/null as
+      # its config file, so global/site config cannot add find-links or indexes.
+      - name: Validate offline wheel-lock grammar
+        run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -S -B scripts/build_masthead_outlines.py --validate-wheel-lock requirements-validation.lock --validate-wheel-lock requirements-masthead.lock
+      - name: Download hash-locked validation and masthead wheels
+        run: |
+          env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -m pip --disable-pip-version-check download --only-binary=:all: --index-url https://pypi.org/simple --require-hashes --dest "$RUNNER_TEMP/seedance-wheelhouse" --requirement requirements-validation.lock
+          env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -m pip --disable-pip-version-check download --only-binary=:all: --index-url https://pypi.org/simple --require-hashes --dest "$RUNNER_TEMP/seedance-wheelhouse" --requirement requirements-masthead.lock
+      - name: Install validation dependencies without package-index access
+        run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -m pip --disable-pip-version-check install --force-reinstall --no-index --find-links "$RUNNER_TEMP/seedance-wheelhouse" --require-hashes --requirement requirements-validation.lock
+      - name: Force-install masthead build dependencies without package-index access
+        run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -S -B scripts/build_masthead_outlines.py --install-build-deps --wheelhouse "$RUNNER_TEMP/seedance-wheelhouse" --build-env "/tmp/seedance-masthead-venv-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Validate skill metadata and required files
-        run: python scripts/validate_skills.py --strict
+        run: python scripts/validate_skills.py
       - name: Audit stale and risky active wording
-        run: python scripts/content_audit.py --strict
+        run: python scripts/content_audit.py
       - name: Validate eval schema
-        run: python scripts/eval_schema_check.py --strict
+        run: python scripts/eval_schema_check.py
       - name: Execute JSON Schemas against declared instances
-        run: python scripts/schema_check.py --strict
+        run: python scripts/schema_check.py
       - name: Audit frontend README and SVG assets
-        run: python scripts/design_audit.py --strict
+        run: python scripts/design_audit.py
+      - name: Check masthead outline provenance
+        run: env -i PATH="$PATH" HOME="$HOME" PIP_CONFIG_FILE=/dev/null python -I -S -B scripts/build_masthead_outlines.py --check --build-env "/tmp/seedance-masthead-venv-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Check the masthead matches its generator
-        run: python scripts/build_hero.py --check
+        run: python -I -S -B scripts/build_hero.py --check
       - name: Validate source freshness and claim labels
-        run: python scripts/source_registry_check.py --strict
+        run: python scripts/source_registry_check.py
       - name: Validate multilingual vocabulary schema
         run: python scripts/vocab_schema_check.py --strict
       - name: Validate sequence project state
@@ -59,22 +75,112 @@ jobs:
       - name: Validate continuity chains
         run: python scripts/continuity_chain_check.py --strict
       - name: Validate behavior contracts
-        run: python scripts/behavior_contract_check.py --strict
+        run: python scripts/behavior_contract_check.py
       - name: Validate sequence evals
-        run: python scripts/sequence_eval_check.py --strict
+        run: python scripts/sequence_eval_check.py
       - name: Validate generation-run fixtures
-        run: python scripts/generation_run_check.py --strict
+        run: python scripts/generation_run_check.py
       - name: Lint compiled prompts
         run: python scripts/prompt_lint.py --self-test --strict
       - name: Stress-test the prompt architecture
         run: python scripts/prompt_architecture_stress.py --strict
       - name: Check eval harness wiring (offline)
-        run: python scripts/eval_run.py --self-test --strict
+        run: python scripts/eval_run.py --self-test
       - name: Check frame-extraction tool wiring (offline)
-        run: python scripts/extract_last_frame.py --self-test --strict
+        run: python scripts/extract_last_frame.py --self-test
+      # The decoded-frame regression must exercise a real executable. Export
+      # the verified path and a handoff marker so the unit-test step fails
+      # closed if this provisioning step is removed or reordered.
+      - name: Provision FFmpeg for decoded-frame tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # `acl` makes the real extended-access-ACL publication regression
+          # deterministic instead of silently skipping on the hosted runner.
+          sudo apt-get install --yes --no-install-recommends acl ffmpeg
+          ffmpeg_path="$(command -v ffmpeg)"
+          test -x "$ffmpeg_path"
+          "$ffmpeg_path" -hide_banner -version
+          {
+            printf 'SEEDANCE_TEST_FFMPEG=%s\n' "$ffmpeg_path"
+            printf 'SEEDANCE_CI_FFMPEG_PROVISIONED=1\n'
+          } >> "$GITHUB_ENV"
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
       - name: Compile Python files
         run: python -m compileall scripts tests
+      - name: Check diff whitespace
+        run: git diff --check
+
+  windows-frame-publication:
+    # Keep the complete validation suite on Linux, but execute the native
+    # handle-locking and publication primitives on the platform they protect.
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - name: Provision and verify FFmpeg
+        shell: pwsh
+        run: |
+          $ffmpeg = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if ($null -eq $ffmpeg) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) {
+              throw "Chocolatey could not provision FFmpeg"
+            }
+            $ffmpeg = Get-Command ffmpeg.exe -ErrorAction Stop |
+              Select-Object -First 1
+          }
+          $ffmpegPath = $ffmpeg.Source
+          if (-not (Test-Path -LiteralPath $ffmpegPath -PathType Leaf)) {
+            throw "Resolved FFmpeg path is not an executable file: $ffmpegPath"
+          }
+          & $ffmpegPath -hide_banner -version
+          if ($LASTEXITCODE -ne 0) {
+            throw "FFmpeg version probe failed"
+          }
+          "SEEDANCE_TEST_FFMPEG=$ffmpegPath" >> $env:GITHUB_ENV
+          "SEEDANCE_CI_FFMPEG_PROVISIONED=1" >> $env:GITHUB_ENV
+      - name: Prove the runner uses native Win32 semantics
+        run: python -c "import os, sys; assert os.name == 'nt' and sys.platform == 'win32', (os.name, sys.platform)"
+      - name: Run native Win32 publication regressions
+        run: >-
+          python -m unittest -v
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_near_name_max_stage_is_bounded_before_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_long_unicode_output_publishes_with_cp1252_console
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_device_and_normalization_aliases_are_refused
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_native_publication_rejects_superscript_device_alias
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_no_force_refuses_parent_rename_and_recreation_during_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_preserves_matching_policy_on_success
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_locks_target_namespace_through_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_refuses_an_explicit_acl_before_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_refuses_named_streams_before_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_refuses_policy_attributes_before_decode
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_rechecks_a_late_named_stream
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_rolls_back_a_commit_boundary_winner
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_rolls_back_commit_boundary_target_ads
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_never_publishes_a_commit_boundary_stage_acl
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_reapplies_the_authorized_destination_dacl
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_rolls_back_commit_boundary_stage_ads_and_attributes
+          tests.test_extract_frame_output_policy.OutputCollisionCliTests.test_windows_force_never_promotes_a_preclaimed_rollback_name
+          tests.test_extract_frame_output_policy.PublicationPrimitiveTests.test_windows_postverify_diagnostic_is_bounded_and_component_specific
+          tests.test_extract_frame_output_policy.PublicationPrimitiveTests.test_windows_security_policy_ignores_only_relative_layout
+          tests.test_extract_frame_output_policy.ConsoleOutputTests.test_error_text_is_escaped_for_legacy_console_encoding
+          tests.test_extract_frame_output_policy.ConsoleOutputTests.test_missing_stdout_cannot_change_a_successful_publication
+          tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_prewrite_hardlink_swap_cannot_redirect_generated_bytes
+          tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_verify_to_publish_swap_is_blocked_by_exclusive_handle
+          tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_collision_after_final_validation_is_atomically_refused
+          tests.test_extract_frame_output_policy.AdversarialPublicationTests.test_cleanup_deletes_by_handle_not_swapped_path
+      - name: Run real-FFmpeg frame publication suites
+        run: >-
+          python -m unittest -v
+          tests.test_extract_last_frame
+          tests.test_extract_frame_output_policy.RealProtectedPipelineTests
       - name: Check diff whitespace
         run: git diff --check

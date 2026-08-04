@@ -21,9 +21,11 @@ metadata:
 
 # seedance-motion
 
+Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
+
 Use physical verbs and consequences. Motion should be observable on screen, timed within the clip, and assigned to a subject or object. Prefer one strong action with a visible endpoint over several vague actions competing for attention.
 
-Load `[ref:reference-workflow]` for video-motion references, `[ref:shot-list-continuity]` for action handoffs across shots, `[ref:examples-by-mode]` for safe edit, extend, and R2V patterns, and `[ref:directing-engine]` when motion is performance: translate the scene's emotion into one true visible gesture per beat - a playable action with an objective and subtext - instead of an emotion word the model cannot render.
+Load [reference-workflow](../../references/reference-workflow.md) for video-motion references, [shot-list-continuity](../../references/shot-list-continuity.md) for action handoffs across shots, [examples-by-mode](../../references/examples-by-mode.md) for safe edit, extend, and R2V patterns, and [directing-engine](../../references/directing-engine.md) when motion is performance: translate the scene's emotion into one true visible gesture per beat - a playable action with an objective and subtext - instead of an emotion word the model cannot render.
 
 ## Intent
 

@@ -29,7 +29,7 @@ Prompt pattern:
 | Profile | Final state | Use when |
 |---|---|---|
 | Resolve | action completes, motion settles, result readable | standalone clips, demos, anything that has to feel finished |
-| Extension anchor | motion, gaze, camera, and ambience still directionally live | the next clip continues this shot — see `[ref:continuation-handoff]` |
+| Extension anchor | motion, gaze, camera, and ambience still directionally live | the next clip continues this shot — see [continuation-handoff](continuation-handoff.md) |
 | Loop seam | position, motion phase, exposure, and audio can rejoin the opening | social loops, ambient backgrounds, hero product spins |
 | Hero hold | subject stable, unobstructed, and legible long enough to read | products, logos, packshots, anything a viewer must actually see |
 | Edit point | visual and audio land on a clean boundary | the clip is a cut, insert, or replacement in a larger edit |

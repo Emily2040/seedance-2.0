@@ -8,7 +8,7 @@ The root skill should route. Sub-skills should decide. References should carry d
 |---|---|---|
 | Root router | `SKILL.md` | Always. Owns the Fast Lane, the gates, the Sequence Gate, and the Load Map - nothing dense. |
 | Sub-skills | 28 `skills/seedance-*/SKILL.md` | When the task is that skill's job. Each is medium-weight: intent, contracts, and routing, not databases. |
-| References | 58 `references/*.md` | On demand, named by a gate or a Load Map row. Most are cheap; a few are heavy (below). |
+| References | 59 `references/*.md` | On demand, named by a gate or a Load Map row. Most are cheap; a few are heavy (below). |
 
 Do not move large databases back into active sub-skill bodies, and do not load a heavy reference by default.
 
@@ -16,7 +16,8 @@ Do not move large databases back into active sub-skill bodies, and do not load a
 
 Most references are small lookup tables loaded freely. A few are heavy and must be loaded only when the task needs them, never preemptively:
 
-- [`directing-engine.md`](directing-engine.md) - the directorial reasoning core (the Read, the Coherence Principle, the Director's Voice, the long-form spine). Loaded when scenes need distinct treatment or a voice must hold across clips; for a single clip, apply its coherence rule inline from memory instead.
+- [`directors-read.md`](directors-read.md) is the cheap exception to on-demand disclosure: every brief route loads this canonical classification and pre-compilation contract. Narrative work completes the full read; non-narrative work records the utility refusal without fabricated drama.
+- [`directing-engine.md`](directing-engine.md) - the deeper directorial reasoning layer (the Coherence Principle, instrument choices, Director's Voice, and long-form spine). Loaded after the canonical Director's Read when scenes need distinct treatment, a setup is unclear, or a voice must hold across clips.
 - [`directing-engine-genre-library.md`](directing-engine-genre-library.md) - 33 fully worked genre examples. Loaded only when the user wants a worked example in a specific genre, via the genre/examples Load Map row, never by the always-on Direction step.
 - [`api-status.md`](api-status.md), [`platform-surface-matrix.md`](platform-surface-matrix.md), [`api-workflow.md`](api-workflow.md) - dated, volatile platform facts. Loaded only behind the source gate, and kept fresh (see the freshness rule below).
 - [`pro-filmmaking-standards.md`](pro-filmmaking-standards.md) - the professional production spine. Loaded only behind the professional gate.

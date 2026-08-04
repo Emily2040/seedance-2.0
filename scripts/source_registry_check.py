@@ -2,13 +2,38 @@
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import re
+import subprocess
 from datetime import date
 from pathlib import Path
 
+if __package__:
+    from .strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        read_repo_text,
+        validate_repo_input_path,
+    )
+else:
+    from strict_json import (
+        diagnostic_path,
+        diagnostic_text,
+        load_json,
+        read_repo_text,
+        validate_repo_input_path,
+    )
+
 REQUIRED_LABELS = ["confirmed", "volatile", "field-observed", "unverified", "internal"]
 REQUIRED_OFFICIAL_MARKERS = ["seed.bytedance.com", "volcengine.com", "arxiv.org", "runwayml.com"]
+# Match one logical metadata line on both LF and CRLF checkouts.  ``$`` in
+# multiline mode stops before ``\n`` but not before the preceding ``\r``;
+# excluding line terminators from the value keeps the parsed date independent
+# of Git's working-tree newline conversion.
+LAST_VERIFIED_FIELD = re.compile(
+    r"^last_verified:[ \t]*([^\r\n]*?)[ \t]*\r?$", re.M
+)
 
 # Wall-clock staleness thresholds for references/source-registry.md.
 STALE_WARN_DAYS = 14
@@ -22,6 +47,90 @@ def parse_date(text: str) -> date | None:
         return None
 
 
+def repository_head_date(root: Path) -> date | None:
+    """Return HEAD's stable committer date, or None outside a Git checkout.
+
+    Pull-request validation needs an upper bound for impossible future
+    verification stamps, but the wall clock is not a property of the commit.
+    Git's ``%cs`` value is stored in the commit object, so every runner judging
+    the same HEAD uses the same date.  Downloaded archives have no such anchor;
+    they still receive syntax and checked-in cross-file consistency checks.
+    """
+    try:
+        top_level_result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    # `git -C` searches parent directories.  Without this containment check,
+    # an extracted archive nested inside an unrelated checkout would inherit
+    # that checkout's HEAD date and receive a false future-date verdict.
+    top_level = top_level_result.stdout.rstrip("\r\n")
+    try:
+        if not top_level or Path(top_level).resolve() != root.resolve():
+            return None
+    except OSError:
+        return None
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "show", "-s", "--format=%cs", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    raw = result.stdout.strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        return None
+    return parse_date(raw)
+
+
+def checked_in_last_verified(
+    text: str, label: str, today: date | None, errors: list[str]
+) -> date | None:
+    """Read one explicit checked-in verification stamp.
+
+    Other dates in the document may describe launches, releases, retrievals, or
+    historical events. They are not evidence that this document was re-read.
+    """
+    values = LAST_VERIFIED_FIELD.findall(text)
+    if not values:
+        errors.append(f"{label} missing last_verified: YYYY-MM-DD")
+        return None
+    if len(values) != 1:
+        errors.append(f"{label} must contain exactly one last_verified field")
+        return None
+    raw = values[0]
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        errors.append(f"{label} has malformed last_verified `{raw}`; expected YYYY-MM-DD")
+        return None
+    verified = parse_date(raw)
+    if verified is None:
+        errors.append(f"{label} has invalid last_verified date `{raw}`")
+        return None
+    # The caller supplies either today's date for explicit freshness
+    # enforcement or the stable HEAD date for pull-request validation.  It
+    # passes None only when no deterministic anchor exists (for example, a
+    # downloaded archive with no Git metadata).
+    if today is not None and verified > today:
+        days = (verified - today).days
+        errors.append(
+            f"{label} last_verified {verified.isoformat()} is {days} "
+            f"day{'s' if days != 1 else ''} in the future"
+        )
+        return None
+    return verified
+
+
 def freshness_findings(
     verified: date, today: date, enforce: bool
 ) -> tuple[list[str], list[str]]:
@@ -33,6 +142,13 @@ def freshness_findings(
     is requested explicitly (scheduled review or release).
     """
     age = (today - verified).days
+    if age < 0:
+        days = -age
+        message = (
+            f"source-registry.md last_verified {verified.isoformat()} is {days} "
+            f"day{'s' if days != 1 else ''} in the future"
+        )
+        return ([message], []) if enforce else ([], [message])
     if age <= STALE_WARN_DAYS:
         return [], []
     message = f"source-registry.md last_verified is {age} days old"
@@ -42,16 +158,17 @@ def freshness_findings(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Validate checked-in source metadata offline; no URLs are fetched."
+    )
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument("--strict", action="store_true")
     parser.add_argument(
         "--enforce-freshness",
         action="store_true",
         help=(
-            "fail when source-registry.md last_verified is older than "
+            "fail when checked-in source-registry.md last_verified metadata is older than "
             f"{STALE_ERROR_DAYS} days; intended for scheduled review and release, "
-            "not for per-pull-request validation"
+            "not for per-pull-request validation; does not verify upstream claims"
         ),
     )
     args = parser.parse_args()
@@ -59,23 +176,34 @@ def main() -> int:
     root = Path(args.repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
+    freshness_date = date.today() if args.enforce_freshness else None
+    ordering_date = freshness_date or repository_head_date(root)
+
+    references = root / "references"
+    if os.path.lexists(references):
+        try:
+            validate_repo_input_path(root, references)
+        except ValueError as exc:
+            errors.append(f"references: {exc}")
 
     registry = root / "references" / "source-registry.md"
-    if not registry.exists():
+    if not os.path.lexists(registry):
         errors.append("missing references/source-registry.md")
     else:
-        text = registry.read_text(encoding="utf-8")
-        match = re.search(r"^last_verified:\s*(\d{4}-\d{2}-\d{2})$", text, re.M)
-        if not match:
-            errors.append("source-registry.md missing last_verified: YYYY-MM-DD")
-        else:
-            verified = parse_date(match.group(1))
-            if verified:
-                stale_errors, stale_warnings = freshness_findings(
-                    verified, date.today(), args.enforce_freshness
-                )
-                errors.extend(stale_errors)
-                warnings.extend(stale_warnings)
+        try:
+            text = read_repo_text(root=root, path=registry)
+        except ValueError as exc:
+            errors.append(f"references/source-registry.md: {exc}")
+            text = ""
+        verified = checked_in_last_verified(
+            text, "source-registry.md", ordering_date, errors
+        )
+        if verified and freshness_date is not None:
+            stale_errors, stale_warnings = freshness_findings(
+                verified, freshness_date, True
+            )
+            errors.extend(stale_errors)
+            warnings.extend(stale_warnings)
 
         for label in REQUIRED_LABELS:
             if f"`{label}`" not in text:
@@ -103,7 +231,7 @@ def main() -> int:
         errors.append("missing data/sources.seedance-2026-05-30.json")
     else:
         try:
-            data = json.loads(data_path.read_text(encoding="utf-8"))
+            data = load_json(data_path, expected_type=dict, root=root)
         except Exception as exc:
             errors.append(f"source data JSON parse error: {exc}")
         else:
@@ -122,9 +250,18 @@ def main() -> int:
     # api-status.md. This compares two checked-in dates, so its verdict depends only on
     # repository content and never on the wall clock. It stays a hard error.
     api_status = root / "references" / "api-status.md"
-    if api_status.exists():
-        anchor_match = re.search(r"^last_verified:\s*(\d{4}-\d{2}-\d{2})$", api_status.read_text(encoding="utf-8"), re.M)
-        anchor = parse_date(anchor_match.group(1)) if anchor_match else None
+    if os.path.lexists(api_status):
+        try:
+            api_status_text = read_repo_text(root=root, path=api_status)
+        except ValueError as exc:
+            errors.append(f"references/api-status.md: {exc}")
+            api_status_text = ""
+        anchor = checked_in_last_verified(
+            api_status_text,
+            "api-status.md",
+            ordering_date,
+            errors,
+        )
         if anchor:
             freshness_critical = [
                 "platform-surface-matrix.md", "api-workflow.md", "model-name-map.md",
@@ -132,13 +269,24 @@ def main() -> int:
             ]
             for name in freshness_critical:
                 ref = root / "references" / name
-                if not ref.exists():
+                if not os.path.lexists(ref):
                     continue
-                parsed = [parse_date(d) for d in re.findall(r"\d{4}-\d{2}-\d{2}", ref.read_text(encoding="utf-8"))]
-                parsed = [d for d in parsed if d]
-                if not parsed:
+                try:
+                    ref_text = read_repo_text(root=root, path=ref)
+                except ValueError as exc:
+                    errors.append(
+                        f"{diagnostic_path(ref.relative_to(root))}: {exc}"
+                    )
                     continue
-                drift = (anchor - max(parsed)).days
+                ref_verified = checked_in_last_verified(
+                    ref_text,
+                    name,
+                    ordering_date,
+                    errors,
+                )
+                if ref_verified is None:
+                    continue
+                drift = (anchor - ref_verified).days
                 if drift > 30:
                     errors.append(
                         f"{name} is {drift} days behind api-status last_verified ({anchor.isoformat()}); "
@@ -148,16 +296,20 @@ def main() -> int:
     if warnings:
         print("WARNINGS:")
         for warning in warnings:
-            print(f"- {warning}")
+            print(diagnostic_text(f"- {warning}"))
         print()
 
     if errors:
         print("Source registry errors:")
         for error in errors:
-            print(f"- {error}")
+            print(diagnostic_text(f"- {error}"))
         return 1
 
-    print("Source registry check passed.")
+    print("Offline source metadata check passed.")
+    print(
+        "Boundary: checked-in dates, labels, and source markers were validated; "
+        "this does not fetch URLs or verify upstream claims live."
+    )
     return 0
 
 
