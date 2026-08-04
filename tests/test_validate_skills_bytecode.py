@@ -9,6 +9,7 @@ CI never reproduced it because the workflow sets PYTHONDONTWRITEBYTECODE.
 from __future__ import annotations
 
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import validate_skills  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+GIT = shutil.which("git")
 
 
 def git(repo: Path, *args: str) -> None:
@@ -31,6 +33,7 @@ class TrackedFilesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(validate_skills.tracked_files(Path(tmp)))
 
+    @unittest.skipUnless(GIT, "requires the Git executable")
     def test_lists_tracked_paths_in_a_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -41,6 +44,7 @@ class TrackedFilesTests(unittest.TestCase):
             self.assertIsNotNone(tracked)
             self.assertIn("kept.py", tracked)
 
+    @unittest.skipUnless(GIT, "requires the Git executable")
     def test_untracked_bytecode_is_not_listed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
