@@ -698,10 +698,27 @@ def trusted_file_fingerprint(path: str | Path) -> dict[str, object]:
     }
 
 
+def windows_venv_runner_source(
+    scripts: str | Path,
+    version_info: tuple[int, int],
+) -> Path:
+    """Return the exact console launcher copied by a supported Windows ``venv``."""
+    # CPython 3.13 moved the copied console launcher from ``python.exe`` to
+    # ``venvlauncher.exe``. Select by interpreter version instead of accepting
+    # whichever executable happens to exist: a missing expected launcher must
+    # fail closed rather than silently changing the trust anchor.
+    runner_name = "venvlauncher.exe" if version_info >= (3, 13) else "python.exe"
+    source = Path(scripts) / runner_name
+    if not source.is_file():
+        raise SystemExit(f"trusted stdlib venv runner is missing: {source}")
+    return source
+
+
 def trusted_venv_runner_source() -> Path:
     """Return the stdlib launcher/base executable that `venv` must install."""
     if os.name == "nt":
-        source = Path(sys.base_prefix) / "Lib" / "venv" / "scripts" / "nt" / "python.exe"
+        scripts = Path(sys.base_prefix) / "Lib" / "venv" / "scripts" / "nt"
+        source = windows_venv_runner_source(scripts, tuple(sys.version_info[:2]))
     else:
         source = trusted_base_python()
     if not source.is_file():

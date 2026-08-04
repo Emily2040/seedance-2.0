@@ -648,6 +648,41 @@ class OutlinedTypeTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, "not the trusted stdlib venv launcher"):
                     gen.require_build_env_trust(build_env, state="sealed")
 
+    def test_windows_venv_runner_source_selects_the_modern_launcher(self) -> None:
+        """CPython 3.13 venvs copy venvlauncher.exe into Scripts/python.exe."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            scripts = Path(temp)
+            modern = scripts / "venvlauncher.exe"
+            legacy = scripts / "python.exe"
+            modern.write_bytes(b"modern-launcher")
+            legacy.write_bytes(b"legacy-lookalike")
+
+            self.assertEqual(
+                gen.windows_venv_runner_source(scripts, (3, 13)),
+                modern,
+            )
+            modern.unlink()
+            with self.assertRaisesRegex(SystemExit, "venvlauncher\\.exe"):
+                gen.windows_venv_runner_source(scripts, (3, 13))
+
+    def test_windows_venv_runner_source_selects_the_legacy_launcher(self) -> None:
+        """CPython 3.11-3.12 venvs copy the stdlib's legacy python.exe."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            scripts = Path(temp)
+            legacy = scripts / "python.exe"
+            modern = scripts / "venvlauncher.exe"
+            legacy.write_bytes(b"legacy-launcher")
+            modern.write_bytes(b"modern-lookalike")
+
+            self.assertEqual(
+                gen.windows_venv_runner_source(scripts, (3, 12)),
+                legacy,
+            )
+
     def test_external_trust_rejects_runner_config_marker_and_script_tampering(self) -> None:
         import build_masthead_outlines as gen
 
