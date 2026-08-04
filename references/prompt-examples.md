@@ -16,9 +16,11 @@ Use these examples as patterns, not fixed scripts. Preserve reference tags exact
 
 ## T2V Character Drama
 
-**Mode:** T2V. **Why it works:** the emotional turn is shown through gesture and timing.
+**Mode:** T2V. **Why it works:** the interrupted tear, repeated smoothing,
+crooked green sticker, held framing, and key-and-paper sound carry the turn
+without a tearful close-up or score swell.
 
-`Character A stands in a narrow apartment hallway under a flickering warm ceiling light. She slowly lowers an unopened envelope, breath catches, eyes fixed on the closed door. Camera: locked medium close-up with a very slight push-in over five seconds. Lighting: warm overhead practical with cool rain reflection on the wall. Sound: distant rain, no music. End on her hand tightening around the paper.`
+`Character A stands in a narrow apartment hallway holding an unopened envelope sealed with a crooked green library-return sticker. A key enters the lock outside. She starts to tear the envelope, stops with the paper stretched between both thumbs, smooths the same creased corner flat twice, and tucks it behind her back before the lock turns. Camera: locked waist-up frame; one slow push-in begins on the key scrape and stops on her hands. Lighting: the warm ceiling practical flickers once while cool rain reflection holds on the wall. Sound: key scrape, paper crease, distant rain; hold the silence instead of adding music. End before the door opens, with her shoulders square and the envelope still hidden.`
 
 ## I2V Portrait Micro-Performance
 
@@ -52,9 +54,11 @@ Use these examples as patterns, not fixed scripts. Preserve reference tags exact
 
 ## Action Beat
 
-**Mode:** T2V. **Why it works:** action has one objective, one obstacle, one endpoint.
+**Mode:** T2V. **Why it works:** the real-time jump has one objective, one
+obstacle, one contained pain response, one canister-specific continuity anchor,
+and one held endpoint instead of a speed-ramped impact montage.
 
-`Original courier sprints across a rain-slick rooftop toward a closing service door. He jumps a narrow gap, lands hard with one knee down, then reaches the door just before it locks. Camera: low handheld tracking from behind, slight breathing sway, no orbit. Lighting: cold rooftop floodlights and wet reflections. Sound: heavy breathing, rain impacts, metal door buzzer at the endpoint.`
+`Original courier sprints across a rain-slick rooftop toward a closing service door, a dented round canister secured under the left arm by one strip of blue cloth tape. The courier clears a narrow gap and lands hard on the right knee. The right hand starts toward the knee, then clamps the canister strap instead; the left forearm catches the door before the lock engages. Camera: one continuous low track from behind, the jump in real time, settling into a held medium frame on the forearm against the door. Cold roof floodlights edge the rain and wet metal. Sound: breath, shoe impact, canister-buckle rattle, motor buzzer; hold on the buzzer and trembling arm instead of cutting to an impact montage. End with the door stopped half-open and the canister dry.`
 
 ## Safe Original Animation
 

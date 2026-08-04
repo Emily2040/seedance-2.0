@@ -70,4 +70,4 @@ Field-observed technique; test before promising results. Probably the most under
 
 ## Sequence Transfer Template
 
-`[Video 1] is the accepted previous clip and controls only the actual opening state, camera phase, motion phase, ambience, and environment arrangement. @Image 1 controls canonical identity. Preserve both tags exactly. Do not copy unrelated identity, costume, logo, or future action from any reference.`
+`@Video1 is the accepted previous clip and controls only the actual observed opening state, camera phase, motion phase, ambience, and environment arrangement. @Image1 controls canonical identity. Preserve both tags exactly. Do not copy unrelated identity, costume, logo, or future action from any reference.`
