@@ -31,6 +31,7 @@ import http.client
 import json
 import os
 import re
+import secrets
 import shlex
 import stat
 import sys
@@ -79,7 +80,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "8ddd7bf542171904abffea38d10eff5fc359607f59dee4abf99a507f42956986"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "cde7848ebda33e8d98a111df67620414caecefa88a5ada6fe2ff3ae7123a0883"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -246,6 +247,10 @@ class HarnessError(RuntimeError):
 
 class CommittedCleanupError(HarnessError):
     """The ledger commit verified, but obsolete recovery cleanup failed."""
+
+
+class LedgerDestinationAppearedError(HarnessError):
+    """Atomic no-replace publication found a concurrent destination winner."""
 
 
 class ProviderResponseError(HarnessError):
@@ -3810,13 +3815,10 @@ def _unlink_bound_atomic_artifact(
     _fsync_parent_directory(path)
 
 
-def _open_bound_new_ledger_descriptor(path: Path) -> int:
-    """Open one writable inode while allowing its atomic publication rename."""
+def _create_windows_bound_new_ledger_descriptor(path: Path) -> int:
+    """Create the Windows stage with one zero-share publication handle."""
 
     flags = os.O_RDWR | getattr(os, "O_BINARY", 0)
-    if os.name != "nt":
-        flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
-        return os.open(path, flags)
 
     import ctypes
     import msvcrt
@@ -3847,14 +3849,16 @@ def _open_bound_new_ledger_descriptor(path: Path) -> int:
     handle = create_file(
         absolute,
         0x80000000 | 0x40000000 | 0x00010000,  # read | write | DELETE
-        0x1 | 0x2 | 0x4,  # retain the inode while allowing namespace races to fail safe
+        0,  # exclude writers, renames, deletion, and source-name substitution
         None,
-        3,  # OPEN_EXISTING
-        0x00200000,  # FILE_FLAG_OPEN_REPARSE_POINT
+        1,  # CREATE_NEW
+        0x00000080,  # FILE_ATTRIBUTE_NORMAL
         None,
     )
     if handle == wintypes.HANDLE(-1).value:
         error = ctypes.get_last_error()
+        if error in (80, 183):
+            raise FileExistsError(error, "ledger stage already exists", str(path))
         raise OSError(error, ctypes.FormatError(error), str(path))
     try:
         descriptor = msvcrt.open_osfhandle(int(handle), flags)
@@ -3869,7 +3873,9 @@ def _open_bound_new_ledger_descriptor(path: Path) -> int:
     return descriptor
 
 
-def _open_bound_ledger_directory(path: Path) -> tuple[int, tuple[int, int]]:
+def _open_bound_ledger_directory(
+    path: Path,
+) -> tuple[int, tuple[int, int]]:
     """Retain the exact destination directory used by no-replace publication."""
 
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
@@ -3912,7 +3918,7 @@ def _open_bound_ledger_directory(path: Path) -> tuple[int, tuple[int, int]]:
         close_handle.restype = wintypes.BOOL
         handle = create_file(
             absolute,
-            0x80000000,  # GENERIC_READ, including directory traverse/list access
+            0x00000020 | 0x00000080 | 0x00100000,
             0x1 | 0x2 | 0x4,
             None,
             3,  # OPEN_EXISTING
@@ -3944,6 +3950,87 @@ def _open_bound_ledger_directory(path: Path) -> tuple[int, tuple[int, int]]:
         return descriptor, (opened.st_dev, opened.st_ino)
     except BaseException:
         os.close(descriptor)
+        raise
+
+
+def _mark_windows_descriptor_for_deletion(
+    descriptor: int,
+    label: str,
+) -> bool:
+    """Mark the exact retained Windows object for deletion, never a pathname."""
+
+    if os.name != "nt" or descriptor < 0:
+        return False
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    class FileDispositionInfo(ctypes.Structure):
+        _fields_ = (("DeleteFile", wintypes.BOOL),)
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    setter = kernel32.SetFileInformationByHandle
+    setter.argtypes = (
+        wintypes.HANDLE,
+        ctypes.c_int,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+    )
+    setter.restype = wintypes.BOOL
+    disposition = FileDispositionInfo(1)
+    if setter(
+        wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
+        4,  # FileDispositionInfo
+        ctypes.byref(disposition),
+        ctypes.sizeof(disposition),
+    ):
+        return True
+    return False
+
+
+def _create_windows_new_ledger_stage(
+    path: Path,
+) -> tuple[int, int, tuple[int, int], Path]:
+    """Create one zero-share source beside the retained target directory."""
+
+    target_descriptor = -1
+    source_descriptor = -1
+    try:
+        target_descriptor, target_identity = _open_bound_ledger_directory(path.parent)
+        target_digest = hashlib.sha256(
+            path.name.encode("utf-8", errors="surrogatepass")
+        ).hexdigest()[:16]
+        for _attempt in range(64):
+            source_path = (
+                path.parent
+                / f".ledger-{target_digest}-{secrets.token_hex(20)}.tmp"
+            )
+            try:
+                source_descriptor = _create_windows_bound_new_ledger_descriptor(
+                    source_path
+                )
+            except FileExistsError:
+                continue
+            break
+        else:
+            raise HarnessError("could not allocate a unique Windows ledger stage")
+        _verify_bound_ledger_directory(
+            target_descriptor,
+            target_identity,
+            path.parent,
+        )
+        return (
+            source_descriptor,
+            target_descriptor,
+            target_identity,
+            source_path,
+        )
+    except BaseException:
+        if source_descriptor >= 0:
+            _mark_windows_descriptor_for_deletion(source_descriptor, "ledger stage")
+            os.close(source_descriptor)
+        if target_descriptor >= 0:
+            os.close(target_descriptor)
         raise
 
 
@@ -4077,7 +4164,7 @@ def _publish_linux_bound_new_ledger(
     if not error:
         return
     if error == errno.EEXIST:
-        raise HarnessError(
+        raise LedgerDestinationAppearedError(
             "ledger destination appeared during atomic write and was preserved"
         )
     raise HarnessError(
@@ -4096,83 +4183,60 @@ def _publish_windows_bound_new_ledger(
     import msvcrt
     from ctypes import wintypes
 
-    class FileRenameInfoEx(ctypes.Structure):
+    class FileRenameInfo(ctypes.Structure):
         _fields_ = (
-            ("Flags", wintypes.DWORD),
+            ("ReplaceIfExists", ctypes.c_ubyte),
             ("RootDirectory", wintypes.HANDLE),
             ("FileNameLength", wintypes.DWORD),
             ("FileName", wintypes.WCHAR * 1),
         )
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    final_name = kernel32.GetFinalPathNameByHandleW
-    final_name.argtypes = (
-        wintypes.HANDLE,
-        wintypes.LPWSTR,
-        wintypes.DWORD,
-        wintypes.DWORD,
-    )
-    final_name.restype = wintypes.DWORD
-    directory_handle = wintypes.HANDLE(msvcrt.get_osfhandle(directory_descriptor))
-    required = final_name(directory_handle, None, 0, 0)
-    if not required:
-        error = ctypes.get_last_error()
-        raise HarnessError(
-            f"cannot resolve the retained ledger directory (Windows error {error})"
-        )
-    path_buffer = ctypes.create_unicode_buffer(required + 1)
-    written = final_name(directory_handle, path_buffer, len(path_buffer), 0)
-    if not written or written >= len(path_buffer):
-        error = ctypes.get_last_error()
-        raise HarnessError(
-            f"cannot read the retained ledger directory path (Windows error {error})"
-        )
-    resolved = path_buffer.value
-    if resolved.startswith("\\\\?\\UNC\\"):
-        dos_directory = "\\\\" + resolved[8:]
-    elif resolved.startswith("\\\\?\\"):
-        dos_directory = resolved[4:]
-    else:
-        raise HarnessError("retained ledger directory returned an unsupported path")
-    dos_target = str(Path(dos_directory) / destination_name)
-    native_target = (
-        "\\??\\UNC\\" + dos_target[2:]
-        if dos_target.startswith("\\\\")
-        else "\\??\\" + dos_target
-    )
-    encoded_name = native_target.encode("utf-16-le")
-    offset = FileRenameInfoEx.FileName.offset
-    buffer = ctypes.create_string_buffer(ctypes.sizeof(FileRenameInfoEx) + len(encoded_name))
-    info = ctypes.cast(buffer, ctypes.POINTER(FileRenameInfoEx)).contents
-    info.Flags = 0
-    # The target path comes exclusively from the retained directory handle.
-    # Win32 rejects a non-null RootDirectory for FileRenameInfoEx on supported
-    # desktop filesystems, so use the equivalent native absolute handle path.
-    info.RootDirectory = None
+    class IoStatusValue(ctypes.Union):
+        _fields_ = (("Status", wintypes.LONG), ("Pointer", wintypes.LPVOID))
+
+    class IoStatusBlock(ctypes.Structure):
+        _anonymous_ = ("Value",)
+        _fields_ = (("Value", IoStatusValue), ("Information", ctypes.c_size_t))
+
+    encoded_name = destination_name.encode("utf-16-le")
+    offset = FileRenameInfo.FileName.offset
+    buffer = ctypes.create_string_buffer(offset + len(encoded_name))
+    info = ctypes.cast(buffer, ctypes.POINTER(FileRenameInfo)).contents
+    info.ReplaceIfExists = 0
+    info.RootDirectory = wintypes.HANDLE(msvcrt.get_osfhandle(directory_descriptor))
     info.FileNameLength = len(encoded_name)
     ctypes.memmove(ctypes.addressof(buffer) + offset, encoded_name, len(encoded_name))
-    setter = kernel32.SetFileInformationByHandle
+    ntdll = ctypes.WinDLL("ntdll")
+    setter = ntdll.NtSetInformationFile
     setter.argtypes = (
         wintypes.HANDLE,
-        ctypes.c_int,
+        ctypes.POINTER(IoStatusBlock),
         wintypes.LPVOID,
         wintypes.DWORD,
+        ctypes.c_int,
     )
-    setter.restype = wintypes.BOOL
-    if setter(
+    setter.restype = wintypes.LONG
+    io_status = IoStatusBlock()
+    status = int(setter(
         wintypes.HANDLE(msvcrt.get_osfhandle(descriptor)),
-        22,  # FileRenameInfoEx
+        ctypes.byref(io_status),
         buffer,
         len(buffer),
-    ):
+        10,  # FileRenameInformation; ReplaceIfExists=False is no-replace
+    ))
+    if status >= 0:
         return
-    error = ctypes.get_last_error()
+    converter = ntdll.RtlNtStatusToDosError
+    converter.argtypes = (wintypes.LONG,)
+    converter.restype = wintypes.ULONG
+    error = int(converter(status))
     if error in (80, 183):
-        raise HarnessError(
+        raise LedgerDestinationAppearedError(
             "ledger destination appeared during atomic write and was preserved"
         )
     raise HarnessError(
-        f"could not publish the bound Windows ledger handle (Windows error {error})"
+        "could not publish the bound Windows ledger handle "
+        f"(NTSTATUS 0x{ctypes.c_ulong(status).value:08x}; Windows error {error})"
     )
 
 
@@ -4252,26 +4316,17 @@ def _atomic_write_text(
     path.parent.mkdir(parents=True, exist_ok=True)
     destination_state = _snapshot_ledger_destination(path)
     temporary: Path | None
-    temporary_directory: Path | None = None
-    temporary_directory_identity: tuple[int, int] | None = None
+    new_destination_descriptor = -1
     target_directory_descriptor = -1
     target_directory_identity: tuple[int, int] | None = None
     if not destination_state.existed and os.name == "nt":
-        temporary_directory = Path(
-            tempfile.mkdtemp(dir=path.parent, prefix=f".{path.name}.stage-")
-        )
-        directory_status = temporary_directory.lstat()
-        temporary_directory_identity = (
-            directory_status.st_dev,
-            directory_status.st_ino,
-        )
-        descriptor, temporary_name = tempfile.mkstemp(
-            dir=temporary_directory,
-            prefix="ledger.",
-            suffix=".tmp",
-            text=False,
-        )
-        temporary = Path(temporary_name)
+        (
+            new_destination_descriptor,
+            target_directory_descriptor,
+            target_directory_identity,
+            temporary,
+        ) = _create_windows_new_ledger_stage(path)
+        descriptor = -1
     elif destination_state.existed:
         descriptor, temporary_name = tempfile.mkstemp(
             dir=path.parent,
@@ -4286,6 +4341,8 @@ def _atomic_write_text(
             target_directory_descriptor,
             target_directory_identity,
         ) = _open_linux_unnamed_ledger(path)
+        new_destination_descriptor = descriptor
+        descriptor = -1
         temporary = None
     temporary_signature: tuple[int, int, int, int] | None = None
     temporary_link_count = 0
@@ -4295,9 +4352,10 @@ def _atomic_write_text(
     backup_link_count = 0
     restore: Path | None = None
     restore_descriptor = -1
-    new_destination_descriptor = -1
     replaced = False
     commit_verified = False
+    publication_collision = False
+    publication_armed = False
 
     def verify_replacement() -> None:
         if temporary_signature is None:
@@ -4361,41 +4419,10 @@ def _atomic_write_text(
         )
 
     def cleanup_temporary_after_failure() -> None:
-        """Delete a new-ledger quarantine only while it names our original file."""
+        """Existing-destination stages retain their pathname-bound cleanup."""
 
-        if temporary is None:
-            return
-        if destination_state.existed or temporary_signature is None:
+        if destination_state.existed and temporary is not None:
             _best_effort_unlink_atomic_artifact(temporary)
-            return
-        try:
-            status = temporary.lstat()
-            if (
-                stat.S_ISLNK(status.st_mode)
-                or not stat.S_ISREG(status.st_mode)
-                or (status.st_dev, status.st_ino) != temporary_signature[:2]
-                or status.st_nlink != temporary_link_count
-            ):
-                return
-            temporary.unlink()
-            _fsync_parent_directory(temporary)
-        except (HarnessError, OSError):
-            pass
-
-    def cleanup_windows_stage_directory() -> None:
-        if temporary_directory is None or temporary_directory_identity is None:
-            return
-        try:
-            status = temporary_directory.lstat()
-            if (
-                not stat.S_ISDIR(status.st_mode)
-                or stat.S_ISLNK(status.st_mode)
-                or (status.st_dev, status.st_ino) != temporary_directory_identity
-            ):
-                return
-            temporary_directory.rmdir()
-        except OSError:
-            pass
 
     def close_pending_descriptors() -> None:
         nonlocal descriptor, backup_descriptor, restore_descriptor
@@ -4410,10 +4437,25 @@ def _atomic_write_text(
         backup_descriptor = -1
         restore_descriptor = -1
 
-    def close_new_destination_descriptor() -> None:
+    def close_new_destination_descriptor(*, delete_unpublished_source: bool) -> None:
         nonlocal new_destination_descriptor, target_directory_descriptor
-        values = (new_destination_descriptor, target_directory_descriptor)
+        if (
+            delete_unpublished_source
+            and os.name == "nt"
+            and new_destination_descriptor >= 0
+        ):
+            _mark_windows_descriptor_for_deletion(
+                new_destination_descriptor,
+                "unpublished ledger stage",
+            )
+        source_value = new_destination_descriptor
         new_destination_descriptor = -1
+        if source_value >= 0:
+            try:
+                os.close(source_value)
+            except OSError:
+                pass
+        values = (target_directory_descriptor,)
         target_directory_descriptor = -1
         for value in values:
             if value < 0:
@@ -4541,10 +4583,13 @@ def _atomic_write_text(
         replaced = False
 
     try:
-        if not destination_state.existed and temporary is None:
-            new_destination_descriptor = descriptor
-            descriptor = -1
-            handle = os.fdopen(os.dup(new_destination_descriptor), "wb")
+        if not destination_state.existed:
+            write_descriptor = os.dup(new_destination_descriptor)
+            try:
+                handle = os.fdopen(write_descriptor, "wb")
+            except BaseException:
+                os.close(write_descriptor)
+                raise
         else:
             handle = os.fdopen(descriptor, "wb")
             descriptor = -1  # ownership transferred to handle
@@ -4552,15 +4597,17 @@ def _atomic_write_text(
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        if temporary is None:
-            if destination_state.posix_mode is None:
-                raise HarnessError("new ledger POSIX mode is unavailable")
-            os.fchmod(new_destination_descriptor, destination_state.posix_mode)
+        if not destination_state.existed:
+            if os.name == "posix":
+                if destination_state.posix_mode is None:
+                    raise HarnessError("new ledger POSIX mode is unavailable")
+                os.fchmod(new_destination_descriptor, destination_state.posix_mode)
             temporary_status = os.fstat(new_destination_descriptor)
             temporary_signature = _ledger_status_signature(temporary_status)
             temporary_link_count = temporary_status.st_nlink
-            if temporary_link_count != 0:
-                raise HarnessError("unnamed temporary ledger unexpectedly has links")
+            expected_links = 0 if os.name == "posix" else 1
+            if temporary_link_count != expected_links:
+                raise HarnessError("temporary ledger has an unexpected link count")
             _verify_ledger_status(
                 temporary_status,
                 destination_state,
@@ -4636,20 +4683,6 @@ def _atomic_write_text(
                 "rollback ledger",
             )
             _fsync_parent_directory(backup)
-        if not destination_state.existed and os.name == "nt":
-            if temporary is None:
-                raise HarnessError("Windows temporary ledger path is unavailable")
-            new_destination_descriptor = _open_bound_new_ledger_descriptor(temporary)
-            target_directory_descriptor, target_directory_identity = (
-                _open_bound_ledger_directory(path.parent)
-            )
-            _verify_bound_new_ledger_descriptor(
-                new_destination_descriptor,
-                temporary_signature,
-                temporary_link_count,
-                "temporary ledger",
-                require_unchanged_content=True,
-            )
         if before_replace is not None:
             before_replace()
         _verify_original_ledger_destination(path, destination_state)
@@ -4726,20 +4759,30 @@ def _atomic_write_text(
                 if temporary is None:
                     raise HarnessError("temporary ledger path is unavailable")
                 os.replace(temporary, path)
-            elif os.name == "nt":
-                _publish_windows_bound_new_ledger(
-                    new_destination_descriptor,
-                    target_directory_descriptor,
-                    path.name,
-                )
+                replaced = True
             else:
-                _publish_linux_bound_new_ledger(
-                    new_destination_descriptor,
-                    target_directory_descriptor,
-                    path.name,
-                )
-                temporary_link_count = 1
-            replaced = True
+                original_link_count = temporary_link_count
+                publication_armed = True
+                replaced = True  # the native helper may commit before raising
+                if os.name == "posix":
+                    temporary_link_count = 1
+                try:
+                    if os.name == "nt":
+                        _publish_windows_bound_new_ledger(
+                            new_destination_descriptor,
+                            target_directory_descriptor,
+                            path.name,
+                        )
+                    else:
+                        _publish_linux_bound_new_ledger(
+                            new_destination_descriptor,
+                            target_directory_descriptor,
+                            path.name,
+                        )
+                except LedgerDestinationAppearedError:
+                    publication_collision = True
+                    temporary_link_count = original_link_count
+                    raise
             if os.name == "posix" and target_directory_descriptor >= 0:
                 os.fsync(target_directory_descriptor)
             else:
@@ -4774,8 +4817,7 @@ def _atomic_write_text(
             after_replace()
         verify_replacement()
         commit_verified = True
-        close_new_destination_descriptor()
-        cleanup_windows_stage_directory()
+        close_new_destination_descriptor(delete_unpublished_source=False)
         if backup is not None:
             try:
                 if backup_signature is None or destination_state.sha256 is None:
@@ -4833,9 +4875,14 @@ def _atomic_write_text(
                         "be invalidated"
                     ) from rollback_error
         finally:
-            close_new_destination_descriptor()
+            close_new_destination_descriptor(
+                delete_unpublished_source=(
+                    (os.name == "nt" and not destination_state.existed)
+                    or publication_collision
+                    or not publication_armed
+                )
+            )
         cleanup_temporary_after_failure()
-        cleanup_windows_stage_directory()
         if restore is not None:
             _best_effort_unlink_atomic_artifact(restore)
         if backup is not None and not commit_verified:
