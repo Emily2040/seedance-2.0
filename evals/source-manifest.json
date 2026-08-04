@@ -34,12 +34,12 @@
     {
       "path": "references/api-status.md",
       "role": "responder",
-      "sha256": "f67638b6ec4231f1483a517272eb9bc454c6ce62531888b0bc91cb465fa3244c"
+      "sha256": "a7836f0f9432878308d207a935bc07be5072cbe0e7678adf125e27ab6157d82e"
     },
     {
       "path": "references/api-workflow.md",
       "role": "responder",
-      "sha256": "2cbe21ad9a8ff201bee1be044566debfd3a27c96b4de3059629fe22edea0aba4"
+      "sha256": "be6c9b709f7e2667ae24eac54de04a2c1a5d2d4fbf474b191affc22ea1a732aa"
     },
     {
       "path": "references/aspect-ratio-delivery.md",
@@ -74,7 +74,7 @@
     {
       "path": "references/community-source-methodology.md",
       "role": "responder",
-      "sha256": "476f4b589f0d0b18257128c0306a94b48ea1389064c87f3589b46fcd03d4a644"
+      "sha256": "8bb558262afe478edcfa584d6aadf7e2b1c23e59b9e63b963add69ce241fee81"
     },
     {
       "path": "references/continuation-handoff.md",
@@ -134,7 +134,7 @@
     {
       "path": "references/field-observed-tips.md",
       "role": "responder",
-      "sha256": "179a1f081442667c48d80322db53b24cc9ba8e3d28862e4cf294dbff0a07cc7b"
+      "sha256": "7c26c2171d3200d80b977af3ea3a111cf7aab4159396588d6abc8937096b13ee"
     },
     {
       "path": "references/filter-vocab.md",
@@ -299,7 +299,7 @@
     {
       "path": "references/model-name-map.md",
       "role": "responder",
-      "sha256": "8558a955ce122d542e3778526f6ba28bc5ff8f224112d23ece3074f17e5693fe"
+      "sha256": "815cce6d46eecaec2217d7c76be5cf737db0520575f5d3a7f562d1d5749850ef"
     },
     {
       "path": "references/multilingual-community-examples.md",
@@ -314,12 +314,12 @@
     {
       "path": "references/platform-constraints.md",
       "role": "responder",
-      "sha256": "826cca7176426bb22a168c1b194c9ae9de7ee33fce8555a6d1ee951698d45ffd"
+      "sha256": "955b02a35b090cbec2358bc4e7ce19eac5233c9857f2edaff0c32dd33c7ff8b6"
     },
     {
       "path": "references/platform-surface-matrix.md",
       "role": "responder",
-      "sha256": "72f03c43634d1c506fd159aecb1fa1a1ec895d8d2d08439264ea8d2b807adf88"
+      "sha256": "44043bf4e933524e963ab4e0d19f05ae356e74d3995af0a9f6af61542e628ff9"
     },
     {
       "path": "references/pro-filmmaking-standards.md",
@@ -384,7 +384,7 @@
     {
       "path": "references/source-registry.md",
       "role": "responder",
-      "sha256": "f397997edd9d54a4d617639b713d51679ef87c16da4b6223a1cbdd08040604f3"
+      "sha256": "8ad19bbbe4eb2944bab556750dad66601dd70344a083b814318f3217b66434c8"
     },
     {
       "path": "references/storytelling-framework.md",

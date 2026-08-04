@@ -4,22 +4,22 @@ A modular agent-skill operating system for directing ByteDance **Seedance 2.0** 
 
 ## What's new in v6.7.0 — the outside world moved
 
-v6.6.0 closed the sequence loop. v6.7.0 is about everything that drifted while the loop was being closed: a newer model line shipped, the front page's type was resolving differently on every reader's machine, and the path a first-time user walks was broken in four places.
+v6.6.0 closed the sequence loop. v6.7.0 is about everything that drifted while the loop was being closed: reports of a newer model line surfaced, the front page's type was resolving differently on every reader's machine, and the path a first-time user walks was broken in four places.
 
 ### A newer model line exists, and the skill now knows it
 
-Seedance 2.5 was announced 2026-06-23 and launched on consumer surfaces on **2026-07-31**. The previous verification stamp was 2026-06-20 — three days before the announcement — so every platform statement in the package was presenting a superseded picture as current, with no signal that a newer line existed at all.
+ByteDance's [official Seedance 2.5 model page](https://seed.bytedance.com/en/seedance2_5) now confirms a separate, newer model line, and [Dreamina's official product page](https://dreamina.capcut.com/seedance/seedance-2-5) says it is live on Dreamina. Neither primary page gives an exact launch date; API and other-surface availability were unconfirmed in the 2026-08-01 review. The previous verification stamp was 2026-06-20 and did not signal that another line existed.
 
 The fix is a boundary, not a rewrite:
 
-- **`api-status` opens with the 2.5 section.** Announcement and launch dates, reported capabilities (≈30-second native single-shot, up to 50 references, 4K, region-level editing), reported BytePlus API access from mid-July, and the reported 4K upgrade to the 2.0 line.
-- **Everything about 2.5 is labeled `tech-press`, not `confirmed`.** The primary ByteDance and Volcengine pages were unreachable in this pass, and `source-registry` records that as a known gap in its own hierarchy rather than quietly upgrading press coverage to primary evidence.
+- **`api-status` opens with the 2.5 source boundary.** It records what ByteDance's model page and Dreamina's product page establish, what they do not establish, and why no 2.5 platform number belongs in this 2.0 skill.
+- **Dreamina availability is confirmed; the exact launch date and API or other-surface availability are not.** Technology press and provider pages report additional dates and access routes, but `source-registry` keeps those reports below the `confirmed` bar.
 - **The root skill's source gate now establishes the model line, not just the surface.** A user can be on 2.5 without saying so.
-- **`model-name-map` gains 2.5 and 2.0-4K rows** and a standing rule: never normalize "2.5" to "2.0". That normalization would apply 2.0 durations, reference ceilings, and resolutions to a model reported to differ on all three — the highest-cost naming error the file exists to prevent.
+- **`model-name-map` gains a 2.5 boundary entry** and a standing rule: never normalize "2.5" to "2.0". That normalization would silently apply this skill's 2.0 durations, reference ceilings, resolutions, and model IDs to an unverified model line — the highest-cost naming error the file exists to prevent. Reports of a 2.0 4K tier remain a source caveat, not a canonical model-name row.
 
 The rule underneath all of it: **craft transfers across model lines; platform numbers never do.** Direction, shot contracts, reference roles, continuity, and anti-slop remain correct on any line. Durations, reference counts, resolutions, model IDs, and mode availability are 2.0 values and stay 2.0 values.
 
-One consequence worth flagging for sequence work: if the reported 30-second single-shot ceiling holds, the shot budgeting in `multishot-grammar` and `seedance-sequence` — which assumes a ~15s generation — becomes a floor rather than a ceiling on 2.5. Re-derive it from the active surface.
+For sequence work, re-derive every duration and shot budget from the verified active surface. This release deliberately adds no 2.5 capability guidance.
 
 ### The masthead now renders the same for everyone
 
@@ -61,4 +61,4 @@ python scripts/install_codex_skill.py --dest ~/.claude/skills --force
 
 ## Verification
 
-17 validators and 52 unit tests, all green, including the masthead design-rule suite, the prompt-architecture gate, and `source_registry_check --strict --enforce-freshness`.
+Run the documented validator suite and unit-test discovery rather than relying on a frozen count. The release checks include the masthead design-rule suite, the prompt-architecture gate, and `source_registry_check --enforce-freshness`.

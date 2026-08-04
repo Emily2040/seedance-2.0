@@ -1,11 +1,11 @@
 # Seedance 2.0 API and Platform Status
 
 last_verified: 2026-08-01
-confidence: public-source snapshot as of the verification date; per-section dates apply where noted (Seedance 2.5 and the 2.0 4K upgrade recorded 2026-08-01 from technology press and provider pages, Seedance 2.0 Mini / additional provider-router / China-facing search recorded 2026-06-20, platform safeguards and resolution recorded 2026-06-14, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
+confidence: public-source snapshot as of the verification date; per-section dates apply where noted (the Seedance 2.5 model-line boundary and Dreamina availability recorded 2026-08-01 from official ByteDance and Dreamina pages, with the exact launch date and API or other-surface availability left unconfirmed; 2.0 4K reports recorded 2026-08-01 from technology press and provider pages; Seedance 2.0 Mini / additional provider-router / China-facing search recorded 2026-06-20, platform safeguards and resolution recorded 2026-06-14, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
 
 ## Scope: This Is a Seedance 2.0 Skill *(recorded 2026-08-01)*
 
-**Everything in this repository describes Seedance 2.0.** A separate, newer line — Seedance 2.5 — launched on consumer surfaces on 2026-07-31 *(tech-press; the primary ByteDance and Volcengine pages were not reachable in this pass)*. This repository does not cover it, does not document its capabilities, and makes no claim about it.
+**Everything in this repository describes Seedance 2.0.** ByteDance's [official Seedance 2.5 model page](https://seed.bytedance.com/en/seedance2_5) confirms a separate newer line, and [Dreamina's official product page](https://dreamina.capcut.com/seedance/seedance-2-5) says it is live on Dreamina. Neither primary page gives an exact launch date; API and other-surface availability were unconfirmed in this pass. This repository does not cover the newer line and does not document its capabilities.
 
 The only rule that matters here is a boundary, and it exists because a user can be on the newer line without saying so:
 
@@ -40,7 +40,7 @@ If the user is working on 2.5, say plainly that this skill is built and verified
 
 ## Copyright Dispute — Still Unresolved *(re-checked 2026-08-01)*
 
-The 2026-06-13 record below stands, with one update: reporting through July 2026 indicates the studio cease-and-desist letters remain **unanswered and unresolved in court**, and ByteDance shipped Seedance 2.5 and its API while the dispute was open. Nothing has been settled that would relax this repository's IP posture — the safety gates are not provisional, and the safeguards below are still the live enforcement path.
+The 2026-06-13 record below stands: reporting through July 2026 indicates the studio cease-and-desist letters remain **unanswered and unresolved in court**. Nothing has been settled that would relax this repository's IP posture — the safety gates are not provisional, and the safeguards below are still the live enforcement path.
 
 ## Overseas API Status — Copyright Suspension *(recorded 2026-06-13)*
 
@@ -149,6 +149,8 @@ Real-person face, portrait, and voice workflows require authorization, legal/eth
 
 - https://seed.bytedance.com/en/seedance2_0
 - https://seed.bytedance.com/en/blog/seedance-2-0-official-launch
+- https://seed.bytedance.com/en/seedance2_5
+- https://dreamina.capcut.com/seedance/seedance-2-5
 - https://replicate.com/bytedance/seedance-2.0
 - https://variety.com/2026/film/news/paramount-disney-bytedance-cease-and-desist-seedance-ai-infringement-ip-1236663663/
 - https://www.cnbc.com/2026/02/16/bytedance-safeguards-seedance-ai-copyright-disney-mpa-netflix-paramount-sony-universal.html

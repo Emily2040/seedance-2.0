@@ -91,7 +91,7 @@ https://github.com/Emily2040/seedance-2.0
 ## 6. 安全
 
 - **内容安全：** 若点子里有受保护角色、明星、品牌、logo、歌曲，或真人的脸和声音，别换种语言把它藏起来——用 `seedance-copyright` 改写成原创、已授权或后期替代的版本。
-- **agent 安全：** 本包**不联网、不上报任何数据**，脚本都是确定性的、离线跑。千万别把 API 密钥、账号 cookie 或私有素材粘进你不信任的 agent。详见 [SECURITY.md](../SECURITY.md)。
+- **agent 安全：** **安装后的内容**不联网、不上报任何数据；安装进去的脚本都在本地运行，不连接外部服务。仓库工作副本里另外包含开发专用的 `scripts/eval_run.py`，它可以连接模型服务商，但安装器会排除它。千万别把 API 密钥、账号 cookie 或私有素材粘进你不信任的 agent。详见 [SECURITY.md](../SECURITY.md)。
 
 ## 7. 想更进一步
 
