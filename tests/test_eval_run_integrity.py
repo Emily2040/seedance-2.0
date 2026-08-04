@@ -11,6 +11,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
@@ -2557,6 +2558,10 @@ class LedgerIntegrityTests(unittest.TestCase):
             path = Path(tmp) / "ledger.md"
 
             def tamper_then_reject() -> None:
+                if os.name == "nt":
+                    # FileRenameInfoEx retains the publishing handle through
+                    # the post-check, so Win32 correctly refuses path writes.
+                    raise eval_run.HarnessError("post-check failed")
                 status = path.stat()
                 path.write_bytes(b"X" * status.st_size)
                 os.utime(path, ns=(status.st_atime_ns, status.st_mtime_ns))
@@ -2571,6 +2576,137 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             self.assertEqual(path.read_bytes(), b"")
             self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows handle-bound publication")
+    def test_windows_temp_source_swap_cannot_publish_attacker_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "ledger.md"
+            displaced = root / "bound-source.md"
+            attacker = root / "attacker.md"
+            payload = "verified evidence\n"
+            attacker.write_text("attacker bytes\n", encoding="utf-8")
+
+            def swap_bound_source_name() -> None:
+                stage = next(root.glob(".ledger.md.stage-*"))
+                source = next(stage.glob("ledger.*.tmp"))
+                os.replace(source, displaced)
+                os.replace(attacker, source)
+
+            eval_run._atomic_write_text(
+                path,
+                payload,
+                before_replace=swap_bound_source_name,
+            )
+
+            self.assertEqual(path.read_text(encoding="utf-8"), payload)
+            self.assertFalse(displaced.exists())
+            stage = next(root.glob(".ledger.md.stage-*"))
+            self.assertEqual(
+                next(stage.glob("ledger.*.tmp")).read_text(encoding="utf-8"),
+                "attacker bytes\n",
+            )
+
+    def test_late_new_ledger_destination_wins_without_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            helper_name = (
+                "_publish_windows_bound_new_ledger"
+                if os.name == "nt"
+                else "_publish_linux_bound_new_ledger"
+            )
+            real_publish = getattr(eval_run, helper_name)
+
+            def publish_after_late_winner(*arguments: object) -> None:
+                path.write_text("late winner\n", encoding="utf-8")
+                real_publish(*arguments)
+
+            with (
+                mock.patch.object(
+                    eval_run,
+                    helper_name,
+                    side_effect=publish_after_late_winner,
+                ),
+                self.assertRaisesRegex(
+                    eval_run.HarnessError,
+                    "appeared during atomic",
+                ),
+            ):
+                eval_run._atomic_write_text(path, "candidate evidence\n")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "late winner\n")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX capability boundary")
+    def test_posix_without_linux_unnamed_publication_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            with (
+                mock.patch.object(
+                    eval_run,
+                    "_open_linux_unnamed_ledger",
+                    side_effect=eval_run.HarnessError(
+                        "descriptor-bound publication unavailable"
+                    ),
+                ),
+                mock.patch.object(eval_run.tempfile, "mkstemp") as mkstemp,
+                self.assertRaisesRegex(
+                    eval_run.HarnessError,
+                    "descriptor-bound publication unavailable",
+                ),
+            ):
+                eval_run._atomic_write_text(path, "candidate evidence\n")
+
+            mkstemp.assert_not_called()
+            self.assertFalse(path.exists())
+
+    def test_new_ledger_publication_has_exact_identity_and_link_count(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            eval_run._atomic_write_text(path, "complete evidence\n")
+
+            status = path.stat()
+            self.assertTrue(stat.S_ISREG(status.st_mode))
+            self.assertEqual(status.st_nlink, 1)
+            self.assertEqual(path.read_text(encoding="utf-8"), "complete evidence\n")
+            if os.name == "posix":
+                self.assertEqual(stat.S_IMODE(status.st_mode), 0o600)
+
+    def test_concurrent_new_ledger_writers_publish_one_complete_winner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            barrier = threading.Barrier(2)
+            payloads = ("writer one\n", "writer two\n")
+            outcomes: list[BaseException | None] = []
+            outcome_lock = threading.Lock()
+
+            def writer(payload: str) -> None:
+                failure: BaseException | None = None
+                try:
+                    eval_run._atomic_write_text(
+                        path,
+                        payload,
+                        before_replace=lambda: barrier.wait(timeout=10),
+                    )
+                except BaseException as exc:
+                    failure = exc
+                with outcome_lock:
+                    outcomes.append(failure)
+
+            threads = [threading.Thread(target=writer, args=(payload,)) for payload in payloads]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=15)
+
+            self.assertTrue(all(not thread.is_alive() for thread in threads))
+            self.assertEqual(sum(outcome is None for outcome in outcomes), 1, outcomes)
+            self.assertEqual(
+                sum(isinstance(outcome, eval_run.HarnessError) for outcome in outcomes),
+                1,
+                outcomes,
+            )
+            self.assertIn(path.read_text(encoding="utf-8"), payloads)
+            self.assertEqual(path.stat().st_nlink, 1)
 
     def test_new_destination_invalidation_failure_is_reported_without_path_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
