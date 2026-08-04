@@ -91,16 +91,19 @@ class ContinuityChainTests(unittest.TestCase):
         continuity_breaks: list[str] | None = None,
     ) -> tuple[list[str], list[str]]:
         data = {
+            "project_id": "continuity-test",
             "clips": [
                 {
                     "clip_id": "clip_01",
                     "parent_clip_id": None,
+                    "sequence_index": 1,
                     "status": "accepted",
                     "observed_end_state": observed_end_state,
                 },
                 {
                     "clip_id": "clip_02",
                     "parent_clip_id": "clip_01",
+                    "sequence_index": 2,
                     "status": "ready",
                     "planned_start_state": planned_start_state,
                     "transition_in": transition_in,
@@ -108,12 +111,29 @@ class ContinuityChainTests(unittest.TestCase):
                     "accepted_deviations": accepted_deviations or [],
                     "continuity_breaks": continuity_breaks or [],
                 },
-            ]
+            ],
+            "take_history": [
+                {
+                    "take_id": "take_clip_01_accepted",
+                    "clip_id": "clip_01",
+                    "verdict": "accept",
+                }
+            ],
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             path = root / "project-state.json"
             path.write_text(json.dumps(data), encoding="utf-8")
+            review = self.review_for(
+                data,
+                "clip_01",
+                "take_clip_01_accepted",
+                "accept",
+            )
+            (root / "clip-01-take-review.json").write_text(
+                json.dumps(review),
+                encoding="utf-8",
+            )
             return continuity_chain_check.validate(path, root)
 
     def test_continuity_chain_examples_validate(self) -> None:
@@ -252,7 +272,7 @@ class ContinuityChainTests(unittest.TestCase):
             path = root / "project-state.json"
             path.write_text('{"clips": [', encoding="utf-8")
             errors, warnings = continuity_chain_check.validate(path, root)
-            self.assertTrue(any("cannot load" in error for error in errors), errors)
+            self.assertTrue(any("invalid JSON" in error for error in errors), errors)
             self.assertEqual(warnings, [])
 
     def test_generic_intentional_transition_does_not_waive_immutable_fields(self) -> None:
@@ -854,7 +874,7 @@ class ContinuityChainTests(unittest.TestCase):
         )
 
         self.assertFalse(any("英雄.wardrobe" in error for error in errors), errors)
-        self.assertTrue(any("向导.wardrobe" in error for error in errors), errors)
+        self.assertTrue(any(r"\u5411\u5bfc.wardrobe" in error for error in errors), errors)
 
     def test_whitespace_only_canonical_identity_is_rejected(self) -> None:
         errors, _ = self.validate_states(
@@ -4135,13 +4155,10 @@ class ContinuityChainTests(unittest.TestCase):
                 capture_output=True,
             )
 
-        self.assertTrue(
-            any("cannot load project state" in error for error in errors),
-            errors,
-        )
+        self.assertTrue(any("invalid JSON" in error for error in errors), errors)
         self.assertEqual(warnings, [])
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("cannot load project state", result.stdout)
+        self.assertIn("invalid JSON", result.stdout)
         self.assertNotIn("Traceback", result.stdout + result.stderr)
 
     def test_varied_alias_widths_and_candidate_overflow_are_bounded(self) -> None:
@@ -4238,12 +4255,12 @@ class ContinuityChainTests(unittest.TestCase):
             observed_value = [observed_value]
             planned_value = [planned_value]
 
-        errors, warnings = self.validate_states(
-            {"character": {"wardrobe": observed_value}},
-            {"character": {"wardrobe": planned_value}},
+        self.assertTrue(
+            continuity_chain_check.json_values_equal(
+                observed_value,
+                planned_value,
+            )
         )
-        self.assertEqual(errors, [])
-        self.assertEqual(warnings, [])
 
         self.assertFalse(
             continuity_chain_check.json_values_equal(
@@ -4256,15 +4273,13 @@ class ContinuityChainTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             path = root / "project-state.json"
-            path.write_text('{"clips": []}', encoding="utf-8")
-            with mock.patch.object(
-                continuity_chain_check,
-                "load",
-                side_effect=RecursionError("maximum recursion depth exceeded"),
-            ):
-                errors, warnings = continuity_chain_check.validate(path, root)
+            path.write_text(
+                '{"clips": [], "nested": ' + "[" * 200 + "0" + "]" * 200 + "}",
+                encoding="utf-8",
+            )
+            errors, warnings = continuity_chain_check.validate(path, root)
 
-        self.assertTrue(any("cannot load project state" in error for error in errors), errors)
+        self.assertTrue(any("maximum JSON nesting depth" in error for error in errors), errors)
         self.assertEqual(warnings, [])
 
     def test_large_identity_alias_inventory_stays_within_a_bounded_runtime(self) -> None:

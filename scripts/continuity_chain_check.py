@@ -8,6 +8,7 @@ import re
 import unicodedata
 from bisect import bisect_left, bisect_right
 from collections import Counter
+from decimal import Decimal
 from pathlib import Path
 
 if __package__:
@@ -2712,8 +2713,8 @@ def json_values_equal(left: object, right: object) -> bool:
             ):
                 return False
             continue
-        if isinstance(left_value, (int, float)) and isinstance(
-            right_value, (int, float)
+        if isinstance(left_value, (int, float, Decimal)) and isinstance(
+            right_value, (int, float, Decimal)
         ):
             if left_value != right_value:
                 return False
