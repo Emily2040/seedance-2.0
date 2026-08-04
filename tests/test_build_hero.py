@@ -704,13 +704,13 @@ class OutlinedTypeTests(unittest.TestCase):
                     True,
                     scripts / "venvlaunchert_d.exe",
                 ),
-                ("3.12 legacy", "python.exe", (3, 12), False, root / "python.exe"),
+                ("3.12 legacy", "python.exe", (3, 12), False, scripts / "python.exe"),
                 (
                     "3.12 legacy debug",
                     "python_d.exe",
                     (3, 12),
                     False,
-                    root / "python_d.exe",
+                    scripts / "python_d.exe",
                 ),
             )
             for label, base_name, version, gil_disabled, expected in cases:
@@ -791,10 +791,10 @@ class OutlinedTypeTests(unittest.TestCase):
                         python_build=False,
                     )
 
-            (scripts / "python.exe").write_bytes(b"legacy-stdlib-lookalike")
-            with self.assertRaisesRegex(SystemExit, "missing-base.*python\\.exe"):
+            (root / "python.exe").write_bytes(b"legacy-base-lookalike")
+            with self.assertRaisesRegex(SystemExit, "trusted stdlib venv runner is missing"):
                 gen.windows_venv_runner_source(
-                    root / "missing-base" / "python.exe",
+                    root / "python.exe",
                     venv_dir,
                     (3, 12),
                     gil_disabled=False,
@@ -819,7 +819,10 @@ class OutlinedTypeTests(unittest.TestCase):
         import build_masthead_outlines as gen
 
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            # Hosted Windows TEMP may use an 8.3 alias (RUNNER~1) while
+            # Path.resolve() in the production verifier expands it. Keep the
+            # mocked trusted base in that same canonical namespace.
+            root = Path(temp).resolve()
             trust_root = root / "external-trust"
 
             def prepared(name: str) -> Path:
