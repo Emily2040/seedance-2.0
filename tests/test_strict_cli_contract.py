@@ -207,7 +207,7 @@ class StrictBehaviorTests(unittest.TestCase):
         self.assertEqual(normal.returncode, 0, normal.stdout + normal.stderr)
         self.assertIn("Continuity warnings", normal.stdout)
         self.assertEqual(strict.returncode, 1, strict.stdout + strict.stderr)
-        self.assertIn("transient pose changes", strict.stdout)
+        self.assertIn("transient character.pose changes", strict.stdout)
 
     def test_vocab_strict_adds_depth_requirements(self) -> None:
         minimal_vocab = """# Vocabulary
