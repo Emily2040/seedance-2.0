@@ -719,17 +719,18 @@ def windows_venv_runner_source(
     if version_info >= (3, 13):
         threaded_suffix = "t" if gil_disabled else ""
         runner_name = f"venvlauncher{threaded_suffix}{debug_suffix}.exe"
+        scripts = base.parent if python_build else Path(venv_dir) / "scripts" / "nt"
     else:
         if gil_disabled:
             raise SystemExit(
                 "trusted stdlib venv runner has an impossible pre-3.13 free-threaded layout"
             )
         runner_name = f"python{debug_suffix}.exe"
+        scripts = base.parent
 
-    # CPython source builds copy from the directory containing the trusted
-    # base executable. Installed builds copy from Lib/venv/scripts/nt. Keep
-    # this decision semantic: never accept a different existing variant.
-    scripts = base.parent if python_build else Path(venv_dir) / "scripts" / "nt"
+    # Python 3.11-3.12 always copy the base interpreter. Python 3.13 installed
+    # builds use Lib/venv/scripts/nt launchers, while source builds keep those
+    # launchers beside the base executable. Never accept another existing path.
     source = Path(scripts) / runner_name
     if not source.is_file():
         raise SystemExit(f"trusted stdlib venv runner is missing: {source}")

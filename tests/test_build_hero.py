@@ -667,32 +667,51 @@ class OutlinedTypeTests(unittest.TestCase):
                 "venvlaunchert_d.exe",
             ):
                 (scripts / name).write_bytes(name.encode("ascii"))
+            for name in (
+                "python.exe",
+                "python_d.exe",
+                "python3.13t.exe",
+                "python3.13t_d.exe",
+            ):
+                (root / name).write_bytes(("base-" + name).encode("ascii"))
 
             cases = (
-                ("3.13 normal", "python.exe", (3, 13), False, "venvlauncher.exe"),
+                (
+                    "3.13 normal",
+                    "python.exe",
+                    (3, 13),
+                    False,
+                    scripts / "venvlauncher.exe",
+                ),
                 (
                     "3.13 free-threaded",
                     "python3.13t.exe",
                     (3, 13),
                     True,
-                    "venvlaunchert.exe",
+                    scripts / "venvlaunchert.exe",
                 ),
                 (
                     "3.13 debug",
                     "python_d.exe",
                     (3, 13),
                     False,
-                    "venvlauncher_d.exe",
+                    scripts / "venvlauncher_d.exe",
                 ),
                 (
                     "3.13 free-threaded debug",
                     "python3.13t_d.exe",
                     (3, 13),
                     True,
-                    "venvlaunchert_d.exe",
+                    scripts / "venvlaunchert_d.exe",
                 ),
-                ("3.12 legacy", "python.exe", (3, 12), False, "python.exe"),
-                ("3.12 legacy debug", "python_d.exe", (3, 12), False, "python_d.exe"),
+                ("3.12 legacy", "python.exe", (3, 12), False, root / "python.exe"),
+                (
+                    "3.12 legacy debug",
+                    "python_d.exe",
+                    (3, 12),
+                    False,
+                    root / "python_d.exe",
+                ),
             )
             for label, base_name, version, gil_disabled, expected in cases:
                 with self.subTest(layout=label):
@@ -704,7 +723,7 @@ class OutlinedTypeTests(unittest.TestCase):
                             gil_disabled=gil_disabled,
                             python_build=False,
                         ),
-                        scripts / expected,
+                        expected,
                     )
 
             build_dir = root / "PCbuild" / "amd64"
@@ -771,6 +790,30 @@ class OutlinedTypeTests(unittest.TestCase):
                         gil_disabled=False,
                         python_build=False,
                     )
+
+            (scripts / "python.exe").write_bytes(b"legacy-stdlib-lookalike")
+            with self.assertRaisesRegex(SystemExit, "missing-base.*python\\.exe"):
+                gen.windows_venv_runner_source(
+                    root / "missing-base" / "python.exe",
+                    venv_dir,
+                    (3, 12),
+                    gil_disabled=False,
+                    python_build=False,
+                )
+
+    @unittest.skipUnless(os.name == "nt", "Windows venv launcher provenance")
+    def test_windows_venv_runner_source_matches_real_envbuilder(self) -> None:
+        """The selected source must be byte-identical to a real venv runner."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            build_env = Path(temp) / "builder"
+            venv.EnvBuilder(with_pip=False).create(build_env)
+            generated = gen.build_env_python(build_env)
+            source = gen.trusted_venv_runner_source()
+
+            self.assertEqual(generated.stat().st_size, source.stat().st_size)
+            self.assertEqual(gen.sha256_file(generated), gen.sha256_file(source))
 
     def test_external_trust_rejects_runner_config_marker_and_script_tampering(self) -> None:
         import build_masthead_outlines as gen

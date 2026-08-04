@@ -28,13 +28,23 @@ class PythonSupportContractTests(unittest.TestCase):
         )
         windows_job = "  windows-frame-publication:\n" + windows_and_later
 
-        for name, job, runner in (
-            ("linux", linux_job, "runs-on: ubuntu-latest"),
-            ("windows", windows_job, "runs-on: windows-latest"),
+        for name, job, runner, matrix in (
+            (
+                "linux",
+                linux_job,
+                "runs-on: ubuntu-latest",
+                'python-version: ["3.11", "3.13"]',
+            ),
+            (
+                "windows",
+                windows_job,
+                "runs-on: windows-latest",
+                'python-version: ["3.11", "3.12", "3.13"]',
+            ),
         ):
             with self.subTest(job=name):
                 self.assertIn(runner, job)
-                self.assertIn('python-version: ["3.11", "3.13"]', job)
+                self.assertIn(matrix, job)
                 self.assertIn("python-version: ${{ matrix.python-version }}", job)
                 self.assertIn("fail-fast: false", job)
 
@@ -53,6 +63,7 @@ class PythonSupportContractTests(unittest.TestCase):
         tests = (
             "test_windows_venv_runner_source_selects_the_exact_upstream_variant",
             "test_windows_venv_runner_source_refuses_the_wrong_variant",
+            "test_windows_venv_runner_source_matches_real_envbuilder",
             "test_external_trust_rejects_runner_config_marker_and_script_tampering",
             "test_forged_runner_and_self_authored_marker_lack_external_trust",
             "test_in_venv_sitecustomize_cannot_short_circuit_a_check",
