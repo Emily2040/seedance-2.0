@@ -414,18 +414,28 @@ class ReleaseChecklistTests(unittest.TestCase):
     workflow = root / ".github" / "workflows" / "source-freshness-review.yml"
 
     def test_release_checklist_enforces_freshness(self) -> None:
-        lines = [
-            line.strip()
-            for line in self.readme.read_text(encoding="utf-8").splitlines()
-            if line.strip().startswith("python scripts/source_registry_check.py")
-        ]
-        self.assertTrue(lines, "README must document the source-registry check")
-        for line in lines:
-            self.assertIn(
-                "--enforce-freshness",
-                line,
-                "the documented release check must fail on a stale registry",
-            )
+        readme = self.readme.read_text(encoding="utf-8")
+        self.assertIn("python scripts/validate_repo.py --release", readme)
+
+        scripts = self.root / "scripts"
+        sys.path.insert(0, str(scripts))
+        try:
+            import validate_repo
+
+            source_commands = [
+                check.display_command()
+                for check in validate_repo.validation_plan(release=True)
+                if "source_registry_check.py" in check.display_command()
+            ]
+        finally:
+            sys.path.remove(str(scripts))
+
+        self.assertEqual(len(source_commands), 1)
+        self.assertIn(
+            "--enforce-freshness",
+            source_commands[0],
+            "the canonical release runner must fail on a stale registry",
+        )
 
     def test_docs_define_the_offline_metadata_boundary(self) -> None:
         text = self.readme.read_text(encoding="utf-8").lower()
