@@ -449,7 +449,7 @@
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "20943a6e4a35ef5af559b82bb21aa0333a7a6140c36e594e8e9750c32043c832"
+      "sha256": "3a9467f0dea0b664398398dc6790296d6c2320a0389dc9adbbd8607f5514ecfe"
     },
     {
       "path": "skills/seedance-antislop/SKILL.md",

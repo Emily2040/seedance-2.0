@@ -11,6 +11,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
@@ -2429,6 +2430,7 @@ class LedgerIntegrityTests(unittest.TestCase):
     def test_private_temporary_hardlink_is_rejected_before_destination_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ledger.md"
+            path.write_text("old evidence\n", encoding="utf-8")
             alias = Path(tmp) / "temporary-alias.md"
             real_apply = eval_run._apply_ledger_permissions
 
@@ -2455,7 +2457,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                 ):
                     eval_run._atomic_write_text(path, "new evidence\n")
 
-                self.assertFalse(path.exists())
+                self.assertEqual(path.read_text(encoding="utf-8"), "old evidence\n")
             finally:
                 alias.unlink(missing_ok=True)
 
@@ -2527,7 +2529,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                 len(list(path.parent.glob(".ledger.md.*.rollback"))), 1
             )
 
-    def test_failed_post_check_never_leaves_a_new_destination(self) -> None:
+    def test_failed_post_check_invalidates_owned_new_destination(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ledger.md"
 
@@ -2536,7 +2538,12 @@ class LedgerIntegrityTests(unittest.TestCase):
                     eval_run.Path,
                     "unlink",
                     side_effect=OSError("unlink blocked"),
-                ),
+                ) as unlink,
+                mock.patch.object(
+                    eval_run.Path,
+                    "rmdir",
+                    side_effect=OSError("rmdir blocked"),
+                ) as rmdir,
                 self.assertRaisesRegex(eval_run.HarnessError, "post-check failed"),
             ):
                 eval_run._atomic_write_text(
@@ -2547,15 +2554,24 @@ class LedgerIntegrityTests(unittest.TestCase):
                     ),
                 )
 
-            self.assertFalse(path.exists())
-            for artifact in path.parent.glob(".ledger.md.*.tmp"):
-                artifact.unlink()
+            unlink.assert_not_called()
+            rmdir.assert_not_called()
+            if os.name == "nt":
+                self.assertFalse(path.exists())
+            else:
+                self.assertTrue(path.exists())
+                self.assertEqual(path.read_bytes(), b"")
+            self.assertEqual(list(path.parent.glob(".ledger-*.tmp")), [])
 
-    def test_tampered_new_destination_is_quarantined_after_post_check_failure(self) -> None:
+    def test_tampered_new_destination_is_invalidated_after_post_check_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ledger.md"
 
             def tamper_then_reject() -> None:
+                if os.name == "nt":
+                    # FileRenameInformation retains the publishing handle through
+                    # the post-check, so Win32 correctly refuses path writes.
+                    raise eval_run.HarnessError("post-check failed")
                 status = path.stat()
                 path.write_bytes(b"X" * status.st_size)
                 os.utime(path, ns=(status.st_atime_ns, status.st_mtime_ns))
@@ -2568,8 +2584,410 @@ class LedgerIntegrityTests(unittest.TestCase):
                     after_replace=tamper_then_reject,
                 )
 
+            if os.name == "nt":
+                self.assertFalse(path.exists())
+            else:
+                self.assertEqual(path.read_bytes(), b"")
+            self.assertEqual(list(path.parent.glob(".ledger-*.tmp")), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows handle-bound publication")
+    def test_windows_zero_share_stage_rejects_native_writer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            import ctypes
+            from ctypes import wintypes
+
+            root = Path(tmp)
+            path = root / "ledger.md"
+            payload = "verified evidence\n"
+            source_paths: list[Path] = []
+            real_create = eval_run._create_windows_new_ledger_stage
+
+            def capture_stage(*arguments: object) -> tuple:
+                stage = real_create(*arguments)
+                source_paths.append(stage[3])
+                return stage
+
+            def attempt_native_write_open() -> None:
+                source = source_paths[0]
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                create_file = kernel32.CreateFileW
+                create_file.argtypes = (
+                    wintypes.LPCWSTR,
+                    wintypes.DWORD,
+                    wintypes.DWORD,
+                    wintypes.LPVOID,
+                    wintypes.DWORD,
+                    wintypes.DWORD,
+                    wintypes.HANDLE,
+                )
+                create_file.restype = wintypes.HANDLE
+                handle = create_file(
+                    str(source),
+                    0x40000000,  # GENERIC_WRITE
+                    0x1 | 0x2 | 0x4,
+                    None,
+                    3,  # OPEN_EXISTING
+                    0x80,
+                    None,
+                )
+                self.assertEqual(handle, ctypes.c_void_p(-1).value)
+                self.assertEqual(ctypes.get_last_error(), 32)
+
+            with mock.patch.object(
+                eval_run,
+                "_create_windows_new_ledger_stage",
+                side_effect=capture_stage,
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    payload,
+                    before_replace=attempt_native_write_open,
+                )
+
+            self.assertEqual(path.read_text(encoding="utf-8"), payload)
+            self.assertEqual(list(root.glob(".ledger-*.tmp")), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows retained-parent publication")
+    def test_windows_parent_rename_recreate_boundary_is_locked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent = root / "ledger-parent"
+            parent.mkdir()
+            path = parent / "ledger.md"
+            moved_parent = root / "renamed-parent"
+            rename_was_blocked = False
+
+            def attempt_parent_replacement() -> None:
+                nonlocal rename_was_blocked
+                try:
+                    os.replace(parent, moved_parent)
+                except PermissionError:
+                    rename_was_blocked = True
+                    return
+                self.fail("zero-share stage unexpectedly allowed parent rename")
+
+            eval_run._atomic_write_text(
+                path,
+                "verified evidence\n",
+                before_replace=attempt_parent_replacement,
+            )
+
+            self.assertTrue(rename_was_blocked)
+            self.assertFalse(moved_parent.exists())
+            self.assertEqual(path.read_text(encoding="utf-8"), "verified evidence\n")
+            self.assertEqual(list(parent.glob(".ledger-*.tmp")), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows handle-bound cleanup")
+    def test_windows_prepublish_failure_cleans_stage_without_path_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "ledger.md"
+            with (
+                mock.patch.object(
+                    eval_run.Path,
+                    "unlink",
+                    side_effect=AssertionError("pathname unlink is forbidden"),
+                ) as unlink,
+                mock.patch.object(
+                    eval_run.Path,
+                    "rmdir",
+                    side_effect=AssertionError("pathname rmdir is forbidden"),
+                ) as rmdir,
+                self.assertRaisesRegex(eval_run.HarnessError, "prepublish failure"),
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    "candidate evidence\n",
+                    before_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("prepublish failure")
+                    ),
+                )
+
+            unlink.assert_not_called()
+            rmdir.assert_not_called()
             self.assertFalse(path.exists())
-            self.assertEqual(list(path.parent.glob(".ledger.md.*.tmp")), [])
+            self.assertEqual(list(root.glob(".ledger-*.tmp")), [])
+
+    def test_native_publish_success_then_raise_invalidates_retained_inode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            helper_name = (
+                "_publish_windows_bound_new_ledger"
+                if os.name == "nt"
+                else "_publish_linux_bound_new_ledger"
+            )
+            real_publish = getattr(eval_run, helper_name)
+
+            def publish_then_raise(*arguments: object) -> None:
+                real_publish(*arguments)
+                raise eval_run.HarnessError("injected post-native failure")
+
+            with (
+                mock.patch.object(
+                    eval_run,
+                    helper_name,
+                    side_effect=publish_then_raise,
+                ),
+                self.assertRaisesRegex(
+                    eval_run.HarnessError,
+                    "injected post-native failure",
+                ),
+            ):
+                eval_run._atomic_write_text(path, "candidate evidence\n")
+
+            if os.name == "nt":
+                self.assertFalse(path.exists())
+            else:
+                self.assertTrue(path.exists())
+                self.assertEqual(path.read_bytes(), b"")
+
+    def test_late_new_ledger_destination_wins_without_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            helper_name = (
+                "_publish_windows_bound_new_ledger"
+                if os.name == "nt"
+                else "_publish_linux_bound_new_ledger"
+            )
+            real_publish = getattr(eval_run, helper_name)
+
+            def publish_after_late_winner(*arguments: object) -> None:
+                path.write_text("late winner\n", encoding="utf-8")
+                real_publish(*arguments)
+
+            with (
+                mock.patch.object(
+                    eval_run,
+                    helper_name,
+                    side_effect=publish_after_late_winner,
+                ),
+                self.assertRaisesRegex(
+                    eval_run.HarnessError,
+                    "appeared during atomic",
+                ),
+            ):
+                eval_run._atomic_write_text(path, "candidate evidence\n")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "late winner\n")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX capability boundary")
+    def test_posix_without_linux_unnamed_publication_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            with (
+                mock.patch.object(
+                    eval_run,
+                    "_open_linux_unnamed_ledger",
+                    side_effect=eval_run.HarnessError(
+                        "descriptor-bound publication unavailable"
+                    ),
+                ),
+                mock.patch.object(eval_run.tempfile, "mkstemp") as mkstemp,
+                self.assertRaisesRegex(
+                    eval_run.HarnessError,
+                    "descriptor-bound publication unavailable",
+                ),
+            ):
+                eval_run._atomic_write_text(path, "candidate evidence\n")
+
+            mkstemp.assert_not_called()
+            self.assertFalse(path.exists())
+
+    def test_new_ledger_publication_has_exact_identity_and_link_count(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            eval_run._atomic_write_text(path, "complete evidence\n")
+
+            status = path.stat()
+            self.assertTrue(stat.S_ISREG(status.st_mode))
+            self.assertEqual(status.st_nlink, 1)
+            self.assertEqual(path.read_text(encoding="utf-8"), "complete evidence\n")
+            if os.name == "posix":
+                self.assertEqual(stat.S_IMODE(status.st_mode), 0o600)
+
+    def test_concurrent_new_ledger_writers_publish_one_complete_winner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            barrier = threading.Barrier(2)
+            payloads = ("writer one\n", "writer two\n")
+            outcomes: list[BaseException | None] = []
+            outcome_lock = threading.Lock()
+
+            def writer(payload: str) -> None:
+                failure: BaseException | None = None
+                try:
+                    eval_run._atomic_write_text(
+                        path,
+                        payload,
+                        before_replace=lambda: barrier.wait(timeout=10),
+                    )
+                except BaseException as exc:
+                    failure = exc
+                with outcome_lock:
+                    outcomes.append(failure)
+
+            threads = [threading.Thread(target=writer, args=(payload,)) for payload in payloads]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=15)
+
+            self.assertTrue(all(not thread.is_alive() for thread in threads))
+            self.assertEqual(sum(outcome is None for outcome in outcomes), 1, outcomes)
+            self.assertEqual(
+                sum(isinstance(outcome, eval_run.HarnessError) for outcome in outcomes),
+                1,
+                outcomes,
+            )
+            self.assertIn(path.read_text(encoding="utf-8"), payloads)
+            self.assertEqual(path.stat().st_nlink, 1)
+
+    def test_new_destination_invalidation_failure_is_reported_without_path_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.md"
+            payload = "new evidence\n"
+
+            with (
+                mock.patch.object(
+                    eval_run.os,
+                    "ftruncate",
+                    side_effect=OSError("truncate blocked"),
+                ),
+                self.assertRaisesRegex(
+                    eval_run.HarnessError,
+                    "unverified new ledger could not be invalidated",
+                ),
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    payload,
+                    after_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("post-check failed")
+                    ),
+                )
+
+            if os.name == "nt":
+                self.assertFalse(path.exists())
+            else:
+                self.assertEqual(path.read_text(encoding="utf-8"), payload)
+            self.assertEqual(list(path.parent.glob(".ledger-*.tmp")), [])
+
+    def test_new_destination_invalidation_preserves_old_replace_boundary_swap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "ledger.md"
+            published = root / "published-ledger.md"
+            substitute = root / "substitute.md"
+            payload = "new evidence\n"
+            substitute.write_text(payload, encoding="utf-8")
+            substitute_status = substitute.stat()
+            substitute_identity = (substitute_status.st_dev, substitute_status.st_ino)
+            real_invalidate = eval_run._invalidate_bound_new_ledger_descriptor
+            swap_blocked = False
+
+            def swap_then_invalidate(
+                descriptor: int,
+                signature: tuple[int, int, int, int],
+                link_count: int,
+            ) -> None:
+                nonlocal swap_blocked
+                if os.name == "nt":
+                    with self.assertRaises(PermissionError):
+                        os.replace(path, published)
+                    swap_blocked = True
+                else:
+                    os.replace(path, published)
+                    os.replace(substitute, path)
+                real_invalidate(descriptor, signature, link_count)
+
+            with (
+                mock.patch.object(
+                    eval_run,
+                    "_invalidate_bound_new_ledger_descriptor",
+                    side_effect=swap_then_invalidate,
+                ) as invalidate,
+                self.assertRaisesRegex(eval_run.HarnessError, "post-check failed"),
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    payload,
+                    after_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("post-check failed")
+                    ),
+                )
+
+            invalidate.assert_called_once()
+            if os.name == "nt":
+                self.assertTrue(swap_blocked)
+                self.assertFalse(path.exists())
+                self.assertFalse(published.exists())
+                self.assertEqual(substitute.read_text(encoding="utf-8"), payload)
+            else:
+                self.assertEqual(path.read_text(encoding="utf-8"), payload)
+                current_status = path.stat()
+                self.assertEqual(
+                    (current_status.st_dev, current_status.st_ino),
+                    substitute_identity,
+                )
+                self.assertEqual(published.read_bytes(), b"")
+
+    def test_new_destination_invalidation_preserves_old_unlink_boundary_swap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "ledger.md"
+            published = root / "published-ledger.md"
+            substitute = root / "substitute.md"
+            payload = "new evidence\n"
+            substitute.write_text(payload, encoding="utf-8")
+            substitute_status = substitute.stat()
+            substitute_identity = (substitute_status.st_dev, substitute_status.st_ino)
+            real_ftruncate = os.ftruncate
+            swapped = False
+            swap_blocked = False
+
+            def swap_then_truncate(descriptor: int, size: int) -> None:
+                nonlocal swapped, swap_blocked
+                self.assertFalse(swapped)
+                if os.name == "nt":
+                    with self.assertRaises(PermissionError):
+                        os.replace(path, published)
+                    swap_blocked = True
+                else:
+                    os.replace(path, published)
+                    os.replace(substitute, path)
+                    swapped = True
+                real_ftruncate(descriptor, size)
+
+            with (
+                mock.patch.object(
+                    eval_run.os,
+                    "ftruncate",
+                    side_effect=swap_then_truncate,
+                ),
+                self.assertRaisesRegex(eval_run.HarnessError, "post-check failed"),
+            ):
+                eval_run._atomic_write_text(
+                    path,
+                    payload,
+                    after_replace=lambda: (_ for _ in ()).throw(
+                        eval_run.HarnessError("post-check failed")
+                    ),
+                )
+
+            if os.name == "nt":
+                self.assertTrue(swap_blocked)
+                self.assertFalse(path.exists())
+                self.assertFalse(published.exists())
+                self.assertEqual(substitute.read_text(encoding="utf-8"), payload)
+            else:
+                self.assertTrue(swapped)
+                self.assertEqual(path.read_text(encoding="utf-8"), payload)
+                current_status = path.stat()
+                self.assertEqual(
+                    (current_status.st_dev, current_status.st_ino),
+                    substitute_identity,
+                )
+                self.assertEqual(published.read_bytes(), b"")
 
     def test_verified_commit_reports_cleanup_failure_as_committed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

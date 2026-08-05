@@ -641,7 +641,12 @@ digest metadata again from the frozen manifest so a constructed snapshot cannot
 reclassify responder files as evaluator-only inputs. A post-run check plus checks
 immediately before and after the atomic ledger replace refuse release evidence
 if any input changed after the snapshot; a failed post-replace check restores the
-prior ledger or removes the newly written one. Existing ledger permission modes
+prior ledger. For a newly created destination, it invalidates only the retained
+published inode to zero length through its open descriptor; a concurrent
+namespace substitute is preserved untouched. That first publication is also
+source-descriptor-bound: Linux links an unnamed `O_TMPFILE`, while Windows
+renames the retained file handle to a target derived from the retained directory
+handle. Neither platform re-resolves a mutable staging pathname. Existing ledger permission modes
 are bound before the copy and preserved on both replacement and rollback; a new
 POSIX ledger remains owner-only, while the Windows read-only attribute is retained
 without modifying linked inputs. Bootstrap failure ledgers also
