@@ -16,7 +16,13 @@ Use these as safe structures, not fixed scripts. They are original examples and 
 
 ## V2V Extend
 
-`@Video1 is the previous clip. Continue the same shot for five seconds from its final frame. The character completes the turn, pauses at the window, and the curtain moves once in the breeze. Camera remains locked; lighting and room layout stay continuous.`
+Use this structure only after take review has accepted the source and recorded its
+observed end state. In this fixture, the review recorded Character A already
+facing the window with the right hand on the sill, the curtain moving inward,
+and a locked camera; those facts are evidence for this example, not details to
+invent for another clip.
+
+`@Video1 is the accepted previous clip and controls its actual observed opening state. Continue only from that reviewed ending: Character A draws one breath and lowers the right hand from the sill while the curtain finishes its inward swing and settles. Keep the camera locked, with the same room layout and light. Stop when the hand rests at Character A's side; do not replay an earlier turn or open a new scene.`
 
 ## R2V Role Map
 
@@ -80,7 +86,11 @@ These examples are original structures distilled from public multilingual practi
 
 ## Sequence Continuation Example
 
-`[Video 1] is the accepted previous clip and controls the actual opening state only. @Image 1 preserves the original traveler identity. Begin from the observed final frame: the traveler is two steps from the open rear door, still moving left-to-right. Complete those two steps, enter the rear seat, and close the door. Do not replay the terminal exit. Do not show the car departing yet.`
+This fixture assumes take review actually recorded the traveler two steps from
+the open rear door and still moving left-to-right. Replace those facts with the
+accepted clip's observed end state; never recover them from the old plan.
+
+`@Video1 is the accepted previous clip and controls only the actual opening state, camera phase, motion phase, ambience, and environment arrangement. @Image1 preserves the original traveler identity. From the reviewed ending, complete the two remaining left-to-right steps, enter the open rear door, and close it. Keep the same travel direction and camera phase. The terminal exit is complete; stop with the closed door before vehicle departure.`
 
 ## Standalone Non-Overplanning Example
 

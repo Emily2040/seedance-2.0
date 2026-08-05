@@ -124,7 +124,7 @@
     {
       "path": "references/examples-by-mode.md",
       "role": "responder",
-      "sha256": "32cd7be32cc0c5f307fb839ea38292c375214da357b63db398dbd15fc5a10f49"
+      "sha256": "029dabc3971248e596c7e1be382d4c1419dbbc0af00a6bd25dd89f6de30be0f6"
     },
     {
       "path": "references/failure-atlas.md",
@@ -344,7 +344,7 @@
     {
       "path": "references/prompt-examples.md",
       "role": "responder",
-      "sha256": "72687b1891e2daf71ea6482a7b60342d26a10ddf89e2684993d2cf0c09c19153"
+      "sha256": "74a718e2123c3cd11ed596307aa4fb679fb859aef13d17b3db2e055a47ce6718"
     },
     {
       "path": "references/quick-ref.md",
@@ -359,7 +359,7 @@
     {
       "path": "references/reference-workflow.md",
       "role": "responder",
-      "sha256": "d07be861f246882c61c941d7c1e2b929975ef1fb8299a624fe85cc2577408857"
+      "sha256": "a91e9f1b9ff46c92d92a35010fa30da59fe0a04ab065ee0b47b24c26e0bca675"
     },
     {
       "path": "references/research-2026-05-30.md",
