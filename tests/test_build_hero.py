@@ -648,11 +648,181 @@ class OutlinedTypeTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, "not the trusted stdlib venv launcher"):
                     gen.require_build_env_trust(build_env, state="sealed")
 
-    def test_external_trust_rejects_runner_config_marker_and_script_tampering(self) -> None:
+    def test_windows_venv_runner_source_selects_the_exact_upstream_variant(self) -> None:
+        """Version, free-threading, and debug status bind the launcher name."""
         import build_masthead_outlines as gen
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
+            stdlib = root / "Lib"
+            venv_dir = stdlib / "venv"
+            scripts = venv_dir / "scripts" / "nt"
+            scripts.mkdir(parents=True)
+            for name in (
+                "python.exe",
+                "python_d.exe",
+                "venvlauncher.exe",
+                "venvlauncher_d.exe",
+                "venvlaunchert.exe",
+                "venvlaunchert_d.exe",
+            ):
+                (scripts / name).write_bytes(name.encode("ascii"))
+            for name in (
+                "python.exe",
+                "python_d.exe",
+                "python3.13t.exe",
+                "python3.13t_d.exe",
+            ):
+                (root / name).write_bytes(("base-" + name).encode("ascii"))
+
+            cases = (
+                (
+                    "3.13 normal",
+                    "python.exe",
+                    (3, 13),
+                    False,
+                    scripts / "venvlauncher.exe",
+                ),
+                (
+                    "3.13 free-threaded",
+                    "python3.13t.exe",
+                    (3, 13),
+                    True,
+                    scripts / "venvlaunchert.exe",
+                ),
+                (
+                    "3.13 debug",
+                    "python_d.exe",
+                    (3, 13),
+                    False,
+                    scripts / "venvlauncher_d.exe",
+                ),
+                (
+                    "3.13 free-threaded debug",
+                    "python3.13t_d.exe",
+                    (3, 13),
+                    True,
+                    scripts / "venvlaunchert_d.exe",
+                ),
+                ("3.12 legacy", "python.exe", (3, 12), False, scripts / "python.exe"),
+                (
+                    "3.12 legacy debug",
+                    "python_d.exe",
+                    (3, 12),
+                    False,
+                    scripts / "python_d.exe",
+                ),
+            )
+            for label, base_name, version, gil_disabled, expected in cases:
+                with self.subTest(layout=label):
+                    self.assertEqual(
+                        gen.windows_venv_runner_source(
+                            root / base_name,
+                            venv_dir,
+                            version,
+                            gil_disabled=gil_disabled,
+                            python_build=False,
+                        ),
+                        expected,
+                    )
+
+            build_dir = root / "PCbuild" / "amd64"
+            build_dir.mkdir(parents=True)
+            source_base = build_dir / "python.exe"
+            source_base.write_bytes(b"base-python")
+            source_launcher = build_dir / "venvlauncher.exe"
+            source_launcher.write_bytes(b"source-build-launcher")
+            self.assertEqual(
+                gen.windows_venv_runner_source(
+                    source_base,
+                    stdlib / "venv",
+                    (3, 13),
+                    gil_disabled=False,
+                    python_build=True,
+                ),
+                source_launcher,
+            )
+            self.assertEqual(
+                gen.windows_venv_runner_source(
+                    source_base,
+                    stdlib / "venv",
+                    (3, 12),
+                    gil_disabled=False,
+                    python_build=True,
+                ),
+                source_base,
+            )
+
+    def test_windows_venv_runner_source_refuses_the_wrong_variant(self) -> None:
+        """An existing launcher for a different ABI cannot become the trust anchor."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            stdlib = root / "Lib"
+            venv_dir = stdlib / "venv"
+            scripts = venv_dir / "scripts" / "nt"
+            scripts.mkdir(parents=True)
+            (scripts / "venvlauncher.exe").write_bytes(b"wrong-abi")
+
+            cases = (
+                ("free-threaded", root / "python3.13t.exe", True, "venvlaunchert\\.exe"),
+                ("debug", root / "python_d.exe", False, "venvlauncher_d\\.exe"),
+            )
+            for label, base, gil_disabled, expected in cases:
+                with self.subTest(layout=label), self.assertRaisesRegex(SystemExit, expected):
+                    gen.windows_venv_runner_source(
+                        base,
+                        venv_dir,
+                        (3, 13),
+                        gil_disabled=gil_disabled,
+                        python_build=False,
+                    )
+
+            for version in ((3, 10), (3, 14)):
+                with self.subTest(version=version), self.assertRaisesRegex(
+                    SystemExit, "supports CPython 3\\.11 through 3\\.13"
+                ):
+                    gen.windows_venv_runner_source(
+                        root / "python.exe",
+                        venv_dir,
+                        version,
+                        gil_disabled=False,
+                        python_build=False,
+                    )
+
+            (root / "python.exe").write_bytes(b"legacy-base-lookalike")
+            with self.assertRaisesRegex(SystemExit, "trusted stdlib venv runner is missing"):
+                gen.windows_venv_runner_source(
+                    root / "python.exe",
+                    venv_dir,
+                    (3, 12),
+                    gil_disabled=False,
+                    python_build=False,
+                )
+
+    @unittest.skipUnless(os.name == "nt", "Windows venv launcher provenance")
+    def test_windows_venv_runner_source_matches_real_envbuilder(self) -> None:
+        """The selected source must be byte-identical to a real venv runner."""
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            build_env = Path(temp) / "builder"
+            venv.EnvBuilder(with_pip=False).create(build_env)
+            generated = gen.build_env_python(build_env)
+            source = gen.trusted_venv_runner_source()
+
+            self.assertEqual(generated.stat().st_size, source.stat().st_size)
+            self.assertEqual(gen.sha256_file(generated), gen.sha256_file(source))
+
+    def test_external_trust_rejects_runner_config_marker_and_script_tampering(self) -> None:
+        import build_masthead_outlines as gen
+
+        with tempfile.TemporaryDirectory() as temp:
+            # Hosted Windows TEMP may use an 8.3 alias (RUNNER~1) while
+            # Path.resolve() in the production verifier expands it. Keep the
+            # mocked trusted base in that same canonical namespace.
+            root = Path(temp).resolve()
             trust_root = root / "external-trust"
 
             def prepared(name: str) -> Path:
