@@ -2,6 +2,32 @@
 
 A modular agent-skill operating system for directing ByteDance **Seedance 2.0** video. It turns vague ideas into production-ready prompts, **directs each scene like a filmmaker**, keeps platform facts source-dated, rewrites unsafe IP, and plans long-form stories across many clips — with localized reader paths for English, 中文, 日本語, and 한국어.
 
+## Final hardening pass — 2026-08-05
+
+The final audit after the main v6.7.0 work found four reproducible defects. Pull requests [#149](https://github.com/Emily2040/seedance-2.0/pull/149), [#150](https://github.com/Emily2040/seedance-2.0/pull/150), [#151](https://github.com/Emily2040/seedance-2.0/pull/151), and [#152](https://github.com/Emily2040/seedance-2.0/pull/152) are now merged. Together they close the following gaps without changing the active version or the documented Seedance 2.0 platform boundary.
+
+### Frame tooling now spans current and legacy FFmpeg
+
+FFmpeg 9 removed the `-vsync` option used by the frame helper, so first- and last-frame extraction failed before decoding on a current Windows runner. The helper now performs one bounded capability probe for the selected FFmpeg binary, prefers `-fps_mode passthrough`, and falls back to `-vsync 0` for older builds. The same real-frame extraction path was verified with FFmpeg 8.1.1 and 9.0; the publication and rollback contract remains unchanged.
+
+### Copyable prompts now match the routing contract
+
+Some repository-authored generic sequence examples used malformed `[Video 1]` and `@Image 1` spellings instead of the canonical tokens the examples intended to teach. They now use `@Video1` and `@Image1`; user- or interface-supplied tags such as `[Video 1]` and `@Image 1` remain byte-preserved by design. The continuation examples also now bind their opening to the accepted take's actual observed state instead of a planned ending, and carry the scene through specific behavior, props, timing, sound, and endpoints. Focused regressions inspect the inline prompt bodies rather than passing on nearby explanatory prose.
+
+### New evaluator ledgers are bound to retained objects
+
+A brand-new ledger previously depended on a mutable temporary pathname during publication and rollback. The repaired Linux path creates an unnamed `O_TMPFILE` and links the retained descriptor into the retained target directory with atomic no-replace semantics. The Windows path retains a zero-share source handle and the exact destination-directory handle, then performs a root-relative no-replace native rename. Rollback is armed before publication, concurrent late claimants and namespace substitutes are preserved, and unsupported hosts or filesystems fail closed instead of weakening the boundary.
+
+This closes the confirmed first-publication, parent-redirection, and rollback race classes. It does not claim protection against a process that can rewrite the evaluator itself.
+
+### Windows release validation follows CPython's real launchers
+
+The masthead build trust check assumed every supported Windows Python copied `Lib/venv/scripts/nt/python.exe`. CPython 3.13 uses the `venvlauncher` family instead, with free-threaded and debug variants. The trust mapping now follows the exact launcher packaged or built for CPython 3.11, 3.12, and 3.13; missing, unsupported, and wrong-variant candidates are rejected. A real `venv.EnvBuilder(with_pip=False)` regression verifies the generated runner against the selected source, and the Windows CI matrix covers all three supported versions.
+
+### What this final pass proves — and what it does not
+
+The merged fixes are backed by repository validators, focused adversarial tests, real FFmpeg extraction, and hosted Linux and Windows matrices. They verify the checked-in prompt contracts and the tested local tooling. They do not guarantee the subjective quality of every generated clip, prove that every third-party agent host auto-loads the skill, or replace a blinded live Seedance generation benchmark.
+
 ## What's new in v6.7.0 — the outside world moved
 
 v6.6.0 closed the sequence loop. v6.7.0 is about everything that drifted while the loop was being closed: reports of a newer model line surfaced, the front page's type was resolving differently on every reader's machine, and the path a first-time user walks was broken in four places.
@@ -62,3 +88,5 @@ python scripts/install_codex_skill.py --dest ~/.claude/skills --force
 ## Verification
 
 Run the documented validator suite and unit-test discovery rather than relying on a frozen count. The release checks include the masthead design-rule suite, the prompt-architecture gate, and `source_registry_check --enforce-freshness`.
+
+At the final handoff, merged `main` commit `f084a54` passed both canonical archive-safe validation jobs and the Windows frame-publication and runner-trust jobs on CPython 3.11, 3.12, and 3.13. The privileged Linux workflow also passed, but the hosted runner lacked the complete descriptor-bound extended-attribute prerequisite, so its success-path metadata-preservation step was explicitly skipped while the prerequisite check proved the helper fails closed.
