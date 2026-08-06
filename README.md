@@ -8,11 +8,11 @@ An agent that reads the scene before it writes the prompt: text, image, video, a
 
 English · [中文](docs/README.zh.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md)
 
-[Start here](#start-here) · [Skill map](#skill-map) · [Reference library](#reference-library) · [Visual gallery](#visual-gallery) · [Install](#install)
+[Start here](#start-here) · [Final hardening](#final-hardening-contract) · [Skill map](#skill-map) · [Reference library](#reference-library) · [Visual gallery](#visual-gallery) · [Install](#install)
 
 ---
 
-`v6.7.0` · MIT · updated 2026-08-01 · [what changed](CHANGELOG.md)
+`v6.7.0` · MIT · updated 2026-08-05 · [what changed](CHANGELOG.md)
 
 Author: [Iamemily2050 (@iamemily2050)](https://github.com/Emily2040) · [Instagram](https://instagram.com/iamemily2050) · [X](https://x.com/iamemily2050) · [Website](https://iamemily2050.com)
 
@@ -82,6 +82,19 @@ This skill package turns Seedance 2.0 work into a repeatable assistant workflow:
 - Rewrites unsafe celebrity, protected IP, private-person, brand, logo, song, or voice requests into safer creative equivalents.
 - Diagnoses failed outputs with concrete repair levers: camera, lighting, motion, reference role, duration, framing, audio, or safety wording.
 - Ships validation scripts, eval cases, source data, and design checks so maintainers can review changes before release.
+
+## Final hardening contract
+
+The 2026-08-05 audit closed four concrete gaps in the current v6.7.0 tree:
+
+| Boundary | Current behavior |
+|---|---|
+| Frame extraction | `extract_last_frame.py` probes the selected FFmpeg binary once, prefers `-fps_mode passthrough`, and falls back to legacy `-vsync 0`. The real-frame path was verified with FFmpeg 8.1.1 and 9.0. |
+| Copyable prompts | Generic reference-package examples use canonical `@Video1` and `@Image1` when the repository authors the tag; user- or interface-supplied spellings such as `[Video 1]` and `@Image 1` remain byte-preserved. Continuations begin from accepted footage's observed end state, and showcase prompts carry brief-specific behavior, props, timing, sound, and endpoints. |
+| Evaluator ledgers | A new ledger is published from a retained file descriptor or handle relative to a retained directory descriptor or handle. Late destination claimants and namespace substitutes remain untouched; unsupported safe-publication paths fail closed. |
+| Windows release tooling | Runner trust follows the exact venv launcher CPython installs across 3.11–3.13, including the 3.13 launcher variants. The Windows CI matrix exercises all three supported versions. |
+
+These checks verify repository contracts, prompt structure, and the tested local tooling. They do not guarantee the subjective quality of every generated clip, prove that every third-party agent host auto-loads the skill, or replace a live Seedance generation benchmark. See the [v6.7.0 release note](docs/RELEASE_v6.7.0.md) for the full audit result.
 
 ## Making Videos Longer Than One Generation
 
