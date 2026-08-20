@@ -616,6 +616,20 @@ python scripts/eval_run.py --provider minimax --region global_en \
   --ledger evals/eval-run-ledger.md --stamp 2026-06-28
 python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 \
   --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+
+# OrcaRouter is an OpenAI- and Anthropic-compatible gateway
+# (https://www.orcarouter.ai). It also runs gateway-level, zero-trust security
+# for AI agents on the same endpoint — screening every prompt/response and
+# governing every tool call on a default-deny basis, with no application code
+# changes. The Messages endpoint accepts vendor-qualified model ids such as
+# anthropic/claude-sonnet-5 or deepseek/deepseek-v4-pro; orcarouter/auto is
+# available as an adaptive router but is not the default here because the eval
+# judge depends on a stable response model.
+export ORCAROUTER_API_KEY=...
+python scripts/eval_run.py --provider orcarouter \
+  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+python scripts/eval_run.py --provider orcarouter --model deepseek/deepseek-v4-pro \
+  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
 ```
 
 The harness uses `Authorization: Bearer <API_KEY>` as documented by both the

@@ -29,6 +29,11 @@ def completion_payload(provider_name: str, model: str) -> dict:
     }
     if provider_name == "anthropic":
         payload["stop_sequence"] = None
+    elif provider_name == "orcarouter":
+        # OrcaRouter is an Anthropic-compatible gateway: it returns the same
+        # message envelope but echoes the *upstream* model id.
+        payload["stop_sequence"] = None
+        payload["model"] = model.split("/", 1)[-1]
     return payload
 
 
@@ -284,6 +289,7 @@ class EvalRunProviderTests(unittest.TestCase):
             ("anthropic", "global_en"),
             ("minimax", "global_en"),
             ("minimax", "cn_zh"),
+            ("orcarouter", "global_en"),
         ):
             with self.subTest(provider=provider_name, region=region):
                 provider, endpoint, model = eval_run.resolve_provider(
@@ -311,6 +317,7 @@ class EvalRunProviderTests(unittest.TestCase):
             ("anthropic", "global_en"),
             ("minimax", "global_en"),
             ("minimax", "cn_zh"),
+            ("orcarouter", "global_en"),
         ):
             provider, endpoint, model = eval_run.resolve_provider(
                 provider_name, region, None
@@ -1130,6 +1137,139 @@ class EvalRunProviderTests(unittest.TestCase):
         self.assertIn(r"\[FORGED\]\(https://evil.example\)", ledger)
         self.assertIn(r"\*\*PASS\*\*", ledger)
         self.assertIn("&lt;img src=x&gt;", ledger)
+
+    def test_orcarouter_configuration_matches_current_models_and_endpoint(self) -> None:
+        config = eval_run.PROVIDER_CONFIGS["orcarouter"]
+
+        self.assertEqual(config.api_key_env, "ORCAROUTER_API_KEY")
+        self.assertEqual(config.default_model, "anthropic/claude-sonnet-5")
+        self.assertEqual(config.endpoints, {"global_en": "https://api.orcarouter.ai/v1/messages"})
+        self.assertEqual(config.auth_header, "x-api-key")
+        self.assertEqual(config.auth_prefix, "")
+        self.assertEqual(config.response_schema, "orcarouter")
+        # The adaptive router is intentionally not the default: the eval judge
+        # depends on a stable response model, so the default is a pinned model.
+        self.assertNotIn("orcarouter/auto", eval_run.ORCAROUTER_MODELS)
+
+    def test_orcarouter_defaults_and_validation(self) -> None:
+        config, endpoint, model = eval_run.resolve_provider(
+            "orcarouter", "global_en", None
+        )
+
+        self.assertEqual(endpoint, "https://api.orcarouter.ai/v1/messages")
+        self.assertEqual(model, "anthropic/claude-sonnet-5")
+        for supported in eval_run.ORCAROUTER_MODELS:
+            self.assertEqual(
+                eval_run.resolve_provider("orcarouter", "global_en", supported)[2],
+                supported,
+            )
+        with self.assertRaisesRegex(ValueError, "not supported"):
+            eval_run.resolve_provider("orcarouter", "global_en", "unsupported")
+        with self.assertRaisesRegex(ValueError, "region 'cn_zh'"):
+            eval_run.resolve_provider("orcarouter", "cn_zh", None)
+
+    def test_orcarouter_request_uses_gateway_endpoint_and_api_key_auth(self) -> None:
+        config = eval_run.PROVIDER_CONFIGS["orcarouter"]
+        _, endpoint, model = eval_run.resolve_provider("orcarouter", "global_en", None)
+        payload = completion_payload("orcarouter", model)
+        with mock.patch.object(
+            eval_run.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(payload),
+        ) as urlopen:
+            text = eval_run.call_api(
+                "system", "user", model, "test-key", config, endpoint
+            )
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(text, "ok")
+        self.assertEqual(request.full_url, "https://api.orcarouter.ai/v1/messages")
+        self.assertEqual(request.get_header("X-api-key"), "test-key")
+        self.assertIsNone(request.get_header("Authorization"))
+        self.assertEqual(request.get_header("Anthropic-version"), "2023-06-01")
+        self.assertEqual(json.loads(request.data)["model"], "anthropic/claude-sonnet-5")
+        self.assertIs(json.loads(request.data)["stream"], False)
+
+    def test_orcarouter_accepts_gateway_model_echo(self) -> None:
+        # OrcaRouter echoes the *upstream* model id (strips the vendor prefix and
+        # may append a version date). Each requested model must accept its own
+        # upstream echo and must still fail closed on an unrelated echo.
+        cases = (
+            ("anthropic/claude-sonnet-5", ("claude-sonnet-5", "claude-sonnet-5-20250829")),
+            ("deepseek/deepseek-v4-pro", ("deepseek-v4-pro",)),
+            ("openai/gpt-5.5", ("gpt-5.5-2026-04-24",)),
+            ("google/gemini-3.5-flash", ("gemini-3.5-flash",)),
+            ("qwen/qwen3.7-max", ("qwen3.7-max",)),
+            ("minimax/minimax-m2.7", ("MiniMax-M2.7",)),
+        )
+        for requested, echoes in cases:
+            config, endpoint, model = eval_run.resolve_provider(
+                "orcarouter", "global_en", requested
+            )
+            for echo in echoes:
+                with self.subTest(model=requested, echo=echo):
+                    payload = completion_payload("orcarouter", model)
+                    payload["model"] = echo
+                    with mock.patch.object(
+                        eval_run.urllib.request,
+                        "urlopen",
+                        return_value=FakeResponse(payload),
+                    ):
+                        self.assertEqual(
+                            eval_run.call_api(
+                                "system", "user", model, "key", config, endpoint
+                            ),
+                            "ok",
+                        )
+            with self.subTest(model=requested, echo="unrelated"):
+                payload = completion_payload("orcarouter", model)
+                payload["model"] = "gpt-4o-mini-2024-07-18"
+                with (
+                    mock.patch.object(
+                        eval_run.urllib.request,
+                        "urlopen",
+                        return_value=FakeResponse(payload),
+                    ),
+                    self.assertRaisesRegex(
+                        eval_run.ProviderResponseError,
+                        "does not match the requested model",
+                    ),
+                ):
+                    eval_run.call_api("system", "user", model, "key", config, endpoint)
+
+    def test_orcarouter_skips_reasoning_thinking_blocks(self) -> None:
+        config, endpoint, model = eval_run.resolve_provider(
+            "orcarouter", "global_en", "deepseek/deepseek-v4-pro"
+        )
+        payload = completion_payload("orcarouter", model)
+        payload["content"] = [
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "thinking", "thinking": "chain of thought", "signature": "sig2"},
+            {"type": "text", "text": "ok"},
+        ]
+        with mock.patch.object(
+            eval_run.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(payload),
+        ):
+            self.assertEqual(
+                eval_run.call_api("system", "user", model, "key", config, endpoint),
+                "ok",
+            )
+
+    def test_live_mode_requires_orcarouter_key(self) -> None:
+        output = io.StringIO()
+        with (
+            mock.patch.object(
+                sys, "argv", ["eval_run.py", "--provider", "orcarouter"]
+            ),
+            mock.patch.dict(os.environ, {}, clear=True),
+            redirect_stdout(output),
+        ):
+            result = eval_run.main()
+
+        self.assertEqual(result, 2)
+        self.assertIn("ORCAROUTER_API_KEY not set", output.getvalue())
 
 
 if __name__ == "__main__":

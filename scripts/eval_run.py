@@ -80,7 +80,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "cde7848ebda33e8d98a111df67620414caecefa88a5ada6fe2ff3ae7123a0883"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "2e55db25a291ce2fce349186d575e37da66b8a63c580a7fffdae9f47208afeaf"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -100,6 +100,27 @@ MINIMAX_ANTHROPIC_BASE_URLS = {
     "global_en": "https://api.minimax.io/anthropic",
     "cn_zh": "https://api.minimaxi.com/anthropic",
 }
+ORCAROUTER_API_URL = "https://api.orcarouter.ai/v1/messages"
+# OrcaRouter is an OpenAI- and Anthropic-compatible gateway
+# (https://www.orcarouter.ai). Its Anthropic Messages endpoint accepts a
+# vendor-qualified model id (for example ``anthropic/claude-sonnet-5``) and
+# echoes the *upstream* model id in the response (``claude-sonnet-5``), so the
+# harness accepts a gateway model echo for this provider instead of requiring an
+# exact match. ``orcarouter/auto`` is the gateway's adaptive router and is
+# intentionally not the default here because the eval judge depends on a stable
+# response model.
+ORCAROUTER_MODELS = (
+    "anthropic/claude-sonnet-5",
+    "anthropic/claude-opus-5",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.1-flash-lite",
+    "openai/gpt-5.5",
+    "openai/gpt-5.4",
+    "deepseek/deepseek-v4-pro",
+    "deepseek/deepseek-v4-flash",
+    "qwen/qwen3.7-max",
+    "minimax/minimax-m2.7",
+)
 MAX_SOURCE_FILES = 24
 SOURCE_MANIFEST_PATH = "evals/source-manifest.json"
 EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py"})
@@ -234,6 +255,13 @@ PROVIDER_CONFIGS = {
         auth_header="Authorization",
         auth_prefix="Bearer ",
         response_schema="minimax",
+    ),
+    "orcarouter": ProviderConfig(
+        api_key_env="ORCAROUTER_API_KEY",
+        default_model=ORCAROUTER_MODELS[0],
+        endpoints={"global_en": ORCAROUTER_API_URL},
+        models=ORCAROUTER_MODELS,
+        response_schema="orcarouter",
     ),
 }
 REGIONS = tuple(
@@ -1585,7 +1613,7 @@ def _validate_usage(usage: object, provider: ProviderConfig) -> None:
         raise ProviderResponseError("model API response has invalid usage")
     if provider.response_schema == "minimax":
         allowed_fields = USAGE_REQUIRED_TOKEN_FIELDS | USAGE_NULLABLE_TOKEN_FIELDS
-    elif provider.response_schema == "anthropic":
+    elif provider.response_schema in ("anthropic", "orcarouter"):
         allowed_fields = (
             USAGE_REQUIRED_TOKEN_FIELDS
             | USAGE_NULLABLE_TOKEN_FIELDS
@@ -1853,6 +1881,12 @@ def _validate_content_blocks(
                 {"type", "thinking", "signature"},
                 f"content thinking block {index}",
             )
+            if provider.response_schema == "orcarouter":
+                # OrcaRouter emits reasoning ``thinking`` blocks for models that
+                # reason (for example the deepseek and qwen routes); the thinking
+                # text can be empty even when the signature is present. These are
+                # not part of the final answer, so skip them.
+                continue
             thinking = block.get("thinking")
             signature = block.get("signature")
             if (
@@ -1944,11 +1978,11 @@ def _validate_provider_legacy_fields(
     body: dict,
 ) -> None:
     common = set(REQUIRED_COMPLETION_FIELDS)
-    if provider.response_schema == "anthropic":
+    if provider.response_schema in ("anthropic", "orcarouter"):
         _reject_extra_keys(
             body,
             common | {"stop_sequence", "container", "stop_details"},
-            "Anthropic response",
+            f"{'Anthropic' if provider.response_schema == 'anthropic' else 'OrcaRouter'} response",
         )
         if "base_resp" in body:
             raise ProviderResponseError("Anthropic response contains foreign base_resp")
@@ -2034,6 +2068,33 @@ def _validate_provider_legacy_fields(
         )
 
 
+def _validate_model_echo(provider: ProviderConfig, model: str, body: dict) -> None:
+    """Fail closed when the response model does not match the requested model.
+
+    Anthropic and MiniMax echo the requested model id exactly. OrcaRouter is a
+    gateway and echoes the *upstream* model id instead: ``anthropic/claude-sonnet-5``
+    returns ``claude-sonnet-5``, and ``openai/gpt-5.5`` returns ``gpt-5.5-2026-04-24``.
+    For that provider, compare the bare requested model (the part after the vendor
+    prefix) as a token prefix of the echoed id.
+    """
+    if body["model"] == model:
+        return
+    if provider.response_schema == "orcarouter":
+        requested_bare = model.rsplit("/", 1)[-1].lower()
+        requested_tokens = re.findall(r"[a-z0-9]+", requested_bare)
+        echoed_tokens = re.findall(r"[a-z0-9]+", str(body["model"]).lower())
+        if (
+            requested_tokens
+            and len(echoed_tokens) >= len(requested_tokens)
+            and echoed_tokens[: len(requested_tokens)] == requested_tokens
+        ):
+            return
+    raise ProviderResponseError(
+        "model API response model does not match the requested model: "
+        f"expected {model!r}, got {body['model']!r}"
+    )
+
+
 def _call_api_unredacted(
     system: str,
     user: str,
@@ -2085,11 +2146,7 @@ def _call_api_unredacted(
         raise ProviderResponseError("model API response type must be message")
     if body["role"] != "assistant":
         raise ProviderResponseError("model API response role must be assistant")
-    if body["model"] != model:
-        raise ProviderResponseError(
-            "model API response model does not match the requested model: "
-            f"expected {model!r}, got {body['model']!r}"
-        )
+    _validate_model_echo(provider, model, body)
 
     stop_reason = body["stop_reason"]
     if not isinstance(stop_reason, str) or not stop_reason.strip():
