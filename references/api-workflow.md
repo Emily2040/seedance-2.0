@@ -14,6 +14,7 @@ Use this reference for Seedance 2.0 operational planning on Volcengine, BytePlus
 | BytePlus ModelArk | International BytePlus docs or console workflows. | JS-rendered pricing/model pages, account access, region, exact model ID, upload/file rules |
 | Runway | Runway web/API/MCP workflow with `seedance2`, hosted uploads, and Runway plan/region constraints. | duration, ratios, plan, region, SDK field support, audio-reference combination rules |
 | Provider/router APIs | EvoLink, OpenRouter, Kie.ai, PiAPI, LaoZhang, Runware, ModelsLab, AI/ML API, MuAPI, SeeGen, Segmind, or similar surfaces. | base URL, model ID, task endpoint, polling endpoint, callback/webhook support, billing unit, file hosting, reference schema, face policy, output URL lifetime, rights terms |
+| Atlas Cloud | Optional unified Seedance 2.0 execution through `scripts/atlas_seedance_generate.py`. | live model catalog and schema, account access, price, duration, resolution, ratio, output lifetime, rights terms |
 | China-facing official surfaces | ByteDance Seed, Volcengine Ark, BytePlus ModelArk, Doubao, Jimeng/Jianying, CapCut/Jianying. | language/region, account tier, enterprise or individual access, identity verification, portrait/virtual-avatar flow, console entitlement, exact docs date |
 | Wrapper APIs | Fast prototyping through a third-party provider. | whether names, prices, moderation, duration, or face support are wrapper-specific |
 
@@ -45,6 +46,29 @@ BytePlus docs are the current source for `dreamina-seedance-2-0-mini-260615` and
 Runway docs are the current source for Runway's `seedance2` API surface, `runway://` uploads, duration, reference-count rules, and SDK caveats. Do not copy Runway field names into Volcengine examples or vice versa.
 
 Provider/router surfaces are integration conveniences, not source-of-truth model specs. As of 2026-06-20, the repo tracks EvoLink, OpenRouter, Kie.ai, PiAPI, LaoZhang, Runware, ModelsLab, AI/ML API, MuAPI, SeeGen, and Segmind as public pages or docs that mention Seedance 2.0 access. Use the active surface's own docs for model IDs and fields, and never merge schemas across providers.
+
+### Atlas Cloud executable path
+
+The optional Atlas Cloud helper is a source-checkout tool; it is intentionally excluded from the offline installed-skill payload. It uses the live model name `bytedance/seedance-2.0/text-to-video` and the `/api/v1/model/generateVideo` task endpoint verified on 2026-08-29. Recheck the catalog and schema before production use because model fields and availability can change.
+
+Preview the exact request without credentials or a paid submission:
+
+```bash
+python scripts/atlas_seedance_generate.py \
+  --prompt "A single continuous dolly shot through a rain-lit night market" \
+  --duration 5 --resolution 720p --ratio 16:9 --dry-run
+```
+
+Submit once and poll the returned prediction with bounded GET requests:
+
+```bash
+export ATLASCLOUD_API_KEY="..."
+python scripts/atlas_seedance_generate.py \
+  --prompt-file prompt.md --duration 5 --resolution 720p --ratio 16:9 \
+  --wait --max-polls 120 --poll-interval 5
+```
+
+The helper never automatically retries the generation POST. A network failure after submission is ambiguous and must be reconciled from provider history before another paid create. Only prediction GET requests are repeated, up to `--max-polls`.
 
 Chinese-language search results need classification before use. Official ByteDance/Volcengine/BytePlus/Doubao/Jimeng/Jianying pages can support China-facing surface guidance. Hosted workflows, Chinese blogs, pricing comparisons, and business-partner news can provide context, but they are not public API contracts unless they link to provider-owned API docs.
 
