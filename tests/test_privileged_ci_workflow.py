@@ -78,6 +78,17 @@ class PrivilegedWorkflowSecurityTests(unittest.TestCase):
         self.assertNotIn("--privileged", self.ordinary)
         self.assertNotIn("linux-privileged-frame-publication", self.ordinary)
 
+    def test_every_validation_checkout_disables_credential_persistence(self) -> None:
+        for name in ("validate", "windows-frame-publication"):
+            with self.subTest(job=name):
+                block = self.job_block(self.ordinary, name)
+                self.assertRegex(
+                    block,
+                    r"(?m)^      - uses: actions/checkout@[0-9a-f]{40}.*\n"
+                    r"        with:\n"
+                    r"          persist-credentials: false$",
+                )
+
     def test_privileged_job_uses_a_digest_pinned_base_and_explicit_option(self) -> None:
         block = self.job_block(
             self.privileged, "linux-privileged-frame-publication"
