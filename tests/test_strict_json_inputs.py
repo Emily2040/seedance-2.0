@@ -844,8 +844,7 @@ class NetworkBoundaryTests(unittest.TestCase):
 
         response = FakeResponse()
         with mock.patch.object(
-            eval_run.urllib.request,
-            "urlopen",
+            eval_run, "_open_provider_request",
             return_value=response,
         ):
             self.assertEqual(

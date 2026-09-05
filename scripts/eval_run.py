@@ -80,7 +80,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "cde7848ebda33e8d98a111df67620414caecefa88a5ada6fe2ff3ae7123a0883"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "7474f588f4614f3be101290f146f040754612946ed28ec64cdec768c8cc0ff9d"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -403,13 +403,42 @@ def _transport_failure(
     )
 
 
+class _RejectProviderRedirects(urllib.request.HTTPRedirectHandler):
+    """Never forward authentication or replay a paid request on a redirect."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(
+            req.full_url,
+            code,
+            "authenticated provider redirects are refused",
+            headers,
+            fp,
+        )
+
+
+def _open_provider_request(request: urllib.request.Request, *, timeout: int):
+    allowed = {
+        endpoint
+        for provider in PROVIDER_CONFIGS.values()
+        for endpoint in provider.endpoints.values()
+        if endpoint.startswith("https://")
+    }
+    if request.full_url not in allowed:
+        raise ProviderResponseError("request must use a configured HTTPS provider endpoint")
+    # A private opener preserves proxy/TLS defaults without changing global urllib
+    # behavior for the host process or following credential-bearing redirects.
+    return urllib.request.build_opener(_RejectProviderRedirects()).open(
+        request, timeout=timeout
+    )
+
+
 def _read_api_response(
     request: urllib.request.Request,
     api_key: str,
 ) -> bytes:
     """Open, enter, read, and close with phase-specific sanitized failures."""
     try:
-        manager = urllib.request.urlopen(request, timeout=120)
+        manager = _open_provider_request(request, timeout=120)
     except Exception as exc:
         failure = _transport_failure("open", exc, api_key)
         if isinstance(exc, urllib.error.HTTPError):

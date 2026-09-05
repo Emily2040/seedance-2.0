@@ -622,7 +622,7 @@ class JudgeIntegrityTests(unittest.TestCase):
         response = mock.MagicMock()
         response.__enter__.return_value.read.return_value = b"{not-json"
         with mock.patch.object(
-            eval_run.urllib.request, "urlopen", return_value=response
+            eval_run, "_open_provider_request", return_value=response
         ):
             with self.assertRaisesRegex(
                 eval_run.ProviderResponseError, "invalid JSON"
@@ -640,7 +640,7 @@ class JudgeIntegrityTests(unittest.TestCase):
             b"x" * (eval_run.MAX_PROVIDER_RESPONSE_BYTES + 1)
         )
         with mock.patch.object(
-            eval_run.urllib.request, "urlopen", return_value=response
+            eval_run, "_open_provider_request", return_value=response
         ):
             with self.assertRaisesRegex(
                 eval_run.ProviderResponseError, "response exceeded"
@@ -661,7 +661,7 @@ class JudgeIntegrityTests(unittest.TestCase):
             eval_run.http.client.IncompleteRead(b"partial")
         )
         with mock.patch.object(
-            eval_run.urllib.request, "urlopen", return_value=response
+            eval_run, "_open_provider_request", return_value=response
         ):
             with self.assertRaisesRegex(
                 eval_run.ProviderResponseError,
@@ -682,7 +682,7 @@ class JudgeIntegrityTests(unittest.TestCase):
         for failure in open_failures:
             with self.subTest(boundary="open", failure=type(failure).__name__):
                 with mock.patch.object(
-                    eval_run.urllib.request, "urlopen", side_effect=failure
+                    eval_run, "_open_provider_request", side_effect=failure
                 ):
                     with self.assertRaises(eval_run.ProviderResponseError) as raised:
                         eval_run.call_api(
@@ -704,7 +704,7 @@ class JudgeIntegrityTests(unittest.TestCase):
                         ConnectionResetError("reset reading response")
                     )
                 with mock.patch.object(
-                    eval_run.urllib.request, "urlopen", return_value=response
+                    eval_run, "_open_provider_request", return_value=response
                 ):
                     with self.assertRaises(eval_run.ProviderResponseError) as raised:
                         eval_run.call_api(
@@ -728,7 +728,7 @@ class JudgeIntegrityTests(unittest.TestCase):
             response_stream,
         )
         with mock.patch.object(
-            eval_run.urllib.request, "urlopen", side_effect=error
+            eval_run, "_open_provider_request", side_effect=error
         ):
             with self.assertRaises(eval_run.ProviderResponseError) as raised:
                 eval_run.call_api(
@@ -772,7 +772,7 @@ class JudgeIntegrityTests(unittest.TestCase):
                     response = mock.MagicMock()
                     response.__enter__.return_value.read.return_value = body
                     with mock.patch.object(
-                        eval_run.urllib.request, "urlopen", return_value=response
+                        eval_run, "_open_provider_request", return_value=response
                     ):
                         with self.assertRaisesRegex(
                             eval_run.ProviderResponseError, "invalid JSON"
@@ -812,7 +812,7 @@ class JudgeIntegrityTests(unittest.TestCase):
                         completion_payload(provider_name, model, content)
                     ).encode("utf-8")
                     with mock.patch.object(
-                        eval_run.urllib.request, "urlopen", return_value=response
+                        eval_run, "_open_provider_request", return_value=response
                     ):
                         with self.assertRaises(eval_run.ProviderResponseError):
                             eval_run.call_api(
@@ -844,7 +844,7 @@ class JudgeIntegrityTests(unittest.TestCase):
                 )
             ).encode("utf-8")
             with mock.patch.object(
-                eval_run.urllib.request, "urlopen", return_value=response
+                eval_run, "_open_provider_request", return_value=response
             ):
                 with self.assertRaisesRegex(
                     eval_run.ProviderResponseError, "unsupported type"
