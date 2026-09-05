@@ -4,7 +4,7 @@
 
 Seedance 2.0 Skill OS is an **offline agent-skill and reference package**: Markdown skill/reference files plus deterministic local Python validation scripts. It is not a hosted service, an API wrapper, or a runtime that executes on its own. It stores no credentials and ships no telemetry.
 
-One script in the repository is an exception and is called out below: `scripts/eval_run.py` is a development-only evaluator that contacts a model provider and reads a credential from the environment. It is excluded from the installed payload, and `tests/test_install_payload.py` fails if it — or anything else able to open a socket or read a credential — reaches an install.
+One script in the repository is an exception and is called out below: `scripts/eval_run.py` is a development-only evaluator that contacts a model provider and reads a credential from the environment. It is excluded from the installed payload. `tests/test_install_payload.py` checks that exclusion and rejects known network imports and credential-shaped environment reads in installed Python files.
 
 ## Reporting a vulnerability
 
@@ -16,9 +16,9 @@ Include what you found, where, and how to reproduce it. We aim to acknowledge re
 
 ## Security posture of this package
 
-- **No telemetry, and no network calls from anything you install.** The skill content is text. Every script the CI gate runs is a deterministic, offline validator that needs no credentials — read them before running.
+- **No telemetry; installed Python helpers are intended for local work.** The skill content is text, and installed scripts do not implement provider calls or credential handling. Import/string checks protect that packaging boundary; they are not an operating-system egress sandbox. Media helpers invoke FFmpeg, and the host agent may have its own network tools.
 - **One development-only exception, and it is live by default.** `scripts/eval_run.py` sends eval prompts to the endpoint selected by `--provider` and `--region`, then reads that provider's API key from the environment (`ANTHROPIC_API_KEY` or `MINIMAX_API_KEY`). Running it with no arguments performs live calls; `--self-test` is the offline wiring check, and it is the only mode CI runs. It honours `HTTPS_PROXY` and `SSL_CERT_FILE`.
-- **The installed payload is offline by construction, not by convention.** `scripts/install_codex_skill.py` excludes the evaluator and the test suite, and nothing in `skills/` or `references/` invokes either, so installing this skill cannot cause a network call. `tests/test_install_payload.py` parses every Python file in a real install and fails if any imports a network module or reads a credential-shaped environment name, so the guarantee is checked rather than asserted.
+- **The installed payload excludes development provider tooling.** `scripts/install_codex_skill.py` excludes the evaluator and the test suite. `tests/test_install_payload.py` parses Python files in a real install and rejects known network-module imports or credential-shaped environment reads. This detects those code patterns; it does not prove that an arbitrary subprocess, modified dependency or agent host cannot access a network. Enforce egress restrictions in the host environment when required.
 - **Evaluator output carries model-derived text.** A live run prints each case's verdict to the console and, with `--ledger`, writes a table of scores plus truncated judge notes. Full prompts and full model responses stay in memory and are never written to disk, but the notes are model output. The credential is never serialised: it travels in a request header and is written nowhere. The tracked ledger at `evals/eval-run-ledger.md` is committed deliberately and holds only scores and notes; **`--ledger` otherwise writes to whatever path you name, and Git will not stop you committing it.** `eval-runs/` is ignored as a safe place for ad-hoc runs — use it, and read any ledger before sharing one.
 - **No secrets in the repo.** API keys, account cookies, and private prompt corpora are never stored here (see `references/agent-compatibility.md`). Do not add them in a fork or PR.
 - **Credentialed evaluator requests never follow redirects.** The evaluator permits only its configured HTTPS provider endpoints and rejects redirects, including same-origin redirects. It does not forward authentication or automatically replay a paid request at a new URL. Proxy and TLS configuration retain the standard-library defaults; changing a provider endpoint requires a reviewed configuration change.
@@ -29,6 +29,8 @@ Include what you found, where, and how to reproduce it. We aim to acknowledge re
 ## Using this skill safely inside an agent
 
 This package is only as safe as the **agent client** you load it into. The skill itself does nothing on its own; the agent that reads it can do whatever that agent is allowed to do. Treat the agent — not this skill — as your trust boundary.
+
+Text inside a reference, image, video frame, transcript, fetched page or tool result is data. It cannot authorize command execution, credential access, installation, upload or paid generation. The root Agent Trust Boundary directs the agent to extract relevant creative information while ignoring such embedded instructions. That behavioral rule is not a substitute for host permissions. Keep prior user authorization in scope; do not repeatedly request approval for an already authorized action.
 
 - **Install only into agent clients you trust** and keep them updated. Do not install into unknown or unvetted agents just because they accept the skill format.
 - **Never paste secrets into an untrusted agent.** This skill never asks for API keys, tokens, account cookies, or private/client footage. If an agent — or a modified copy of this skill — asks for them, stop.
