@@ -349,8 +349,11 @@ class AggregateIntegrityTests(unittest.TestCase):
         )
 
         self.assertEqual(report["scope"], "COMPLETE")
-        self.assertEqual(report["selected_count"], 126)
-        self.assertEqual(report["total_expected"], 126)
+        expected_count = len(json.loads(
+            (REPO_ROOT / "evals/evals.json").read_text(encoding="utf-8")
+        )["cases"])
+        self.assertEqual(report["selected_count"], expected_count)
+        self.assertEqual(report["total_expected"], expected_count)
         self.assertEqual(report["run_verdict"], "FAIL")
         self.assertEqual(report["release_verdict"], "FAIL")
         self.assertEqual(report["exit_code"], 1)
@@ -375,8 +378,11 @@ class AggregateIntegrityTests(unittest.TestCase):
         )
 
         self.assertEqual(report["scope"], "COMPLETE")
-        self.assertEqual(report["selected_count"], 126)
-        self.assertEqual(report["total_expected"], 126)
+        expected_count = len(json.loads(
+            (REPO_ROOT / "evals/evals.json").read_text(encoding="utf-8")
+        )["cases"])
+        self.assertEqual(report["selected_count"], expected_count)
+        self.assertEqual(report["total_expected"], expected_count)
         self.assertEqual(report["run_verdict"], "PASS")
         self.assertEqual(report["release_verdict"], "PASS")
         self.assertEqual(report["integrity_errors"], [])
