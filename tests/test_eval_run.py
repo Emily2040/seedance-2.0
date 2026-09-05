@@ -102,8 +102,7 @@ class EvalRunProviderTests(unittest.TestCase):
                 _, endpoint, model = eval_run.resolve_provider("minimax", region, None)
                 payload = completion_payload("minimax", model)
                 with mock.patch.object(
-                    eval_run.urllib.request,
-                    "urlopen",
+                    eval_run, "_open_provider_request",
                     return_value=FakeResponse(payload),
                 ) as urlopen:
                     text = eval_run.call_api(
@@ -127,8 +126,7 @@ class EvalRunProviderTests(unittest.TestCase):
     def test_default_provider_preserves_existing_request_auth(self) -> None:
         config, endpoint, model = eval_run.resolve_provider("anthropic", "global_en", None)
         with mock.patch.object(
-            eval_run.urllib.request,
-            "urlopen",
+            eval_run, "_open_provider_request",
             return_value=FakeResponse(
                 completion_payload("anthropic", model)
             ),
@@ -154,8 +152,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     payload["stop_sequence"] = invalid_stop_sequence
                 with (
                     mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         return_value=FakeResponse(payload),
                     ),
                     self.assertRaises(eval_run.ProviderResponseError),
@@ -173,8 +170,7 @@ class EvalRunProviderTests(unittest.TestCase):
                 self.assertNotIn("base_resp", payload)
                 self.assertNotIn("stop_sequence", payload)
                 with mock.patch.object(
-                    eval_run.urllib.request,
-                    "urlopen",
+                    eval_run, "_open_provider_request",
                     return_value=FakeResponse(payload),
                 ):
                     self.assertEqual(
@@ -192,8 +188,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     payload["base_resp"] = base_resp
                     payload["stop_sequence"] = None
                     with mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         return_value=FakeResponse(payload),
                     ):
                         self.assertEqual(
@@ -211,8 +206,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     }
                 )
                 with mock.patch.object(
-                    eval_run.urllib.request,
-                    "urlopen",
+                    eval_run, "_open_provider_request",
                     return_value=FakeResponse(payload),
                 ):
                     self.assertEqual(
@@ -236,8 +230,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     payload[field] = value
                     with (
                         mock.patch.object(
-                            eval_run.urllib.request,
-                            "urlopen",
+                            eval_run, "_open_provider_request",
                             return_value=FakeResponse(payload),
                         ),
                         self.assertRaises(eval_run.ProviderResponseError),
@@ -254,8 +247,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     payload["usage"].update(usage_update)
                     with (
                         mock.patch.object(
-                            eval_run.urllib.request,
-                            "urlopen",
+                            eval_run, "_open_provider_request",
                             return_value=FakeResponse(payload),
                         ),
                         self.assertRaises(eval_run.ProviderResponseError),
@@ -271,8 +263,7 @@ class EvalRunProviderTests(unittest.TestCase):
         payload["base_resp"] = {"status_code": 0, "status_msg": "success"}
         with (
             mock.patch.object(
-                eval_run.urllib.request,
-                "urlopen",
+                eval_run, "_open_provider_request",
                 return_value=FakeResponse(payload),
             ),
             self.assertRaises(eval_run.ProviderResponseError),
@@ -293,8 +284,7 @@ class EvalRunProviderTests(unittest.TestCase):
                 payload["model"] = model + "-unexpected"
                 with (
                     mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         return_value=FakeResponse(payload),
                     ),
                     self.assertRaisesRegex(
@@ -325,8 +315,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     payload.pop(missing_field)
                     with (
                         mock.patch.object(
-                            eval_run.urllib.request,
-                            "urlopen",
+                            eval_run, "_open_provider_request",
                             return_value=FakeResponse(payload),
                         ),
                         self.assertRaises(eval_run.ProviderResponseError),
@@ -353,8 +342,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     payload[field] = value
                     with (
                         mock.patch.object(
-                            eval_run.urllib.request,
-                            "urlopen",
+                            eval_run, "_open_provider_request",
                             return_value=FakeResponse(payload),
                         ),
                         self.assertRaises(eval_run.ProviderResponseError),
@@ -391,8 +379,7 @@ class EvalRunProviderTests(unittest.TestCase):
             }
         )
         with mock.patch.object(
-            eval_run.urllib.request,
-            "urlopen",
+            eval_run, "_open_provider_request",
             return_value=FakeResponse(payload),
         ):
             self.assertEqual(
@@ -465,8 +452,7 @@ class EvalRunProviderTests(unittest.TestCase):
                 mutate(invalid)
                 with (
                     mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         return_value=FakeResponse(invalid),
                     ),
                     self.assertRaises(eval_run.ProviderResponseError),
@@ -508,8 +494,7 @@ class EvalRunProviderTests(unittest.TestCase):
                         payload["stop_sequence"] = "DONE"
                     with (
                         mock.patch.object(
-                            eval_run.urllib.request,
-                            "urlopen",
+                            eval_run, "_open_provider_request",
                             return_value=FakeResponse(payload),
                         ),
                         self.assertRaises(eval_run.ProviderResponseError),
@@ -538,8 +523,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     payload["content"] = [block, {"type": "text", "text": "ok"}]
                     with (
                         mock.patch.object(
-                            eval_run.urllib.request,
-                            "urlopen",
+                            eval_run, "_open_provider_request",
                             return_value=FakeResponse(payload),
                         ),
                         self.assertRaises(eval_run.ProviderResponseError),
@@ -558,8 +542,7 @@ class EvalRunProviderTests(unittest.TestCase):
         ]
         with (
             mock.patch.object(
-                eval_run.urllib.request,
-                "urlopen",
+                eval_run, "_open_provider_request",
                 return_value=FakeResponse(payload),
             ),
             self.assertRaisesRegex(eval_run.ProviderResponseError, "was not requested"),
@@ -575,8 +558,7 @@ class EvalRunProviderTests(unittest.TestCase):
             {"type": "text", "text": "ok"},
         ]
         with mock.patch.object(
-            eval_run.urllib.request,
-            "urlopen",
+            eval_run, "_open_provider_request",
             return_value=FakeResponse(payload),
         ):
             self.assertEqual(
@@ -596,8 +578,7 @@ class EvalRunProviderTests(unittest.TestCase):
                 payload["content"] = [malformed, {"type": "text", "text": "ok"}]
                 with (
                     mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         return_value=FakeResponse(payload),
                     ),
                     self.assertRaisesRegex(eval_run.ProviderResponseError, "malformed"),
@@ -657,8 +638,7 @@ class EvalRunProviderTests(unittest.TestCase):
             }
         ]
         with mock.patch.object(
-            eval_run.urllib.request,
-            "urlopen",
+            eval_run, "_open_provider_request",
             return_value=FakeResponse(payload),
         ):
             self.assertEqual(
@@ -736,8 +716,7 @@ class EvalRunProviderTests(unittest.TestCase):
                 invalid["content"] = [block, {"type": "text", "text": "ok"}]
                 with (
                     mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         return_value=FakeResponse(invalid),
                     ),
                     self.assertRaises(eval_run.ProviderResponseError),
@@ -758,8 +737,7 @@ class EvalRunProviderTests(unittest.TestCase):
         ]
         with (
             mock.patch.object(
-                eval_run.urllib.request,
-                "urlopen",
+                eval_run, "_open_provider_request",
                 return_value=FakeResponse(invalid),
             ),
             self.assertRaisesRegex(
@@ -801,8 +779,7 @@ class EvalRunProviderTests(unittest.TestCase):
                 invalid["content"] = [block, {"type": "text", "text": "ok"}]
                 with (
                     mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         return_value=FakeResponse(invalid),
                     ),
                     self.assertRaisesRegex(
@@ -839,8 +816,7 @@ class EvalRunProviderTests(unittest.TestCase):
                     side_effect = failure
                 with (
                     mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         return_value=manager if side_effect is None else mock.DEFAULT,
                         side_effect=side_effect,
                     ),
@@ -922,7 +898,7 @@ class EvalRunProviderTests(unittest.TestCase):
                 api_key = f"sk-header-secret{separator}leak"
                 escaped_key = api_key.encode("unicode_escape").decode("ascii")
                 with (
-                    mock.patch.object(eval_run.urllib.request, "urlopen") as urlopen,
+                    mock.patch.object(eval_run, "_open_provider_request") as urlopen,
                     self.assertRaises(eval_run.ProviderResponseError) as raised,
                 ):
                     eval_run.call_api(
@@ -946,7 +922,7 @@ class EvalRunProviderTests(unittest.TestCase):
         manager.__enter__.return_value.read.return_value = "not bytes"
         with (
             mock.patch.object(
-                eval_run.urllib.request, "urlopen", return_value=manager
+                eval_run, "_open_provider_request", return_value=manager
             ),
             self.assertRaisesRegex(
                 eval_run.ProviderResponseError, "body must be bytes"
@@ -978,8 +954,7 @@ class EvalRunProviderTests(unittest.TestCase):
             with self.subTest(failure=type(failure).__name__):
                 with (
                     mock.patch.object(
-                        eval_run.urllib.request,
-                        "urlopen",
+                        eval_run, "_open_provider_request",
                         side_effect=failure,
                     ),
                     self.assertRaises(eval_run.ProviderResponseError) as raised,
@@ -998,8 +973,7 @@ class EvalRunProviderTests(unittest.TestCase):
         payload["model"] = api_key
         with (
             mock.patch.object(
-                eval_run.urllib.request,
-                "urlopen",
+                eval_run, "_open_provider_request",
                 return_value=FakeResponse(payload),
             ),
             self.assertRaises(eval_run.ProviderResponseError) as raised,
@@ -1017,8 +991,7 @@ class EvalRunProviderTests(unittest.TestCase):
         }
         with (
             mock.patch.object(
-                eval_run.urllib.request,
-                "urlopen",
+                eval_run, "_open_provider_request",
                 return_value=FakeResponse(payload),
             ),
             self.assertRaises(eval_run.ProviderResponseError) as raised,
