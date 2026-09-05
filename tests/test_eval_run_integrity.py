@@ -1186,7 +1186,7 @@ class InputContractTests(unittest.TestCase):
 
             for argv, expected_code, expected_message in (
                 (["eval_run.py", str(root), "--self-test"], 1, "self-test FAILED"),
-                (["eval_run.py", str(root)], 2, "Could not freeze evaluation inputs"),
+                (["eval_run.py", "--live", "--max-calls", "10000", str(root)], 2, "Could not freeze evaluation inputs"),
             ):
                 with self.subTest(argv=argv):
                     output = io.StringIO()
@@ -1327,7 +1327,7 @@ class InputContractTests(unittest.TestCase):
                 real_freeze = eval_run.freeze_repository
                 with (
                     mock.patch.object(
-                        sys, "argv", ["eval_run.py", str(root), "--limit", "1"]
+                        sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root), "--limit", "1"]
                     ),
                     mock.patch.dict(
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
@@ -1473,7 +1473,7 @@ class InputContractTests(unittest.TestCase):
                 real_freeze = eval_run.freeze_repository
                 with (
                     mock.patch.object(
-                        sys, "argv", ["eval_run.py", str(root), "--limit", "1"]
+                        sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root), "--limit", "1"]
                     ),
                     mock.patch.dict(
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
@@ -1512,7 +1512,7 @@ class InputContractTests(unittest.TestCase):
             output = io.StringIO()
             real_freeze = eval_run.freeze_repository
             with (
-                mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                 mock.patch.dict(
                     os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                 ),
@@ -1553,7 +1553,7 @@ class InputContractTests(unittest.TestCase):
                 api_call = mock.Mock(return_value="candidate response")
                 output = io.StringIO()
                 with (
-                    mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                    mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                     mock.patch.dict(
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                     ),
@@ -1587,7 +1587,7 @@ class InputContractTests(unittest.TestCase):
             api_call = mock.Mock(return_value="candidate response")
             output = io.StringIO()
             with (
-                mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                 mock.patch.dict(
                     os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                 ),
@@ -1622,7 +1622,7 @@ class InputContractTests(unittest.TestCase):
                 api_call = mock.Mock(return_value="candidate response")
                 output = io.StringIO()
                 with (
-                    mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                    mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                     mock.patch.dict(
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                     ),
@@ -1700,7 +1700,7 @@ class InputContractTests(unittest.TestCase):
                     1,
                     "self-test FAILED",
                 ),
-                (["eval_run.py", str(root)], 2, "Could not freeze evaluation inputs"),
+                (["eval_run.py", "--live", "--max-calls", "10000", str(root)], 2, "Could not freeze evaluation inputs"),
             ):
                 output = io.StringIO()
                 with (
@@ -1762,7 +1762,7 @@ class InputContractTests(unittest.TestCase):
             output = io.StringIO()
             call = mock.Mock()
             with (
-                mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                 mock.patch.dict(
                     os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                 ),
@@ -1855,7 +1855,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, output, call, judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--id",
                     "missing",
@@ -1888,7 +1888,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, output, call, judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--limit",
                     "1",
@@ -1920,7 +1920,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, _output, _call, _judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--limit",
                     "1",
@@ -1952,7 +1952,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, _output, _call, _judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--limit",
                     "1",
@@ -1981,7 +1981,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, _output, _call, _judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--ledger",
                     "evals/eval-run-ledger.md",
@@ -2018,7 +2018,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--ledger",
                         "evals/eval-run-ledger.md",
@@ -2070,7 +2070,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--ledger",
                         "evals/eval-run-ledger.md",
@@ -2124,7 +2124,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--ledger",
                         "evals/eval-run-ledger.md",
@@ -3401,7 +3401,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, output, _call, _judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--ledger",
                     "evals/eval-run-ledger.md",
@@ -3461,7 +3461,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, _output, call, judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--provider",
                     "minimax",
