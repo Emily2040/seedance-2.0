@@ -1,6 +1,6 @@
 {
   "version": "6.6.0",
-  "updated": "2026-07-04",
+  "updated": "2026-09-05",
   "cases": [
     {
       "id": "vague_idea_interview",
@@ -2792,6 +2792,36 @@
       "skills_expected_to_activate": [
         "seedance-sequence",
         "seedance-continuation"
+      ]
+    },
+    {
+      "id": "single_clip_unknown_duration_stays_short",
+      "prompt": "I want one short clip of a red paper boat drifting under a bridge. I have not decided the duration. Choose a sensible starting point and give me the prompt.",
+      "expected_output": "A compact standalone prompt using a stated reversible duration assumption, without sequence planning or a questionnaire.",
+      "assertions": [
+        "treats the request as one standalone clip",
+        "does not ask whether to make connected clips or plan a complete story",
+        "states any duration assumption without claiming an unverified platform limit",
+        "returns a copy-ready prompt instead of waiting for more answers"
+      ],
+      "failure_mode": "unknown duration escalates a single clip into sequence planning",
+      "skills_expected_to_activate": [
+        "seedance-prompt-short"
+      ]
+    },
+    {
+      "id": "short_interview_preserves_supplied_decisions",
+      "prompt": "Help me make a fast brief for one 8-second clip: a white ceramic bowl on a wooden table, a hand puts one orange into it. Static overhead camera, daylight, no dialogue, no references. Please draft now.",
+      "expected_output": "A concise utility brief and prompt that preserve the supplied action, duration, camera and sound choices without asking already answered questions.",
+      "assertions": [
+        "preserves one bowl and one orange and the placement action",
+        "preserves 8 seconds, static overhead camera and daylight",
+        "does not ask for references, duration, dialogue or a sequence ending",
+        "does not invent a hidden dramatic conflict for a functional action"
+      ],
+      "failure_mode": "short interview repeats supplied answers or invents project-level planning",
+      "skills_expected_to_activate": [
+        "seedance-interview-short"
       ]
     }
   ]
