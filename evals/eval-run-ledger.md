@@ -12,17 +12,25 @@ Those claims require separate evidence; see
 
 ## How to regenerate
 
-A live evaluation needs network access and a key, so it runs outside the offline
-CI gate:
+First run `python scripts/eval_run.py` to inspect the offline plan. It makes no
+provider calls and writes no ledger, even when `--ledger` is supplied.
+
+A live evaluation needs network access, an environment key, `--live`, and an
+explicit call ceiling for the full suite. Choose the ceiling after reviewing the
+plan. For example, this permits at most 390 attempted calls and 429,000 reserved
+output tokens for the current 130-case suite:
 
 ```bash
-export ANTHROPIC_API_KEY=...
-python scripts/eval_run.py --ledger evals/eval-run-ledger.md --stamp <ISO-date>
-
-export MINIMAX_API_KEY=...
-python scripts/eval_run.py --provider minimax --region global_en \
-  --ledger evals/eval-run-ledger.md --stamp <ISO-date>
+python scripts/eval_run.py --live --max-calls 390 --max-output-tokens 429000 \
+  --ledger evals/eval-run-ledger.md --stamp 2026-09-05
 ```
+
+Set `ANTHROPIC_API_KEY` through your environment, or select
+`--provider minimax --region global_en` and use `MINIMAX_API_KEY`. A focused
+`--limit 1` run must write its ledger under `eval-runs/`, not over this file.
+Failed requests retain their reservations. Preserve the final console execution
+budget summary with the run log. These ceilings do not cap input-token charges,
+cache charges or currency cost. Incomplete runs cannot qualify as release evidence.
 
 For each case, a blind discovery phase receives the complete root `SKILL.md`, a
 catalog of responder-role files, and the user request plus project state as
@@ -91,4 +99,4 @@ file with per-case scored verdicts or explicit non-scored harness errors.
 
 | id | status | scale | dimension scores | frozen sources (path@sha256) | score | pass | notes |
 |---|---|---|---|---|---|---|---|
-| _pending_ | — | — | — | — | — | — | run `eval_run.py --ledger` to populate |
+| _pending_ | — | — | — | — | — | — | review the offline plan, then run with `--live` and explicit ceilings |

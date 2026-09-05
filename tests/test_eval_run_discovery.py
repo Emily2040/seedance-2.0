@@ -1043,7 +1043,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--ledger",
                         "evals/eval-run-ledger.md",
@@ -1089,7 +1089,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                         sys,
                         "argv",
                         [
-                            "eval_run.py",
+                            "eval_run.py", "--live", "--max-calls", "10000",
                             str(root),
                             "--ledger",
                             str(ledger),
@@ -1116,7 +1116,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(missing_root),
                         "--ledger",
                         str(ledger.resolve()),
@@ -1154,7 +1154,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--provider",
                         "minimax",
