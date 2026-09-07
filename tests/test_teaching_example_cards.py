@@ -8,6 +8,16 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = ('Evidence', 'Brief', 'Choice', 'Bindings', 'Settings', 'Why this direction', 'Check', 'Fallback')
+REFERENCE_TAG = re.compile(
+    r'@[\w-]+(?:[ \t]+\d+)?|'
+    r'\[(?:Image|Video|Audio|图片|视频|音频|画像|動画|音声|이미지|비디오|오디오)[ \t]*\d+\]',
+    re.IGNORECASE,
+)
+
+
+def reference_tags(text):
+    # Match the original bytes: recognizing a spelling must not canonicalize it.
+    return set(REFERENCE_TAG.findall(text))
 
 
 def cards():
@@ -45,14 +55,23 @@ class TeachingExampleCardsTests(unittest.TestCase):
             with self.subTest(page=path.name, card=title):
                 prompt = re.search(r'^```text\n(.*?)\n```$', body, re.M | re.S).group(1)
                 bindings = re.search(r'^\*\*Bindings:\*\* (.+)$', body, re.M).group(1)
-                tags = set(re.findall(r'@(?:Image|Video|Audio)\d+', prompt))
-                if tags:
+                tags = reference_tags(prompt)
+                if bindings.startswith('None.'):
+                    self.assertFalse(tags, 'reference prompt is incorrectly labeled asset-free')
+                else:
                     self.assertIn('**Conditional prompt:**', body)
                     self.assertIn('Required; not attached.', bindings)
-                    for tag in tags:
-                        self.assertIn(tag, bindings)
-                else:
-                    self.assertTrue(bindings.startswith('None.'), bindings)
+                    self.assertTrue(tags <= reference_tags(bindings), 'prompt tag has no exact binding')
+
+    def test_tag_recognition_preserves_localized_spaced_and_bracketed_forms(self):
+        for tag in ('@Image1', '@Video1', '@Audio1', '@图片1', '@视频1', '@音频1',
+                    '@Image 1', '@Video 2', '[Video 1]', '[Image 2]', '[Audio 3]',
+                    '@画像1', '@이미지1', '@CustomReference7'):
+            with self.subTest(tag=tag):
+                self.assertEqual(reference_tags(f'Use {tag} for the opening pose.'), {tag})
+                self.assertEqual(reference_tags(f'Required; not attached. {tag} controls pose.'), {tag})
+        self.assertNotEqual(reference_tags('@Image 1'), reference_tags('@Image1'))
+        self.assertFalse(reference_tags('@Image1') <= reference_tags('@Image10'))
 
     def test_card_pages_are_declared_in_install_and_eval_payloads(self):
         import json
