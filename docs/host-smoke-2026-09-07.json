@@ -1,0 +1,120 @@
+{
+  "date": "2026-09-07",
+  "os": "Windows-11-10.0.26340-SP0",
+  "python": "3.13.15",
+  "host_versions": {
+    "claude": "2.1.263 (Claude Code)",
+    "codex": "codex-cli 0.153.4"
+  },
+  "runtime_stages": {
+    "discovery": "not_run",
+    "short_prompt": "not_run",
+    "continuation": "not_run"
+  },
+  "observations": [
+    {
+      "client": "Codex",
+      "relative_target": ".agents/skills",
+      "stages": [
+        {
+          "operation": "fresh_install",
+          "source_commit": "bc21ada751f7ba92715957a7b5321a5c8b4160b8",
+          "installer_exit": 0,
+          "doctor": {
+            "changed": [],
+            "checked_files": 190,
+            "format_version": 1,
+            "installed_commit": null,
+            "installed_version": "6.7.0",
+            "managed": true,
+            "missing": [],
+            "modified_since_install": [],
+            "newline_only": [],
+            "next_step": "No replacement is needed for the checked payload.",
+            "recorded_paths_not_checked": 0,
+            "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
+            "source_contract_sha256": "73c9fa6d0844178618e0aa3be83d56d15b167aae0172bd7f07c47abccbc4623c",
+            "source_version": "6.7.0",
+            "status": "current"
+          },
+          "forbidden_entries_present": []
+        },
+        {
+          "operation": "managed_revision_replacement",
+          "source_commit": "3a3fa1ae14c7f85d53941671249a0612d2427f82",
+          "installer_exit": 0,
+          "doctor": {
+            "changed": [],
+            "checked_files": 190,
+            "format_version": 1,
+            "installed_commit": null,
+            "installed_version": "6.7.0",
+            "managed": true,
+            "missing": [],
+            "modified_since_install": [],
+            "newline_only": [],
+            "next_step": "No replacement is needed for the checked payload.",
+            "recorded_paths_not_checked": 0,
+            "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
+            "source_contract_sha256": "7506c6be615a8a4c690724b9b601859fb5095728bb08d86aba82f30584a7e1dc",
+            "source_version": "6.7.0",
+            "status": "current"
+          },
+          "forbidden_entries_present": []
+        }
+      ]
+    },
+    {
+      "client": "Claude Code",
+      "relative_target": ".claude/skills",
+      "stages": [
+        {
+          "operation": "fresh_install",
+          "source_commit": "bc21ada751f7ba92715957a7b5321a5c8b4160b8",
+          "installer_exit": 0,
+          "doctor": {
+            "changed": [],
+            "checked_files": 190,
+            "format_version": 1,
+            "installed_commit": null,
+            "installed_version": "6.7.0",
+            "managed": true,
+            "missing": [],
+            "modified_since_install": [],
+            "newline_only": [],
+            "next_step": "No replacement is needed for the checked payload.",
+            "recorded_paths_not_checked": 0,
+            "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
+            "source_contract_sha256": "73c9fa6d0844178618e0aa3be83d56d15b167aae0172bd7f07c47abccbc4623c",
+            "source_version": "6.7.0",
+            "status": "current"
+          },
+          "forbidden_entries_present": []
+        },
+        {
+          "operation": "managed_revision_replacement",
+          "source_commit": "3a3fa1ae14c7f85d53941671249a0612d2427f82",
+          "installer_exit": 0,
+          "doctor": {
+            "changed": [],
+            "checked_files": 190,
+            "format_version": 1,
+            "installed_commit": null,
+            "installed_version": "6.7.0",
+            "managed": true,
+            "missing": [],
+            "modified_since_install": [],
+            "newline_only": [],
+            "next_step": "No replacement is needed for the checked payload.",
+            "recorded_paths_not_checked": 0,
+            "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
+            "source_contract_sha256": "7506c6be615a8a4c690724b9b601859fb5095728bb08d86aba82f30584a7e1dc",
+            "source_version": "6.7.0",
+            "status": "current"
+          },
+          "forbidden_entries_present": []
+        }
+      ]
+    }
+  ]
+}

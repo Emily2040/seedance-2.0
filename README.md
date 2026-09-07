@@ -91,7 +91,7 @@ Prompt preparation does not authorize paid generation.
 <details>
 <summary>Installation by client, replacement and recovery details</summary>
 
-Client support for Agent Skills is still tool-specific. Codex documents a skill as a directory with a required `SKILL.md`, optional `scripts/`, `references/`, `assets/`, and optional `agents/` metadata.
+Client support for Agent Skills is still tool-specific. See [observed compatibility and the host smoke protocol](docs/HOST_COMPATIBILITY.md) for tested revisions and explicit gaps. Codex documents a skill as a directory with a required `SKILL.md`, optional `scripts/`, `references/`, `assets/`, and optional `agents/` metadata.
 
 Codex scans `.agents/skills` locations from the working directory upward, plus user/admin/system skill locations. A repository root with `SKILL.md` is shaped like a skill folder, but it still needs to be installed/copied under a scanned skills directory or distributed as a plugin for automatic discovery.
 
