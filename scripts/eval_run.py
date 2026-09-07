@@ -83,7 +83,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "37482798cb8feb17b79068bb31f2dd6d5d077cb2783f6d4baac14d03fce774f7"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "3e510f5c8a27bfcd98c7c3d9ba8fc9b97671e856b869683789bcb310b7fd8720"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -108,7 +108,7 @@ SOURCE_MANIFEST_PATH = "evals/source-manifest.json"
 EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py"})
 FIXTURE_ROOT = "evals/fixtures"
 SOURCE_ROLES = {"root", "responder", "evaluator", "fixture", "archive"}
-EXPECTED_EVALS_SHA256 = "8497fa1d3e73d006939d6c0cb96c730f95b21d97d07df99e3c692cbd2ac64f69"
+EXPECTED_EVALS_SHA256 = "af82c0458240e576005af073ccd86ffe60bb0f3ce1255479ad7a4aa51112ae93"
 EXPECTED_RUBRIC_SHA256 = "10247feac85df8e5f59a13e2588ac4c28d17380f83a11adc6124e4142a4277c9"
 # Thresholds sourced from references/eval-rubric.md.
 LEGACY_MIN, LEGACY_AVG = 2, 2.6          # 0-3 scale
