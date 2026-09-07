@@ -1,52 +1,74 @@
-# Retake Protocol — the iteration economy
+# Retake Protocol — decide whether another take is useful
 
-*What happens after a generation comes back. The rest of this skill plans the shot and repairs outright failure; this governs everything in between — the partially good take, which is most of real production. Labels: [heuristic] = default to test · [internal] = workflow guidance. Cost figures are surface-specific and volatile: load [api-status](api-status.md) and verify live before budgeting.*
+Use this after a returned take or a user-reported failure. A diagnosis is a proposal, not authorization to generate again. Preserve the user's acceptance criteria, settings, references, prior decisions, and remaining take/spend limits. This is internal workflow guidance; prices and supported edit operations require current evidence from the active surface.
 
-## Triage every take — five verdicts
+## Inspect before deciding
 
-| Verdict | When | Next move |
+Name the failed criterion and the evidence: a timestamp, frame, audible error, or explicitly labeled user report. If the host cannot inspect the relevant media, say so and work from that report. Do not claim the take was watched or measured. Keep what already worked visible in the diagnosis so a repair does not discard it.
+
+Separate a plausible cause from an established fact. The same failure in two or three takes does not prove that the prompt is wrong; references, settings, unsupported controls, model limitations, and variation can also contribute. Use [model-mechanics](model-mechanics.md) for testable hypotheses, not hidden-model explanations.
+
+## Choose a verdict
+
+| Verdict | When it fits | Tradeoff or next step |
 |---|---|---|
-| **Keep** | The primary spend (the thing this shot is FOR, per `allocation-model.md`) is delivered and nothing is fatal. | Lock it, log it, move on. Perfection in secondary details is post's job. |
-| **Fix in post** | The flaw lives in post's domain: color, on-screen text, sound mix, trim, a few unstable frames at the ends. | Never burn takes on what an editor fixes in minutes. |
-| **Edit, don't regenerate** | Composition and timing are right; exactly one layer is wrong, and the surface supports edit. | Preserve the take as the source clip; change only the failing layer. |
-| **Re-roll** | The prompt is right; the sample was unlucky (sampling variance). | Same prompt, new seed. Two or three re-rolls maximum — then the prompt is the problem, by definition. |
-| **Rewrite** | The same flaw appears in two or more takes. | It is systematic, not luck. Diagnose by mechanism (`model-mechanics.md`), change the prompt. |
+| **Keep** | The shot meets its must-pass criteria. | Accept it and record any allowed deviation; do not spend for an unspecified ideal. |
+| **Fix in post** | A localized trim, mix, text overlay, or other feasible edit can meet the criterion. | Check available tools, effort, and whether the fix harms another requirement; post work is not automatically free or trivial. |
+| **Edit** | A supported operation can repair the failed layer while preserving the rest. | State the intended change and locks; an edit may still alter other layers and consume credits. |
+| **Re-roll** | The current brief remains plausible and another sample could answer a useful question. | Same requested settings, a new seed only if supported and authorized; no certainty that the cause was sampling luck. |
+| **Rewrite** | A specific ambiguity, conflict, or missing action has a plausible repair. | Show the smallest relevant prompt change and what it preserves; do not blame the prompt merely because several takes failed. |
+| **Stop / change approach** | The budget is exhausted, the user wants to stop, or another take has little expected value. | Keep useful footage and offer a revised shot plan, post work, a practical shoot, or stopping here. These alternatives have their own costs and authorization boundaries. |
 
-## The one-variable rule [heuristic]
+## Check the authorization before an external action
 
-Change one thing per retake: one prompt clause, OR the seed, OR the mode, OR one reference — never several. Same seed plus one prompt change is the closest available thing to a controlled experiment; new seed with the same prompt is a pure re-roll. Change two things at once and the result is unreadable either way it lands — you learn nothing.
+1. Reuse the user's existing authorization. Distinguish permission to review or rewrite from permission to submit a generation, edit, upload, or batch.
+2. Identify the remaining limit: authorized takes minus attempted submissions, and any applicable currency or other cap. Include failed or uncertain submissions unless their non-submission or refund is confirmed. An uncertain timeout is not permission to submit a duplicate; query the existing job only through an authorized read path when available.
+3. Preserve model/tier, operation, duration, resolution, reference roles, and output scope. Changing one of these is a proposal unless the user's existing authorization covers it. A request to “try again” does not imply an upgrade or longer clip.
+4. If a currency cap applies, use current surface-specific pricing and a defensible maximum charge before submitting. Unknown pricing stays unknown; a take cap alone is not a money cap. Do not invent a price, refund, retry allowance, or a new budget.
+5. At zero/exhausted budget or an explicit stop, request no further generation. Continue with authorized review, a draft revision, or a post plan if useful. Do not pressure the user to top up. If a new external action is requested but its scope is missing, prepare the concrete change first and ask only for the missing authorization.
 
-## Attempt budget [heuristic]
+Never default to five Standard takes or ten Fast drafts. A cost example is not a spending allowance. Keep the user in control of whether the next useful step is a prompt revision, a paid take, an edit, or no more work.
 
-Set it before take one: a number of takes (default: five standard-tier, or ten fast-tier drafts) and a written "good enough" — the primary spend delivered, secondary flaws postable. At half the budget with no progress on the same flaw, stop iterating and change strategy: a different mode, decomposition into more shots, or the honest exit below. Iteration without a stop condition is how a five-dollar shot becomes a hundred-dollar shot.
+## Make a comparison useful
 
-## Cost awareness [internal]
+Prefer changing one relevant variable when the purpose is diagnosis. Record the exact change and the preserved settings. A shared seed does not make different prompts or tiers a controlled experiment. If several changes are needed to fix a clearly invalid setup, make them together and label the result a combined repair rather than attributing success to one change.
 
-Every second of generation costs real money, and retakes multiply it: at the fal figures last verified in `api-status.md` (≈$0.30/s standard 720p, ≈$0.68/s 1080p — verify live), a single 15-second standard take is several dollars, and a ten-take session is a real invoice. Spend accordingly:
+Fast, short, or low-resolution drafts can answer some composition questions, but their behavior may not transfer to the final tier, duration, or resolution. Use a cheaper draft only if it tests the actual criterion and is within the user's authorized scope. Do not claim that ten short drafts necessarily teach more than one longer clip.
 
-- **Draft cheap, lock expensive**: explore composition on the fast tier, short durations, or lower resolution; spend standard tier and full length only on the locked design.
-- Ten four-second drafts answer more questions than one failed fifteen-second take.
-- Quote costs to users only with the verification date and a verify-live caveat.
+## Compact response and take log
 
-## The shot log [internal]
+For a partial failure, a useful response is:
 
-One line per take — this is the story state made auditable:
+> The label becomes unreadable during the turn (user-reported). Motion and viewing angle may contribute. Keep the accepted lighting and bottle shape; try ending the turn before the label becomes edge-on. One of your three authorized takes remains, with the same model, duration, and resolution. Alternatively, keep the current take and use the approved still for the end hold.
 
-`Take N · changed: [the one variable] · seed: [same/new] · verdict: [keep/post/edit/re-roll/rewrite] · evidence: [one sentence]`
+This is a fictional, unrendered review example. In a real review, use actual observations and authorization; never copy its remaining-budget claim into another job. Only offer the still end hold when the asset exists and the edit is feasible.
 
-Re-reading the log beats re-living it. Two takes in the log with the same flaw is a rewrite, by rule — no third attempt on luck.
+One line per take can record:
 
-## Sequence Canon [internal]
+`Take N · failed criterion and evidence · kept strengths · hypothesis · proposed change · preserved settings · remaining authorized limits · verdict / stop reason`
 
-For sequence projects, a take review decides whether footage becomes canon.
+Keep review notes internal or in an already authorized project record. Do not put budget arithmetic, diagnosis labels, or future attempts into the generation prompt.
+
+## Decision examples for review
+
+These cases specify intended skill behavior, not measured live-model results:
+
+| Input situation | Expected decision |
+|---|---|
+| Two similar failures, one authorized take left | Consider prompt, references, settings, and model behavior; propose one useful comparison without declaring the prompt wrong by definition. |
+| Zero takes left; user asks what to change | Provide a draft change or post option; submit nothing and do not request an automatic top-up. |
+| User approves one retry at the same settings | Preserve tier, duration, resolution, and scope; do not upgrade to Standard or lengthen the clip. |
+| User asks only to rewrite the prompt | Return the revision without submitting a generation or asking for an unnecessary generation budget. |
+| Prior submission timed out and charge/job status is unknown | Count it conservatively; do not blindly resubmit or assume the attempt was free. |
+| A Fast draft works but exact final dialogue matters | Explain that the final setting still needs review; any further test requires remaining authorization. |
+
+## Sequence Canon
+
+A take review decides whether footage becomes canon:
 
 - Accept: record observed start/end state and allow it to become a parent source.
 - Accept with deviation: record the deviation, update downstream beats, and carry unfinished work forward.
 - Repair: do not advance the sequence until the repaired tail or layer is accepted.
 - Reject: do not update canon and do not use that take as a parent source.
 
-Accepted observed state overrides planned state. If a clip unexpectedly completes a future beat, mark that beat completed and remove it from later prompts.
-
-## When the answer is "don't generate"
-
-Honest direction sometimes refuses the tool: dense on-screen text belongs to post, a real product's exact behavior may belong to a camera, archival reality belongs to licensing, and a shot that has failed its budget twice after decomposition belongs to a different idea. "Film this one for real" is a deliverable, not a failure.
+Accepted observed state overrides planned state. If a clip unexpectedly completes a future beat, mark that beat completed and remove it from later prompts. A rewrite, retry plan, or exhausted budget does not itself approve footage or change observed state.
