@@ -33,7 +33,7 @@ The offline-payload guarantee applies to the installer's allowlisted output. Use
 - Keep volatile facts in dated references such as `api-status.md` and `source-registry.md`.
 - Keep generated bitmap images inside `assets/` if they are referenced by README.
 - Keep `agents/openai.yaml` aligned with the root skill name and make the default prompt invoke `$seedance-20`.
-- Use `scripts/install_codex_skill.py` for a fresh local user-level copy at `$CODEX_HOME/skills/seedance-20` or `~/.codex/skills/seedance-20`. Use `--force` only for an intentional replacement after reviewing and backing up the existing installation.
+- Use `scripts/install_codex_skill.py --client codex --scope user` for a fresh Codex user copy at `~/.agents/skills/seedance-20`, or `--client claude-code --scope user` for `~/.claude/skills/seedance-20`. Project scope requires `--scope project --project-root /path/to/project`. With no destination options, the historical `$CODEX_HOME/skills` or `~/.codex/skills` default is preserved. Use `--force` only for an intentional replacement after reviewing and backing up the existing installation.
 - Keep scripts deterministic and local. They should validate structure, schema, design, and source metadata without requiring private credentials.
 - Do not store API keys, account cookies, or private prompt corpora in the skill package.
 
@@ -44,7 +44,7 @@ The general matrix was verified 2026-06-12 from each agent's public docs; the An
 | Agent | Skills location | Install route | Notes |
 |---|---|---|---|
 | Claude Code / claude.ai | `.claude/skills/` (workspace), managed skills | copy or marketplace | Origin platform of the SKILL.md shape. |
-| Codex | `.agents/skills/` upward scan + user/system dirs | `scripts/install_codex_skill.py --force` | `agents/openai.yaml` supplies UI metadata. |
+| Codex | `.agents/skills/` upward scan + user/system dirs | `scripts/install_codex_skill.py --client codex --scope user` | `agents/openai.yaml` supplies UI metadata. |
 | Google Antigravity | `.agents/skills/` (workspace), `~/.gemini/config/skills/` (global across Antigravity products) | copy the folder, restart the session | Google's Antigravity skills codelab documents the directory-based `SKILL.md` package at both scopes. |
 | OpenClaw | workspace `skills/`, `~/.openclaw/skills/` (global) | `openclaw skills install` (git/local expect `SKILL.md` at source root - this repo qualifies) | ClawHub is the public registry (`clawhub` CLI to publish). Every skill here already carries `openclaw:` metadata. |
 | Hermes Agent (Nous Research) | `~/.hermes/skills/` (primary); project/shared folders via `skills.external_dirs` | `hermes skills install` (runs a security scan) | A project `skills/` directory is not an automatic scope; add that parent directory in `~/.hermes/config.yaml`. |

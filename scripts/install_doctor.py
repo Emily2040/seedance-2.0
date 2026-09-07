@@ -148,14 +148,16 @@ def inspect_install(repo_root: Path, destination: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dest", type=Path, default=installer.default_skills_dir(),
-                        help="Skills parent directory, using the same meaning as the installer.")
+    installer.add_destination_arguments(parser)
     parser.add_argument("--json", action="store_true", help="Print the complete machine-readable report.")
     args = parser.parse_args()
-    report = inspect_install(Path(__file__).resolve().parents[1], args.dest.expanduser() / installer.SKILL_NAME)
+    destination = installer.skills_dir_from_args(parser, args) / installer.SKILL_NAME
+    report = inspect_install(Path(__file__).resolve().parents[1], destination)
+    report["destination"] = str(destination.absolute())
     if args.json:
         print(json.dumps(report, ensure_ascii=True, sort_keys=True))
     else:
+        installer.safe_print("Target: " + installer._bounded_diagnostic(report["destination"], 280))
         print(f"Installation: {report['status']}")
         print(f"Version: installed {report['installed_version'] or 'unknown'}; source {report['source_version'] or 'unknown'}")
         print(f"Checked {report['checked_files']} source-declared files; extra files were not scanned.")
