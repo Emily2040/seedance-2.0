@@ -2,6 +2,8 @@
 
 These cards describe intended images, not product tests, measured performance or generated successes. Proposed durations and framing require active-surface checks. Exact products need actual authorized references; neither a prompt nor a generated clip certifies a functional or advertising claim. For exact type or logos, consider approved artwork in post and review the result rather than promising preservation.
 
+Reference tokens shown here are teaching placeholders. Before using a conditional prompt, replace them in both its binding record and prose with the active surface's exact bound tokens, preserving the user's supplied spelling. Do not submit a literal placeholder or invent a binding; leave the prompt conditional if the actual asset or token is unavailable.
+
 ## Card: Keep the tin label facing us
 
 **Evidence:** Concept; not generated or inspected.
