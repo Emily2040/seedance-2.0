@@ -474,7 +474,7 @@
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "1a4c3045b9855e379b6d62adb66a541ea091f7d5f288a45431250b4d058106fd"
+      "sha256": "960e80efe6b72054935f92e7de6da6b7229282da73447dec335cf434cbbc232e"
     },
     {
       "path": "scripts/eval_ledger_format.py",
