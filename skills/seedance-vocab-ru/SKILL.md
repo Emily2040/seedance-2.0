@@ -53,8 +53,17 @@ When the prompt leans on `кинематографичный`, `эпичный`,
 
 ## Dialogue Rule
 
-For spoken Russian, load the Russian Dialogue Notes in [Russian vocabulary](../../references/vocab/ru.md): lines of a few words, one speaker per generation, Cyrillic first with transliteration as the field-reported fallback, and a post-dub plan for fully voiced pieces.
+For spoken Russian, load the Russian Dialogue Notes in [Russian vocabulary](../../references/vocab/ru.md). Preserve exact supplied dialogue and Cyrillic spelling; do not transliterate, shorten, or change register without agreement. Time the actual performance. Offer supported voice-reference or post-dub options as user choices, not automatic replacements or guarantees.
 
 ## Output Contract
 
-Return Russian prompt wording, optional English gloss when useful, and unchanged reference tags.
+Return Russian prompt wording and unchanged reference tags; add an English gloss only when requested or needed to resolve a specific ambiguity.
+
+For a first prompt or retake:
+
+- Use the user's supplied decisions immediately. Do not restart an interview or impose a language lesson on a complete brief.
+- When directions are requested, distinguish their visible performance, staging or information tradeoffs. Keep the chosen and rejected options across revisions; do not force a menu on a specified scene.
+- Put the copyable prompt apart from settings, reference requirements and review notes. A written token does not attach an asset; never invent a binding.
+- Preserve exact quoted dialogue even when it is in another language, unless translation is requested. Ask about region or relationship only when it changes the requested wording.
+- For a reported failure, name the criterion, propose one concrete change and retain duration, tier and remaining budget. Attribute an unseen result to the user's description. A text revision does not authorize submission; at zero budget offer an acceptable edit or stop.
+- Treat authored examples as unrendered and independent language review as pending. Do not promise fluency, voice reliability or credit savings from a static check.
