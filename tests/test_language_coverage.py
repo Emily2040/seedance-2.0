@@ -2,7 +2,7 @@ import copy
 import unittest
 import json
 
-from scripts.language_coverage import ROOT, check
+from scripts.language_coverage import ROOT, check, digest
 from scripts.strict_json import load_json
 
 
@@ -28,6 +28,10 @@ class LanguageCoverageTests(unittest.TestCase):
         self.assertTrue(all(r["status"] == "stale_review_required" for r in report.values()))
 
     def test_target_drift_is_locale_scoped(self):
+        # This synthetic test baseline is not a review of the shipped wording.
+        # Committed ES vocabulary may already be awaiting a human review.
+        for path in self.contract["languages"]["es"]["snapshots"]:
+            self.contract["languages"]["es"]["snapshots"][path] = digest(ROOT, path)
         baseline = check(ROOT, self.contract)
         self.contract["languages"]["es"]["snapshots"]["docs/QUICKSTART.es.md"] = "0" * 64
         report = check(ROOT, self.contract)

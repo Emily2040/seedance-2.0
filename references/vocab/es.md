@@ -65,18 +65,19 @@ Use this reference for Spanish Seedance prompt wording, role binding, and compac
 
 ## Dialogue Notes
 
-Field-observed and under-tested for Spanish specifically as of 2026; test per surface, never promise results. Treat Spanish as the non-English/Mandarin tier.
+La variante regional, la relación entre hablantes y el registro se eligen según el encargo. Conserva literalmente las frases indicadas por el usuario; no las traduzcas, acortes ni vuelvas más formales sin acuerdo. Si la frase está en otro idioma y debe ser exacta, la lengua de las instrucciones no cambia la lengua del diálogo.
 
-- Keep to one short clear line, about one breath.
-- For reliable Spanish voice, prefer a voice reference (attach the spoken line so the model lip-syncs to it) or plan a post-dub.
+Cronometra la interpretación real y escucha el resultado con una persona competente en la variante elegida. Una frase breve y un turno de habla pueden servir como condiciones de prueba; no son límites universales ni garantías de sincronización. El texto de esta guía no justifica clasificar todos los idiomas por fiabilidad.
+
+Ofrece voz generada, una referencia de voz autorizada si la operación la admite, o doblaje posterior según las prioridades del usuario. Una referencia no garantiza reproducción exacta. Consulta [audio-guide](../audio-guide.md) y el [protocolo de calibración](../sync-budget-protocol.md) para separar duración, pronunciación y sincronización.
 
 ## Slop Traps
 
-Consenso de la comunidad: los adjetivos de calidad abstractos desestabilizan la generación porque el modelo no sabe qué elemento enfatizar. Convierte cada palabra-sensación en los elementos físicos que la producen (verbo de cámara + velocidad + punto de vista, fuente de luz + dirección + comportamiento).
+Criterio editorial: sustituye un adjetivo vago cuando no indique qué debe verse u oírse. Nombra la acción, el encuadre, la fuente de luz o el sonido que sirve a esa escena. Esta revisión facilita evaluar el encargo; no demuestra cómo procesa el modelo los adjetivos ni garantiza una mejora del vídeo.
 
 | Muletilla | Escribe en su lugar |
 |---|---|
-| `cinematográfico` | escala de plano, movimiento de cámara, fuente de luz y etalonaje: `plano general amplio, travelling lento, sol bajo, tonos teal y naranja` |
+| `cinematográfico` | decisiones ligadas al encargo: `cámara fija a la altura de sus ojos; el tictac precede a la sonrisa; mantener la expresión al final` |
 | `épico` | escala física: tamaño de la multitud, distancia a la cámara, altura de la estructura |
 | `impresionante / asombroso` | el único contraste o revelación visible que lo justifica |
 | `hermoso / precioso` | color, textura, material, comportamiento de la luz |
