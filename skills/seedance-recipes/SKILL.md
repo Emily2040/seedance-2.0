@@ -72,3 +72,5 @@ When sequence state is present, recipes must inherit the story spine, current cl
 ## Output Contract
 
 Return one selected recipe, why it fits, the customized prompt skeleton, compact final prompt, and campaign/delivery notes when relevant.
+
+For worked examples with a chosen approach, copyable prompt, evidence boundary and failure checks, load [product and process cards](../../references/product-example-cards.md). These are authored concepts, not observed generation results.

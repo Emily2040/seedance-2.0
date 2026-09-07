@@ -4,36 +4,30 @@ Use this reference for detailed audio, dialogue, beat-sync, ambience, and lip-sy
 
 For professional audio post, stems, M&E, dubbing, loudness, or delivery checks, also load [audio-post-delivery](audio-post-delivery.md).
 
-## How the audio actually works (reason before you prompt)
+## What the evidence supports
 
-Field-observed from 2026 community testing across Chinese, Russian, and English sources; test per surface and never promise results. Use these as a reasoning model, not guarantees.
+The [Seedance 2.0 model card](https://arxiv.org/abs/2604.14148), v1 dated 2026-04-15 and rechecked 2026-09-07, describes joint audio-video generation. Joint generation does **not** guarantee synchronization, exact dialogue, or reference playback. Inspect the active surface's audio controls; do not assume a named toggle exists or is off by default.
 
-- Audio and video are generated together in one pass, so timing is locked by construction - you are not adding a track, you are asking one model to commit to both at once.
-- The model infers sound from what it sees whether or not you ask: a character on gravel gets footsteps, a street gets traffic. "Generic default audio" is therefore the resting state - you override it by naming the exact sound you want, because a sound cue acts as audio direction.
-- Speech and lip articulation appear tightly coupled: asking for a moving mouth with no voice is unreliable, and the model tends to voice the line anyway. Plan around this instead of expecting silent lip-sync.
-- Lip-sync is not always on by default. On some surfaces (for example Jimeng/即梦) it is a toggle that ships off; confirm the active surface enables voiced dialogue before blaming the prompt.
-- Reliability is probabilistic. Reputable hands-on testing, including Chinese tech press, reports voice scrambling and garbled on-screen text on harder prompts, so budget retakes and keep dialogue simple.
-- Language strength is uneven: field reports rank Mandarin strongest for lip-sync, English a close second, with Japanese, Korean, Russian, and others weaker and sometimes English-accented - a training-data effect, not something prompt wording alone fixes.
+Table 20 reports developer-run I2V evaluations on a 1–5 scale, with separate audio quality (AQ), audio-visual sync (AVS), and audio prompt-following (APF) scores:
 
-## Dialogue capacity (field-observed)
+| Language | AQ | AVS | APF |
+|---|---:|---:|---:|
+| English | 4.00 | 3.93 | 4.20 |
+| Japanese | 4.00 | 3.63 | 3.13 |
+| Korean | 3.75 | 3.38 | 3.38 |
+| Indonesian | 3.71 | 3.71 | 4.14 |
+| Portuguese | 3.50 | 3.63 | 3.63 |
+| Spanish | 4.14 | 4.14 | 4.00 |
 
-No official per-language word limit is published; the numbers below are field-observed ranges from 2026 community testing (cross-cited how-to blogs plus Chinese and Russian hands-on reports), not guarantees - test per surface.
+These task-specific averages are not success percentages, universal language rankings, or this skill's results. Table 19 evaluates different Chinese-voice categories; do not combine the tables into a Mandarin-first hierarchy. Russian is absent from Table 20: that is an evidence gap, not proof of poor Russian support. The tables do not establish training-data causes or a reliable maximum line length.
 
-Two budgets matter, and people confuse them. The acoustic budget is how many words fit at natural pace (English roughly 35-40 in 15 seconds). The reliable-sync budget - how much stays lip-synced and un-garbled - is much lower and is the real limit. "Words" also mislead across languages; the safer unit is one short sentence, about one breath (~1.5-2.5s, one idea).
+## Dialogue capacity: measure the performance
 
-| Language | Reliable-sync budget, ~15s clip | Per line | Note |
-|---|---|---|---|
-| English | ~16-20 words before the mix compresses | 5-10 words | close-second lip-sync |
-| Mandarin | count in characters/syllables, not words; strongest sync | one short clause | best lip-sync, training-weighted |
-| Japanese | not separately measured; treat as the weaker tier | one short line | mora-timed; word counts mislead — measure via [sync-budget-protocol](sync-budget-protocol.md) |
-| Korean | not separately measured, under-tested | one short line | flag uncertainty, do not assume parity — measure via [sync-budget-protocol](sync-budget-protocol.md) |
-| Russian | ~10-15 words maximum, shorter is better | under 10 words | weak, often English-accented |
+This repository has no validated per-language word, character, mora, or syllable ceiling. Earlier numerical limits and language tiers lacked a reproducible dataset and are withdrawn. Distinguish **spoken duration** from **returned speech accuracy and visible sync**: a line can fit and still fail either check.
 
-Past the reliable-sync budget, especially in non-English, use the voice-reference lip-sync path below or plan a post-dub.
+Preserve the user's language, script, exact quoted words, and intended relationship. For new dialogue, one short speaker turn is a useful starting heuristic. Read or record the actual line at the intended pace, including pauses, and leave time for the reaction. Written counts help describe a sample; they are not seconds or a universal sync budget. Use [sync-budget-protocol](sync-budget-protocol.md) only if the user wants a bounded calibration test.
 
-One budget trap is language-specific: **Korean has no neutral register**, and the speech level chosen for a line changes its syllable count. 감사합니다 (5 syllables) and 고마워 (3) are the same thanks at different levels, and 합니다체 runs roughly 1.5-2x 반말 across a line. On a tier already flagged as under-tested, picking the formal register by reflex can spend the budget on politeness endings rather than content. Decide the level deliberately - see Speech Level in [vocab/ko](vocab/ko.md).
-
-**Japanese has the same trap in its registers.** ありがとう (5 morae) and ありがとうございます (10) are one thanks at two politeness levels, and full 敬語 can double a line on the tier already flagged as weaker for sync. The first-person pronoun (私/僕/俺) is part of the same decision. Decide the register deliberately - see Register (文体) in [vocab/ja](vocab/ja.md).
+Register changes character and wording. Choose it from the relationship and the user's intent, not to minimize syllables. If a line is too long, offer a shorter alternative, more time where supported, or post production. Do not silently replace formal language with casual speech. See [Japanese register](vocab/ja.md) and [Korean speech level](vocab/ko.md).
 
 ## Dialogue
 
@@ -43,14 +37,14 @@ One budget trap is language-specific: **Korean has no neutral register**, and th
 - Use stable framing for lip-sync.
 - Avoid head turns, large face movement, extreme camera moves, or busy hand action while mouth accuracy matters.
 - If the line matters more than the environment, reduce music and SFX during the line.
-- Non-English dialogue: keep lines even shorter - long non-English phrases are a field-reported weak spot. For a fully voiced non-English piece, plan a post-dub instead, and check the language's vocab file for dialogue notes.
+- For any language, assess the actual line and performance. Offer native generation, a supported voice-reference workflow, or post dubbing according to the user's priorities; do not force a post-dub solely because the line is non-English.
 - Inline audio tags (field-observed, surface-specific): some surfaces (for example Jimeng) let you append bracketed cues to the spoken line to steer voice timbre and insert SFX, e.g. `"..." [low warm voice][distant bell]`. Useful but unverified across surfaces - do not assume universal support.
 
 ## Audio reference mapping
 
 `@Audio1` can be used for rhythm, pacing, mood, voice tone, ambience, music texture, or beat timing. Do not promise exact audio playback unless the active platform documents exact playback behavior. If the source contains a real voice or recognizable song, treat it as authorization-sensitive and convert it into broad sonic descriptors when rights are unclear.
 
-On surfaces that accept a spoken-voice audio reference, field reports describe a stronger role than tempo or mood: attaching an actual voice clip can make the model lip-sync to that audio instead of synthesizing speech itself - effectively a lip-sync compiler. This is the most reliable field-reported path for non-English dialogue: record or commission the line, attach it, and let the model only move the mouth. Use only your own recorded, licensed, or rights-cleared voice; treat a real or recognizable person's voice as authorization-sensitive and route it through [seedance-copyright](../skills/seedance-copyright/SKILL.md) when rights are unclear. Verify the active surface actually exposes a voice audio reference before relying on this.
+A spoken-voice reference is an option only when the active operation supports the intended use. A reference-input feature alone does not promise verbatim playback or exact mouth motion. Compare the returned words, performance, and sync with the source. Use only your own recorded, licensed, or rights-cleared voice; route unclear real-person voice authorization through [seedance-copyright](../skills/seedance-copyright/SKILL.md). Post dubbing is a separate option when exact delivery matters.
 
 When an audio reference and video reference compete, silence or mute the video reference before upload when the audio should control timing. If the video must keep sound, state the priority: `@Video1 controls only camera/motion; @Audio1 controls tempo and energy`.
 

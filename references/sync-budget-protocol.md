@@ -1,80 +1,42 @@
-# Sync-Budget Measurement Protocol
+# Dialogue Calibration Protocol
 
-Two cells in the dialogue-capacity table of [audio-guide](audio-guide.md) read "not separately measured": Japanese and Korean. That wording is deliberate — nobody has measured them, and this repository does not print numbers nobody measured. This protocol is the missing half of that honesty: the exact procedure that turns a few real dialogue takes on one surface into numbers those cells can carry.
+Use this for an **optional, bounded pilot** on the active surface. It does not estimate a universal language limit. This repository has no validated per-language dialogue ceiling; [audio-guide](audio-guide.md) distinguishes published benchmark evidence from unmeasured workflow suggestions.
 
-Anyone with access to a Seedance 2.0 surface that voices dialogue can run it. Total cost is roughly 24-40 takes per language.
+## Agree on the question and budget
 
-## What is being measured
+Choose one question: for example, whether the user's exact line works in a stable close-up, or whether a supported audio reference improves delivery. Preserve language, script, register, and speaker identity. Do not substitute Mandarin as a supposedly stronger control language.
 
-The **reliable-sync budget**: the longest line, counted in the language's own unit (morae for Japanese, syllables for Korean, characters for Mandarin), that survives generation with clean lip-sync and un-garbled speech most of the time. Not the acoustic budget — a longer line often *fits*; the question is what stays reliable.
+Before any paid call, establish the model/operation, maximum takes, maximum spend, and stop condition using the user's existing authorization. If those are missing, prepare the test and ask only for the missing authorization. A document saying “run four takes” is not authorization to spend. If prices cannot be verified, do not promise a cost or start a spending loop.
 
-## Fixed conditions (do not vary these between takes)
+Start with the smallest test that could change the production decision. Reuse reviewed existing takes when their conditions match. Stop when the decision is made, the budget is exhausted, or the user stops the test; do not automatically finish a ladder.
 
-The shot must be the one the Dialogue rules in [audio-guide](audio-guide.md) already prescribe, so the measurement isolates line length instead of confounding it with camera:
+## Keep a comparison interpretable
 
-- One speaker, locked medium close-up, eye level, no reframing.
-- No head turn, no walking, hands still, plain expression.
-- No music, no competing SFX: `Sound: quiet room tone` and the quoted line only.
-- Same surface, same duration setting, same resolution for every take in a ladder.
-- Speech level / register held constant within a ladder (해요체 for Korean, です・ます体 for Japanese) — the register sections in [vocab/ko](vocab/ko.md) and [vocab/ja](vocab/ja.md) exist precisely so this variable is controlled.
-- Lip-sync enabled where the surface exposes a toggle (Jimeng/即梦 ships it off).
+- Use the same surface, exact model/tier, operation, duration, resolution, reference roles, and audio settings across compared conditions.
+- Hold speaker, framing, head movement, background sound, and performance direction constant unless that is the variable being tested.
+- Use the actual approved line. Record its intended spoken duration with pauses; optional word/mora/syllable counts are descriptive only.
+- If testing line length, use several reviewed lines per duration band with the same intended register. Different lines also change phonetics and meaning, so a length effect remains tentative.
+- For a two-condition comparison, alternate conditions or predeclare an order; record seeds if exposed. A seed does not ensure equivalent output across providers or model versions.
+- Check the documented audio control state; do not assume a Jimeng toggle or default. Do not upload voice material without authorization for that use.
 
-## The ladders
+## Score what actually happened
 
-Every count below is script-verified, not eyeballed. Climb from the shortest rung; run 4 takes per rung; stop one rung after the first rung that fails the acceptance rule.
+Inspect the returned clip and listen to the audio. A speaker or qualified reviewer of the target language checks the exact words, pronunciation, register, and intended emotion. Without that review, mark speech quality unreviewed; automated transcription alone cannot certify natural delivery.
 
-**Japanese (morae, です・ます体):**
+Record these separately for every take, including failures:
 
-| Morae | Line |
+| Dimension | What to record |
 |---|---|
-| 4 | 分かった *(plain form, calibration rung only)* |
-| 6 | 分かりました |
-| 8 | かしこまりました |
-| 10 | ありがとうございます |
-| 14 | 五時に駅の前で会いましょう |
-| 20 | もう一度最初から説明してください |
+| Words and speaker | Omitted, changed, duplicated, wrong-language, or misassigned words. |
+| Performance | Whether pronunciation, accent, register, pace, and emotion fit the brief; reviewer status. |
+| Visible sync | Noticeable mismatch with mouth movement; timestamp examples and review method. |
+| Completion and mix | Cut-off line, missing reaction time, masked speech, or artifacts. |
+| Production decision | Accept, revise one variable, use post work, or stop. |
 
-**Korean (syllables, 해요체 except where marked):**
+Define “acceptable for this shot” before looking at the results. A 3/4 pass count is **three acceptable takes out of four under these conditions**; it does not establish a reliable maximum, a language ranking, or a 75% future success probability. Selecting the best rung from many attempts also biases the result. Report all tried conditions and avoid presenting an exploratory pilot as confirmation.
 
-| Syllables | Line |
-|---|---|
-| 3 | 고마워 *(반말, calibration rung only)* |
-| 4 | 고마워요 |
-| 5 | 감사합니다 *(합니다체 — register-cost pair with the rung above)* |
-| 7 | 지금 시작할게요 |
-| 10 | 끝나면 바로 전화할게요 |
-| 16 | 내일 아침 아홉 시에 회의실에서 만나요 |
+## Keep evidence and claims separate
 
-**Mandarin control ladder (characters).** Run this first on the same surface and session. Mandarin is the strongest documented tier; if the control ladder fails early, the surface or settings are the problem, and the ja/ko numbers from that session are not valid measurements.
+Record takes in a private ledger using `schemas/generation-run.schema.json` and `data/generation-runs.example.jsonl`. Use `result_status: "reviewed"` only after review, and `is_synthetic_fixture: false` only for real generations. Keep calibration condition, exact line, reviewer status, defects, and stop reason in linked local notes; do not invent schema fields. Do not commit raw media, personal voice material, credentials, or unsanitized generation ledgers.
 
-| Characters | Line |
-|---|---|
-| 3 | 知道了 |
-| 5 | 我马上就到 |
-| 10 | 我们五点在车站门口见 |
-| 17 | 把东西放下然后跟我来我们时间不多了 |
-
-## Scoring a take
-
-Score each take on three binary defects — a take is **clean** only when all three are absent:
-
-1. **Desync** — visible mismatch between mouth articulation and the audio at any point in the line.
-2. **Garble** — scrambled, swallowed, duplicated, or wrong-language words (the 语音错乱 class of failure).
-3. **Truncation or mix collapse** — the line is cut off, or speech ducks under compression artifacts before it ends.
-
-A **rung passes** when at least 3 of its 4 takes are clean. The language's reliable-sync budget is the highest passing rung, reported as a range against the next failing rung (for example "clean through 10, degrading by 14 → report ~10-14").
-
-## Recording takes
-
-Record every take — including the failures; the failures are the data — as one line each in a JSONL file shaped by `schemas/generation-run.schema.json` (see `data/generation-runs.example.jsonl` for the shape). Use `result_status: "reviewed"`, set `is_synthetic_fixture: false`, and put the rung and the three defect verdicts in the prompt-adjacent notes your workflow keeps. Do not commit raw generation ledgers to this repository; commit only the summarized findings below.
-
-## Writing the result back
-
-When a ladder is complete:
-
-1. Update the Japanese and/or Korean row of the dialogue-capacity table in [audio-guide](audio-guide.md): replace "not separately measured" with the measured range, the unit, the surface, and the date — e.g. `~10-14 morae on <surface>, 2026-XX [field]`.
-2. Keep the claim label `[field]` — four takes per rung on one surface is field observation, not a guarantee, and the note column should still say "test per surface".
-3. Record the session in the [source registry](source-registry.md) per its methodology, so the freshness check knows when the number ages out.
-4. If the measured number contradicts the current tier ordering (for example Korean beats English), do not resolve it silently: flag it in the table note. Surprising results are the ones worth keeping visible.
-
-One session on one surface fills the cell for that surface only. A second surface gets its own measurement, not an inherited number.
+A shareable result should identify date, surface, model/tier, operation, settings, language/register, line duration, sample counts, review method, observed defects, and limitations. Label it `field-observed`. Leave the general audio guide's capacity statement unchanged unless broader reproducible evidence supports a specifically scoped revision. Replication uses a separately authorized budget; this protocol does not schedule or trigger more calls.

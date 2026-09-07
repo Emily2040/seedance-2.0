@@ -2,7 +2,7 @@
 
 The compiler turns internal project state into one natural-language Seedance prompt for the current clip only. JSON or YAML can organize planning, but the final prompt sent to Seedance stays readable prose unless the user explicitly asks for structured output.
 
-Before compilation, load the [Director's Read](directors-read.md). Narrative, story, and performance clips persist the complete canonical internal read, evidence-bearing detail provenance, explicit value endpoints, and prompt carriers in `authoring_state`. `source_bound` requires a registered exact source locator; `authored_choice` requires a null source. Non-narrative utility, product-only, abstract, VFX, or ambient clips persist exactly the two-line utility intent and refusal. The handoff never substitutes a reduced taxonomy for the canonical record.
+Before compilation, load the [Director's Read](directors-read.md). Clips classified in the narrative lane persist the complete canonical internal read, evidence-bearing detail provenance, explicit value endpoints, and prompt carriers in `authoring_state`. `source_bound` requires a registered exact source locator; `authored_choice` requires a null source. Observation/performance without a dramatic story turn and utility clips use the non_narrative lane and persist exactly the two-line utility intent and refusal. The handoff never substitutes a reduced taxonomy for the canonical record.
 
 ## Inputs
 

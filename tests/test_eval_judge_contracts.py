@@ -360,7 +360,7 @@ class JudgeContractTests(unittest.TestCase):
             mock.patch.object(
                 sys,
                 "argv",
-                ["eval_run.py", str(REPO_ROOT)],
+                ["eval_run.py", "--live", "--max-calls", "10000", str(REPO_ROOT)],
             ),
             mock.patch.object(
                 eval_run,

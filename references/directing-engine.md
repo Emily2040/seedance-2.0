@@ -10,7 +10,11 @@ Load the [Director's Read](directors-read.md) first on every route. Load this de
 
 ## Step 1 - Expand the Canonical Director's Read
 
-Before any technique, complete the exact ten-field narrative record in the [Director's Read](directors-read.md), or its two-line non-narrative refusal when no agency, story, or performance is requested. Do not fabricate drama for utility, packshot, functional product, abstract, VFX, or ambient work. The five lenses below deepen parts of the narrative record; they are not a shorter substitute for its hidden objective, obstacle/tactic, visible suppressed behavior, non-transferable detail, or stock-solution refusal.
+Before any technique, complete the exact ten-field narrative record in the [Director's Read](directors-read.md), or its two-line non-narrative record for observation/performance without a dramatic story turn or for utility. Do not fabricate conflict for joyful expression, sensory observation, direct demonstration, or ambient work. Genre-library entries below are authored example beats, not rules that every scene in that genre needs their narrative lane. The five lenses below deepen parts of the narrative record; they are not a shorter substitute for its hidden objective, obstacle/tactic, visible suppressed behavior, non-transferable detail, or stock-solution refusal.
+
+For the non-narrative lane, skip the five dramatic lenses below and Step 3's dramatic setups. Start Step 2 from the concrete viewer experience in `utility_intent`. Use the non-narrative path in Step 4, then choose framing, light, sound, and continuity that make that experience legible. A held observation can be complete without a value flip, power shift, or hidden motive. Step 8's dramatic arc applies only when the project requests one; otherwise preserve the requested order and rhythm without inventing a climax or new state fields.
+
+For the narrative lane only:
 
 1. **Function.** What is this scene for in the larger story - introduce, deepen, turn, or pay off? A scene that earns its place changes something.
 2. **The turn.** Name the single shift the scene exists to deliver as a value flip: safe to threatened, hope to despair, stranger to ally, control to helplessness, ordinary to wonder. If nothing flips, the scene is decoration and should be cut or merged.
@@ -58,6 +62,8 @@ Different dramatic functions demand different complete setups. Use the scene's f
 ## Step 4 - Directing the Performance
 
 Seedance renders observable behavior, not internal states. "She is sad," "he feels betrayed," and "tense atmosphere" are not directable - they have no pixels. The director's job is to convert the read into what a body visibly does.
+
+For observation/performance in the non-narrative lane, specify the physical phrase, tempo, range of motion, spatial relationship, and visible or audible endpoint that serve the brief. Preserve broad expression or energetic choreography when requested; do not force a micro-gesture, obstacle, tactic, or contradiction. For utility, specify the readable task or material change. The acting instructions below apply to the narrative lane only.
 
 1. **Emotion becomes behavior.** Replace the feeling with the one true gesture that proves it: not "grief" but "she folds the letter, presses it flat with both hands, and does not look up." The camera can shoot the gesture; it cannot shoot the noun.
 2. **Play an action, not a mood.** Give the performer an objective, an obstacle, and a tactic, then name the action verb: wants to be believed, is not believed, so she steadies her voice and meets his eyes. One playable action per beat.
@@ -122,9 +128,9 @@ The skills run this function whenever a scene becomes a shot.
 1. Complete the [Director's Read](directors-read.md): classify the lane, then write the full narrative record or the non-narrative refusal. For narrative work, use the function, turn, POV, power, objective, obstacle/tactic, contradiction, visible suppressed behavior, non-transferable detail, and stock refusal in the steps below.
 2. Set or inherit the project voice (Step 6); store it.
 3. Derive the unified setup: let scene-type (Step 3) and the one-sentence intention choose the instruments, biased by the voice.
-4. Write the performance as one true gesture per beat (Step 4).
+4. Use the lane-specific performance path in Step 4: narrative acting or the requested observational/utility action and rhythm.
 5. Run the coherence test (Step 7).
-6. Place the clip in the long-form spine: set its arc position and instrument trends, and decide whether it is the pattern break (Step 8).
+6. For a requested dramatic arc, place the clip in the long-form spine (Step 8). For non-narrative work, preserve the planned order, rhythm, and continuity without adding a dramatic pattern break.
 7. Hand the motivated setup to the Director Formula in [seedance-prompt](../skills/seedance-prompt/SKILL.md), the prompt compiler in [prompt-compiler](prompt-compiler.md), or the plan in [seedance-sequence](../skills/seedance-sequence/SKILL.md).
 
 ## Worked Example - A Single Scene

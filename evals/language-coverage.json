@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "source_revision": "39f3543a5d23ee3720e5bdd5a57172e0fa6c464a",
+  "sources": {
+    "SKILL.md": "e1710cbecd5039fbe549a622590f0aff6a2abadf4b08872993116368ee0474fd",
+    "skills/seedance-prompt/SKILL.md": "8f33bdef8c3f9dacc3050b9ce5eb401ab44ec082ec1f19c7ce3393882f3f1768",
+    "skills/seedance-interview/SKILL.md": "a408e03d7a112884d41950ef93a8cbb6001b92179bf159cfd5c000a1921bb6b5",
+    "skills/seedance-audio/SKILL.md": "f163f7bf6f5b075800bef2e03cf313ee9aee9d3c23f135a630bafc8ed92c1245"
+  },
+  "languages": {
+    "en": {
+      "quickstart": "docs/QUICKSTART.md",
+      "vocabulary": "references/vocab/en.md",
+      "readme": "README.md",
+      "snapshots": {
+        "docs/QUICKSTART.md": "8ef7728d7729cdc08de0159ca25ab3f09a3e8befe83c127834d096e4fca3e159",
+        "references/vocab/en.md": "2d16a2cf156db55904e29fd5727e534a16e7fb48230ab28d6049d2d8d6c73b3b"
+      },
+      "native_review": "pending",
+      "rendered_review": "pending"
+    },
+    "zh": {
+      "quickstart": "docs/QUICKSTART.zh.md",
+      "vocabulary": "references/vocab/zh.md",
+      "readme": "docs/README.zh.md",
+      "snapshots": {
+        "docs/QUICKSTART.zh.md": "a37272b46a235d279666f2c9cb2bbeb09ce0ce03dd85685583d9991a13bc2465",
+        "references/vocab/zh.md": "cc2e18807c850cf41cc6bae29d0306ae7146b63dfa95712874a4171cfa0f72e2"
+      },
+      "native_review": "pending",
+      "rendered_review": "pending"
+    },
+    "ja": {
+      "quickstart": "docs/QUICKSTART.ja.md",
+      "vocabulary": "references/vocab/ja.md",
+      "readme": "docs/README.ja.md",
+      "snapshots": {
+        "docs/QUICKSTART.ja.md": "b3230e29d536f0283290fa7ed3f9001c1ef9f0b14dcc840f4f9e911a9776378a",
+        "references/vocab/ja.md": "4cc24ed592750d2e1352ada481cfad759627d81babf91fbc3a7be36b02867685"
+      },
+      "native_review": "pending",
+      "rendered_review": "pending"
+    },
+    "ko": {
+      "quickstart": "docs/QUICKSTART.ko.md",
+      "vocabulary": "references/vocab/ko.md",
+      "readme": "docs/README.ko.md",
+      "snapshots": {
+        "docs/QUICKSTART.ko.md": "8deebbbb396d531db577f15049de97c5a90ad14e6ce41961033693b3fbf5d44e",
+        "references/vocab/ko.md": "3951f257d6d06bd49a00c68aeec7a9dc28922dcf5f3b0032cd19618e3c781219"
+      },
+      "native_review": "pending",
+      "rendered_review": "pending"
+    },
+    "es": {
+      "quickstart": "docs/QUICKSTART.es.md",
+      "vocabulary": "references/vocab/es.md",
+      "readme": null,
+      "snapshots": {
+        "docs/QUICKSTART.es.md": "16e6a4a85f129bd3c6da4ec753802bbab4efd6e261d21590a049da00da22aeac",
+        "references/vocab/es.md": "d5bdc96283d012ba0ae6ffd015a86840dd06264a751bd7811bda660281ada693"
+      },
+      "native_review": "pending",
+      "rendered_review": "pending"
+    },
+    "ru": {
+      "quickstart": "docs/QUICKSTART.ru.md",
+      "vocabulary": "references/vocab/ru.md",
+      "readme": null,
+      "snapshots": {
+        "docs/QUICKSTART.ru.md": "54d600f5dd35710d7ec21408efdb11cc8c8161de06d524efc2bb11d2226dc83d",
+        "references/vocab/ru.md": "689f5a75f7711846038876b86fc6272b7b9815002c0b61e27e402799e6b31e95"
+      },
+      "native_review": "pending",
+      "rendered_review": "pending"
+    }
+  }
+}

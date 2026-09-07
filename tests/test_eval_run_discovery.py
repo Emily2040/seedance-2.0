@@ -625,9 +625,11 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             self.assertIn("skills/seedance-prompt/SKILL.md@", text)
             self.assertIn("Frozen repository provenance: **BOUND**", text)
             self.assertIn("archive=23", text)
-            self.assertIn("evaluator=4", text)
+            evaluator_count = sum(role == "evaluator" for role in repository_roles.values())
+            self.assertRegex(text, rf"\bevaluator={evaluator_count}\b")
             self.assertIn("fixture=1", text)
-            self.assertIn("responder=90", text)
+            responder_count = sum(role == "responder" for role in repository_roles.values())
+            self.assertRegex(text, rf"\bresponder={responder_count}\b")
             self.assertIn("root=1", text)
 
             mismatched_repository = dict(repository_manifest)
@@ -1043,7 +1045,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--ledger",
                         "evals/eval-run-ledger.md",
@@ -1089,7 +1091,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                         sys,
                         "argv",
                         [
-                            "eval_run.py",
+                            "eval_run.py", "--live", "--max-calls", "10000",
                             str(root),
                             "--ledger",
                             str(ledger),
@@ -1116,7 +1118,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(missing_root),
                         "--ledger",
                         str(ledger.resolve()),
@@ -1154,7 +1156,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--provider",
                         "minimax",
@@ -1176,7 +1178,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                     eval_run, "_verify_canonical_evaluation_contract"
                 ),
                 mock.patch.object(
-                    eval_run, "_verify_evaluator_execution_identity"
+                    eval_run, "_verify_evaluator_modules"
                 ),
                 mock.patch.object(
                     eval_run,

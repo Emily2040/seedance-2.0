@@ -6,34 +6,38 @@ The read is internal planning only. It may appear in a production brief or agent
 
 ## Classify First
 
+Identify the viewer's job before requiring a dramatic explanation. There are three useful creative purposes, stored in the existing two lanes:
+
+| Purpose in the brief | What to direct | Stored lane |
+|---|---|---|
+| Drama or story | A consequential choice, relationship change, concealment, resistance, or story turn. | `narrative` |
+| Observation / performance | A visible activity, rhythm, expressive delivery, sensory change, or physical joke without a requested dramatic turn. | `non_narrative` |
+| Utility / demonstration | What the viewer must understand, compare, identify, or see working. | `non_narrative` |
+
+These purposes are an internal decision aid, not new schema values. Do not serialize `observation` or `performance` as a third lane, invent new state fields, or fill narrative fields with “N/A.” Existing state files remain valid.
+
 ### Narrative lane
 
-Use the narrative lane when the brief asks for any of these:
+Use the narrative lane when the requested scene actually turns on a dramatic objective, obstacle, tactic, consequential choice, subtext, relationship change, or before/after story value. A silent breakup, a watchmaker concealing recognition, or a dancer disguising a missed cue belongs here. Retain the complete ten-field record below; do not use the lighter lane to omit a requested dramatic turn.
 
-- a person, character, creature, or performer pursuing, resisting, choosing, concealing, reacting, relating, or changing;
-- a story beat, dramatic turn, performance beat, dialogue, subtext, emotional shift, power shift, or deliberate audience alignment;
-- a product, fashion, music, dance, action, or brand shot in which a performer has an objective, obstacle, choice, relationship, or change.
-
-A silent scene can be narrative. A product shot can be narrative. The test is requested agency, performance, or dramatic change - not dialogue, genre, or whether a product is present.
+A person, dialogue, a product, or a genre label does not by itself determine the lane. Distinguish a performer's physical task (“dance this phrase”) from a dramatic objective (“hide the missed cue from the ensemble”). An expressive performance can simply be joyful. Do not require suppressed emotion, rivalry, trauma, or a power shift to justify it.
 
 ### Non-narrative lane
 
-Use the non-narrative lane for a packshot, material or light study, functional demonstration, camera or motion transfer, assembly instruction, abstract or VFX transformation, ambient environment, process visualization, or product shot with no requested agency, performance, relationship, or story turn.
+For observation / performance, direct the requested rhythm, gesture, attention, spatial relationship, sensory detail, or comedic timing. For utility, direct readable information, material change, or functional proof. Both use the existing two-line record:
 
-A visible human or hand does not by itself create a narrative. If the person only demonstrates a function and the brief asks for no objective, resistance, choice, reaction, or expressive performance, keep the work in the non-narrative lane. Do not fabricate hidden wants, power struggles, subtext, character psychology, or conflict to make utility footage seem dramatic.
+- `utility intent`: the concrete viewer-facing job or experience, including the action and a brief-specific visible or audible detail;
+- `non-narrative refusal`: the invented drama or psychology that would distort this brief.
 
-For the non-narrative lane, write only:
+The legacy field name `utility_intent` also carries an observational or performance intention. It need not make art sound like an instruction manual. Example: `utility intent: share the dancer's delight as each heel tap sends water outward from the yellow rain boots; non-narrative refusal: no invented sadness, competitive stakes, concealed mistake, or recovery arc.` Those details must be supplied or explicitly authored; do not claim to have seen an absent reference.
 
-- `utility intent`: the concrete viewer-facing job of the shot;
-- `non-narrative refusal`: the invented drama or anthropomorphism that must not be added.
+Proceed to visible or audible carriers: the physical action, its rhythm or endpoint, viewpoint, sound, references, and constraints. An ambient shot can end on a held observation; it does not need a dramatic reversal. An energetic brief can keep energetic movement and open expression instead of being compressed into a restrained micro-gesture.
 
-Then proceed with the visible beat, camera, light, material behavior, sound, references, and constraints. Example: `utility intent: prove the engraved label stays legible as condensation forms; non-narrative refusal: no invented character, rivalry, seduction, or emotional reveal.`
-
-If the lane is genuinely ambiguous and the answer would change the prompt, ask one plain question: `Is this only a clean demonstration, or should the person be playing a choice or feeling?` Otherwise use the evidence in the brief. Do not upgrade a utility shot into drama merely to fill fields.
+If the purpose is genuinely ambiguous and changes the prompt, ask one plain question such as “Are we enjoying the dance itself, or showing what changes between the dancers?” Otherwise use the evidence in the brief and draft. Do not fabricate conflict to complete a form.
 
 ## Mandatory Narrative Record
 
-For every narrative, story, or performance brief, complete all ten fields before drafting or compressing the generation prompt. Do not leave blanks and do not substitute a generic mood word.
+For every brief classified in the narrative lane, complete all ten fields before drafting or compressing the generation prompt. Do not leave blanks and do not substitute a generic mood word.
 
 - `dramatic function`: what this beat earns - introduce, deepen, turn, test, reveal, decide, or pay off.
 - `turn`: the single before-to-after value change visible in the beat.
@@ -66,7 +70,7 @@ Translate every useful abstraction into something the model can render or play:
 | non-transferable detail | the exact object, ritual, sound, or environment fact preserved in the shot |
 | stock solution refused | a physical exclusion only when needed, paired with the chosen replacement |
 
-Do not paste `dramatic function`, `POV`, `power shift`, `hidden want`, `subtext`, or other read labels into the final generation prompt. Do not tell Seedance that a character `feels conflicted` when the conflict can be carried by behavior. At minimum, the final prompt must preserve the turn, the visible suppressed behavior, and the non-transferable detail as filmable or audible evidence. The deterministic compiler check proves literal carrier inclusion only; prompt-polarity review and take review decide whether that evidence is actually requested and enacted.
+Do not paste `dramatic function`, `POV`, `power shift`, `hidden want`, `subtext`, or other read labels into the final generation prompt. Do not tell Seedance that a character `feels conflicted` when the conflict can be carried by behavior. For the narrative lane, the final prompt must preserve the turn, the visible suppressed behavior, and the non-transferable detail as filmable or audible evidence. The deterministic compiler check proves literal carrier inclusion only; prompt-polarity review and take review decide whether that evidence is actually requested and enacted.
 
 ## Narrative Example: Internal Read to Prompt
 
@@ -96,8 +100,19 @@ Brief: `Macro turntable shot of a perfume bottle while condensation forms; prese
 
 Proceed directly to a controlled rotation, condensation timing, macro endpoint, motivated hero light, glass sound cue if useful, and exact label-preservation constraints. No Director's Read fields are manufactured for this lane.
 
+## Observation / Performance Example
+
+Brief: “A joyful dancer in yellow rain boots taps through shallow puddles. Normal speed, a held wide camera, no sadness or competitive story.”
+
+- `utility intent`: share the delight and rhythm of heel taps sending water outward from the yellow rain boots, with the whole phrase visible.
+- `non-narrative refusal`: no invented grief, rivalry, suppressed mistake, or recovery arc.
+
+Prompt: `Hold a wide view of the dancer in yellow rain boots tapping through the shallow puddles at normal speed. Each heel tap sends a small fan of water outward; the dancer opens both arms on the final step and holds the pose as the ripples settle. Keep the whole body and boots visible. Sound: heel taps, splashes, and an open laugh at the finish.`
+
+The arm opening and laugh are authored options, not observed footage. Preserve a supplied choreography or exact sound specification instead when present. This example is ungenerated. Review the requested rhythm, boots, framing, and energy; do not demand a hidden obstacle or emotional reversal.
+
 ## Handoff Rule
 
-Every agent and every route uses this exact reference. A handoff may carry either the completed ten-field narrative record or the two-line non-narrative record. It may not say `handled from memory`, `use good judgment`, or `make it cinematic` in place of the record. Before another agent compiles or compresses a prompt, it verifies that the correct lane record is present and that the final prose contains carriers rather than internal labels.
+Every agent and every route uses this exact reference. A handoff may carry either the completed ten-field narrative record or the two-line non-narrative record for observation/performance or utility. It may not say `handled from memory`, `use good judgment`, or `make it cinematic` in place of the record. Before another agent compiles or compresses a prompt, it verifies that the correct lane record is present and that the final prose contains carriers rather than internal labels.
 
 This shared contract standardizes inputs and review criteria; it does not guarantee byte-identical classification or prose from separate language-model agents. Any claim about live cross-agent consistency requires a model-in-the-loop benchmark, not only these static routing checks.

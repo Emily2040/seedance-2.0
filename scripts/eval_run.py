@@ -8,11 +8,13 @@ sources without seeing expected routes or judge labels, a responder uses only
 that frozen selection, and a judge scores the result against the case contract
 using references/eval-rubric.md.
 
-Two modes:
+Three modes:
   --self-test   Offline. Validates the pinned manifest, immutable source snapshot,
                 case contracts, rubric, discovery requests, and responder inputs.
                 No network. Safe for CI.
-  (default)     Live. Uses the selected provider's API key. Runs responder +
+  (default)     Offline plan. Lists selected cases and request/output-token caps.
+                Does not read a provider key, call a provider, or write a ledger.
+  --live        Uses the selected provider's API key. Runs responder +
                 judge for each case, prints per-case scores, aggregates against
                 the rubric thresholds, and (with --ledger) writes a markdown
                 evidence ledger.
@@ -24,15 +26,14 @@ manually (or in a network-enabled job) when you want evidence, not just shape.
 from __future__ import annotations
 
 import argparse
+import contextvars
 import errno
 import hashlib
-import html
 import http.client
 import json
 import os
 import re
 import secrets
-import shlex
 import stat
 import sys
 import tempfile
@@ -69,6 +70,23 @@ else:
     )
 
 
+if __package__:
+    from . import eval_ledger_format as _ledger_format
+else:
+    import eval_ledger_format as _ledger_format
+
+# Preserve the existing import surface while the implementation moves.
+_is_utf8_encodable = _ledger_format._is_utf8_encodable
+_ledger_row_sort_key = _ledger_format._ledger_row_sort_key
+_safe_ledger_text = _ledger_format._safe_ledger_text
+_safe_markdown_code = _ledger_format._safe_markdown_code
+_safe_markdown_text = _ledger_format._safe_markdown_text
+COMMAND_VALUE_RE = _ledger_format.COMMAND_VALUE_RE
+_regeneration_argv = _ledger_format._regeneration_argv
+_powershell_quote = _ledger_format._powershell_quote
+_regeneration_command_lines = _ledger_format._regeneration_command_lines
+
+
 # Capture the exact module code object that Python is executing.  Later, the
 # frozen evaluator source is compiled with the same filename and optimization
 # level and must produce the same module code object.  Comparing only
@@ -80,7 +98,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "2e55db25a291ce2fce349186d575e37da66b8a63c580a7fffdae9f47208afeaf"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "f05725d794e8d34be91ed17cde421e46fc37604207faa64791080eb21a66312a"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -101,32 +119,24 @@ MINIMAX_ANTHROPIC_BASE_URLS = {
     "cn_zh": "https://api.minimaxi.com/anthropic",
 }
 ORCAROUTER_API_URL = "https://api.orcarouter.ai/v1/messages"
-# OrcaRouter is an OpenAI- and Anthropic-compatible gateway
-# (https://www.orcarouter.ai). Its Anthropic Messages endpoint accepts a
-# vendor-qualified model id (for example ``anthropic/claude-sonnet-5``) and
-# echoes the *upstream* model id in the response (``claude-sonnet-5``), so the
-# harness accepts a gateway model echo for this provider instead of requiring an
-# exact match. ``orcarouter/auto`` is the gateway's adaptive router and is
-# intentionally not the default here because the eval judge depends on a stable
-# response model.
+# Deliberately limited to the Claude routes in the provider's native Messages
+# documentation (reviewed 2026-09-07); the broader catalog is not a contract
+# that every route implements this response schema. See docs/ORCAROUTER_EVAL.md.
 ORCAROUTER_MODELS = (
-    "anthropic/claude-sonnet-5",
-    "anthropic/claude-opus-5",
-    "google/gemini-3.5-flash",
-    "google/gemini-3.1-flash-lite",
-    "openai/gpt-5.5",
-    "openai/gpt-5.4",
-    "deepseek/deepseek-v4-pro",
-    "deepseek/deepseek-v4-flash",
-    "qwen/qwen3.7-max",
-    "minimax/minimax-m2.7",
+    "anthropic/claude-sonnet-4.6",
+    "anthropic/claude-opus-4.7",
 )
+# Explicit equivalent spellings only. Never infer a version, suffix or route.
+ORCAROUTER_MODEL_ECHOES = {
+    "anthropic/claude-sonnet-4.6": ("claude-sonnet-4.6", "claude-sonnet-4-6"),
+    "anthropic/claude-opus-4.7": ("claude-opus-4.7", "claude-opus-4-7"),
+}
 MAX_SOURCE_FILES = 24
 SOURCE_MANIFEST_PATH = "evals/source-manifest.json"
-EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py"})
+EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py", "scripts/eval_ledger_format.py"})
 FIXTURE_ROOT = "evals/fixtures"
 SOURCE_ROLES = {"root", "responder", "evaluator", "fixture", "archive"}
-EXPECTED_EVALS_SHA256 = "729057eb7b64c2d77638f0b94e62a1885eb00d7b8533e26165bad71dadb129ea"
+EXPECTED_EVALS_SHA256 = "af82c0458240e576005af073ccd86ffe60bb0f3ce1255479ad7a4aa51112ae93"
 EXPECTED_RUBRIC_SHA256 = "10247feac85df8e5f59a13e2588ac4c28d17380f83a11adc6124e4142a4277c9"
 # Thresholds sourced from references/eval-rubric.md.
 LEGACY_MIN, LEGACY_AVG = 2, 2.6          # 0-3 scale
@@ -285,6 +295,48 @@ class ProviderResponseError(HarnessError):
     """A successful HTTP response did not contain usable model evidence."""
 
 
+@dataclass
+class EvaluationBudget:
+    max_calls: int
+    max_output_tokens: int
+    attempted_calls: int = 0
+    reserved_output_tokens: int = 0
+    reported_input_tokens: int = 0
+    reported_output_tokens: int = 0
+    validated_usage_responses: int = 0
+    exhausted: bool = False
+
+    def reserve(self, max_tokens: int) -> None:
+        if type(max_tokens) is not int or max_tokens <= 0:
+            raise ProviderResponseError("request output-token limit must be positive")
+        if (self.attempted_calls >= self.max_calls or
+                self.reserved_output_tokens + max_tokens > self.max_output_tokens):
+            self.exhausted = True
+            raise ProviderResponseError("evaluation execution budget exhausted")
+        # Reserve before transport, including requests that later fail. Never
+        # refund an uncertain request or assume a provider error was unbilled.
+        self.attempted_calls += 1
+        self.reserved_output_tokens += max_tokens
+
+    def summary(self) -> dict:
+        return {
+            "max_calls": self.max_calls,
+            "attempted_calls": self.attempted_calls,
+            "max_output_tokens": self.max_output_tokens,
+            "reserved_output_tokens": self.reserved_output_tokens,
+            "reported_input_tokens": self.reported_input_tokens,
+            "reported_output_tokens": self.reported_output_tokens,
+            "validated_usage_responses": self.validated_usage_responses,
+            "usage_may_be_incomplete": self.validated_usage_responses != self.attempted_calls,
+            "exhausted": self.exhausted,
+        }
+
+
+_ACTIVE_BUDGET: contextvars.ContextVar[EvaluationBudget | None] = contextvars.ContextVar(
+    "seedance_evaluation_budget", default=None
+)
+
+
 class CaseRunError(HarnessError):
     """A post-discovery failure carrying the already selected source paths."""
 
@@ -352,14 +404,6 @@ def _reject_duplicate_json_keys(pairs: list[tuple[str, object]]) -> dict:
             raise ValueError(f"duplicate JSON key: {key}")
         result[key] = value
     return result
-
-
-def _is_utf8_encodable(value: str) -> bool:
-    try:
-        value.encode("utf-8")
-    except UnicodeEncodeError:
-        return False
-    return True
 
 
 def _validate_json_strings(value: object) -> None:
@@ -431,13 +475,42 @@ def _transport_failure(
     )
 
 
+class _RejectProviderRedirects(urllib.request.HTTPRedirectHandler):
+    """Never forward authentication or replay a paid request on a redirect."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(
+            req.full_url,
+            code,
+            "authenticated provider redirects are refused",
+            headers,
+            fp,
+        )
+
+
+def _open_provider_request(request: urllib.request.Request, *, timeout: int):
+    allowed = {
+        endpoint
+        for provider in PROVIDER_CONFIGS.values()
+        for endpoint in provider.endpoints.values()
+        if endpoint.startswith("https://")
+    }
+    if request.full_url not in allowed:
+        raise ProviderResponseError("request must use a configured HTTPS provider endpoint")
+    # A private opener preserves proxy/TLS defaults without changing global urllib
+    # behavior for the host process or following credential-bearing redirects.
+    return urllib.request.build_opener(_RejectProviderRedirects()).open(
+        request, timeout=timeout
+    )
+
+
 def _read_api_response(
     request: urllib.request.Request,
     api_key: str,
 ) -> bytes:
     """Open, enter, read, and close with phase-specific sanitized failures."""
     try:
-        manager = urllib.request.urlopen(request, timeout=120)
+        manager = _open_provider_request(request, timeout=120)
     except Exception as exc:
         failure = _transport_failure("open", exc, api_key)
         if isinstance(exc, urllib.error.HTTPError):
@@ -621,6 +694,26 @@ def _verify_evaluator_execution_identity(source: FrozenFile) -> None:
         raise HarnessError(
             "executed evaluator code does not match frozen scripts/eval_run.py"
         )
+
+
+def _verify_evaluator_modules(snapshot: FrozenRepository) -> None:
+    """Every extracted evaluator module must match its frozen executed source."""
+    _verify_evaluator_execution_identity(snapshot.require("scripts/eval_run.py", "evaluator"))
+    source = snapshot.require("scripts/eval_ledger_format.py", "evaluator")
+    module = _ledger_format
+    try:
+        if module._EXECUTED_PATH is None or not source.path.samefile(module._EXECUTED_PATH):
+            raise HarnessError("executed ledger formatter path does not match frozen source")
+        declaration = re.compile(r'^_EXECUTED_SOURCE_SHA256 = "[0-9a-f]{64}"$', re.MULTILINE)
+        normalized, count = declaration.subn('_EXECUTED_SOURCE_SHA256 = "' + "0" * 64 + '"', source.text)
+        if count != 1 or hashlib.sha256(normalized.encode("utf-8")).hexdigest() != module._EXECUTED_SOURCE_SHA256:
+            raise HarnessError("executed ledger formatter digest does not match frozen source")
+        code = compile(source.text, module._EXECUTED_CODE.co_filename, "exec",
+                       dont_inherit=True, optimize=sys.flags.optimize)
+        if code != module._EXECUTED_CODE:
+            raise HarnessError("executed ledger formatter code does not match frozen source")
+    except (OSError, SyntaxError, TypeError, ValueError) as exc:
+        raise HarnessError("cannot verify executed ledger formatter identity") from exc
 
 
 def _verify_canonical_evaluation_contract(snapshot: FrozenRepository) -> None:
@@ -839,9 +932,7 @@ def freeze_repository(
     if enforce_canonical_contract:
         _verify_canonical_evaluation_contract(snapshot)
     if enforce_evaluator_identity:
-        _verify_evaluator_execution_identity(
-            snapshot.require("scripts/eval_run.py", "evaluator")
-        )
+        _verify_evaluator_modules(snapshot)
     return snapshot
 
 
@@ -1881,12 +1972,6 @@ def _validate_content_blocks(
                 {"type", "thinking", "signature"},
                 f"content thinking block {index}",
             )
-            if provider.response_schema == "orcarouter":
-                # OrcaRouter emits reasoning ``thinking`` blocks for models that
-                # reason (for example the deepseek and qwen routes); the thinking
-                # text can be empty even when the signature is present. These are
-                # not part of the final answer, so skip them.
-                continue
             thinking = block.get("thinking")
             signature = block.get("signature")
             if (
@@ -2069,25 +2154,11 @@ def _validate_provider_legacy_fields(
 
 
 def _validate_model_echo(provider: ProviderConfig, model: str, body: dict) -> None:
-    """Fail closed when the response model does not match the requested model.
-
-    Anthropic and MiniMax echo the requested model id exactly. OrcaRouter is a
-    gateway and echoes the *upstream* model id instead: ``anthropic/claude-sonnet-5``
-    returns ``claude-sonnet-5``, and ``openai/gpt-5.5`` returns ``gpt-5.5-2026-04-24``.
-    For that provider, compare the bare requested model (the part after the vendor
-    prefix) as a token prefix of the echoed id.
-    """
+    """Accept only an exact model or an explicitly reviewed gateway spelling."""
     if body["model"] == model:
         return
     if provider.response_schema == "orcarouter":
-        requested_bare = model.rsplit("/", 1)[-1].lower()
-        requested_tokens = re.findall(r"[a-z0-9]+", requested_bare)
-        echoed_tokens = re.findall(r"[a-z0-9]+", str(body["model"]).lower())
-        if (
-            requested_tokens
-            and len(echoed_tokens) >= len(requested_tokens)
-            and echoed_tokens[: len(requested_tokens)] == requested_tokens
-        ):
+        if body["model"] in ORCAROUTER_MODEL_ECHOES.get(model, ()):
             return
     raise ProviderResponseError(
         "model API response model does not match the requested model: "
@@ -2127,6 +2198,9 @@ def _call_api_unredacted(
     req.add_header(provider.auth_header, provider.auth_prefix + api_key)
     req.add_header("anthropic-version", ANTHROPIC_VERSION)
     req.add_header("content-type", "application/json")
+    budget = _ACTIVE_BUDGET.get()
+    if budget is not None:
+        budget.reserve(max_tokens)
     raw_body = _read_api_response(req, api_key)
     try:
         body = loads_json_bytes(raw_body, expected_type=dict)
@@ -2183,6 +2257,10 @@ def _call_api_unredacted(
         )
 
     _validate_usage(body["usage"], provider)
+    if budget is not None:
+        budget.reported_input_tokens += body["usage"]["input_tokens"]
+        budget.reported_output_tokens += body["usage"]["output_tokens"]
+        budget.validated_usage_responses += 1
     return _validate_content_blocks(provider, model, body["content"])
 
 
@@ -2823,9 +2901,7 @@ def assess_run(
             if release_requested or snapshot.canonical_contract_bound:
                 _verify_canonical_evaluation_contract(snapshot)
             if release_requested or snapshot.evaluator_execution_bound:
-                _verify_evaluator_execution_identity(
-                    snapshot.require("scripts/eval_run.py", "evaluator")
-                )
+                _verify_evaluator_modules(snapshot)
         except HarnessError as exc:
             integrity_errors.append(f"frozen repository verification failed: {exc}")
         else:
@@ -4947,98 +5023,6 @@ def _atomic_write_text(
         raise original_error
 
 
-def _ledger_row_sort_key(indexed_row: tuple[int, object]) -> tuple[int, str, int]:
-    index, row = indexed_row
-    if not isinstance(row, dict):
-        return (2, "", index)
-    sequence = row.get("sequence")
-    sequence_order = 0 if sequence is False else 1 if sequence is True else 2
-    case_id = row.get("id")
-    safe_id = (
-        case_id
-        if isinstance(case_id, str) and _is_utf8_encodable(case_id)
-        else ""
-    )
-    return (sequence_order, safe_id, index)
-
-
-def _safe_ledger_text(value: str, limit: int = 80) -> str:
-    if not _is_utf8_encodable(value):
-        return "[invalid Unicode string]"
-    # Markdown treats several controls as line boundaries even when ``\n`` is
-    # absent. Collapse every unsafe C0/C1 control and Unicode line separator
-    # before truncation so one field can never create another ledger line.
-    sanitized = re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]+", " ", value)
-    return sanitized.replace("|", "/")[:limit]
-
-
-def _safe_markdown_code(value: str, limit: int = 80) -> str:
-    """Sanitize values interpolated into Markdown code spans or fences."""
-    return _safe_ledger_text(value, limit=limit).replace("`", "'")
-
-
-def _safe_markdown_text(value: str, limit: int = 80) -> str:
-    """Make untrusted text inert when it is rendered outside a code span."""
-    sanitized = html.escape(_safe_ledger_text(value, limit=limit), quote=False)
-    return re.sub(r"([\\`*_\[\]()#!~>])", r"\\\1", sanitized)
-
-
-COMMAND_VALUE_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:/+-]{0,199}\Z")
-
-
-def _regeneration_argv(
-    provider_name: str,
-    region: str,
-    model: str,
-    judge_model: str,
-) -> list[str] | None:
-    values = (provider_name, region, model, judge_model)
-    if any(
-        not _is_utf8_encodable(value) or COMMAND_VALUE_RE.fullmatch(value) is None
-        for value in values
-    ):
-        return None
-    return [
-        "python",
-        "scripts/eval_run.py",
-        "--provider",
-        provider_name,
-        "--region",
-        region,
-        "--model",
-        model,
-        "--judge-model",
-        judge_model,
-        "--ledger",
-        "evals/eval-run-ledger.md",
-    ]
-
-
-def _powershell_quote(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
-
-
-def _regeneration_command_lines(argv: list[str] | None) -> list[str]:
-    if argv is None:
-        return [
-            "Regeneration commands omitted because CLI metadata contains unsafe shell or ",
-            "Markdown characters; re-enter those values manually.",
-        ]
-    return [
-        "Regenerate from a POSIX shell:",
-        "",
-        "```sh",
-        shlex.join(argv),
-        "```",
-        "",
-        "Regenerate from PowerShell:",
-        "",
-        "```powershell",
-        "& " + " ".join(_powershell_quote(value) for value in argv),
-        "```",
-    ]
-
-
 def source_provenance_label(sources: object) -> str:
     """Render path+digest evidence without making malformed values active Markdown."""
     if sources is None:
@@ -5260,9 +5244,7 @@ def write_ledger(
             if release_attestation_required or snapshot.canonical_contract_bound:
                 _verify_canonical_evaluation_contract(snapshot)
             if release_attestation_required or snapshot.evaluator_execution_bound:
-                _verify_evaluator_execution_identity(
-                    snapshot.require("scripts/eval_run.py", "evaluator")
-                )
+                _verify_evaluator_modules(snapshot)
 
     needs_final_bound_check = (
         report["repository_sha256"] is not None or _destination_guard is not None
@@ -5330,6 +5312,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Model-in-the-loop eval harness for seedance-20.")
     parser.add_argument("repo", nargs="?", default=".")
     parser.add_argument("--self-test", action="store_true", help="offline wiring check, no network")
+    parser.add_argument("--live", action="store_true", help="explicitly authorize provider calls")
+    parser.add_argument("--max-calls", type=int, default=None, help="hard ceiling on attempted provider requests")
+    parser.add_argument("--max-output-tokens", type=int, default=None, help="ceiling on the sum of request max_tokens, not input tokens or currency")
     parser.add_argument("--provider", choices=sorted(PROVIDER_CONFIGS), default="anthropic")
     parser.add_argument("--region", choices=REGIONS, default="global_en")
     parser.add_argument(
@@ -5348,7 +5333,14 @@ def main() -> int:
     parser.add_argument("--stamp", default="unstamped", help="date label for the ledger (pass an ISO date)")
     args = parser.parse_args()
 
-    requested_ledger = Path(args.ledger) if args.ledger else None
+    if args.self_test and args.live:
+        parser.error("--self-test and --live cannot be combined")
+    for flag in ("max_calls", "max_output_tokens"):
+        value = getattr(args, flag)
+        if value is not None and value <= 0:
+            parser.error("--" + flag.replace("_", "-") + " must be positive")
+
+    requested_ledger = Path(args.ledger) if args.ledger and args.live else None
     ledger_path: Path | None = None
     if requested_ledger is not None and requested_ledger.is_absolute():
         try:
@@ -5431,6 +5423,25 @@ def main() -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
+    budget = EvaluationBudget(
+        args.max_calls if args.max_calls is not None else len(cases) * 3,
+        args.max_output_tokens if args.max_output_tokens is not None else len(cases) * 3300,
+    )
+    if not args.live:
+        print(json.dumps({
+            "mode": "offline_plan", "provider": args.provider, "region": args.region,
+            "model": model, "judge_model": judge_model,
+            "case_count": len(cases), "case_ids": selected_ids,
+            "max_calls": budget.max_calls, "max_output_tokens": budget.max_output_tokens,
+            "ledger_written": False,
+            "cost_note": "Input tokens, cache charges and currency cost are not capped or estimated. Provider billing may include failed requests.",
+            "next_step": "Use --live with --id/--limit, or an explicit --max-calls for the full suite.",
+        }, indent=2))
+        return 0
+    if not args.id and not args.limit and args.max_calls is None:
+        print("A full live suite requires an explicit --max-calls; use --id or --limit for a focused run.")
+        return 2
+
     api_key = os.environ.get(provider.api_key_env)
     if not api_key:
         print(
@@ -5440,60 +5451,67 @@ def main() -> int:
         return 2
 
     results: list[dict] = []
-    for case in cases:
-        cid = case["id"]
-        source_paths: list[str] | None = None
-        try:
-            raw_verdict, source_paths = run_case(
-                snapshot,
-                case,
-                model,
-                judge_model,
-                api_key,
-                rubric,
-                provider,
-                endpoint,
+    budget_token = _ACTIVE_BUDGET.set(budget)
+    try:
+        for case in cases:
+            cid = case["id"]
+            source_paths: list[str] | None = None
+            try:
+                raw_verdict, source_paths = run_case(
+                    snapshot,
+                    case,
+                    model,
+                    judge_model,
+                    api_key,
+                    rubric,
+                    provider,
+                    endpoint,
+                )
+            except CaseRunError as exc:
+                source_paths = list(exc.sources)
+                print(diagnostic_text(f"[{cid}] evaluation error: {exc}"))
+                verdict = harness_error_result(f"evaluation error: {exc}")
+            except (ProviderResponseError, TimeoutError) as exc:
+                print(diagnostic_text(f"[{cid}] discovery transport error: {exc}"))
+                verdict = harness_error_result(f"discovery transport error: {exc}")
+            except HarnessError as exc:
+                print(diagnostic_text(f"[{cid}] discovery error: {exc}"))
+                verdict = failed_verdict(case, f"discovery error: {exc}")
+                verdict = normalize_verdict(case, verdict)
+            else:
+                verdict = normalize_verdict(case, raw_verdict)
+            status = verdict["status"]
+            score = verdict["overall_score"]
+            passed = verdict["pass"]
+            results.append(
+                {
+                    "id": cid,
+                    "status": status,
+                    "score": score,
+                    "pass": passed,
+                    "sequence": is_sequence_case(case),
+                    "critical": case.get("critical", False),
+                    "notes": verdict.get("notes", ""),
+                    "dimension_scores": verdict.get("dimension_scores", []),
+                    "sources": (
+                        source_provenance(snapshot, source_paths)
+                        if source_paths is not None
+                        else None
+                    ),
+                }
             )
-        except CaseRunError as exc:
-            source_paths = list(exc.sources)
-            print(diagnostic_text(f"[{cid}] evaluation error: {exc}"))
-            verdict = harness_error_result(f"evaluation error: {exc}")
-        except (ProviderResponseError, TimeoutError) as exc:
-            print(diagnostic_text(f"[{cid}] discovery transport error: {exc}"))
-            verdict = harness_error_result(f"discovery transport error: {exc}")
-        except HarnessError as exc:
-            print(diagnostic_text(f"[{cid}] discovery error: {exc}"))
-            verdict = failed_verdict(case, f"discovery error: {exc}")
-            verdict = normalize_verdict(case, verdict)
-        else:
-            verdict = normalize_verdict(case, raw_verdict)
-        status = verdict["status"]
-        score = verdict["overall_score"]
-        passed = verdict["pass"]
-        results.append(
-            {
-                "id": cid,
-                "status": status,
-                "score": score,
-                "pass": passed,
-                "sequence": is_sequence_case(case),
-                "critical": case.get("critical", False),
-                "notes": verdict.get("notes", ""),
-                "dimension_scores": verdict.get("dimension_scores", []),
-                "sources": (
-                    source_provenance(snapshot, source_paths)
-                    if source_paths is not None
-                    else None
-                ),
-            }
-        )
-        print(f"[{cid}] sources: {source_provenance_label(results[-1]['sources'])}")
-        outcome = (
-            "HARNESS_ERROR score=n/a"
-            if status == "harness_error"
-            else f"{'PASS' if passed else 'FAIL'} score={score}"
-        )
-        print(f"[{cid}] {outcome} :: {str(verdict.get('notes', ''))[:70]}")
+            print(f"[{cid}] sources: {source_provenance_label(results[-1]['sources'])}")
+            outcome = (
+                "HARNESS_ERROR score=n/a"
+                if status == "harness_error"
+                else f"{'PASS' if passed else 'FAIL'} score={score}"
+            )
+            print(f"[{cid}] {outcome} :: {str(verdict.get('notes', ''))[:70]}")
+            if budget.exhausted:
+                break
+    finally:
+        _ACTIVE_BUDGET.reset(budget_token)
+        print("Execution budget: " + json.dumps(budget.summary(), sort_keys=True))
 
     snapshot_error: str | None = None
     try:

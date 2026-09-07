@@ -112,40 +112,13 @@ Use these when the Japanese prompt is part of a v6 sequence project, continuatio
 
 ## Dialogue Notes
 
-Field-observed from 2026 community testing (note.com, Qiita); test per surface, never promise results. Japanese lip-sync is weaker than Mandarin and English.
-
-- No separate word-count is documented; treat Japanese as the weaker tier. Keep to one short line (一言), about one breath.
-- Japanese is mora-timed, so "word count" misleads - judge by sentence length and clarity, not word number.
-- 台詞の書式: 話者名＋動作＋「台詞」. Example: `男：ゆっくり顔を上げて「もう一度だけ」`. Keep the spoken line inside 「 」 so the model can separate performance direction from the words to be spoken.
-- Reference tags stay Latin inside a Japanese prompt: `@Image1`, never `@画像1`. No surface documents translated Japanese tags; the localized `@图片1` family belongs to Chinese-UI surfaces only.
-- For reliable Japanese voice, prefer a voice reference (attach the spoken line so the model lip-syncs to it) or plan a post-dub.
+No validated language-wide line ceiling is established here. Preserve the user's exact dialogue and intended register. Time the spoken performance rather than treating written counts as seconds. A short speaker turn and stable framing are useful starting conditions; review pronunciation, performance, and visible sync separately. See [audio-guide](../audio-guide.md) for task-scoped benchmark evidence. Voice references and post dubbing are options, not mandatory remedies for this language. Reference tags such as `@Image1` stay unchanged.
 
 ## Register (文体)
 
-Japanese dialogue commits to a register the same way Korean commits to a speech level: leaving it unstated does not avoid the decision, it hands the decision to the model. Declare one per speaker.
+Preserve the user's wording and characterization. For newly drafted speech, choose politeness, honorific or humble forms, and pronouns from the relationship, scene, and speaker's voice. These choices can overlap; they are not three mutually exclusive levels or fixed cost multipliers. Pronouns may be omitted when natural. A change in register can be intentional characterization, so flag unexplained changes without automatically correcting them.
 
-This is a budget decision as well as a characterization one. Japanese is mora-timed, the sync budget in [audio-guide](../audio-guide.md) is spent per mora, and the same sentence costs a different number of them at each register:
-
-| 同じ意味 (same meaning) | 普通体 → です・ます体 → 敬語, モーラ数 (mora count) |
-|---|---|
-| thank you | ありがとう (5) → ありがとうございます (10) |
-| understood | 分かった (4) → 分かりました (6) → かしこまりました (8) |
-| please come | 来て (2) → 来てください (6) → お越しください (7) |
-| I'll do it | やる (2) → やります (4) → いたします (5) |
-
-です・ます体 runs roughly 1.5x the morae of 普通体 for identical content, and full 敬語 can double it. On a language already flagged as the weaker sync tier, an unconsidered formal register can spend the whole budget on politeness endings.
-
-Choosing:
-
-- **敬語 (尊敬語・謙譲語)** - service staff to customers, corporate and public-facing VO, formal announcements, a subordinate addressing a superior. Most morae.
-- **です・ます体** - the safe default for a single-line commercial, presenter-to-camera, or a stranger-to-stranger exchange. Polite without the full honorific cost.
-- **普通体 (だ体)** - close friends, family, internal monologue, an older speaker to a younger one. Shortest, and too blunt for a Japanese viewer where the relationship does not license it.
-
-One axis is unique to Japanese: the first-person pronoun is itself register. 私 / 僕 / 俺 / わたくし each cast a different speaker, and a pronoun that contradicts the declared register (俺 inside 敬語, わたくし inside 普通体) reads as a dubbing error, not a character choice.
-
-With two speakers, the pair of registers *is* the relationship: a boss in 普通体 answered in です・ます体 reads as hierarchy, both in です・ます体 reads as peers or strangers. Keep each character's register and pronoun consistent across a sequence - drifting mid-project reads as a translation error, and it is the kind of continuity that no frame-level QC catches.
-
-If the user has not stated a register and the relationship does not imply one, ask once rather than defaulting silently; it is one question and it changes both the performance and the mora budget.
+Examples such as ありがとう and ありがとうございます illustrate different wording and social use, not a general doubling law. Measure the actual delivery, including pauses. Do not choose casual speech simply to save morae. If the relationship is unclear and materially changes the line, ask one focused question or offer labeled alternatives. Naturalness remains pending a qualified Japanese-language review.
 
 ## Aesthetic Registers (美学)
 

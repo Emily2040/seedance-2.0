@@ -1,5 +1,7 @@
 # Reference Workflow
 
+For conditional motion-transfer, editorial-order and accepted-frame continuation examples, load [reference and continuity cards](continuity-example-cards.md). Their missing assets must be bound and inspected before use; conceptual states are not accepted footage.
+
 ## Reference Tag Syntax
 
 Seedance 2.0 binds uploaded assets with an `@`-mention typed directly in the prompt: type `@` in the prompt field to pick an uploaded file, or write the tag inline. Tags are assigned by type and upload order.

@@ -17,6 +17,7 @@ assets/skill-map.svg
 data/community-patterns.seedance-2026-05-30.json
 data/generation-runs.example.jsonl
 data/sources.seedance-2026-05-30.json
+docs/LANGUAGE_COVERAGE.md
 docs/QUICKSTART.es.md
 docs/QUICKSTART.ja.md
 docs/QUICKSTART.ko.md
@@ -76,6 +77,7 @@ references/cinematography-shot-language.md
 references/color-pipeline-aces.md
 references/community-source-methodology.md
 references/continuation-handoff.md
+references/continuity-example-cards.md
 references/continuity-qc.md
 references/delivery-qc.md
 references/dense-storyboard-mode.md
@@ -84,6 +86,7 @@ references/directing-engine.md
 references/directors-read.md
 references/eval-rubric.md
 references/event-density.md
+references/example-card-format.md
 references/examples-by-mode.md
 references/failure-atlas.md
 references/field-observed-tips.md
@@ -100,9 +103,11 @@ references/model-name-map.md
 references/multilingual-community-examples.md
 references/multilingual-native-review.md
 references/multishot-grammar.md
+references/performance-example-cards.md
 references/platform-constraints.md
 references/platform-surface-matrix.md
 references/pro-filmmaking-standards.md
+references/product-example-cards.md
 references/progressive-disclosure.md
 references/prompt-compiler.md
 references/prompt-examples.md

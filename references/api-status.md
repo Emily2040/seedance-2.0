@@ -3,6 +3,10 @@
 last_verified: 2026-08-01
 confidence: public-source snapshot as of the verification date; per-section dates apply where noted (the Seedance 2.5 model-line boundary and Dreamina availability recorded 2026-08-01 from official ByteDance and Dreamina pages, with the exact launch date and API or other-surface availability left unconfirmed; 2.0 4K reports recorded 2026-08-01 from technology press and provider pages; Seedance 2.0 Mini / additional provider-router / China-facing search recorded 2026-06-20, platform safeguards and resolution recorded 2026-06-14, overseas-API status and Replicate recorded 2026-06-13, fal section re-verified 2026-06-11, earlier surface sections verified 2026-05-30); not a guarantee of access, pricing, model IDs, upload limits, authorization behavior, or regional availability on every surface
 
+## Scoped update: 2026-09-07
+
+The August header still dates the broader inventory; it is not a claim that every provider was rechecked. See the [September source review](source-registry.md#claims-rechecked-on-2026-09-07) for exact coverage and the incomplete BytePlus retrieval. That review separates the model card's native-resolution claim from Runway's current creator-UI output options. Runway's API catalog now documents `seedance2_5` separately, so the historical “other-surface availability unconfirmed” wording below must not be read as a current claim that no other provider lists it. Catalog naming does not establish account entitlement, and this skill still covers 2.0 only.
+
 ## Scope: This Is a Seedance 2.0 Skill *(recorded 2026-08-01)*
 
 **Everything in this repository describes Seedance 2.0.** ByteDance's [official Seedance 2.5 model page](https://seed.bytedance.com/en/seedance2_5) confirms a separate newer line, and [Dreamina's official product page](https://dreamina.capcut.com/seedance/seedance-2-5) says it is live on Dreamina. Neither primary page gives an exact launch date; API and other-surface availability were unconfirmed in this pass. This repository does not cover the newer line and does not document its capabilities.
