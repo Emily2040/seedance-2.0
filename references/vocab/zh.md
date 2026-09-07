@@ -118,11 +118,11 @@ Use these when the Chinese prompt is part of a v6 sequence project, continuation
 
 ## Dialogue Notes (对白注意事项)
 
-Field-observed from 2026 community testing (即梦官方手册解读、知乎、36氪实测); test per surface, never promise results. Mandarin has the strongest lip-sync, yet hands-on tests still report 语音错乱 / 字幕乱码 - budget retakes.
+No universal Mandarin-first ranking or character ceiling is established here. Keep the user's quoted dialogue, script, and intended voice. Measure spoken duration with pauses, and review words, performance, and sync separately. The model card's Chinese-voice tasks are not a matched language ranking; see [audio-guide](../audio-guide.md).
 
-- 台词格式：角色名 + 动作 + 冒号 + 引号内台词。Count characters/syllables, not "words"; keep to one short clause.
-- 唇形同步在部分界面默认关闭（如即梦需勾选“启用唇形同步”）- confirm it is enabled before blaming the prompt.
-- Inline audio tags are field-reported on some surfaces: 在台词末尾加方括号提示音色与音效，例如 `"领旨" [低沉男声][编钟余音]`。Surface-specific; verify before relying on it.
+- 台词格式：角色名 + 动作 + 冒号 + 引号内台词。Character counts describe a line; they do not certify timing or sync.
+- Check the active surface's documented audio settings; do not assume a named lip-sync toggle or its default.
+- Inline bracketed audio cues are a prompting convention unless the active operation documents a parser. Keep spoken words separate from performance direction.
 
 ## Aesthetic Registers (美学语域)
 
@@ -140,7 +140,7 @@ Chinese carries genre-aesthetic registers with no one-word English equivalent. T
 
 "Chinese" is not one script. This file is Simplified (zh-Hans); a deliverable for 台灣, 香港, or 澳門 needs Traditional (zh-Hant). Leaving it undeclared means the mainland variant ships to a Traditional-script audience by default, which reads as a foreign cut rather than a localized one.
 
-**Prompt script and delivery script are separate decisions.** The surfaces this skill targets (即梦/Dreamina、豆包、火山方舟) are mainland-trained, and Simplified is the safer prompt language — [audio-guide](../audio-guide.md) ranks Mandarin the strongest lip-sync tier on that basis. The audience-facing text is a different question. Prompting in Simplified while delivering Traditional subtitles is a legitimate and common combination; conflating the two either weakens the prompt or ships the wrong script to the viewer.
+**Prompt script and delivery script are separate decisions.** Preserve the user's chosen script and record the target audience's locale. Simplified and Traditional subtitles may require different vocabulary as well as character conversion. This repository has no controlled evidence that Simplified prompting improves lip-sync or that training geography explains language performance. Do not switch scripts merely on that assumption.
 
 Where it bites hardest is exactly where this repo is already weakest. Hands-on tests report 字幕乱码 (garbled subtitles), and every vocab file's standing advice is to keep the frame textless and add subtitles in post - so the variant is primarily a **delivery** parameter, set on the post/subtitle path rather than requested from the model.
 
