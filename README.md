@@ -45,7 +45,7 @@ without submitting a paid generation request.
 <!-- teaching-image:placement -->
 <!-- installed-readme-gallery:start -->
 
-![Two hands hold a thin ivory paper fan on a wooden workbench under a desk lamp.](assets/paper-fan-teaching.png)
+![An adult woman's hands with rose-and-gold nail art hold an ivory paper fan under a desk lamp.](assets/paper-fan-teaching.png)
 
 *AI-generated teaching concept, not Seedance output.* The still illustrates
 material, framing and light; it does not prove the action or sound will render.

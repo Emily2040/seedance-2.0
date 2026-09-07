@@ -13,12 +13,12 @@ All essential instructions remain in Markdown if the image is unavailable.
 
 ## Provenance
 
-- Created 2026-09-07 with the built-in image-generation tool, followed by one
-  targeted edit with that tool. No Seedance/Dreamina generation was run.
+- Created 2026-09-07 with the built-in image-generation tool, followed by two
+  targeted edits with that tool. No Seedance/Dreamina generation was run.
 - Final file: `assets/paper-fan-teaching.png`, 1536 × 1024 pixels, PNG,
-  2,067,040 bytes. SHA-256 is recorded in `data/paper-fan-art.json`.
+  2,029,237 bytes. SHA-256 is recorded in `data/paper-fan-art.json`.
 - No private reference asset, real person's likeness or third-party product was
-  supplied. The edit used the first generated illustration as its reference.
+  supplied. Each edit used the preceding generated illustration as its reference.
 - The final generated PNG is copied without crop, recoloring or re-encoding.
   The original tool output remains preserved outside the repository.
 - Visual inspection found book-like stacked edges in the initial image. The
@@ -38,6 +38,18 @@ Use case: illustration-story. Create one landscape 3:2 editorial teaching illust
 
 ```text
 Edit only the ivory paper object. It currently resembles a thick stack of book pages with a bound spine. Replace it with a believable lightweight accordion paper fan made from ONE continuous thin sheet of ivory paper, with about eight clear mountain and valley folds radiating from the held narrow end. Remove all stacked-page edges, all binding or spine structure, and the block-like thickness at the lower edge. Each pleat has one thin paper edge, not a stack. Preserve the exact hands, their contact positions, forearms, navy shirt, lamp, worn wooden table, composition, camera, palette and lighting. Keep all text and UI absent. Fictional AI teaching concept; no certification or motion claims.
+```
+
+## Maintainer-requested hand and manicure revision
+
+The maintainer rejected the original hands and requested feminine hands with
+polished nails. The second edit replaces the hands and cuffs with an adult
+woman's hands, dusty-rose almond nails, fine gold accents and navy blouse cuffs.
+Future commissioned hand-focused imagery for this repository should follow that
+preference. This is the maintainer's visual brief, not a rule for users' prompts.
+
+```text
+Use case: precise-object-edit. Edit target: the supplied paper-fan README illustration. Replace the existing hands and forearms with those of an adult woman: elegant slender feminine hands, softly tapered fingers, natural skin texture, well-groomed cuticles, and a beautiful professional manicure. Give every visible nail a consistent medium-length soft almond shape with glossy dusty-rose polish and delicate fine champagne-gold accent lines; tasteful refined nail art clearly readable on the nearer hand. Natural anatomically coherent hands, five fingers per hand, plausible joints and contact with the fan, no duplicated or fused fingers. Replace the heavy work-shirt cuffs with simple dark navy silk blouse cuffs, retaining their position and understated appearance. Keep the exact thin ivory accordion fan, its folds and position, worn walnut table, lamp in upper left, warm side lighting, dark background, oblique camera angle, framing and 3:2 landscape composition. Keep the hands in the same functional gesture around the fan so the scene still communicates careful making. No face or extra person, no rings or extra props, no text, logos, watermark, UI, labels or panels. This is fictional AI-generated teaching concept art, not a Seedance render or a verified craft tutorial.
 ```
 
 ## Acceptance boundaries
