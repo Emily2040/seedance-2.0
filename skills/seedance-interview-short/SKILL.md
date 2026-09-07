@@ -36,8 +36,10 @@ The user here knows what they want and is asking you to respect their momentum. 
 Ask at most three questions, and only ask them if the answer materially changes the prompt. Assume no film background: ask in everyday words, give pickable options, and attach a default so "I don't know" never stalls the brief. Prioritize:
 
 1. What happens in the video, and what is different at the end? `(not sure? I'll pick one simple action with a visible ending)`
-2. Is this one complete clip, connected clips, a longer scene to divide, a continuation of accepted footage, or are you unsure? `(not sure? I'll plan the whole story but only finalize the first prompt)`
-3. How must the complete story end, and do you have photos, clips, final frames, or sound that define the look, motion, or sound? `(none is fine; if continuing, I need the accepted clip or final frame)`
+2. Do you have photos, clips, or sound that should define this clip's appearance, movement, or sound? `(none is fine; I'll draft from your idea)`
+3. Only if the user asks for connected clips, a longer scene to divide, or continuation: how must the complete story end, and what accepted footage or final frame already exists? `(if continuing, I need the accepted clip or final frame)`
+
+Unknown duration alone does not make a sequence. For one clip, ask at most one blocking question; otherwise state a reversible assumption and draft. Do not ask whether this should become a series before the first draft. Preserve information the user already supplied. Explicit connected-clip or continuation intent still activates sequence planning and its accepted-footage gate.
 
 If the user already supplied enough information, do not ask. Produce a brief immediately. If the user speaks production language fluently, drop the plain phrasing and ask in director terms.
 
@@ -51,7 +53,7 @@ Internal lane record from the [Director's Read](../../references/directors-read.
 
 ## Routing Rule
 
-Route to [seedance-sequence](../seedance-sequence/SKILL.md) for connected clips, long scenes, unclear total duration, or continuation-ready planning; [seedance-continuation](../seedance-continuation/SKILL.md) for accepted-footage continuation; [seedance-prompt](../seedance-prompt/SKILL.md) for a full standalone production prompt; [seedance-prompt-short](../seedance-prompt-short/SKILL.md) for a compact prompt; [seedance-copyright](../seedance-copyright/SKILL.md) for IP/likeness risk; or [seedance-troubleshoot](../seedance-troubleshoot/SKILL.md) when the user starts from a bad result.
+Route to [seedance-sequence](../seedance-sequence/SKILL.md) when the user requests connected clips or a long story that needs multiple generations; [seedance-continuation](../seedance-continuation/SKILL.md) for accepted-footage continuation; [seedance-prompt](../seedance-prompt/SKILL.md) for a full standalone production prompt; [seedance-prompt-short](../seedance-prompt-short/SKILL.md) for a compact prompt, including one clip whose duration is undecided; [seedance-copyright](../seedance-copyright/SKILL.md) for IP/likeness risk; or [seedance-troubleshoot](../seedance-troubleshoot/SKILL.md) when the user starts from a bad result.
 
 ## Output Contract
 

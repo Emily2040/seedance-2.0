@@ -8,11 +8,13 @@ sources without seeing expected routes or judge labels, a responder uses only
 that frozen selection, and a judge scores the result against the case contract
 using references/eval-rubric.md.
 
-Two modes:
+Three modes:
   --self-test   Offline. Validates the pinned manifest, immutable source snapshot,
                 case contracts, rubric, discovery requests, and responder inputs.
                 No network. Safe for CI.
-  (default)     Live. Uses the selected provider's API key. Runs responder +
+  (default)     Offline plan. Lists selected cases and request/output-token caps.
+                Does not read a provider key, call a provider, or write a ledger.
+  --live        Uses the selected provider's API key. Runs responder +
                 judge for each case, prints per-case scores, aggregates against
                 the rubric thresholds, and (with --ledger) writes a markdown
                 evidence ledger.
@@ -24,6 +26,7 @@ manually (or in a network-enabled job) when you want evidence, not just shape.
 from __future__ import annotations
 
 import argparse
+import contextvars
 import errno
 import hashlib
 import html
@@ -80,7 +83,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "7474f588f4614f3be101290f146f040754612946ed28ec64cdec768c8cc0ff9d"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "c8d314c2e4dfe8cb2ebf1e65d92474175605661807447eb3bf46f86e52f1a737"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -105,7 +108,7 @@ SOURCE_MANIFEST_PATH = "evals/source-manifest.json"
 EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py"})
 FIXTURE_ROOT = "evals/fixtures"
 SOURCE_ROLES = {"root", "responder", "evaluator", "fixture", "archive"}
-EXPECTED_EVALS_SHA256 = "729057eb7b64c2d77638f0b94e62a1885eb00d7b8533e26165bad71dadb129ea"
+EXPECTED_EVALS_SHA256 = "9302753be321838b2950857135653a6ee48210cc37e97db16b1c50212f955c24"
 EXPECTED_RUBRIC_SHA256 = "10247feac85df8e5f59a13e2588ac4c28d17380f83a11adc6124e4142a4277c9"
 # Thresholds sourced from references/eval-rubric.md.
 LEGACY_MIN, LEGACY_AVG = 2, 2.6          # 0-3 scale
@@ -255,6 +258,48 @@ class LedgerDestinationAppearedError(HarnessError):
 
 class ProviderResponseError(HarnessError):
     """A successful HTTP response did not contain usable model evidence."""
+
+
+@dataclass
+class EvaluationBudget:
+    max_calls: int
+    max_output_tokens: int
+    attempted_calls: int = 0
+    reserved_output_tokens: int = 0
+    reported_input_tokens: int = 0
+    reported_output_tokens: int = 0
+    validated_usage_responses: int = 0
+    exhausted: bool = False
+
+    def reserve(self, max_tokens: int) -> None:
+        if type(max_tokens) is not int or max_tokens <= 0:
+            raise ProviderResponseError("request output-token limit must be positive")
+        if (self.attempted_calls >= self.max_calls or
+                self.reserved_output_tokens + max_tokens > self.max_output_tokens):
+            self.exhausted = True
+            raise ProviderResponseError("evaluation execution budget exhausted")
+        # Reserve before transport, including requests that later fail. Never
+        # refund an uncertain request or assume a provider error was unbilled.
+        self.attempted_calls += 1
+        self.reserved_output_tokens += max_tokens
+
+    def summary(self) -> dict:
+        return {
+            "max_calls": self.max_calls,
+            "attempted_calls": self.attempted_calls,
+            "max_output_tokens": self.max_output_tokens,
+            "reserved_output_tokens": self.reserved_output_tokens,
+            "reported_input_tokens": self.reported_input_tokens,
+            "reported_output_tokens": self.reported_output_tokens,
+            "validated_usage_responses": self.validated_usage_responses,
+            "usage_may_be_incomplete": self.validated_usage_responses != self.attempted_calls,
+            "exhausted": self.exhausted,
+        }
+
+
+_ACTIVE_BUDGET: contextvars.ContextVar[EvaluationBudget | None] = contextvars.ContextVar(
+    "seedance_evaluation_budget", default=None
+)
 
 
 class CaseRunError(HarnessError):
@@ -2095,6 +2140,9 @@ def _call_api_unredacted(
     req.add_header(provider.auth_header, provider.auth_prefix + api_key)
     req.add_header("anthropic-version", ANTHROPIC_VERSION)
     req.add_header("content-type", "application/json")
+    budget = _ACTIVE_BUDGET.get()
+    if budget is not None:
+        budget.reserve(max_tokens)
     raw_body = _read_api_response(req, api_key)
     try:
         body = loads_json_bytes(raw_body, expected_type=dict)
@@ -2155,6 +2203,10 @@ def _call_api_unredacted(
         )
 
     _validate_usage(body["usage"], provider)
+    if budget is not None:
+        budget.reported_input_tokens += body["usage"]["input_tokens"]
+        budget.reported_output_tokens += body["usage"]["output_tokens"]
+        budget.validated_usage_responses += 1
     return _validate_content_blocks(provider, model, body["content"])
 
 
@@ -4997,17 +5049,21 @@ def _regeneration_command_lines(argv: list[str] | None) -> list[str]:
             "Markdown characters; re-enter those values manually.",
         ]
     return [
-        "Regenerate from a POSIX shell:",
+        "Preview regeneration from a POSIX shell (offline):",
         "",
         "```sh",
         shlex.join(argv),
         "```",
         "",
-        "Regenerate from PowerShell:",
+        "Preview regeneration from PowerShell (offline):",
         "",
         "```powershell",
         "& " + " ".join(_powershell_quote(value) for value in argv),
         "```",
+        "",
+        "Review the plan, then add `--live --max-calls N` and an optional ",
+        "`--max-output-tokens N` to execute. Replace N with your chosen positive ",
+        "ceiling. Input-token charges and currency cost are not capped.",
     ]
 
 
@@ -5302,6 +5358,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Model-in-the-loop eval harness for seedance-20.")
     parser.add_argument("repo", nargs="?", default=".")
     parser.add_argument("--self-test", action="store_true", help="offline wiring check, no network")
+    parser.add_argument("--live", action="store_true", help="explicitly authorize provider calls")
+    parser.add_argument("--max-calls", type=int, default=None, help="hard ceiling on attempted provider requests")
+    parser.add_argument("--max-output-tokens", type=int, default=None, help="ceiling on the sum of request max_tokens, not input tokens or currency")
     parser.add_argument("--provider", choices=sorted(PROVIDER_CONFIGS), default="anthropic")
     parser.add_argument("--region", choices=REGIONS, default="global_en")
     parser.add_argument(
@@ -5320,7 +5379,14 @@ def main() -> int:
     parser.add_argument("--stamp", default="unstamped", help="date label for the ledger (pass an ISO date)")
     args = parser.parse_args()
 
-    requested_ledger = Path(args.ledger) if args.ledger else None
+    if args.self_test and args.live:
+        parser.error("--self-test and --live cannot be combined")
+    for flag in ("max_calls", "max_output_tokens"):
+        value = getattr(args, flag)
+        if value is not None and value <= 0:
+            parser.error("--" + flag.replace("_", "-") + " must be positive")
+
+    requested_ledger = Path(args.ledger) if args.ledger and args.live else None
     ledger_path: Path | None = None
     if requested_ledger is not None and requested_ledger.is_absolute():
         try:
@@ -5403,6 +5469,25 @@ def main() -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
+    budget = EvaluationBudget(
+        args.max_calls if args.max_calls is not None else len(cases) * 3,
+        args.max_output_tokens if args.max_output_tokens is not None else len(cases) * 3300,
+    )
+    if not args.live:
+        print(json.dumps({
+            "mode": "offline_plan", "provider": args.provider, "region": args.region,
+            "model": model, "judge_model": judge_model,
+            "case_count": len(cases), "case_ids": selected_ids,
+            "max_calls": budget.max_calls, "max_output_tokens": budget.max_output_tokens,
+            "ledger_written": False,
+            "cost_note": "Input tokens, cache charges and currency cost are not capped or estimated. Provider billing may include failed requests.",
+            "next_step": "Use --live with --id/--limit, or an explicit --max-calls for the full suite.",
+        }, indent=2))
+        return 0
+    if not args.id and not args.limit and args.max_calls is None:
+        print("A full live suite requires an explicit --max-calls; use --id or --limit for a focused run.")
+        return 2
+
     api_key = os.environ.get(provider.api_key_env)
     if not api_key:
         print(
@@ -5412,60 +5497,67 @@ def main() -> int:
         return 2
 
     results: list[dict] = []
-    for case in cases:
-        cid = case["id"]
-        source_paths: list[str] | None = None
-        try:
-            raw_verdict, source_paths = run_case(
-                snapshot,
-                case,
-                model,
-                judge_model,
-                api_key,
-                rubric,
-                provider,
-                endpoint,
+    budget_token = _ACTIVE_BUDGET.set(budget)
+    try:
+        for case in cases:
+            cid = case["id"]
+            source_paths: list[str] | None = None
+            try:
+                raw_verdict, source_paths = run_case(
+                    snapshot,
+                    case,
+                    model,
+                    judge_model,
+                    api_key,
+                    rubric,
+                    provider,
+                    endpoint,
+                )
+            except CaseRunError as exc:
+                source_paths = list(exc.sources)
+                print(diagnostic_text(f"[{cid}] evaluation error: {exc}"))
+                verdict = harness_error_result(f"evaluation error: {exc}")
+            except (ProviderResponseError, TimeoutError) as exc:
+                print(diagnostic_text(f"[{cid}] discovery transport error: {exc}"))
+                verdict = harness_error_result(f"discovery transport error: {exc}")
+            except HarnessError as exc:
+                print(diagnostic_text(f"[{cid}] discovery error: {exc}"))
+                verdict = failed_verdict(case, f"discovery error: {exc}")
+                verdict = normalize_verdict(case, verdict)
+            else:
+                verdict = normalize_verdict(case, raw_verdict)
+            status = verdict["status"]
+            score = verdict["overall_score"]
+            passed = verdict["pass"]
+            results.append(
+                {
+                    "id": cid,
+                    "status": status,
+                    "score": score,
+                    "pass": passed,
+                    "sequence": is_sequence_case(case),
+                    "critical": case.get("critical", False),
+                    "notes": verdict.get("notes", ""),
+                    "dimension_scores": verdict.get("dimension_scores", []),
+                    "sources": (
+                        source_provenance(snapshot, source_paths)
+                        if source_paths is not None
+                        else None
+                    ),
+                }
             )
-        except CaseRunError as exc:
-            source_paths = list(exc.sources)
-            print(diagnostic_text(f"[{cid}] evaluation error: {exc}"))
-            verdict = harness_error_result(f"evaluation error: {exc}")
-        except (ProviderResponseError, TimeoutError) as exc:
-            print(diagnostic_text(f"[{cid}] discovery transport error: {exc}"))
-            verdict = harness_error_result(f"discovery transport error: {exc}")
-        except HarnessError as exc:
-            print(diagnostic_text(f"[{cid}] discovery error: {exc}"))
-            verdict = failed_verdict(case, f"discovery error: {exc}")
-            verdict = normalize_verdict(case, verdict)
-        else:
-            verdict = normalize_verdict(case, raw_verdict)
-        status = verdict["status"]
-        score = verdict["overall_score"]
-        passed = verdict["pass"]
-        results.append(
-            {
-                "id": cid,
-                "status": status,
-                "score": score,
-                "pass": passed,
-                "sequence": is_sequence_case(case),
-                "critical": case.get("critical", False),
-                "notes": verdict.get("notes", ""),
-                "dimension_scores": verdict.get("dimension_scores", []),
-                "sources": (
-                    source_provenance(snapshot, source_paths)
-                    if source_paths is not None
-                    else None
-                ),
-            }
-        )
-        print(f"[{cid}] sources: {source_provenance_label(results[-1]['sources'])}")
-        outcome = (
-            "HARNESS_ERROR score=n/a"
-            if status == "harness_error"
-            else f"{'PASS' if passed else 'FAIL'} score={score}"
-        )
-        print(f"[{cid}] {outcome} :: {str(verdict.get('notes', ''))[:70]}")
+            print(f"[{cid}] sources: {source_provenance_label(results[-1]['sources'])}")
+            outcome = (
+                "HARNESS_ERROR score=n/a"
+                if status == "harness_error"
+                else f"{'PASS' if passed else 'FAIL'} score={score}"
+            )
+            print(f"[{cid}] {outcome} :: {str(verdict.get('notes', ''))[:70]}")
+            if budget.exhausted:
+                break
+    finally:
+        _ACTIVE_BUDGET.reset(budget_token)
+        print("Execution budget: " + json.dumps(budget.summary(), sort_keys=True))
 
     snapshot_error: str | None = None
     try:
