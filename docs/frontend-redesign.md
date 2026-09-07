@@ -12,8 +12,9 @@ supported inline Markdown/HTML link subset, local file and heading destinations,
 case-correct paths, six quickstart links, Start Here and Install destinations,
 nonempty image descriptions, supported PNG/SVG media and explicit byte ceilings.
 PNG checks inspect signatures and dimensions, not full pixel decoding or craft.
-The three canonical SVG assets retain their accessible title/description,
-outlined typography and existing no-script/no-external-resource constraints.
+Every embedded SVG is parsed as XML and checked for accessible title/description,
+scripts and external resources. The three canonical SVG assets also retain
+their outlined-typography and editorial constraints.
 The separate deterministic masthead build check remains mandatory.
 
 There is no minimum README length, bitmap byte count, picture count or gallery
