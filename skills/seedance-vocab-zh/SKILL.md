@@ -49,7 +49,7 @@ Load [vocab/zh](../../references/vocab/zh.md) for dense role-binding, first/last
 
 ## Script Variant Rule
 
-When the deliverable targets 台灣, 香港, or any Traditional-script audience, load Script Variant (简繁) in [Chinese vocabulary](../../references/vocab/zh.md) before writing subtitle or delivery text. Prompt in Simplified; declare the delivery script separately - and never convert between them by find-and-replace (头发 → 頭髮, not 頭發).
+When choosing or adapting Chinese prompt or delivery text, load Script Variant (简繁) in [Chinese vocabulary](../../references/vocab/zh.md). Preserve the user's chosen prompt script, subtitle script, locale and intended voice as separate decisions. Do not force Simplified prompting or infer a voice from written script. Keep exact dialogue and reference tags unchanged; convert or localize only the text the user asked to adapt. If a missing choice materially affects that deliverable, ask one focused question or use the user's delegated choice. Never convert by find-and-replace (头发 → 頭髮, not 頭發).
 
 ## De-Slop Rule
 

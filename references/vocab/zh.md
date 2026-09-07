@@ -1,6 +1,6 @@
 # Chinese Vocabulary
 
-**Script variant: Simplified Chinese (简体中文, zh-Hans), mainland terminology.** Every phrase below is written for the mainland surfaces this skill targets. See Script Variant before using any of it in a Traditional-script deliverable.
+**Guide convention: primarily Simplified Chinese (简体中文, zh-Hans), with some Traditional-script examples.** This is the guide's writing convention, not a required prompt script or provider restriction. See Script Variant when choosing or adapting prompt or delivery text.
 
 Use this reference for Chinese Seedance prompt wording, role binding, and compact prompt compression. Keep reference tags unchanged: `@Image1`, `@Video1`, and `@Audio1` stay literal.
 
@@ -138,13 +138,20 @@ Chinese genre and aesthetic terms can carry useful creative intent. Preserve the
 
 ## Script Variant (简繁)
 
-"Chinese" is not one script. This file is Simplified (zh-Hans); a deliverable for 台灣, 香港, or 澳門 needs Traditional (zh-Hant). Leaving it undeclared means the mainland variant ships to a Traditional-script audience by default, which reads as a foreign cut rather than a localized one.
+**Record prompt script, subtitle script, audience locale and intended voice separately when relevant.** Preserve choices already supplied; a location alone does not override the user's script choice. A Traditional-script audience does not require changing the prompt to Simplified. Written script does not specify the spoken language, accent or character's register. A no-dialogue request does not need a voice decision.
 
-**Prompt script and delivery script are separate decisions.** Preserve the user's chosen script and record the target audience's locale. Simplified and Traditional subtitles may require different vocabulary as well as character conversion. This repository has no controlled evidence that Simplified prompting improves lip-sync or that training geography explains language performance. Do not switch scripts merely on that assumption.
+If a missing choice materially affects the requested text, ask one focused question. If the user delegated that choice, state a brief-based assumption and proceed; do not impose an intake form on a complete brief. For a prompt-only draft with no script preference, use the script of the user's supplied Chinese wording and label that assumption. Do not choose a script based on an assumed model advantage: this repository has no controlled evidence that Simplified prompting improves lip-sync or that training geography explains language performance.
 
-Where it bites hardest is exactly where this repo is already weakest. Hands-on tests report 字幕乱码 (garbled subtitles), and every vocab file's standing advice is to keep the frame textless and add subtitles in post - so the variant is primarily a **delivery** parameter, set on the post/subtitle path rather than requested from the model.
+**Adapt only the requested text.** A request to localize subtitles is not permission to rewrite exact dialogue, change the prompt script, transliterate speech, alter reference tags or add lettering to the generated scene. If subtitles intentionally differ from the spoken transcript, keep them as a separate deliverable and retain the exact dialogue. For an exact-text requirement, discuss adding text in post; do not treat a prompt as proof that generated lettering will be correct. The delivery path does not determine the prompt script.
 
-**Do not convert by find-and-replace.** Several Simplified characters map to more than one Traditional character by meaning, and a naive pass produces text that is wrong rather than merely foreign:
+| User choice | Keep separate |
+|---|---|
+| Traditional prompt; Simplified subtitles | Keep the prompt in Traditional and adapt only the subtitle copy. Preserve exact spoken dialogue and reference tags |
+| Simplified prompt; Traditional subtitles for a named audience | Keep the prompt in Simplified. Adapt subtitle wording for that audience instead of treating character conversion as complete localization |
+| Existing exact dialogue; localize the subtitle copy | Retain the dialogue verbatim and label the localized subtitle text separately. Do not change voice or pronunciation instructions automatically |
+| Prompt only; no dialogue or subtitles requested | Draft the prompt in the chosen script. Do not add a subtitle track, voice choice or localization interview |
+
+**Do not convert by find-and-replace.** When conversion is requested, resolve characters by meaning and review vocabulary for the target locale. These examples illustrate why character substitution alone is insufficient:
 
 | 简体 | 繁體 — 按意思分化 |
 |---|---|
@@ -154,20 +161,18 @@ Where it bites hardest is exactly where this repo is already weakest. Hands-on t
 | 里面 (inside) / 三里 (li, distance) | 裡面 / 三里 |
 | 松开 (loosen) / 松树 (pine) | 鬆開 / 松樹 |
 
-头发 → 頭髮 matters here specifically: hair is a named continuity anchor in the reference workflow, so it turns up in prompts and in take notes.
+Vocabulary choices also need context. The candidates below are working examples to review for the requested audience, not a shared Taiwan/Hong Kong terminology standard or a complete locale glossary:
 
-Vocabulary also differs beyond the characters, so a correct script conversion can still read as the wrong region:
-
-| 简体（中国大陆） | 繁體（台灣 / 香港） |
+| Source wording | Candidate wording to review |
 |---|---|
-| 视频 | 影片（台）／影片、短片（港） |
+| 视频 | 影片／短片 |
 | 屏幕 | 螢幕 |
 | 质量 | 品質 |
 | 信息 | 資訊 |
-| 网络 | 網路（台）／網絡（港） |
+| 网络 | 網路／網絡 |
 | 摄像机 | 攝影機 |
 
-Record the variant with the delivery target, not the prompt, and keep it fixed for the life of a project - a sequence that switches variants between clips has the same continuity problem as one that switches wardrobe.
+Carry the chosen prompt and delivery scripts forward independently. If the user requests a later change, update only that scope and identify which existing text needs revision; do not silently convert prior clips or unrelated outputs. Independent language and production-language review of these working examples remains pending.
 
 ## Slop Traps
 
