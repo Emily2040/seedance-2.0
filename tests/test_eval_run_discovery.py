@@ -1178,7 +1178,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
                     eval_run, "_verify_canonical_evaluation_contract"
                 ),
                 mock.patch.object(
-                    eval_run, "_verify_evaluator_execution_identity"
+                    eval_run, "_verify_evaluator_modules"
                 ),
                 mock.patch.object(
                     eval_run,

@@ -29,13 +29,11 @@ import argparse
 import contextvars
 import errno
 import hashlib
-import html
 import http.client
 import json
 import os
 import re
 import secrets
-import shlex
 import stat
 import sys
 import tempfile
@@ -72,6 +70,23 @@ else:
     )
 
 
+if __package__:
+    from . import eval_ledger_format as _ledger_format
+else:
+    import eval_ledger_format as _ledger_format
+
+# Preserve the existing import surface while the implementation moves.
+_is_utf8_encodable = _ledger_format._is_utf8_encodable
+_ledger_row_sort_key = _ledger_format._ledger_row_sort_key
+_safe_ledger_text = _ledger_format._safe_ledger_text
+_safe_markdown_code = _ledger_format._safe_markdown_code
+_safe_markdown_text = _ledger_format._safe_markdown_text
+COMMAND_VALUE_RE = _ledger_format.COMMAND_VALUE_RE
+_regeneration_argv = _ledger_format._regeneration_argv
+_powershell_quote = _ledger_format._powershell_quote
+_regeneration_command_lines = _ledger_format._regeneration_command_lines
+
+
 # Capture the exact module code object that Python is executing.  Later, the
 # frozen evaluator source is compiled with the same filename and optimization
 # level and must produce the same module code object.  Comparing only
@@ -83,7 +98,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "3e510f5c8a27bfcd98c7c3d9ba8fc9b97671e856b869683789bcb310b7fd8720"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "7f514f4c2105bf94cd712051f5da2a15a7c69e25fdcb1c8b4f992afa18242530"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -105,7 +120,7 @@ MINIMAX_ANTHROPIC_BASE_URLS = {
 }
 MAX_SOURCE_FILES = 24
 SOURCE_MANIFEST_PATH = "evals/source-manifest.json"
-EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py"})
+EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py", "scripts/eval_ledger_format.py"})
 FIXTURE_ROOT = "evals/fixtures"
 SOURCE_ROLES = {"root", "responder", "evaluator", "fixture", "archive"}
 EXPECTED_EVALS_SHA256 = "af82c0458240e576005af073ccd86ffe60bb0f3ce1255479ad7a4aa51112ae93"
@@ -369,14 +384,6 @@ def _reject_duplicate_json_keys(pairs: list[tuple[str, object]]) -> dict:
             raise ValueError(f"duplicate JSON key: {key}")
         result[key] = value
     return result
-
-
-def _is_utf8_encodable(value: str) -> bool:
-    try:
-        value.encode("utf-8")
-    except UnicodeEncodeError:
-        return False
-    return True
 
 
 def _validate_json_strings(value: object) -> None:
@@ -669,6 +676,26 @@ def _verify_evaluator_execution_identity(source: FrozenFile) -> None:
         )
 
 
+def _verify_evaluator_modules(snapshot: FrozenRepository) -> None:
+    """Every extracted evaluator module must match its frozen executed source."""
+    _verify_evaluator_execution_identity(snapshot.require("scripts/eval_run.py", "evaluator"))
+    source = snapshot.require("scripts/eval_ledger_format.py", "evaluator")
+    module = _ledger_format
+    try:
+        if module._EXECUTED_PATH is None or not source.path.samefile(module._EXECUTED_PATH):
+            raise HarnessError("executed ledger formatter path does not match frozen source")
+        declaration = re.compile(r'^_EXECUTED_SOURCE_SHA256 = "[0-9a-f]{64}"$', re.MULTILINE)
+        normalized, count = declaration.subn('_EXECUTED_SOURCE_SHA256 = "' + "0" * 64 + '"', source.text)
+        if count != 1 or hashlib.sha256(normalized.encode("utf-8")).hexdigest() != module._EXECUTED_SOURCE_SHA256:
+            raise HarnessError("executed ledger formatter digest does not match frozen source")
+        code = compile(source.text, module._EXECUTED_CODE.co_filename, "exec",
+                       dont_inherit=True, optimize=sys.flags.optimize)
+        if code != module._EXECUTED_CODE:
+            raise HarnessError("executed ledger formatter code does not match frozen source")
+    except (OSError, SyntaxError, TypeError, ValueError) as exc:
+        raise HarnessError("cannot verify executed ledger formatter identity") from exc
+
+
 def _verify_canonical_evaluation_contract(snapshot: FrozenRepository) -> None:
     """Recompute the pinned eval and rubric bindings from frozen source bytes."""
     pinned = {
@@ -885,9 +912,7 @@ def freeze_repository(
     if enforce_canonical_contract:
         _verify_canonical_evaluation_contract(snapshot)
     if enforce_evaluator_identity:
-        _verify_evaluator_execution_identity(
-            snapshot.require("scripts/eval_run.py", "evaluator")
-        )
+        _verify_evaluator_modules(snapshot)
     return snapshot
 
 
@@ -2847,9 +2872,7 @@ def assess_run(
             if release_requested or snapshot.canonical_contract_bound:
                 _verify_canonical_evaluation_contract(snapshot)
             if release_requested or snapshot.evaluator_execution_bound:
-                _verify_evaluator_execution_identity(
-                    snapshot.require("scripts/eval_run.py", "evaluator")
-                )
+                _verify_evaluator_modules(snapshot)
         except HarnessError as exc:
             integrity_errors.append(f"frozen repository verification failed: {exc}")
         else:
@@ -4971,102 +4994,6 @@ def _atomic_write_text(
         raise original_error
 
 
-def _ledger_row_sort_key(indexed_row: tuple[int, object]) -> tuple[int, str, int]:
-    index, row = indexed_row
-    if not isinstance(row, dict):
-        return (2, "", index)
-    sequence = row.get("sequence")
-    sequence_order = 0 if sequence is False else 1 if sequence is True else 2
-    case_id = row.get("id")
-    safe_id = (
-        case_id
-        if isinstance(case_id, str) and _is_utf8_encodable(case_id)
-        else ""
-    )
-    return (sequence_order, safe_id, index)
-
-
-def _safe_ledger_text(value: str, limit: int = 80) -> str:
-    if not _is_utf8_encodable(value):
-        return "[invalid Unicode string]"
-    # Markdown treats several controls as line boundaries even when ``\n`` is
-    # absent. Collapse every unsafe C0/C1 control and Unicode line separator
-    # before truncation so one field can never create another ledger line.
-    sanitized = re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]+", " ", value)
-    return sanitized.replace("|", "/")[:limit]
-
-
-def _safe_markdown_code(value: str, limit: int = 80) -> str:
-    """Sanitize values interpolated into Markdown code spans or fences."""
-    return _safe_ledger_text(value, limit=limit).replace("`", "'")
-
-
-def _safe_markdown_text(value: str, limit: int = 80) -> str:
-    """Make untrusted text inert when it is rendered outside a code span."""
-    sanitized = html.escape(_safe_ledger_text(value, limit=limit), quote=False)
-    return re.sub(r"([\\`*_\[\]()#!~>])", r"\\\1", sanitized)
-
-
-COMMAND_VALUE_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:/+-]{0,199}\Z")
-
-
-def _regeneration_argv(
-    provider_name: str,
-    region: str,
-    model: str,
-    judge_model: str,
-) -> list[str] | None:
-    values = (provider_name, region, model, judge_model)
-    if any(
-        not _is_utf8_encodable(value) or COMMAND_VALUE_RE.fullmatch(value) is None
-        for value in values
-    ):
-        return None
-    return [
-        "python",
-        "scripts/eval_run.py",
-        "--provider",
-        provider_name,
-        "--region",
-        region,
-        "--model",
-        model,
-        "--judge-model",
-        judge_model,
-        "--ledger",
-        "evals/eval-run-ledger.md",
-    ]
-
-
-def _powershell_quote(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
-
-
-def _regeneration_command_lines(argv: list[str] | None) -> list[str]:
-    if argv is None:
-        return [
-            "Regeneration commands omitted because CLI metadata contains unsafe shell or ",
-            "Markdown characters; re-enter those values manually.",
-        ]
-    return [
-        "Preview regeneration from a POSIX shell (offline):",
-        "",
-        "```sh",
-        shlex.join(argv),
-        "```",
-        "",
-        "Preview regeneration from PowerShell (offline):",
-        "",
-        "```powershell",
-        "& " + " ".join(_powershell_quote(value) for value in argv),
-        "```",
-        "",
-        "Review the plan, then add `--live --max-calls N` and an optional ",
-        "`--max-output-tokens N` to execute. Replace N with your chosen positive ",
-        "ceiling. Input-token charges and currency cost are not capped.",
-    ]
-
-
 def source_provenance_label(sources: object) -> str:
     """Render path+digest evidence without making malformed values active Markdown."""
     if sources is None:
@@ -5288,9 +5215,7 @@ def write_ledger(
             if release_attestation_required or snapshot.canonical_contract_bound:
                 _verify_canonical_evaluation_contract(snapshot)
             if release_attestation_required or snapshot.evaluator_execution_bound:
-                _verify_evaluator_execution_identity(
-                    snapshot.require("scripts/eval_run.py", "evaluator")
-                )
+                _verify_evaluator_modules(snapshot)
 
     needs_final_bound_check = (
         report["repository_sha256"] is not None or _destination_guard is not None

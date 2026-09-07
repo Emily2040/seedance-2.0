@@ -421,6 +421,10 @@ class AggregateIntegrityTests(unittest.TestCase):
                     root / "scripts" / "eval_run.py",
                 )
                 shutil.copy2(
+                    REPO_ROOT / "scripts" / "eval_ledger_format.py",
+                    root / "scripts" / "eval_ledger_format.py",
+                )
+                shutil.copy2(
                     REPO_ROOT / "evals" / "evals.json",
                     root / "evals" / "evals.json",
                 )
@@ -442,7 +446,13 @@ class AggregateIntegrityTests(unittest.TestCase):
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module
                 try:
-                    spec.loader.exec_module(module)
+                    formatter_spec = importlib.util.spec_from_file_location(
+                        "fixture_ledger_format", root / "scripts" / "eval_ledger_format.py"
+                    )
+                    formatter = importlib.util.module_from_spec(formatter_spec)
+                    formatter_spec.loader.exec_module(formatter)
+                    with mock.patch.dict(sys.modules, {"eval_ledger_format": formatter}):
+                        spec.loader.exec_module(module)
                     with self.assertRaisesRegex(
                         module.HarnessError,
                         "canonical evaluation contract changed",
@@ -1836,7 +1846,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                 side_effect=release_like_freeze,
             ),
             mock.patch.object(eval_run, "_verify_canonical_evaluation_contract"),
-            mock.patch.object(eval_run, "_verify_evaluator_execution_identity"),
+            mock.patch.object(eval_run, "_verify_evaluator_modules"),
             mock.patch.object(eval_run, "run_case", call),
             redirect_stdout(output),
         ):
