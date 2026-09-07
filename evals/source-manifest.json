@@ -29,7 +29,7 @@
     {
       "path": "references/anti-slop-lexicon.md",
       "role": "responder",
-      "sha256": "d92d0e460e911d77258454814f3d1ac6744bc5b3ec486d01b1ecb5f66d5a39f1"
+      "sha256": "a07391bdb3d8998512d032c128cb29306e0658a175862ad57a0c2d3c7cc5c34a"
     },
     {
       "path": "references/api-status.md",
@@ -59,7 +59,7 @@
     {
       "path": "references/capability-map.md",
       "role": "responder",
-      "sha256": "ed30812d3c3ddce722a3880924ebed18f1c0f987b7c5b88dbea8fcd148563ff5"
+      "sha256": "51e67e6199eff9f6ce21ef9ff3a912fbcdf8b69e120b3cd0b4a173ae854e9aa3"
     },
     {
       "path": "references/cinematography-shot-language.md",
@@ -294,7 +294,7 @@
     {
       "path": "references/model-mechanics.md",
       "role": "responder",
-      "sha256": "d703f2ab7d756d0ed1c0bb82017dd71dfd1fd0ecf2cebcf76c8378f25a9d2ff4"
+      "sha256": "d924b1197ec2ad0808235e81a4011c6d7569e5ced5675a77da899375e0fbfb19"
     },
     {
       "path": "references/model-name-map.md",
@@ -314,7 +314,7 @@
     {
       "path": "references/multishot-grammar.md",
       "role": "responder",
-      "sha256": "9bab2f08d681f246bb60e31696714b7d9b4104cc97dfbb7eed34a78e18c19fdd"
+      "sha256": "d7f90d9f418a589b027281cee70f9d04ee4498f18dd03b0b17ec52029bfadb82"
     },
     {
       "path": "references/platform-constraints.md",
@@ -454,7 +454,7 @@
     {
       "path": "skills/seedance-antislop/SKILL.md",
       "role": "responder",
-      "sha256": "b8d2cfbe073bf7443c6c7584227876d3d46e7f8f9fc1f77f74f9fabda20c1839"
+      "sha256": "cf65903ce6b2587503033b8a73542e8daf3b1c959820d4bd6131d2dad4208045"
     },
     {
       "path": "skills/seedance-audio/SKILL.md",
@@ -554,7 +554,7 @@
     {
       "path": "skills/seedance-troubleshoot/SKILL.md",
       "role": "responder",
-      "sha256": "9dc0381181afa9460083864579f440b75c59c37e440b987c7481a83ca99b2cbc"
+      "sha256": "2b447db9b39c2dee6231115507c6a13a5e19be7a04eb93e22f31eaa960ffd405"
     },
     {
       "path": "skills/seedance-vfx/SKILL.md",

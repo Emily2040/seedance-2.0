@@ -1,43 +1,50 @@
-# Multi-Shot Grammar — real cuts inside one generation
+# Multi-Shot Grammar — direct cuts inside one generation
 
-*Seedance 2.0's defining capability over 1.x: a single 10–15s call can contain 2–3 shots with genuine editorial cuts. Labels: [official] = ByteDance/fal docs · [field] = practitioner-reported. Last verified 2026-06-09.*
+Multi-shot means several shots within one generated clip. It is not new to the 2.0 line: the [Seedance 1.0 paper](https://arxiv.org/abs/2506.09113) already describes native multi-shot generation. Seedance 2.0's [launch post](https://seed.bytedance.com/en/blog/seedance-2-0-official-launch) demonstrates multi-shot audio-video output. These are capability descriptions, not guarantees that each requested cut will land. Sources checked 2026-09-07.
 
-## The grammar [official]
-Label every cut explicitly — `Shot 1:` / `Shot 2:` / `Shot 3:` — in plain prose. The labels are what give the model cut points; long unlabeled prompts tend to render as one continuous take. Per shot: **one primary action + one camera move**, plus its sound. Order inside each shot: subject + action → camera → sound.
+## Choose the edit before choosing notation
 
-## The budget [official]
-Shots cost seconds. Plan ≈4–6s per shot: two shots want ~10s, three want 12–15s. Ask for four shots in 5s and the model compresses or skips beats. `duration: auto` lets the model size the clip to the prompt's complexity — a strong default for multi-shot; set an explicit duration only when the edit demands it.
+| User's priority | Starting approach | Tradeoff |
+|---|---|---|
+| One continuous performance | Say “single continuous take”; describe phases and the final hold. | Less editorial control inside the take. |
+| A reveal, reaction, or comparison | Describe two shots and the action that motivates the cut. | Each shot needs enough time for its essential beat. |
+| Fast montage | Use brief, distinct images with explicit transitions and a total duration supported by the surface. | Less time for dialogue, detailed actions, and final holds. |
+| Exact frame timing | Plan separate clips and edit them in post. | More assembly work; model-generated timing alone is insufficient. |
 
-## Requirements [official + field]
-- **Standard tier [field].** Official fal docs give fast endpoints the same schema and multi-shot support, but field reports say fast tiers do not reliably honor multi-shot (or slow-motion or dolly moves) on the first try.
-- **10–15s or `auto` [official].** Multi-shot below ~10s starves the beats.
+Use `Shot 1:` / `Shot 2:` when headings make the brief easier to read. Plain prose with “cut to” is also valid prompting: [Runway's official help](https://help.runwayml.com/hc/en-us/articles/50488490233363-Creating-with-Seedance-2-0) includes a multi-shot prose example without numbered headings. No cited source establishes a universal `Shot N` parser. Labels and timestamp ranges are teaching notation unless the active endpoint explicitly documents otherwise.
 
-## Timestamps: secondary on Western surfaces, primary on Chinese surfaces [official + field]
-Prefer `Shot N:` labels as the structure — clear and portable across surfaces. fal's reference-to-video docs additionally accept timestamp pacing phrases ("At 5 seconds…", "Cut scene to…"); use them sparingly as *hints inside* a labeled shot, never as bracketed `[0-6s]` blocks replacing the labels.
+Chinese timelines such as `0–3秒…，3–6秒…` and English timing phrases can express pacing. Choose a coherent format in the user's language; do not require a different grammar merely because a surface is Chinese or Western. Requested timestamps remain intentions until the returned clip is reviewed.
 
-Surface exception [field]: on Dreamina/Jimeng, Chinese community practice structures longer prompts (over ~8s) with a bracketed timeline as the primary skeleton — `【时间轴】0-3s: … / 3-6s: … / 6-10s: …` — each segment carrying its own 画面/镜头/音效 (frame, camera, sound). Match the convention of the active surface; do not mix both skeletons in one prompt.
+## Allocate time without inventing limits
 
-## Dialogue & audio placement [official + field]
-A spoken line goes inside the shot where the speaker is on-screen, written naturally in quotes; keep lines short. Name each shot's specific sounds — they anchor the audio pass. Audio is generated per call, not across calls: multi-block pieces get their unifying score in post.
+Start with one primary action per shot, a motivated camera choice (including locked framing), and the relevant sound. Roughly 4–6 seconds per shot can help plan a deliberate action/reaction beat; it is a **workflow heuristic**, not a minimum. A montage can be faster, while a spoken exchange may need more time.
 
-## The single-take alternative [official]
-For an unbroken take, say so: "single continuous take, no cuts" — otherwise a long action description may get cut up.
+Check the active model, operation, and surface for accepted duration values. Use `auto` only when that endpoint documents it, and keep any existing user setting. Do not infer an API enum from prose examples. There is no universal ten-second minimum or requirement to upgrade to Standard for multi-shot. If comparing tiers, show the cost/reliability tradeoff and obtain authorization for any additional paid test.
 
-## Worked shapes
-*Three-shot commercial (≈15s):* Shot 1: extreme close-up of condensation sliding down a glass bottle, ice clinking. Shot 2: the bottle rises from crushed ice, camera tilting up into a backlit halo. Shot 3: a hand grabs it against a sunset rooftop, the city humming below. *(Paraphrased from the official demo shape.)*
+## Two original director examples
 
-*Two-shot dialogue beat (≈10s):* Shot 1: close on the detective under a flickering platform light, rain on his shoulders — he says quietly, "You were never on that train." Shot 2: cut to the woman's face as the train doors close behind her, a half-smile; the departure chime swallows the silence.
+**Reassurance through a cut — proposed 10-second clip.** The audience should understand that someone has waited, without a speech explaining it.
 
-## Failure → fix [field]
-| Symptom | Fix |
+> Shot 1, about four seconds: locked close-up of two bowls at a kitchen table. A hand slides a folded towel from beneath the untouched bowl; the other bowl is already empty. A key turns off-screen. Cut to Shot 2: medium view from the doorway. The person at the table looks up, moves the untouched bowl toward the empty chair, and keeps their hand beside it. Hold that invitation before cutting. Sound: key, chair leg against tile, quiet room tone.
+
+**Product proof through comparison — proposed 6-second montage.** Demonstrate how a tool fits into a routine, without asking tiny generated text to sell it.
+
+> Close on a loose cabinet hinge; the door drops as it opens. Cut to a side view of a compact screwdriver tightening the hinge, its bit already seated. Cut to the same opening angle: the door now swings level and closes flush. Keep the cabinet finish and hinge position consistent. Sound: hinge creak, brief motor pulse, soft latch click.
+
+These are ungenerated teaching examples. Review action feasibility and references before spending credits; exact timings and small hardware details may require separate shots or post work. Offer a longer action shot if the tightening beat is unreadable, rather than silently increasing duration or generating more takes.
+
+## Failure → next choice
+
+| Observed result | Smallest useful revision |
 |---|---|
-| Renders as one continuous take | clearer `Shot N:` labels · reduce to two shots · Standard tier |
-| A shot's action skipped/compressed | fewer shots · raise duration / `auto` · one action per shot |
-| Cut lands mid-action | end each shot's sentence on the completed beat; let the next shot open the new one |
-| Atmosphere breaks between shots | declare the persisting effect once for the whole piece: "thin mist throughout, every shot" (全程薄雾) |
+| Unwanted continuous take | Name the cut and make the second composition distinct; try two shots before adding more. |
+| Action skipped or compressed | Remove a secondary action, or offer more duration within the supported limits. |
+| Cut interrupts the action | State the completed endpoint before the cut; use post editing if exact timing matters. |
+| Look or state changes across cuts | Repeat the specific continuity anchors and check reference roles. |
+| Dialogue is cut short | Measure the spoken line and leave room for the reaction; retain the user's words unless a rewrite is authorized. |
 
 ## Sequence Boundary
 
 Multi-shot grammar describes cuts inside one generation. Sequence-state planning describes multiple connected generations. Do not paste future clip prompts into the current multishot prompt. If a beat belongs to a later generation, mark it reserved and leave it out.
 
-Dense multishot prompts use shot labels and endpoints. Continuous takes use phases and no hard cuts. Do not mix those contracts.
+Multi-shot prompts identify cuts and endpoints. Continuous takes use phases and no hard cuts. Keep the selected contract consistent. For a continuous score across separately generated clips, plan audio assembly in post.
