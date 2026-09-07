@@ -45,7 +45,7 @@
         },
         {
           "operation": "managed_revision_replacement",
-          "source_commit": "3a3fa1ae14c7f85d53941671249a0612d2427f82",
+          "source_commit": "43130e829cc9b1958950a1442aa1f946c07f8c62",
           "installer_exit": 0,
           "doctor": {
             "changed": [],
@@ -60,7 +60,7 @@
             "next_step": "No replacement is needed for the checked payload.",
             "recorded_paths_not_checked": 0,
             "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
-            "source_contract_sha256": "7506c6be615a8a4c690724b9b601859fb5095728bb08d86aba82f30584a7e1dc",
+            "source_contract_sha256": "31378ee1154accf929973482848802e204a5f273c3dfe7bd189aa8ad4267c6d3",
             "source_version": "6.7.0",
             "status": "current"
           },
@@ -97,7 +97,7 @@
         },
         {
           "operation": "managed_revision_replacement",
-          "source_commit": "3a3fa1ae14c7f85d53941671249a0612d2427f82",
+          "source_commit": "43130e829cc9b1958950a1442aa1f946c07f8c62",
           "installer_exit": 0,
           "doctor": {
             "changed": [],
@@ -112,7 +112,7 @@
             "next_step": "No replacement is needed for the checked payload.",
             "recorded_paths_not_checked": 0,
             "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
-            "source_contract_sha256": "7506c6be615a8a4c690724b9b601859fb5095728bb08d86aba82f30584a7e1dc",
+            "source_contract_sha256": "31378ee1154accf929973482848802e204a5f273c3dfe7bd189aa8ad4267c6d3",
             "source_version": "6.7.0",
             "status": "current"
           },
@@ -139,6 +139,7 @@
       }
     ],
     "thread_created": false,
-    "model_turn_started": false
+    "model_turn_started": false,
+    "source_commit": "43130e829cc9b1958950a1442aa1f946c07f8c62"
   }
 }
