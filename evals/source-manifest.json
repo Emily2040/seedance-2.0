@@ -332,6 +332,11 @@
       "sha256": "cf66cdff1438ddd59e0d361e41685196964018f47fd6d7da3fbb3e09fd2f9a90"
     },
     {
+      "path": "references/product-example-cards.md",
+      "role": "responder",
+      "sha256": "bab85462f46c1422c4e008d6c1f542603b494d1e310db57d647cd4cfcb20a387"
+    },
+    {
       "path": "references/progressive-disclosure.md",
       "role": "responder",
       "sha256": "a882215249063b94d68dc8fb9ebe29936e43d133974d7c284d9af7c6c8ff47de"
@@ -539,7 +544,7 @@
     {
       "path": "skills/seedance-recipes/SKILL.md",
       "role": "responder",
-      "sha256": "4fff2eac9795f72b366ba617a0c7616b053954e1202f83ccf08cafbf3ab18677"
+      "sha256": "636549cb16360b99191a3d327aefcb5fc0471c37b65b97719cb89fce14763ee9"
     },
     {
       "path": "skills/seedance-sequence/SKILL.md",

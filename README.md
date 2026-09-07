@@ -330,6 +330,7 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`i2v-guide.md`](references/i2v-guide.md) | Image-to-video best practices. |
 | [`prompt-examples.md`](references/prompt-examples.md) | Safe copy-paste prompt examples. |
 | [`genre-guides.md`](references/genre-guides.md) | Genre-specific prompt patterns. |
+| [`product-example-cards.md`](references/product-example-cards.md) | Three concept cards: exact product binding, illustrative material change and a craft process. |
 | [`storytelling-framework.md`](references/storytelling-framework.md) | Narrative design and visual layering. |
 | [`intent-vs-precision.md`](references/intent-vs-precision.md) | The intent-first philosophy. |
 | [`audio-guide.md`](references/audio-guide.md) | Audio, dialogue, beat-sync, and lip-sync guidance. |

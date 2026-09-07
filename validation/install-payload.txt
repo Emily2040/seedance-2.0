@@ -103,6 +103,7 @@ references/multishot-grammar.md
 references/platform-constraints.md
 references/platform-surface-matrix.md
 references/pro-filmmaking-standards.md
+references/product-example-cards.md
 references/progressive-disclosure.md
 references/prompt-compiler.md
 references/prompt-examples.md
