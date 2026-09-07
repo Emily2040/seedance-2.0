@@ -82,6 +82,11 @@
       "sha256": "ea7178642162eda4d8695830a613e13c2f6d4f11706a61512e86a6ce18d2c37d"
     },
     {
+      "path": "references/continuity-example-cards.md",
+      "role": "responder",
+      "sha256": "09e233da5f378d8f242b2daed3836b49f0da82b53316fcec6b8740cbd821eba0"
+    },
+    {
       "path": "references/continuity-qc.md",
       "role": "responder",
       "sha256": "1199e0233292743e3d36298d371b977dba1cbd8c2859dae93cdd955198516150"
@@ -359,7 +364,7 @@
     {
       "path": "references/reference-workflow.md",
       "role": "responder",
-      "sha256": "a91e9f1b9ff46c92d92a35010fa30da59fe0a04ab065ee0b47b24c26e0bca675"
+      "sha256": "466d83616b9082c45eb14de8f4ed70ac1ef72e04d8a00257814bdaf491479adb"
     },
     {
       "path": "references/research-2026-05-30.md",

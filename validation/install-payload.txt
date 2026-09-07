@@ -76,6 +76,7 @@ references/cinematography-shot-language.md
 references/color-pipeline-aces.md
 references/community-source-methodology.md
 references/continuation-handoff.md
+references/continuity-example-cards.md
 references/continuity-qc.md
 references/delivery-qc.md
 references/dense-storyboard-mode.md
