@@ -70,7 +70,7 @@ The read is an internal brief and handoff object, never final generation prose. 
 12. Quality pass: run anti-slop and the directing coherence test, then check the correct Director's Read lane, one visible beat, one primary camera move, physically motivated light, sound intent, continuity anchors, constraints, delivery caveats, and source-date caveats. Narrative prompts must carry the turn, suppressed behavior, and non-transferable detail without leaking internal labels; non-narrative prompts must remain free of invented psychology.
 
     For interaction-heavy or fragile shots, write the visible chain in order - initial state, trigger, decisive change, response, follow-through, local endpoint - and name which of those the camera actually covers. Keep subject, prop, camera, and environmental motion under separate owners: a subject can reach its endpoint while rain keeps falling, a fan keeps turning, or the camera stays open for a handoff. Treat the chain as authored planning and review criteria; it describes what the shot should show, and is never evidence about the model's internals or a claim of physical accuracy.
-13. Repair loop: when a take returns, triage it with [references/retake-protocol.md](references/retake-protocol.md) (keep / fix in post / edit / re-roll / rewrite, one variable per retake, inside an attempt budget); if it fails outright, diagnose root cause before adding adjectives via [skills/seedance-troubleshoot/SKILL.md](skills/seedance-troubleshoot/SKILL.md).
+13. Repair loop: when a take returns, use the current verdicts, diagnosis process, and authorization boundaries in [references/retake-protocol.md](references/retake-protocol.md). For a failure, use [skills/seedance-troubleshoot/SKILL.md](skills/seedance-troubleshoot/SKILL.md). Keep those rules canonical instead of duplicating them here; never treat a plausible diagnosis as proven causation.
 
 ## Authority Order
 
@@ -145,7 +145,7 @@ Sequence invariants:
 | Russian/Spanish or mixed-language examples | [skills/seedance-vocab-ru/SKILL.md](skills/seedance-vocab-ru/SKILL.md), [skills/seedance-vocab-es/SKILL.md](skills/seedance-vocab-es/SKILL.md), [references/multilingual-community-examples.md](references/multilingual-community-examples.md) |
 | Slop-heavy or filter-tripping English wording | [skills/seedance-vocab-en/SKILL.md](skills/seedance-vocab-en/SKILL.md), [skills/seedance-antislop/SKILL.md](skills/seedance-antislop/SKILL.md) |
 | Bad result | [skills/seedance-troubleshoot/SKILL.md](skills/seedance-troubleshoot/SKILL.md) |
-| A take came back: keep, fix in post, edit, re-roll, or rewrite | [references/retake-protocol.md](references/retake-protocol.md) |
+| Decide what to do with a returned take | [references/retake-protocol.md](references/retake-protocol.md) |
 | Why a rule works, or a novel case no rule covers | [references/model-mechanics.md](references/model-mechanics.md) |
 
 Preserve reference tags exactly, keep prompts short, and never convert field-observed community tricks into official platform guarantees. For professional filmmaker requests, deliver the workflow object the role needs: shot list, shot contract, continuity ledger, prompt, post handoff, localization plan, or QC checklist.

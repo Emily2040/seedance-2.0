@@ -104,7 +104,7 @@
     {
       "path": "references/directing-engine.md",
       "role": "responder",
-      "sha256": "4e1a6d3ae7050fd7f859ff8bb262270ebe94ac1d6e46838547e20f5bcb73a8cb"
+      "sha256": "c212896169e073c73efa20ca1cb82a26b415346b168f2f0b697aa72f3ca12487"
     },
     {
       "path": "references/directing-engine-genre-library.md",
@@ -444,7 +444,7 @@
     {
       "path": "SKILL.md",
       "role": "root",
-      "sha256": "14fbf419bc813f40c01d9a371787a6c194462e98ea1f829a6a8581a624bae97a"
+      "sha256": "e1710cbecd5039fbe549a622590f0aff6a2abadf4b08872993116368ee0474fd"
     },
     {
       "path": "scripts/eval_run.py",
