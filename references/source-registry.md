@@ -1,8 +1,22 @@
 # Source Registry
 
-last_verified: 2026-08-01
+last_verified: 2026-09-07
 
-**Reviewed 2026-08-01.** One structural gap was found and is recorded here rather than papered over: this registry's capability hierarchy covers the Seedance **2.0** line only. ByteDance's [official Seedance 2.5 model page](https://seed.bytedance.com/en/seedance2_5) confirms a separate model line, and [Dreamina's official product page](https://dreamina.capcut.com/seedance/seedance-2-5) says it is live on Dreamina. Neither primary page gives an exact launch date; API and other-surface availability remain unconfirmed. This 2.0 registry does not import 2.5 capability numbers, and technology-press or provider access reports stay below the `confirmed` bar. See the Seedance 2.5 section of [api-status](api-status.md).
+**Scoped review: 2026-09-07.** The date above covers the review below, not a fresh verification of every historical source. Unlisted provider, pricing, client-installation, and policy claims retain their earlier verification dates and require rechecking before use. The older inventory is preserved for traceability.
+
+## Claims rechecked on 2026-09-07
+
+| Source | Verified claim | Boundary |
+|---|---|---|
+| [ByteDance model page](https://seed.bytedance.com/en/seedance2_0) | Unified multimodal audio-video architecture; text, image, audio, video inputs. | Broad model framing, not an endpoint contract. |
+| [ByteDance launch post](https://seed.bytedance.com/en/blog/seedance-2-0-official-launch) | Multimodal reference, editing, extension, and multi-shot examples. | Demonstrations do not establish a success rate or mandatory prompt parser. |
+| [Model card v1, 2026-04-15](https://arxiv.org/abs/2604.14148) | Describes 4–15 seconds and native 480p/720p; reports developer evaluations. | Paper version is unchanged; retrieval date is not a new model release. Benchmark scores are not this skill's measured results. |
+| [Runway creator help](https://help.runwayml.com/hc/en-us/articles/50488490233363-Creating-with-Seedance-2-0) | Lists 5–15 seconds and 480p/720p/1080p; 1080p requires Credits Mode. | Runway UI output options do not revise the model card's native-resolution statement or prove API/account access. |
+| [Runway API model catalog](https://docs.dev.runwayml.com/guides/models/) | Lists `seedance2`, `seedance2_fast`, `seedance2_mini`, and separate `seedance2_5`. | A catalog entry proves documented naming, not entitlement. This package remains scoped to 2.0. |
+
+**Incomplete retrieval:** the [BytePlus prompt-guide page](https://docs.byteplus.com/api/docs/ModelArk/2222480) exposed a title and August 31 update date but no guide body; the canonical page returned a server error in the browser. Its contents were not reverified. A changed page date alone cannot support new limits or syntax claims. No authenticated console, paid generation, pricing, or regional-access test was performed.
+
+The machine-readable [source inventory](../data/sources.seedance-2026-05-30.json) updates only the records inspected in this pass. Its filename and `generated_at` describe the original inventory; individual `retrieved_at` dates describe subsequent checks. The broader [API status snapshot](api-status.md) retains its August header and dated historical sections.
 
 Use this registry before making factual claims about Seedance 2.0 platform behavior. Prefer primary public sources, attach a verification date, and mark volatile claims as recheck-required. This file is a claim-boundary map, not a guarantee of access on every product surface or region.
 
@@ -16,19 +30,21 @@ Use this registry before making factual claims about Seedance 2.0 platform behav
 | `unverified` | Plausible but not confirmed by a primary source. | `Requires testing or owner confirmation.` |
 | `internal` | Repository guidance derived from this skill package. | `Use as workflow guidance, not external fact.` |
 
-## Primary Source Hierarchy
+## Primary Source Hierarchy — historical inventory
+
+Except for claims explicitly rechecked above, these entries retain their earlier dates (August 1 or the linked inventory record). `confirmed` means confirmed at that date, not continuously current.
 
 | Topic | Preferred source | Evidence label | Verification note | Claim boundary |
 |---|---|---|---|---|
 | Core model capabilities | ByteDance Seedance 2.0 official page: https://seed.bytedance.com/en/seedance2_0 | confirmed | Recheck before release notes, API claims, or marketing copy. | Use for broad public capability framing only. |
 | Launch capabilities and known limits | ByteDance Seedance 2.0 official launch post: https://seed.bytedance.com/en/blog/seedance-2-0-official-launch | confirmed | Recheck when discussing multimodal references, editing, audio, and platform examples. | Do not turn launch examples into guaranteed behavior on every surface. |
-| Seedance 2.5 model-line boundary | ByteDance official model page: https://seed.bytedance.com/en/seedance2_5 and Dreamina official product page: https://dreamina.capcut.com/seedance/seedance-2-5 | confirmed model line; confirmed Dreamina surface | Recheck the exact launch date and any API or other-surface availability before stating them. | Establishes a separate model line and live Dreamina access. It does not authorize copying 2.5 capability numbers into this 2.0 skill. |
+| Seedance 2.5 model-line boundary | ByteDance official model page: https://seed.bytedance.com/en/seedance2_5 and Dreamina official product page: https://dreamina.capcut.com/seedance/seedance-2-5 | confirmed model line; confirmed Dreamina surface | Historical model/Dreamina check: 2026-08-01. Runway catalog naming was checked separately on 2026-09-07 above; exact launch dates and account access remain unchecked. | Establishes a separate model line and live Dreamina access. It does not authorize copying 2.5 capability numbers into this 2.0 skill. |
 | Model card and paper | arXiv model card: https://arxiv.org/abs/2604.14148 | confirmed | Useful for model-family context and benchmark caveats. | Provider-authored paper; do not use as current commercial access proof. |
 | API tutorial and platform docs | BytePlus ModelArk and Volcengine Ark docs: https://docs.byteplus.com/en/docs/ModelArk/2291680, https://docs.byteplus.com/en/docs/ModelArk/1520757, https://www.volcengine.com/docs/82379/1520757?lang=zh, and https://www.volcengine.com/docs/82379/2291680?lang=zh | volatile | Recheck endpoints, request fields, model IDs, task flow, and pricing before procedural API guidance. | API shape may differ by region, account, release channel, or trial gate. |
 | Video generation task lifecycle | Volcengine video-generation tutorial: https://www.volcengine.com/docs/82379/2298881?lang=zh | volatile | Recheck create/query/list/cancel-delete flow, first/last-frame roles, return-last-frame, tools, and file-reference rules before implementation. | Official surface, but fields and account support can change. |
 | Model IDs and pricing | Volcengine model list/pricing and BytePlus pricing pages, including https://docs.byteplus.com/en/docs/ModelArk/1544106 | volatile | Always recheck immediately before quoting numbers or IDs. Seedance 2.0 Mini IDs were source-visible on 2026-06-20, but access was still trial-gated through June 22 in official docs. | Volcengine prices may be cited only with date, currency, model, surface, and caveat; never infer BytePlus pricing from incomplete JS-rendered pages. |
 | API-service ecosystem news | Volcengine developer article: https://developer.volcengine.com/articles/7628567056649125942 | volatile | Use as official ecosystem/news evidence for API-service rollout, safety standards, portrait authorization, virtual portraits, and BytePlus overseas-service statements. Recheck docs/console for implementation. | Not an API contract, price table, or entitlement guarantee. |
-| BytePlus pricing pages | BytePlus ModelArk pricing docs: https://docs.byteplus.com/en/docs/ModelArk/1544106 and legacy docs such as https://docs.byteplus.com/en/docs/ModelArk/1099320 | volatile | Recheck live official pages or console before quoting Seedance 2.0 pricing, quotas, or model IDs. BytePlus currently shows a `dreamina-seedance-2.0-mini` pricing row and no 1080p support for that row. | Some pages are JavaScript-rendered in static fetches; do not infer pricing from incomplete static content. |
+| BytePlus pricing pages | BytePlus ModelArk pricing docs: https://docs.byteplus.com/en/docs/ModelArk/1544106 and legacy docs such as https://docs.byteplus.com/en/docs/ModelArk/1099320 | volatile | Recheck live official pages or console before quoting Seedance 2.0 pricing, quotas, or model IDs. The earlier BytePlus snapshot recorded a `dreamina-seedance-2.0-mini` pricing row and no 1080p support for that row. | Some pages are JavaScript-rendered in static fetches; do not infer pricing from incomplete static content. |
 | Prompting guide | Volcengine Seedance 2.0 prompt guide: https://www.volcengine.com/docs/82379/2222480?lang=zh | confirmed | Recheck when adding multimodal reference wording or prompt examples. | Prompting advice is official guidance, not a guarantee that every surface exposes every control. |
 | First/last frame workflow | Volcengine tutorial and ComfyUI partner docs: https://www.volcengine.com/docs/82379/2298881?lang=zh and https://docs.comfy.org/zh/tutorials/partner-nodes/bytedance/seedance-2-0 | volatile | Volcengine documents first/last-frame roles; ComfyUI uses FLF2V workflow vocabulary. Recheck active surface before using exact fields. | The `FLF2V` label is surface-specific, but first/last-frame capability is documented on Volcengine. |
 | Face, portrait, and voice behavior | Active product surface, official policy, and user authorization | volatile | Recheck current surface behavior and authorization context. | Do not infer consent from a file upload. |
