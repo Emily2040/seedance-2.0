@@ -1,0 +1,145 @@
+{
+  "date": "2026-09-07",
+  "os": "Windows-11-10.0.26340-SP0",
+  "python": "3.13.15",
+  "host_versions": {
+    "claude": "2.1.263 (Claude Code)",
+    "codex": "codex-cli 0.153.4"
+  },
+  "runtime_stages": {
+    "discovery": {
+      "codex": "passed_exact_project_path",
+      "claude": "not_run",
+      "codex_automatic_selection": "not_run"
+    },
+    "short_prompt": "not_run",
+    "continuation": "not_run"
+  },
+  "observations": [
+    {
+      "client": "Codex",
+      "relative_target": ".agents/skills",
+      "stages": [
+        {
+          "operation": "fresh_install",
+          "source_commit": "bc21ada751f7ba92715957a7b5321a5c8b4160b8",
+          "installer_exit": 0,
+          "doctor": {
+            "changed": [],
+            "checked_files": 190,
+            "format_version": 1,
+            "installed_commit": null,
+            "installed_version": "6.7.0",
+            "managed": true,
+            "missing": [],
+            "modified_since_install": [],
+            "newline_only": [],
+            "next_step": "No replacement is needed for the checked payload.",
+            "recorded_paths_not_checked": 0,
+            "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
+            "source_contract_sha256": "73c9fa6d0844178618e0aa3be83d56d15b167aae0172bd7f07c47abccbc4623c",
+            "source_version": "6.7.0",
+            "status": "current"
+          },
+          "forbidden_entries_present": []
+        },
+        {
+          "operation": "managed_revision_replacement",
+          "source_commit": "43130e829cc9b1958950a1442aa1f946c07f8c62",
+          "installer_exit": 0,
+          "doctor": {
+            "changed": [],
+            "checked_files": 190,
+            "format_version": 1,
+            "installed_commit": null,
+            "installed_version": "6.7.0",
+            "managed": true,
+            "missing": [],
+            "modified_since_install": [],
+            "newline_only": [],
+            "next_step": "No replacement is needed for the checked payload.",
+            "recorded_paths_not_checked": 0,
+            "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
+            "source_contract_sha256": "31378ee1154accf929973482848802e204a5f273c3dfe7bd189aa8ad4267c6d3",
+            "source_version": "6.7.0",
+            "status": "current"
+          },
+          "forbidden_entries_present": []
+        }
+      ]
+    },
+    {
+      "client": "Claude Code",
+      "relative_target": ".claude/skills",
+      "stages": [
+        {
+          "operation": "fresh_install",
+          "source_commit": "bc21ada751f7ba92715957a7b5321a5c8b4160b8",
+          "installer_exit": 0,
+          "doctor": {
+            "changed": [],
+            "checked_files": 190,
+            "format_version": 1,
+            "installed_commit": null,
+            "installed_version": "6.7.0",
+            "managed": true,
+            "missing": [],
+            "modified_since_install": [],
+            "newline_only": [],
+            "next_step": "No replacement is needed for the checked payload.",
+            "recorded_paths_not_checked": 0,
+            "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
+            "source_contract_sha256": "73c9fa6d0844178618e0aa3be83d56d15b167aae0172bd7f07c47abccbc4623c",
+            "source_version": "6.7.0",
+            "status": "current"
+          },
+          "forbidden_entries_present": []
+        },
+        {
+          "operation": "managed_revision_replacement",
+          "source_commit": "43130e829cc9b1958950a1442aa1f946c07f8c62",
+          "installer_exit": 0,
+          "doctor": {
+            "changed": [],
+            "checked_files": 190,
+            "format_version": 1,
+            "installed_commit": null,
+            "installed_version": "6.7.0",
+            "managed": true,
+            "missing": [],
+            "modified_since_install": [],
+            "newline_only": [],
+            "next_step": "No replacement is needed for the checked payload.",
+            "recorded_paths_not_checked": 0,
+            "scope": "Only current source-declared paths and the completion marker are read; extra files are not scanned.",
+            "source_contract_sha256": "31378ee1154accf929973482848802e204a5f273c3dfe7bd189aa8ad4267c6d3",
+            "source_version": "6.7.0",
+            "status": "current"
+          },
+          "forbidden_entries_present": []
+        }
+      ]
+    }
+  ],
+  "codex_discovery": {
+    "date": "2026-09-07",
+    "client_version": "codex-cli 0.153.4",
+    "method": "skills/list",
+    "forceReload": true,
+    "expected_relative_path": ".agents/skills/seedance-20/SKILL.md",
+    "matching_project_entries": 1,
+    "same_name_entries": 2,
+    "matching_source_errors": 0,
+    "project_skill_sha256": "e1710cbecd5039fbe549a622590f0aff6a2abadf4b08872993116368ee0474fd",
+    "entry_flags": [
+      {
+        "name": "seedance-20",
+        "scope": "repo",
+        "enabled": true
+      }
+    ],
+    "thread_created": false,
+    "model_turn_started": false,
+    "source_commit": "43130e829cc9b1958950a1442aa1f946c07f8c62"
+  }
+}
