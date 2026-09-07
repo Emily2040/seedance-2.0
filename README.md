@@ -24,11 +24,13 @@ After installation, tell your agent what happens and what must stay fixed:
 One possible draft:
 
 ```text
-Locked tabletop shot. Two hands finish
-the last fold of a paper fan and let go.
-The fan settles on the wood. Hold still
-for one beat. Warm desk-lamp light;
-dry paper rustle and room tone. No music.
+Locked tabletop shot. Two hands
+finish the last fold of a paper
+fan and let go. The fan settles
+on the wood. Hold still for one
+beat. Warm desk-lamp light;
+dry paper rustle and room tone.
+No music.
 ```
 
 **Why these choices:** one visible action, a clear endpoint, a fixed camera and
