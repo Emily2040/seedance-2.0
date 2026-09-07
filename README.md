@@ -56,6 +56,8 @@ Completed records belong in the CI-validated evidence artifact; it is currently 
 
 New here? Each language also has a 5-minute quickstart: [English](docs/QUICKSTART.md) · [中文](docs/QUICKSTART.zh.md) · [日本語](docs/QUICKSTART.ja.md) · [한국어](docs/QUICKSTART.ko.md) · [Español](docs/QUICKSTART.es.md) · [Русский](docs/QUICKSTART.ru.md).
 
+See the [six-language coverage contract](docs/LANGUAGE_COVERAGE.md) for available pages, missing full READMEs, shared concept IDs and source-drift status. Availability does not establish translation parity, native review or rendered-language quality.
+
 For longer stories in any language, start with [`seedance-sequence`](skills/seedance-sequence/SKILL.md). For the next part of an accepted clip, use [`seedance-continuation`](skills/seedance-continuation/SKILL.md) and update the observed final state before writing the next prompt.
 
 ## Why this repository exists
