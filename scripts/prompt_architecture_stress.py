@@ -169,7 +169,7 @@ BOUNDARY = (
     "Boundary: this deterministic gate catches structural, brief-relevance, "
     "explicit contradiction, and repetition failures. It does not judge "
     "creativity or originality; comparative creative quality still requires "
-    "blinded model evaluation and native-language human review. "
+    "blinded model evaluation and native-language human review.\n"
     "The slop_free dimension is a legacy lexical proxy: matches and their "
     "position do not establish useless wording or model token importance. "
     "Lexical flags are advisory and excluded from the v2 gate; "
