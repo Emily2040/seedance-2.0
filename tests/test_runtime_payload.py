@@ -274,7 +274,7 @@ class RuntimePayloadContractTests(unittest.TestCase):
         self.assertTrue((ROOT / "assets" / "hero-command-center.png").is_file())
         self.assertIn(
             "assets/hero-command-center.png",
-            (ROOT / "README.md").read_text(encoding="utf-8"),
+            (ROOT / "docs/visual-archive.md").read_text(encoding="utf-8"),
         )
         with tempfile.TemporaryDirectory() as tmp:
             payload = self.install(Path(tmp))

@@ -51,8 +51,8 @@ def png_dimensions(path: Path) -> tuple[int, int] | None:
     return struct.unpack(">II", header[16:24])
 
 
-# Transitional ceiling for the existing gallery. Lower with the README refactor.
-MAX_README_ASSET_BYTES = 24 * 1024 * 1024
+# Front-page ceiling includes both theme mastheads and one teaching image.
+MAX_README_ASSET_BYTES = 4 * 1024 * 1024
 MAX_ASSET_BYTES = 5 * 1024 * 1024
 LANGUAGE_PATHS = ("docs/QUICKSTART.md", "docs/QUICKSTART.zh.md", "docs/QUICKSTART.ja.md",
                   "docs/QUICKSTART.ko.md", "docs/QUICKSTART.es.md", "docs/QUICKSTART.ru.md")
