@@ -17,6 +17,7 @@ assets/skill-map.svg
 data/community-patterns.seedance-2026-05-30.json
 data/generation-runs.example.jsonl
 data/sources.seedance-2026-05-30.json
+docs/LANGUAGE_COVERAGE.md
 docs/QUICKSTART.es.md
 docs/QUICKSTART.ja.md
 docs/QUICKSTART.ko.md
