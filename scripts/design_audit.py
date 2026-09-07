@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import re
 import struct
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import unquote, urlsplit
@@ -66,9 +67,14 @@ def prose_only(text: str) -> str:
         marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
         if marker:
             token = marker.group(1)
+            suffix = line[marker.end():]
             if fence is None:
+                if token[0] == "`" and "`" in suffix:
+                    lines.append(line)
+                    continue
                 fence = token
-            elif token[0] == fence[0] and len(token) >= len(fence):
+            elif (token[0] == fence[0] and len(token) >= len(fence)
+                  and not suffix.strip(" \t")):
                 fence = None
             continue
         if fence is None:
@@ -95,6 +101,7 @@ class MediaParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.images, self.links, self.errors = [], [], []
+        self.named_links, self.anchor_stack = [], []
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -105,10 +112,53 @@ class MediaParser(HTMLParser):
                 self.errors.append("README image needs a source")
             else:
                 self.images.append(attrs["src"])
+                if self.anchor_stack:
+                    self.anchor_stack[-1][1].append(attrs.get("alt") or "")
         if tag in {"source", "img"} and attrs.get("srcset"):
             self.images.extend(part.strip().split()[0] for part in attrs["srcset"].split(",") if part.strip())
         if tag == "a" and attrs.get("href"):
             self.links.append(attrs["href"])
+            self.anchor_stack.append((attrs["href"], []))
+
+    def handle_data(self, data):
+        if self.anchor_stack:
+            self.anchor_stack[-1][1].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor_stack:
+            target, parts = self.anchor_stack.pop()
+            if "".join(parts).strip():
+                self.named_links.append(target)
+
+
+def svg_findings(rel: str, svg: str) -> list[str]:
+    """Structural/accessibility checks for every embedded SVG, not pixel QA."""
+    errors = []
+    if re.search(r"<!DOCTYPE|<!ENTITY|<\?xml-stylesheet", svg, re.I):
+        return [f"{rel} must not declare entities or external stylesheets"]
+    try:
+        tree = ET.fromstring(svg)
+    except ET.ParseError:
+        return [f"{rel} is not valid SVG XML"]
+    local = lambda name: name.rsplit("}", 1)[-1]
+    if local(tree.tag) != "svg":
+        errors.append(f"{rel} is not an SVG")
+    for required in ("title", "desc"):
+        if not any(local(e.tag) == required and "".join(e.itertext()).strip() for e in tree.iter()):
+            errors.append(f"{rel} missing accessible {required}")
+    for element in tree.iter():
+        if local(element.tag).lower() in {"script", "foreignobject"}:
+            errors.append(f"{rel} must not include scripts or foreign content")
+        for key, value in element.attrib.items():
+            name = local(key).lower()
+            if name.startswith("on") or (name in {"href", "src"} and not value.strip().startswith("#")):
+                errors.append(f"{rel} must not include scripts or external resources")
+    if re.search(r"@import\b", svg, re.I):
+        errors.append(f"{rel} must not import stylesheets")
+    for value in re.findall(r"url\s*\(([^)]*)\)", svg, re.I):
+        if not value.strip().strip("\"'").startswith("#"):
+            errors.append(f"{rel} must not include external CSS resources")
+    return errors
 
 
 def readme_findings(root: Path, text: str, *, budget: int = MAX_README_ASSET_BYTES) -> list[str]:
@@ -120,6 +170,7 @@ def readme_findings(root: Path, text: str, *, budget: int = MAX_README_ASSET_BYT
     errors.extend(parser.errors)
     images.extend(parser.images)
     links.extend(parser.links)
+    named_links = list(parser.named_links)
     for match in re.finditer(r'(!?)\[([^\]\n]*)\]\(([^)\n]+)\)', prose):
         image, label, destination = match.groups()
         destination = destination.strip().strip("<>")
@@ -129,8 +180,10 @@ def readme_findings(root: Path, text: str, *, budget: int = MAX_README_ASSET_BYT
             images.append(destination)
         else:
             links.append(destination)
+            if re.sub(r"<[^>]+>|[*_`~]", "", label).strip():
+                named_links.append(destination)
     for required in LANGUAGE_PATHS:
-        if required not in links:
+        if required not in named_links:
             errors.append(f"README needs the {required} language entry link")
     for section in ("install", "start-here"):
         if section not in anchors(prose):
@@ -166,7 +219,9 @@ def readme_findings(root: Path, text: str, *, budget: int = MAX_README_ASSET_BYT
                 size = png_dimensions(path)
                 if size is None or not all(0 < value <= 8192 for value in size):
                     errors.append(f"README PNG header/dimensions invalid: {relative}")
-            elif path.suffix.lower() != ".svg":
+            elif path.suffix.lower() == ".svg":
+                errors.extend(svg_findings(relative, read_repo_text(root, path)))
+            else:
                 errors.append(f"README asset type is not supported: {relative}")
         if parsed.fragment and path.suffix.lower() == ".md":
             source = text if not relative or relative == "README.md" else read_repo_text(root, path)
@@ -196,12 +251,7 @@ def main() -> int:
             errors.append(f"missing asset: {rel}")
             continue
         svg = path.read_text(encoding="utf-8", errors="ignore")
-        if "<svg" not in svg:
-            errors.append(f"{rel} is not an SVG")
-        if "<title>" not in svg or "<desc>" not in svg:
-            errors.append(f"{rel} missing accessible title/desc")
-        if re.search(r"<script|href=[\"\']https?://|xlink:href=[\"\']https?://", svg, re.I):
-            errors.append(f"{rel} must not include scripts or external resources")
+        errors.extend(svg_findings(rel, svg))
         if "linearGradient" in svg or "feGaussianBlur" in svg:
             errors.append(f"{rel} must follow the editorial standard: no gradients or blur filters")
         # Display type is outlined, so there is no serif stack left to look for
