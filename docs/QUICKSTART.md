@@ -9,75 +9,48 @@ Seedance 2.0 Skill OS helps turn a scene idea into a prompt with visible actions
 
 **Review status:** these are unrendered teaching examples, not measured quality or credit-saving results. Language and rendered review remain pending in the [coverage record](LANGUAGE_COVERAGE.md).
 
-## 1. Install (about 5 minutes)
+## 1. Install one root skill
 
-Install this repository as **one** root skill named `seedance-20`; its sub-skills and references load by relative path.
+Download and unzip the repository, or run:
 
-**First, get the files.** Every command below runs from inside a local copy:
-
-```bash
+```sh
 git clone https://github.com/Emily2040/seedance-2.0.git
 cd seedance-2.0
 ```
 
-No `git`? Use **Code → Download ZIP** on the repository page, unzip, and `cd` into the folder.
+From that folder, choose **one** destination. Each receives one `seedance-20/` folder; do not install the sub-skills separately.
 
-**Then install it.** One command works for any client that reads a skills directory — `--dest` picks which one:
+```sh
+# Codex: available to your user
+python scripts/install_codex_skill.py --client codex --scope user
 
-```bash
-# Codex (default: ~/.codex/skills)
-python scripts/install_codex_skill.py
+# Claude Code: available to your user
+python scripts/install_codex_skill.py --client claude-code --scope user
 
-# Claude Code (personal install, every project)
-python scripts/install_codex_skill.py --dest ~/.claude/skills
-
-# Install into another project — run from that project
-python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+# Codex: one existing project outside this source checkout
+python scripts/install_codex_skill.py --client codex --scope project --project-root "/path/to/project"
 ```
 
-It prints where the skill landed. Restart your client, then call `seedance-20`.
-Installs are staged and validated, and concurrent installers sharing one
-destination are serialized. Add `--force` only when replacing a complete
-existing install. Automatic retry applies only when every authority record
-required by the phase reached exists and validates: an exact empty stage before
-provenance; after complete provenance, exact final payload files plus the one
-transaction-derived in-progress copy sibling; exact torn prefixes of expected
-stage markers; and externally journaled deletion workspaces can be recovered.
-Payload bytes are synced and digest-checked under that sibling name before an
-atomic rename, so an expected final stage pathname is absent or complete, never
-partially written. The copy-sibling basename is capped at 34 ASCII bytes and
-shortens further on POSIX when the stage reports a smaller component limit; a
-shortened transaction/path digest is accepted only when it is unique within the
-authenticated payload namespace. This is a bound on copy siblings, not a claim
-that the installer's longer stage and authority names fit unusually small
-component limits. The exact empty
-terminal workspace left after journal removal is also recoverable. A truncated
-expected final file, an unbound temp-like file, malformed or swapped records,
-unexpected bytes, an unmarked
-quarantine, and a nonempty unjournaled deletion workspace are preserved fail
-closed. Windows handles exclude writable/deletion sharing through the consuming
-action. On POSIX, a mode-`0700` workspace excludes other OS accounts, but
-advisory `flock` and owner permissions cannot exclude a hostile same-account
-process from existing or new writable opens or namespace mutation. See the
-[README install notes](../README.md#install)
-for the full recovery boundary. The previous complete copy is retained for
-rollback until promotion succeeds.
-On POSIX, authority files and transaction namespace changes are directory-
-`fsync`ed. Each payload file is `fsync`ed before its atomic rename and its stage
-directory is `fsync`ed afterward. The supplied skills-directory ancestry is
-assumed durable rather than recursively flushed.
-A destination inside this repository is refused, since copying the tree into
-itself would recurse until the path length fails.
+Replace `/path/to/project` with an existing project outside this source checkout; keep paths with spaces in quotes. These commands run from the source folder.
 
-**Install from GitHub (if your client supports repo-URL install):**
+For another client or a customized profile, use `--dest /path/to/client/skills`. Do not combine it with client/scope options. With no destination options, the historical `$CODEX_HOME/skills` or `~/.codex/skills` path remains in use; an explicit user scope does not move or disable older copies.
 
-```text
-https://github.com/Emily2040/seedance-2.0
+Check **the same destination** with the doctor. After the first option, for example:
+
+```sh
+python scripts/install_doctor.py --client codex --scope user --json
 ```
 
-**Manual copy (any other client):** copy this folder into your client's skills directory, keeping the name `seedance-20`. Common targets — verify in your own client, these are not a support guarantee — are in the [Install table of the README](../README.md#install): e.g. Claude Code `.claude/skills/`, Cursor `.cursor/skills/`, GitHub Copilot `.github/skills/`, Windsurf `.windsurf/skills/`.
+`current` means the checked payload matches this source checkout. Restart or refresh the client and verify the discovered skill path separately; the doctor does not prove which copy your client loads. Before intentional replacement with `--force`, preserve local edits and a separate backup. [Destination options](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_SCOPES.md) · [Migration and duplicates](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_MIGRATION.md).
 
-> Security first: only install into agent clients you trust. Read [SECURITY.md](../SECURITY.md) before using this skill inside a third-party or unfamiliar agent.
+For manual transfer, run the installer with `--dest /path/to/new-staging/skills` in a new location outside this checkout. Copy **only the resulting `seedance-20/` directory**, preserving hidden files and the completion record. A direct GitHub import may package different files; inspect what the client imports. Do not assume it applies this installer’s allowlist. [Manual transfer instructions](https://github.com/Emily2040/seedance-2.0/blob/main/docs/MANUAL_INSTALL.md).
+
+<details>
+<summary>Replacement and recovery details</summary>
+
+The transaction keeps a temporary backup during promotion. If promotion fails and the required records remain valid, it restores the previous complete copy. After successful promotion, that backup is quarantined and deleted. It is not your retained personal backup. Automatic recovery is limited to authenticated transaction states; unknown or invalid files and records are preserved for review. See the [full recovery boundary](../README.md#install).
+
+</details>
 
 ## 2. Pick the skill for your situation
 

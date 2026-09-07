@@ -9,45 +9,50 @@ Seedance 2.0 Skill OS は、シーンのアイデアを、目に見える動作�
 
 **レビュー状況：**作例は動画を未生成の案です。品質向上やクレジット節約の測定結果ではありません。言語レビューと生成結果のレビューは、[対応状況の記録](LANGUAGE_COVERAGE.md)でも未完了です。今回の日本語修正は AI を使った草稿で、独立した言語レビューは受けていません。
 
-## 1. インストール（約 5 分）
+## 1. ルートスキルをひとつインストールする
 
-このリポジトリを `seedance-20` という**ひとつの**ルートスキルとして入れます。サブスキルと references は相対パスで自動的に読み込まれます。
+リポジトリをダウンロードして展開するか、次を実行します。
 
-**まずファイルを取得します。** 以下のコマンドはすべてローカルコピーの中で実行します:
-
-```bash
+```sh
 git clone https://github.com/Emily2040/seedance-2.0.git
 cd seedance-2.0
 ```
 
-`git` がなければリポジトリページの **Code → Download ZIP** を使い、展開してそのフォルダに `cd` してください。
+そのフォルダで、インストール先を**ひとつ**選びます。各インストール先に `seedance-20/` フォルダが作られます。サブスキルを個別にインストールする必要はありません。
 
-**次にインストールします。** このインストーラーは Codex 専用ではありません。`--dest` でクライアントが読む skills ディレクトリを指定します:
+```sh
+# Codex：現在のユーザーで利用
+python scripts/install_codex_skill.py --client codex --scope user
 
-```bash
-# Codex（既定は ~/.codex/skills）
-python scripts/install_codex_skill.py
+# Claude Code：現在のユーザーで利用
+python scripts/install_codex_skill.py --client claude-code --scope user
 
-# Claude Code（個人インストール、全プロジェクトで利用可）
-python scripts/install_codex_skill.py --dest ~/.claude/skills
-
-# 別のプロジェクトへインストール（そのプロジェクトで実行）
-python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+# Codex：既存のひとつのプロジェクトで利用。ソースの外にあるプロジェクトを指定
+python scripts/install_codex_skill.py --client codex --scope project --project-root "/path/to/project"
 ```
 
-インストール先が表示されます。クライアントを再起動して `seedance-20` を呼び出してください。`--force` は完全な既存インストールを置き換えるときだけ付けます。不完全な管理対象インストールは自動修復されます。新しいコピーは切り替え前にステージングされ、検証されます。切り替え中は従来の完全なコピーをトランザクションに紐づくバックアップとして保持し、失敗すれば元に戻します。切り替えが成功した後にだけ、そのバックアップを隔離して安全に削除します。このリポジトリ内部を指す `--dest` は拒否されます。ソースツリーを自分自身へコピーすると、パス長の上限に達するまで再帰してしまうためです。
+`/path/to/project` は、ソースの外にある既存プロジェクトのパスに置き換えます。空白を含むパスは引用符で囲んでください。コマンドはソースのフォルダから実行します。
 
-**GitHub から入れる（リポジトリ URL 指定に対応したクライアントの場合）**
+本節の日本語修正は AI を使った草稿で、独立した言語レビューは未完了です。[レビュー状況](LANGUAGE_COVERAGE.md)。
 
-```text
-https://github.com/Emily2040/seedance-2.0
+別のクライアントや独自の設定では、`--dest /path/to/client/skills` でスキルの親ディレクトリを指定します。クライアント・スコープのオプションとは併用しないでください。インストール先のオプションを省略すると、従来の `$CODEX_HOME/skills` または `~/.codex/skills` が使われます。ユーザースコープを明示しても、古いコピーは移動・無効化されません。
+
+doctor でも**同じインストール先**を指定して確認します。たとえば、最初の選択肢を使った場合：
+
+```sh
+python scripts/install_doctor.py --client codex --scope user --json
 ```
 
-**手動でコピー（そのほかのクライアント）**
+`current` は、確認したインストール済みファイルがこのソースと一致することを示します。クライアントを再起動または更新し、認識されたスキルのパスを別途確認してください。doctor は、クライアントがどのコピーを読み込むかまでは確認しません。`--force` は意図的な置き換えにのみ使い、先にローカルの変更と独立したバックアップを保存してください。 [インストール先の選択肢](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_SCOPES.md) · [移行と重複の確認](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_MIGRATION.md).
 
-フォルダを、名前を `seedance-20` のままクライアントのスキルディレクトリへコピーします。よくある置き場所は [README のインストール表](../README.md#install) にまとめてあります（保証ではありません。必ずお使いのクライアントでご確認ください）。例：Claude Code `.claude/skills/`、Cursor `.cursor/skills/`、GitHub Copilot `.github/skills/`、Windsurf `.windsurf/skills/`。
+手動で転送する場合は、インストーラーの `--dest /path/to/new-staging/skills` を使い、ソースの外にある新しい場所でファイルを準備します。**生成された `seedance-20/` ディレクトリだけ**を、隠しファイルと完了記録を含めてコピーしてください。GitHub から直接取り込む場合、クライアントが別のファイルを含めることがあります。取り込む内容を確認し、このインストーラーの許可リストが適用されるとは想定しないでください。 [手動転送の手順](https://github.com/Emily2040/seedance-2.0/blob/main/docs/MANUAL_INSTALL.md).
 
-> まずは安全から。信頼できる agent クライアントにだけ入れてください。第三者製や素性のわからない agent で使う前に、[SECURITY.md](../SECURITY.md) に必ず目を通してください。
+<details>
+<summary>置き換えと復旧の詳細</summary>
+
+切り替え中は、トランザクション用の一時バックアップを保持します。切り替えに失敗し、必要な記録が有効な場合は、以前の完全なコピーを元に戻します。切り替えが成功すると、一時バックアップを隔離して削除します。これは個別に保存するバックアップの代わりにはなりません。自動復旧は検証できるトランザクション状態に限られます。検証できないファイルや記録は削除せず、確認のために残します。[復旧の詳しい条件](../README.md#install)を参照してください。
+
+</details>
 
 ## 2. 目的に合わせてスキルを選ぶ
 

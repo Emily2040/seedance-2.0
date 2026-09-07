@@ -9,45 +9,50 @@ Seedance 2.0 Skill OS 帮你把场景想法整理成包含可见动作、镜头�
 
 **审核状态：**这些示例尚未生成视频，不代表已测得的质量提升或积分节省。语言审核和生成结果审核仍为待完成，详见[覆盖记录](LANGUAGE_COVERAGE.md)。本次中文修订由 AI 辅助起草，尚未经过独立语言审核。
 
-## 1. 安装（约 5 分钟）
+## 1. 安装一个根技能
 
-把整个仓库当作**一个**名为 `seedance-20` 的根技能来装；子技能和参考资料会按相对路径自动加载。
+下载并解压仓库，或运行：
 
-**第一步：先把文件拿到本地。** 下面每条命令都要在仓库目录里运行：
-
-```bash
+```sh
 git clone https://github.com/Emily2040/seedance-2.0.git
 cd seedance-2.0
 ```
 
-没装 `git` 就用仓库页面的 **Code → Download ZIP**，解压后 `cd` 进去。
+在这个目录中，选择**一个**安装位置。每个位置都会得到一个 `seedance-20/` 文件夹；不要分别安装子技能。
 
-**第二步：安装。** 这个脚本不只支持 Codex；用 `--dest` 指定你的客户端扫描的 skills 目录即可：
+```sh
+# Codex：当前用户可用
+python scripts/install_codex_skill.py --client codex --scope user
 
-```bash
-# Codex（默认 ~/.codex/skills）
-python scripts/install_codex_skill.py
+# Claude Code：当前用户可用
+python scripts/install_codex_skill.py --client claude-code --scope user
 
-# Claude Code（个人安装，所有项目可用）
-python scripts/install_codex_skill.py --dest ~/.claude/skills
-
-# 装到另一个项目里——请在那个项目目录下运行
-python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+# Codex：仅用于一个已存在的项目，项目必须位于本源码目录之外
+python scripts/install_codex_skill.py --client codex --scope project --project-root "/path/to/project"
 ```
 
-脚本会打印安装位置。重启客户端后调用 `seedance-20`。只有在替换一份完整的现有安装时才加 `--force`；不完整的受管安装会自动修复。新副本会先在暂存区完成复制和校验。切换时，旧的完整副本会作为与本次事务绑定的备份保留；若切换失败，安装器会将它回滚到原位。只有新副本成功切换为正式安装后，旧备份才会被移入隔离区并安全删除。目标目录若在本仓库内部会被直接拒绝：把源码树复制进它自己会一路递归，直到路径过长而失败。
+将 `/path/to/project` 换成源码目录之外已存在的项目路径；含空格的路径要保留引号。这些命令在源码目录中运行。
 
-**从 GitHub 安装（客户端支持仓库地址时）**
+本节中文修订由 AI 辅助起草，独立语言审核仍待完成：[审核状态](LANGUAGE_COVERAGE.md)。
 
-```text
-https://github.com/Emily2040/seedance-2.0
+其它客户端或自定义配置可用 `--dest /path/to/client/skills` 指定技能目录。不要将它与客户端、作用域选项混用。不传安装位置选项时，仍使用历史位置 `$CODEX_HOME/skills` 或 `~/.codex/skills`；显式选择用户作用域不会迁移或禁用旧副本。
+
+用 doctor 检查**同一个安装位置**。例如，选择第一项后运行：
+
+```sh
+python scripts/install_doctor.py --client codex --scope user --json
 ```
 
-**手动复制（其它客户端）**
+`current` 表示已检查的安装文件与这份源码一致。重启或刷新客户端后，另行核对它发现的技能路径；doctor 不能证明客户端加载了哪个副本。只有明确要替换现有安装时才使用 `--force`，并先保存本地修改和一份独立备份。 [安装位置选项](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_SCOPES.md) · [迁移与重复安装](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_MIGRATION.md).
 
-把整个文件夹复制进客户端的技能目录，名字保持 `seedance-20`。常见位置见 [README 安装表](../README.md#install)（请以自己客户端为准，并非通用保证）：如 Claude Code `.claude/skills/`、Cursor `.cursor/skills/`、GitHub Copilot `.github/skills/`、Windsurf `.windsurf/skills/`。
+需要手动传输时，先用安装器的 `--dest /path/to/new-staging/skills` 在源码目录之外的新位置准备文件。**只复制生成的 `seedance-20/` 目录**，保留隐藏文件和安装完成记录。直接从 GitHub 导入时，客户端可能打包不同的文件；请核对导入内容，不要假定它采用了本安装器的允许清单。 [手动传输说明](https://github.com/Emily2040/seedance-2.0/blob/main/docs/MANUAL_INSTALL.md).
 
-> 安全第一：只装进你信得过的 agent。在陌生或第三方 agent 里使用前，先读一遍 [SECURITY.md](../SECURITY.md)。
+<details>
+<summary>替换与恢复细节</summary>
+
+切换期间，事务会保留临时备份。如果切换失败且所需记录仍然有效，安装器会将原来的完整副本回滚到原位。切换成功后，临时备份会移入隔离区并删除；它不能替代你单独保留的备份。自动恢复仅适用于通过验证的事务状态；无法验证的文件和记录会保留，等待检查。详见[完整恢复边界](../README.md#install)。
+
+</details>
 
 ## 2. 对号入座，挑一个技能
 
