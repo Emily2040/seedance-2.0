@@ -89,7 +89,7 @@ The 2026-08-05 audit closed four concrete gaps in the current v6.7.0 tree:
 
 | Boundary | Current behavior |
 |---|---|
-| Frame extraction | `extract_last_frame.py` probes the selected FFmpeg binary once, prefers `-fps_mode passthrough`, and falls back to legacy `-vsync 0`. The real-frame path was verified with FFmpeg 8.1.1 and 9.0. |
+| Frame extraction | `extract_last_frame.py` shares a 120-second FFmpeg budget across probe/decode/verify/encode; use `--timeout-seconds` to choose another positive limit. It bounds pipe output, retains 800 diagnostic bytes and restricts input protocols to file/pipe. Timeout cleanup may add up to 10 seconds; this is not a filesystem sandbox. Current `-fps_mode passthrough` and legacy `-vsync 0` remain supported. |
 | Copyable prompts | Generic reference-package examples use canonical `@Video1` and `@Image1` when the repository authors the tag; user- or interface-supplied spellings such as `[Video 1]` and `@Image 1` remain byte-preserved. Continuations begin from accepted footage's observed end state, and showcase prompts carry brief-specific behavior, props, timing, sound, and endpoints. |
 | Evaluator ledgers | A new ledger is published from a retained file descriptor or handle relative to a retained directory descriptor or handle. Late destination claimants and namespace substitutes remain untouched; unsupported safe-publication paths fail closed. |
 | Windows release tooling | Runner trust follows the exact venv launcher CPython installs across 3.11–3.13, including the 3.13 launcher variants. The Windows CI matrix exercises all three supported versions. |

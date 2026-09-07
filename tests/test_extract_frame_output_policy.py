@@ -2525,7 +2525,7 @@ class OutputEncodingTests(unittest.TestCase):
             args=[], returncode=0, stdout=b"RIFFxxxxWEBP", stderr=b""
         )
         with mock.patch.object(
-            extractor.subprocess, "run", return_value=completed
+            extractor, "_run_bounded", return_value=completed
         ) as run:
             encoded = extractor._encode_frame_for_output(
                 "ffmpeg", b"PNG_FRAME", Path("frame.webp")
@@ -2978,7 +2978,7 @@ class PngStreamTests(unittest.TestCase):
         )
         extractor._frame_sync_options.cache_clear()
         try:
-            with mock.patch.object(extractor.subprocess, "run", return_value=completed) as run:
+            with mock.patch.object(extractor, "_run_bounded", return_value=completed) as run:
                 self.assertEqual(
                     extractor._frame_sync_options("probe-ffmpeg"),
                     ("-fps_mode", "passthrough"),
@@ -2999,7 +2999,7 @@ class PngStreamTests(unittest.TestCase):
         )
         extractor._frame_sync_options.cache_clear()
         try:
-            with mock.patch.object(extractor.subprocess, "run", return_value=completed):
+            with mock.patch.object(extractor, "_run_bounded", return_value=completed):
                 self.assertEqual(
                     extractor._frame_sync_options("legacy-probe-ffmpeg"),
                     ("-vsync", "0"),
