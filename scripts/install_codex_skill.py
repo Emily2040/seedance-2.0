@@ -3069,7 +3069,8 @@ def declared_payload_manifest(
     }
 
 
-def _completion_record(destination: Path) -> tuple[dict[str, object], bytes]:
+def _completion_metadata(destination: Path) -> tuple[dict[str, object], bytes]:
+    """Validate marker metadata only; this does not validate installed bytes."""
     record, raw = _read_json_record(destination / COMPLETION_MARKER)
     expected_keys = {
         "contract_sha256",
@@ -3116,6 +3117,19 @@ def _completion_record(destination: Path) -> tuple[dict[str, object], bytes]:
         raise ValueError("completion marker contract digest is invalid")
     if contract_digest != _contract_sha256(manifest_digest, declared, files):
         raise ValueError("completion marker contract digest does not match")
+
+    if files[PAYLOAD_MANIFEST.as_posix()]["sha256"] != manifest_digest:
+        raise ValueError("installed payload manifest metadata does not match marker")
+    record["files"] = files
+    return record, raw
+
+
+def _completion_record(destination: Path) -> tuple[dict[str, object], bytes]:
+    """Validate the marker and bind it to the installed payload allowlist."""
+    record, raw = _completion_metadata(destination)
+    files = record["files"]
+    declared = tuple(record["declared_paths"])
+    manifest_digest = record["payload_manifest_sha256"]
 
     manifest_snapshot, manifest_bytes = _read_stable_regular_bytes(
         destination,
@@ -6142,7 +6156,10 @@ def assert_destination_outside_source(destination: Path, repo_root: Path) -> Non
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Install this repository as a local Codex skill.")
+    parser = argparse.ArgumentParser(
+        description="Install this repository as a local Codex skill.",
+        epilog="For read-only diagnosis, run python scripts/install_doctor.py from a source checkout; see docs/INSTALL_DOCTOR.md.",
+    )
     parser.add_argument(
         "--dest",
         type=Path,
