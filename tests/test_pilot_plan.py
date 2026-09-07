@@ -1,10 +1,30 @@
 from decimal import Decimal
+from pathlib import Path
 import unittest
 
 from scripts.pilot_plan import ARMS, BRIEFS, CANARY, cost_ceiling, schedule
 
 
 class PilotPlanTests(unittest.TestCase):
+    def test_pair_leaders_are_balanced_by_phase_and_take(self):
+        rows = schedule()
+        for phase in ("canary", "remainder"):
+            for take in (1, 2):
+                selected = [r for r in rows if r["phase"] == phase and r["take"] == take]
+                leaders = [selected[i]["arm"] for i in range(0, len(selected), 2)]
+                self.assertEqual(leaders.count("current"), leaders.count("proposed"))
+        for brief, _ in BRIEFS:
+            selected = [r for r in rows if r["brief_id"] == brief]
+            self.assertNotEqual(selected[0]["arm"], selected[2]["arm"])
+
+    def test_primary_denominator_uses_first_takes(self):
+        rows = schedule()
+        for arm in ARMS:
+            self.assertEqual(sum(r["arm"] == arm and r["take"] == 1 for r in rows), 12)
+        protocol = (Path(__file__).resolve().parents[1] / "evals/capped-rendered-pilot.md").read_text(encoding="utf-8")
+        self.assertIn("12 scheduled take-one slots per arm", protocol)
+        self.assertIn("A better second take cannot change", protocol)
+
     def test_complete_schedule_and_canary_are_not_double_counted(self):
         rows = schedule()
         self.assertEqual(len(BRIEFS), 12)

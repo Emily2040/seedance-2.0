@@ -27,10 +27,17 @@ MAX_ATTEMPTS = 48
 def schedule() -> list[dict]:
     """Canary occupies 16 of the 48 slots, never 16 additional slots."""
     ordered = [b for b in BRIEFS if b[0] in CANARY] + [b for b in BRIEFS if b[0] not in CANARY]
-    return [{"slot": f"{brief}-{arm}-{take}", "brief_id": brief, "brief": prompt,
-             "arm": arm, "take": take, "phase": "canary" if brief in CANARY else "remainder",
-             "status": "planned"}
-            for brief, prompt in ordered for take in range(1, TAKES + 1) for arm in ARMS]
+    rows = []
+    for index, (brief, prompt) in enumerate(ordered):
+        for take in range(1, TAKES + 1):
+            # Both take strata and each phase balance which arm leads; each
+            # brief also reverses its leader for the second take.
+            arms = ARMS if (index + take) % 2 else ARMS[::-1]
+            for arm in arms:
+                rows.append({"slot": f"{brief}-{arm}-{take}", "brief_id": brief, "brief": prompt,
+                             "arm": arm, "take": take, "phase": "canary" if brief in CANARY else "remainder",
+                             "status": "planned"})
+    return rows
 
 
 def cost_ceiling(per_attempt: Decimal, budget: Decimal) -> dict:

@@ -43,8 +43,10 @@ Select and freeze those settings and references before either arm writes its
 prompt. Keep external settings outside prompt prose where the surface owns them.
 Within each brief freeze the same inputs across both arms and both takes. Use
 matched seeds when supported, recording that they do not guarantee deterministic
-or equivalent outputs. Alternate arm order using the planned schedule; randomize
-the brief order within each phase and save the order before the first request.
+or equivalent outputs. Preserve the schedule's assigned within-pair arm order:
+each phase and take stratum balances which arm leads, and each brief reverses its
+leader for take two. Randomize whole brief blocks within each phase and save that
+order before the first request; do not sort pairs back into current-first order.
 
 Obtain explicit execution authorization for the provider, 48-attempt maximum,
 account, expiry and all-in credit/currency ceiling. A request to prepare or merge
@@ -85,15 +87,19 @@ reason. Use 0 = unusable, 1 = major repair, 2 = local repair, 3 = usable as is.
 Any rights/authorization failure or wrong observed starting state is a hard fail.
 Quote timecodes and visible/audible evidence for each material judgment.
 
-Predeclare primary outcome: proportion of all 24 scheduled slots per arm that
+Predeclare primary outcome: proportion of the **12 scheduled take-one slots per arm** that
 both reviewers judge usable as is (all applicable dimensions 3 and no hard fail).
-Report technical failures and missing clips in that denominator, separately from
+Count technical failures and missing take-one clips in that denominator, separately from
 quality ratings on rendered clips. Adjudicate disagreement with retained notes;
 show original and adjudicated counts. Report both takes, paired per-brief results,
 all failure statuses, attempt totals, actual charges including failures, and cost
 per accepted take only when charges are complete and accepted count is nonzero.
 If zero accepted, show no finite cost-per-accepted figure. Do not headline a
-best-of-two result as first-attempt quality. Report first-take quality separately.
+best-of-two result as first-attempt quality. Secondary outcomes report take-two
+quality separately and pooled per-render usability over all 24 scheduled slots
+per arm, with explicit denominators. A better second take cannot change the
+primary first-attempt outcome. An interrupted run remains incomplete, regardless
+of any interim proportion.
 
 Keep all results including the stopped canary. Label the schedule `planned`,
 mock tooling data `synthetic`, and real records `observed`; those categories must
