@@ -17,4 +17,6 @@ For an import dialog or transfer to another machine:
 
 Before replacing an existing installation, use the doctor, preserve local edits and keep a separate backup. A manual copy does not provide the installer's transaction recovery or rollback, so use the installer for replacement whenever possible.
 
+Changing locations or seeing duplicate entries? Follow the [installation migration guide](INSTALL_MIGRATION.md) to inspect both destinations, verify the new source in the client, and retain a way back before retiring the old copy.
+
 Direct GitHub installation remains a client-specific packaging route. Review the files it imports; do not assume it applies `validation/install-payload.txt`. The filtered payload excludes the network evaluator and optional provider runners. Keeping the full source checkout separately is useful for maintenance, but it is not the offline installed payload described by [SECURITY.md](../SECURITY.md).
