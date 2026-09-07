@@ -1,8 +1,11 @@
 # Source Registry
 
 last_verified: 2026-09-07
+review_scope: partial
 
 **Scoped review: 2026-09-07.** The date above covers the review below, not a fresh verification of every historical source. Unlisted provider, pricing, client-installation, and policy claims retain their earlier verification dates and require rechecking before use. The older inventory is preserved for traceability.
+
+`review_scope: partial` keeps the scheduled source-review warning active even while the review date is fresh. Mark it `full` only after the remaining inventory has been checked or explicitly retired; passing the metadata-age gate does not complete that work.
 
 ## Claims rechecked on 2026-09-07
 

@@ -198,6 +198,21 @@ def main() -> int:
         verified = checked_in_last_verified(
             text, "source-registry.md", ordering_date, errors
         )
+        scope_fields = [
+            line.partition(":")[2].strip()
+            for line in text.splitlines()
+            if line.startswith("review_scope:")
+        ]
+        if scope_fields:
+            if len(scope_fields) != 1 or scope_fields[0] not in {"full", "partial"}:
+                errors.append("source-registry.md review_scope must be one full or partial field")
+            elif scope_fields[0] == "partial":
+                # Keep the scheduled review issue open even when the date is
+                # fresh: re-reading a subset does not complete the inventory.
+                warnings.append(
+                    "source-registry.md review_scope is partial; unreviewed inventory "
+                    "still needs re-verification regardless of last_verified age"
+                )
         if verified and freshness_date is not None:
             stale_errors, stale_warnings = freshness_findings(
                 verified, freshness_date, True
