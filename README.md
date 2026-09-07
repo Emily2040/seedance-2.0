@@ -604,6 +604,8 @@ happened, so refreshing it is deliberately a human step. A clean metadata-age
 result means only that the recorded review date is recent enough; it is not a
 live source or claim verification.
 
+For a future paid comparison, the [capped rendered pilot](evals/capped-rendered-pilot.md) defines 12 briefs, two arms and two takes, with a 16-attempt canary inside a 48-attempt ceiling. Its schedule is unexecuted; actual assets, settings, pricing and spending authorization must be supplied before a run.
+
 To prove the package is also *good*, run the model-in-the-loop harness. Its
 discovery phase sees the root router and a safe catalog, not the expected route
 labels; the responder receives only the sources it selected, and the judge then
