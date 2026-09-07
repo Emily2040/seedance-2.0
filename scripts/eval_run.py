@@ -98,7 +98,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "7f514f4c2105bf94cd712051f5da2a15a7c69e25fdcb1c8b4f992afa18242530"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "f05725d794e8d34be91ed17cde421e46fc37604207faa64791080eb21a66312a"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -117,6 +117,19 @@ MINIMAX_MODELS = (
 MINIMAX_ANTHROPIC_BASE_URLS = {
     "global_en": "https://api.minimax.io/anthropic",
     "cn_zh": "https://api.minimaxi.com/anthropic",
+}
+ORCAROUTER_API_URL = "https://api.orcarouter.ai/v1/messages"
+# Deliberately limited to the Claude routes in the provider's native Messages
+# documentation (reviewed 2026-09-07); the broader catalog is not a contract
+# that every route implements this response schema. See docs/ORCAROUTER_EVAL.md.
+ORCAROUTER_MODELS = (
+    "anthropic/claude-sonnet-4.6",
+    "anthropic/claude-opus-4.7",
+)
+# Explicit equivalent spellings only. Never infer a version, suffix or route.
+ORCAROUTER_MODEL_ECHOES = {
+    "anthropic/claude-sonnet-4.6": ("claude-sonnet-4.6", "claude-sonnet-4-6"),
+    "anthropic/claude-opus-4.7": ("claude-opus-4.7", "claude-opus-4-7"),
 }
 MAX_SOURCE_FILES = 24
 SOURCE_MANIFEST_PATH = "evals/source-manifest.json"
@@ -252,6 +265,13 @@ PROVIDER_CONFIGS = {
         auth_header="Authorization",
         auth_prefix="Bearer ",
         response_schema="minimax",
+    ),
+    "orcarouter": ProviderConfig(
+        api_key_env="ORCAROUTER_API_KEY",
+        default_model=ORCAROUTER_MODELS[0],
+        endpoints={"global_en": ORCAROUTER_API_URL},
+        models=ORCAROUTER_MODELS,
+        response_schema="orcarouter",
     ),
 }
 REGIONS = tuple(
@@ -1684,7 +1704,7 @@ def _validate_usage(usage: object, provider: ProviderConfig) -> None:
         raise ProviderResponseError("model API response has invalid usage")
     if provider.response_schema == "minimax":
         allowed_fields = USAGE_REQUIRED_TOKEN_FIELDS | USAGE_NULLABLE_TOKEN_FIELDS
-    elif provider.response_schema == "anthropic":
+    elif provider.response_schema in ("anthropic", "orcarouter"):
         allowed_fields = (
             USAGE_REQUIRED_TOKEN_FIELDS
             | USAGE_NULLABLE_TOKEN_FIELDS
@@ -2043,11 +2063,11 @@ def _validate_provider_legacy_fields(
     body: dict,
 ) -> None:
     common = set(REQUIRED_COMPLETION_FIELDS)
-    if provider.response_schema == "anthropic":
+    if provider.response_schema in ("anthropic", "orcarouter"):
         _reject_extra_keys(
             body,
             common | {"stop_sequence", "container", "stop_details"},
-            "Anthropic response",
+            f"{'Anthropic' if provider.response_schema == 'anthropic' else 'OrcaRouter'} response",
         )
         if "base_resp" in body:
             raise ProviderResponseError("Anthropic response contains foreign base_resp")
@@ -2133,6 +2153,19 @@ def _validate_provider_legacy_fields(
         )
 
 
+def _validate_model_echo(provider: ProviderConfig, model: str, body: dict) -> None:
+    """Accept only an exact model or an explicitly reviewed gateway spelling."""
+    if body["model"] == model:
+        return
+    if provider.response_schema == "orcarouter":
+        if body["model"] in ORCAROUTER_MODEL_ECHOES.get(model, ()):
+            return
+    raise ProviderResponseError(
+        "model API response model does not match the requested model: "
+        f"expected {model!r}, got {body['model']!r}"
+    )
+
+
 def _call_api_unredacted(
     system: str,
     user: str,
@@ -2187,11 +2220,7 @@ def _call_api_unredacted(
         raise ProviderResponseError("model API response type must be message")
     if body["role"] != "assistant":
         raise ProviderResponseError("model API response role must be assistant")
-    if body["model"] != model:
-        raise ProviderResponseError(
-            "model API response model does not match the requested model: "
-            f"expected {model!r}, got {body['model']!r}"
-        )
+    _validate_model_echo(provider, model, body)
 
     stop_reason = body["stop_reason"]
     if not isinstance(stop_reason, str) or not stop_reason.strip():

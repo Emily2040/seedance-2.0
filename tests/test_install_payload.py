@@ -1168,7 +1168,7 @@ class InstallPayloadTests(unittest.TestCase):
         self.assertTrue(imported_modules(tree) & NETWORK_MODULES)
         self.assertEqual(
             credential_env_reads(tree),
-            {"ANTHROPIC_API_KEY", "MINIMAX_API_KEY"},
+            {"ANTHROPIC_API_KEY", "MINIMAX_API_KEY", "ORCAROUTER_API_KEY"},
         )
 
     def test_the_skill_itself_is_still_installed(self) -> None:
