@@ -22,6 +22,8 @@ If the surface is unknown, state that the profile is conservative and avoid unsu
 
 Vocabulary tables and templates illustrate wording. Their `@Image1`, `@图片1`, `@Video1` and similar tokens do not attach files or establish that an operation supports those assets or roles.
 
+For translation-only requests, preserve supplied tokens and role instructions without requiring another upload or a new surface choice just to translate prose. Keep unknown attachment status unverified. Check the actual binding before claiming that a draft is ready to submit.
+
 Before adapting a reference example:
 
 - Identify the real asset and its requested role, then check the active operation's binding convention and role support. Match by the agreed role, not by upload order, filename or the example's number.

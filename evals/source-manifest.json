@@ -429,7 +429,7 @@
     {
       "path": "references/surface-prompt-profiles.md",
       "role": "responder",
-      "sha256": "de8795dac22c86a5f94d42540abca85fccfa03c69dc306b178fadd44666e2fdd"
+      "sha256": "6a0067ec6b2f2d9bfc0ebd4f2a809128a4cb7ce857b19f2382c5e1efd836d835"
     },
     {
       "path": "references/sync-budget-protocol.md",
