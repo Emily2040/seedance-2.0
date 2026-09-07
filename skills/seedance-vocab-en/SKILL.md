@@ -33,7 +33,7 @@ Help the user express the intended action, camera, light and sound clearly. Pres
 
 ## Usage Rule
 
-If a camera, microphone, light meter, or stopwatch cannot detect it, rewrite it. Every sentence should name something visible, audible, or measurable: subject, visible action, camera, light source, sound, constraint.
+Use visible or audible detail when a phrase leaves a relevant production choice unclear. Keep useful genre, style and mood labels. The examples below are optional vocabulary, not required camera moves, lighting setups or limits on scene complexity.
 
 | Function | English wording |
 |---|---|
@@ -45,7 +45,7 @@ If a camera, microphone, light meter, or stopwatch cannot detect it, rewrite it.
 
 ## De-Slop Pass
 
-Strip quality adjectives before adding anything: `cinematic`, `epic`, `stunning`, `masterpiece`, `8K`, `ultra-realistic`, `award-winning`, `hyper-detailed` all delete or convert to one observable detail each. A prompt that earns "epic" names the crowd size, the lens distance, or the structure height instead of the word.
+Preserve the intended energy and useful style choices; clarify ambiguity and remove redundant praise in context. Do not turn every "cinematic" into a slow push-in or every "epic" into a crowd. Follow the [anti-slop lexicon](../../references/anti-slop-lexicon.md) for conditional repairs. Keep an explicit resolution target as a delivery requirement, using a supported setting when available and stating any gap. Prompt wording alone cannot guarantee output dimensions. Preserve exact dialogue, actual reference tokens, safety boundaries and chosen settings; respect decisions already delegated by the user.
 
 ## Filter-Aware Wording
 
@@ -55,7 +55,7 @@ For a blocked prompt, load [seedance-filter](../seedance-filter/SKILL.md) and as
 
 `@Image1 is the reference; keep identity, color, and shape unchanged. Only [motion/light/camera] changes. Camera: [one move]. Sound: [one cue]. Constraints: [lock].`
 
-Load [English vocabulary](../../references/vocab/en.md) for the full function-organized vocabulary, slop traps, and context-dependent wording examples. Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for the core replacement rule and [filter-vocab](../../references/filter-vocab.md) for the distinction between faithful clarification and a different content proposal.
+Load [English vocabulary](../../references/vocab/en.md) for the full function-organized vocabulary, slop traps, and context-dependent wording examples. Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for intent-preserving editorial guidance and [filter-vocab](../../references/filter-vocab.md) for the distinction between faithful clarification and a different content proposal.
 
 ## Output Contract
 

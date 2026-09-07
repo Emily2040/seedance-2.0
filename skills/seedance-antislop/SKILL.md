@@ -22,45 +22,27 @@ metadata:
 
 Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
 
-Remove filler that hides missing visual decisions. A strong Seedance prompt uses observable nouns, verbs, camera moves, light sources, sound cues, and constraints. A weak prompt asks for excellence without saying what excellence looks or sounds like.
+Clarify wording that hides an unresolved production decision. Preserve useful style, genre and mood language; concrete detail should support the user's direction, not replace it with a stock look. These are editorial choices, not measured rules about which words improve Seedance output.
 
 ## Intent
 
-Users reach for giant empty words precisely because they care intensely and don't know where to put it. The soul of de-slopping is conservation: every deleted "epic" must come back as a visible choice that holds the same caring. Strip a prompt without honoring the feeling that bloated it, and the user hears that their excitement was wrong.
-
-## Visibility Test
-
-Every major phrase should be visible to a camera, measurable by a light meter, audible in the mix, or observable as motion. If a phrase cannot pass that test, replace it with production language.
-
-| Filler | Ask what it means | Strong replacement pattern |
-|---|---|---|
-| cinematic | What camera and light make it cinematic? | `locked close-up, warm practical key, cool rim light` |
-| epic | What is the scale or stake? | `wide low-angle shot, tiny figure against storm wall` |
-| beautiful | What color, texture, or light behavior? | `pearl highlights on wet ceramic, soft window bounce` |
-| dynamic | What moves, how fast, and where does it end? | `fast lateral track ending on the hero label` |
-| professional | What production setup? | `clean commercial tabletop, controlled reflection, no clutter` |
-
-## The Six Slop Classes
-
-Classify before rewriting - each class has a different repair:
-
-1. **Empty evaluators** (`cinematic, epic, stunning`) - convert each to the one observable detail that earns it.
-2. **Borrowed image-model tokens** (`8K, masterpiece, trending on ArtStation`) - delete; quality and resolution are settings, not prose.
-3. **Tag salad** (comma keyword dumps ported from image prompting) - rewrite as shooting-brief prose: one sentence per element, with an action and a time axis.
-4. **Negation slop** (`no blur, no artifacts, no extra fingers`) - prefer a concrete desired state; preserve useful exclusions such as `no cuts`. Negation is not proven to summon the named flaw, and a special constraint slot is not assumed.
-5. **Adjective stacking** (three synonyms for one quality) - pick the single detail that matters.
-6. **Feel-suffix words** (`电影感, 雰囲気のある, 감성적인, atmosférico, атмосферный, vibey`) - name the physical cause of the feeling; every language file in `references/vocab/` has a Slop Traps table for its own community's empty words.
+Keep the intended energy, medium, era, palette and performance. A word such as "epic" may communicate a useful ambition even when the brief still needs a decision about scale or stakes. Do not infer the user's taste or confidence from their adjectives.
 
 ## Rewrite Pass
 
-First, underline all superlatives and vague style labels and classify each by slop class. Second, decide whether each word should become camera, light, motion, material, sound, or constraint language. Third, reduce duplicates. Fourth, keep the prompt within the character budget and preserve reference tags.
+1. Identify what is already decided: creative intent, exact dialogue, actual reference tokens, continuity, safety boundaries, exclusions and requested settings. Preserve those through the edit.
+2. Check whether an abstract phrase leaves a material choice unresolved. Keep it when context is sufficient. Otherwise use the brief to clarify it; if the user has delegated creative choices, propose a coherent interpretation and state any material assumption. Ask only when a necessary choice remains unresolved outside that scope.
+3. Remove redundant praise where it adds no distinct intent. Surface conflicting requirements instead of silently choosing one. Add only details that serve this brief; neither a camera move nor a lighting recipe is required for every style word. Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for conditional repairs and delivery requirements.
+4. Apply a length limit only when the user requests it or the selected operation documents it. Do not invent a universal character budget or silently discard must-haves to fit one.
 
 ## Do Not Over-Correct
 
-Do not remove useful genre language when it is paired with concrete direction. `Noir hallway with hard venetian-blind shadows` is useful; `dramatic cinematic noir vibes` is not. Keep terms that communicate medium, era, palette, or lens behavior.
+Keep useful labels such as noir, documentary or ultra-realistic when they describe the chosen look. Observable detail is a way to resolve ambiguity, not a test that every phrase must pass. A locked shot may already serve an energetic scene; "dynamic" does not automatically authorize a lateral track. Likewise, "professional" does not require a clean product tabletop.
 
-Load [anti-slop-lexicon](../../references/anti-slop-lexicon.md) for the slop-class taxonomy and extended replacement table, and [seedance-vocab-en](../seedance-vocab-en/SKILL.md) with [English vocabulary](../../references/vocab/en.md) for the full function-organized English precision vocabulary. For non-English prompts, load the matching vocab file's Slop Traps table: [Chinese](../../references/vocab/zh.md), [Japanese](../../references/vocab/ja.md), [Korean](../../references/vocab/ko.md), [Spanish](../../references/vocab/es.md), or [Russian](../../references/vocab/ru.md). Each language community has its own empty-quality words and decompositions.
+Treat output resolution as a delivery requirement. Preserve the requested value and carry it into a supported setting when available. Prompt text alone does not guarantee that resolution. If support is unknown or the value is unavailable, state the gap and offer an explicit option within the user's scope; do not silently lower the target, switch providers, add an upscale or spend credits.
+
+For English wording, load [seedance-vocab-en](../seedance-vocab-en/SKILL.md) with [English vocabulary](../../references/vocab/en.md). For another prompt language, consult its Slop Traps table only when needed: [Chinese](../../references/vocab/zh.md), [Japanese](../../references/vocab/ja.md), [Korean](../../references/vocab/ko.md), [Spanish](../../references/vocab/es.md), or [Russian](../../references/vocab/ru.md). These are contextual wording examples, not language-wide lists of useless words.
 
 ## Output Contract
 
-Return removed words, replacements grouped by camera/light/motion/sound/constraint, and the tightened prompt.
+Return the revised prompt in the requested format and briefly explain material edits when useful. Keep delivery settings separate from scene prose, retaining any unresolved requirement. Disclose content changes or assumptions; a wording rewrite does not authorize another submission. Provide a word-by-word removal table only when requested or needed for the review.

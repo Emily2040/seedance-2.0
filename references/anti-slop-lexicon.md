@@ -1,38 +1,49 @@
 # Anti-Slop Lexicon
 
-Replace empty evaluation language with observable production language. This is an editorial heuristic: it makes a brief easier to interpret and review. This repository has not measured a universal improvement in generation stability from removing abstract words.
+Use concrete production language to resolve ambiguity while preserving the user's style and intent. This is an editorial heuristic for interpreting and reviewing a brief. The repository has not measured a universal improvement in generation stability from removing abstract words. A lexical match in a static evaluator does not establish that a word is useless in context or predict a rendered result.
 
 ## The Six Slop Classes
 
-| Class | Looks like | Repair |
+These are review cues, not automatic deletion rules. Inspect the phrase's role in the actual brief before editing.
+
+| Class | Looks like | Conditional repair |
 |---|---|---|
-| Empty evaluators | `cinematic, epic, stunning, beautiful, dramatic` | convert each to the one observable detail that earns it |
-| Borrowed image-model tokens | `8K, masterpiece, award-winning, trending on ArtStation, Unreal Engine, RAW` | delete; resolution and quality are settings or outcomes, never prose |
-| Tag salad | comma-separated keyword dumps ported from image prompting | rewrite as shooting-brief prose: one sentence per element - subject, action, camera, light, sound |
-| Negation slop | `no blur, no artifacts, no distortion, no extra fingers` | describe the desired composition; retain necessary explicit exclusions |
-| Adjective stacking | `gorgeous, breathtaking, mesmerizing sunset` | three synonyms make one weak claim; pick the single detail that matters |
-| Feel-suffix words | `电影感 · 雰囲気のある · 감성적인 · atmosférico · атмосферный · vibey` | name the physical cause of the feeling; every vocab file has a language-specific Slop Traps table |
+| Empty evaluators | `cinematic, epic, stunning, beautiful, dramatic` | Keep a useful style or mood cue; clarify only the missing decision, using the intended effect and existing scene |
+| Borrowed image-model tokens | `8K, masterpiece, award-winning, trending on ArtStation, Unreal Engine, RAW` | Separate delivery requirements, intended render style and unsupported praise; these terms do not all serve the same role |
+| Tag salad | comma-separated keywords with unclear relationships | Connect existing subject, action and timing when their relationship is unclear; concise lists are acceptable when already unambiguous |
+| Negation slop | `no blur, no artifacts, no distortion, no extra fingers` | Clarify the desired state when useful; retain necessary explicit exclusions and preservation boundaries |
+| Adjective stacking | `gorgeous, breathtaking, mesmerizing sunset` | Remove repetition that adds no distinct intent; retain the desired mood and any meaningful distinction |
+| Feel-suffix words | `电影感 · 雰囲気のある · 감성적인 · atmosférico · атмосферный · vibey` | Interpret in context; keep the mood cue and clarify its intended expression only if needed |
 
 ## Replacement Table
 
-| Weak phrase | Replace with |
+The following are questions to resolve, not a menu of mandatory camera moves, lighting setups or visual effects. Use established choices first. When creative decisions are delegated, make a brief-specific proposal and disclose material assumptions; otherwise ask only about a necessary unresolved choice.
+
+| Phrase to review | Decision to preserve or clarify |
 |---|---|
-| cinematic | shot scale, camera move, lighting, grade |
-| epic | physical scale, stakes, crowd size, lens distance |
-| beautiful | color, texture, composition, material, light behavior |
-| stunning / breathtaking | visible contrast, reveal, movement, or detail |
-| dynamic | specific movement, speed, and endpoint |
-| dramatic | blocking, shadow, silence, or camera pressure |
-| ultra-realistic | material behavior, skin texture, lens artifacts, natural motion |
-| cool transition | match cut, whip pan, dissolve, hard cut, object wipe |
-| magical | particle behavior, glow source, motion path, interaction |
-| professional | product lighting setup, clean background, controlled camera |
-| masterpiece / award-winning | delete; quality is not a request |
-| 8K / ultra-HD / high quality | delete; resolution is a render setting, not prose |
-| atmosphere of mystery | what is hidden, by what: doorway, shadow, fog |
-| insanely / highly detailed | the two details that matter, named |
-| visually striking | the one frame the viewer remembers, described |
-| trending / viral style | the actual format: vertical, fast hook, caption-safe framing |
+| cinematic | Keep the intended film language; clarify framing, pacing or light only where the brief leaves a relevant ambiguity |
+| epic | Preserve the ambition; determine whether the user means physical scale, emotional stakes or another kind of intensity |
+| beautiful | Preserve the aesthetic preference; clarify the relevant color, texture, composition or performance |
+| stunning / breathtaking | Identify the intended impact or reveal without inventing a new event |
+| dynamic | Identify what changes over time; do not add camera movement to an intentionally locked shot |
+| dramatic | Preserve the requested tension or performance; do not automatically add shadows, silence or camera pressure |
+| ultra-realistic | Keep the chosen realism target; add relevant material or motion detail only when it helps, without promising photorealism |
+| cool transition | Determine the intended relationship between shots before choosing a transition |
+| magical | Preserve a fantasy or wonder direction; particles and glow are optional implementations |
+| professional | Identify the intended production standard for this genre; product lighting and clean backgrounds are not universal |
+| masterpiece / award-winning | Remove unsupported outcome claims when merely praise; retain any actual reference role and concrete requirement |
+| 8K / ultra-HD | Preserve the delivery target under the rule below; do not treat prompt text as a resolution control |
+| high quality / hyper-detailed | Clarify relevant review criteria or important details; do not conflate detail with output dimensions |
+| Unreal Engine / RAW | Distinguish an intended render look from a requested tool or file format; wording does not establish that tool or format was used |
+| atmosphere of mystery | Preserve what should remain uncertain; use the existing scene before proposing concealment, fog or darkness |
+| visually striking | Clarify what the viewer should notice or remember in this brief |
+| trending / viral style | Clarify any intended format or reference; do not assume vertical framing, rapid cuts or promise engagement |
+
+## Delivery Requirements
+
+Retain an explicit resolution requirement even when moving it out of scene prose. Use the selected operation's supported setting where available; if support is unknown, mark it unverified. If unavailable, state the mismatch and offer a supported output or a separate finishing step as an option. Do not silently downgrade, switch providers, upscale or spend credits. Honor choices already delegated within their scope.
+
+Do not turn "8K" into a promise that the generated file is 8K, or turn "hyper-detailed" into an invented numeric resolution. Preserve requested aspect ratio, duration and other settings too. Apply only a user-requested or operation-documented length limit; disclose a conflict with required content instead of silently dropping it.
 
 ## Put the important instruction where a reader can find it
 
@@ -40,12 +51,12 @@ Open with the subject and action when that makes the brief clearer. Preserve exa
 
 ## Tag Salad Repair
 
-Image-model habits port badly: `girl, sunset, 8K, cinematic, beautiful light, masterpiece, detailed face` gives a video model no action, no camera, no time axis. Rewrite as a brief: `A woman turns from the railing at sunset; the low sun flares behind her hair. Camera: slow push-in to a medium close-up. Sound: wind and distant surf.` One sentence per element beats twenty comma fragments.
+A list of subject, sunset, resolution and style tags may leave action and timing undecided; it may also be an intentional mood board awaiting direction. Determine which task the user wants. Reconnect information already supplied and keep useful tags. If action is missing, use delegated creative scope or ask for the necessary choice. Do not silently invent a railing, a head turn, a slow push-in or surf ambience just to make a list resemble a shooting brief. Follow the calling skill's Director's Read before drafting generation prose.
 
 ## Negation Rule
 
-Prefer a concrete desired state when a negative quality slogan is vague: `hands rest on the table` describes blocking more clearly than `no bad hands`. Keep useful literal constraints such as `no cuts` when they express the user's intent. Negation is not proven to summon an object, and this skill does not assume every provider has a special constraint slot. Never remove a safety or preservation boundary merely to shorten the prompt.
+Prefer a concrete desired state when a negative quality slogan is vague: `hands rest on the table` describes blocking but is only a suitable clarification when that pose matches the brief. It does not guarantee anatomical correctness. Keep useful literal constraints such as `no cuts` when they express the user's intent. Negation is not proven to summon an object, and this skill does not assume every provider has a special constraint slot. Never remove a safety or preservation boundary merely to shorten the prompt.
 
-Rule: if a camera, microphone, light meter, or stopwatch cannot detect it, rewrite it.
+Observable detail helps resolve a missing decision; useful genre, medium, era, palette and mood labels can remain. Preserve exact dialogue, actual reference tokens and chosen sound states throughout the edit. A clarification is not permission for a new submission.
 
-Each language file in `references/vocab/` carries a Slop Traps table for its own community's empty words: English (`vocab/en.md`), Chinese (`vocab/zh.md`), Japanese (`vocab/ja.md`), Korean (`vocab/ko.md`), Spanish (`vocab/es.md`), Russian (`vocab/ru.md`).
+The Slop Traps tables in `references/vocab/` provide contextual examples in English, Chinese, Japanese, Korean, Spanish and Russian. They are editorial guidance, not evidence of language-wide model behavior.

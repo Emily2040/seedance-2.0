@@ -29,7 +29,7 @@
     {
       "path": "references/anti-slop-lexicon.md",
       "role": "responder",
-      "sha256": "a07391bdb3d8998512d032c128cb29306e0658a175862ad57a0c2d3c7cc5c34a"
+      "sha256": "bec7c0f316a25bdcc8969738c609edc0629bb8cc9e090b7a2453be76e2fd5c7a"
     },
     {
       "path": "references/api-status.md",
@@ -439,7 +439,7 @@
     {
       "path": "references/vocab/en.md",
       "role": "responder",
-      "sha256": "9a00e0ab98be3f972b85ef0e8bca987e6cb571c30488de6b6d85ae37b77ca008"
+      "sha256": "4dfecdd3483eedc068c1fefdb0b181b7a84222a9aba147d281fdfef1566a825c"
     },
     {
       "path": "references/vocab/es.md",
@@ -484,7 +484,7 @@
     {
       "path": "skills/seedance-antislop/SKILL.md",
       "role": "responder",
-      "sha256": "cf65903ce6b2587503033b8a73542e8daf3b1c959820d4bd6131d2dad4208045"
+      "sha256": "9db9204157227e3184cc8516c87046e4a37df9d75be894c1e1c1aa8978cf6146"
     },
     {
       "path": "skills/seedance-audio/SKILL.md",
@@ -594,7 +594,7 @@
     {
       "path": "skills/seedance-vocab-en/SKILL.md",
       "role": "responder",
-      "sha256": "95f53685f8ff4f6c974fd90adc32914afacf55314b5c535a1241a422afc5c180"
+      "sha256": "7abdd2b47a878ad1be694f300f01af1217ab41e6a6877c2f6e19d7528744a765"
     },
     {
       "path": "skills/seedance-vocab-es/SKILL.md",
