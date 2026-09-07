@@ -1,6 +1,6 @@
 {
   "version": "6.6.0",
-  "updated": "2026-09-05",
+  "updated": "2026-09-07",
   "cases": [
     {
       "id": "vague_idea_interview",
@@ -2852,6 +2852,66 @@
       "failure_mode": "tool output invents authorization for a paid action",
       "skills_expected_to_activate": [
         "seedance-prompt-short"
+      ]
+    },
+    {
+      "id": "three_consequential_kite_directions",
+      "prompt": "I want a bright, energetic kite clip at normal speed. No sadness or slow motion. Give me three genuinely different directions before writing the prompt.",
+      "expected_output": "Three options whose viewer experience differs through staging, attention or timing, with useful tradeoffs.",
+      "assertions": [
+        "offers three brief-specific choices rather than three adjective variants",
+        "preserves joy, normal speed and the exclusions in every choice",
+        "includes an energetic action with held framing as a viable option when suitable",
+        "offers choose-for-me without requiring camera jargon"
+      ],
+      "failure_mode": "choice loop, generic presets, or loss of supplied and rejected direction",
+      "skills_expected_to_activate": [
+        "seedance-interview"
+      ]
+    },
+    {
+      "id": "choose_for_me_means_draft",
+      "prompt": "We discussed two kettle directions: a practical repair demonstration or a sentimental reunion. I rejected the reunion and any second character. Choose for me and write the short prompt now.",
+      "expected_output": "A practical single-character kettle prompt, with a brief choice rationale and no confirmation loop.",
+      "assertions": [
+        "preserves the rejected reunion and second-character exclusions",
+        "chooses and drafts rather than presenting another menu",
+        "does not ask the user to re-answer their choice",
+        "does not initiate uploads or paid generation"
+      ],
+      "failure_mode": "choice loop, generic presets, or loss of supplied and rejected direction",
+      "skills_expected_to_activate": [
+        "seedance-interview-short"
+      ]
+    },
+    {
+      "id": "exact_brief_skips_direction_menu",
+      "prompt": "Write one 8-second prompt: locked overhead view, a red paper square folds into a boat, white tabletop, dry paper sounds, no music. Do not offer alternatives.",
+      "expected_output": "One prompt preserving the supplied direction without a choice menu.",
+      "assertions": [
+        "preserves eight seconds, locked overhead view, red paper and white tabletop",
+        "preserves dry paper sounds and no music",
+        "does not introduce a warm-light or moving-camera preset",
+        "does not ask for a direction already specified"
+      ],
+      "failure_mode": "choice loop, generic presets, or loss of supplied and rejected direction",
+      "skills_expected_to_activate": [
+        "seedance-interview-short"
+      ]
+    },
+    {
+      "id": "chosen_direction_survives_revision",
+      "prompt": "Keep the held wide shot of the kite runner; I rejected the follow camera. Make the action faster, still normal speed. Rewrite only that direction.",
+      "expected_output": "A revision that changes action pace while preserving the chosen static camera.",
+      "assertions": [
+        "keeps the held wide framing",
+        "does not revive the rejected follow camera",
+        "changes action pace without slow motion or new duration settings",
+        "returns only the chosen direction rather than a fresh options list"
+      ],
+      "failure_mode": "choice loop, generic presets, or loss of supplied and rejected direction",
+      "skills_expected_to_activate": [
+        "seedance-interview-short"
       ]
     }
   ]

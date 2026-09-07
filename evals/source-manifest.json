@@ -4,7 +4,7 @@
     {
       "path": "evals/evals.json",
       "role": "evaluator",
-      "sha256": "9302753be321838b2950857135653a6ee48210cc37e97db16b1c50212f955c24"
+      "sha256": "8497fa1d3e73d006939d6c0cb96c730f95b21d97d07df99e3c692cbd2ac64f69"
     },
     {
       "path": "evals/fixtures/sequence-airport-arrival-project-state.json",
@@ -169,7 +169,7 @@
     {
       "path": "references/interview-starters.md",
       "role": "responder",
-      "sha256": "c661d8990707850671f84080f7e72a1956123d58ba73a4a4502d5b6deea37303"
+      "sha256": "f555b1ef7c13115d54721244feb766f035b436227b689b8837818130469499bc"
     },
     {
       "path": "references/json-schema.md",
@@ -449,7 +449,7 @@
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "2bf235b10ddb46d0bd2279e82e648b7799289fd4403f7fd2beec4dccdcd56ba1"
+      "sha256": "cdd19750574060c5e8d04a025538e1b41e5c2178b86a1a68e2c2862f20567f46"
     },
     {
       "path": "skills/seedance-antislop/SKILL.md",
@@ -504,12 +504,12 @@
     {
       "path": "skills/seedance-interview/SKILL.md",
       "role": "responder",
-      "sha256": "cc6dd4994bc5df8c4c16c883b46fe03ba16b21cfc98b1d8b1a587c58be91e6b3"
+      "sha256": "a408e03d7a112884d41950ef93a8cbb6001b92179bf159cfd5c000a1921bb6b5"
     },
     {
       "path": "skills/seedance-interview-short/SKILL.md",
       "role": "responder",
-      "sha256": "2b61593e8161e36c2695dd3bfef5a46bd1cae364c462d08f38b8b046f1114dbf"
+      "sha256": "49fbe1961bf9a8a982e1b407bb4d1709d1480d4b6de620d50ee4f2ab7932a1e4"
     },
     {
       "path": "skills/seedance-lighting/SKILL.md",
