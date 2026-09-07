@@ -30,7 +30,7 @@ The result should look meticulously crafted — the product of deep expertise an
 ## Asset rules
 
 - Use SVG for simple structural support diagrams.
-- Use generated bitmap images for the README hero, operating-system infographic, skill-map infographic, capability map, CDN delivery map, reference-role map, production-delivery map, and QC stack when the asset needs cinematic texture, real scene depth, or visual storytelling.
+- Use a generated bitmap only when it teaches a concrete directing choice. Keep the masthead deterministic; archive conceptual dashboards and broad capability graphics behind a link.
 - Bitmap hero/infographic/map assets should be logo-free, watermark-free, and readable at GitHub README width.
 - Text-rich infographics are allowed when labels are large, short, corrected, and repeated in accessible Markdown next to the image.
 - SVG assets must include `<title>` and `<desc>`.
@@ -72,4 +72,12 @@ The front page uses a studio spec-sheet system. Apply these tokens to every hand
 - One amber gesture per composition, and the script `Skill OS` carries it. Nothing else is amber - never a second hue, and never a second amber mark competing with the wordmark.
 - The masthead ships as a theme-aware pair (`hero-dark.svg`, `hero-light.svg`) behind a `prefers-color-scheme` picture element; the operating diagram (`skill-map.svg`) carries its own background so it reads on both themes.
 - Do not bake version numbers or counts into vector assets; they go stale. Use timeless labels (ROUTE / VERIFY / DIRECT / DELIVER).
-- Generated bitmap art is gallery-only. The working interface of the README is vector.
+- A single labeled teaching image may accompany a worked prompt. Essential instructions and captions stay in Markdown; generated pixels are never a product interface or evidence of a successful render.
+
+## Acceptance and page budget
+
+Use [README design acceptance](../docs/frontend-redesign.md) for the automated
+checks and manual 390/768/1280px light/dark review. Image counts, minimum image
+bytes and minimum page length are not quality criteria. Preserve source and
+review boundaries beside imagery. Keep advanced reference and maintenance
+material reachable without placing it ahead of the first useful prompt.

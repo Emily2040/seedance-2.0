@@ -173,6 +173,8 @@ class RuntimePayloadContractTests(unittest.TestCase):
             installed_readme = (payload / "README.md").read_text(encoding="utf-8")
 
         self.assertIn("View the full visual gallery in the source repository", installed_readme)
+        self.assertIn("/blob/main/docs/visual-archive.md", installed_readme)
+        self.assertIn("[View current teaching examples](https://github.com/Emily2040/seedance-2.0#start-here)", installed_readme)
         self.assertNotIn("assets/hero-command-center.png", installed_readme)
         self.assertNotIn("therefore resolve only in this repository", installed_readme)
 
@@ -274,7 +276,7 @@ class RuntimePayloadContractTests(unittest.TestCase):
         self.assertTrue((ROOT / "assets" / "hero-command-center.png").is_file())
         self.assertIn(
             "assets/hero-command-center.png",
-            (ROOT / "README.md").read_text(encoding="utf-8"),
+            (ROOT / "docs/visual-archive.md").read_text(encoding="utf-8"),
         )
         with tempfile.TemporaryDirectory() as tmp:
             payload = self.install(Path(tmp))

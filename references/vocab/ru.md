@@ -65,17 +65,9 @@ Use this reference for Russian Seedance prompt wording, role binding, and compac
 
 ## Russian Dialogue Notes
 
-Field-observed from Russian community testing (Habr, vc.ru); test per surface, never promise results. Russian-language coverage reports multi-language dialogue support including Russian, but the official ByteDance pages in the source registry do not enumerate dialogue languages - treat Russian dialogue as field-observed, and long Russian phrases as a reported weak spot.
+Russian is not included in the model card's Table 20; that absence establishes neither poor performance nor a word limit. Preserve the user's Cyrillic dialogue and intended register. Do not transliterate or shorten it without agreement. Time the actual spoken line and review the returned speech with a Russian speaker; mark naturalness unreviewed if that review is unavailable.
 
-| Rule | Practice |
-|---|---|
-| Короткие реплики | Split monologues into lines of a few words: `Она тихо говорит: «Я нашла его»` - long phrases drift into noise |
-| Кириллица vs транслит | The community tested pure Cyrillic, transliteration (`Ya nashla yego`), and hybrids - results vary by surface; try Cyrillic first, transliteration as the field-reported fallback when Cyrillic degrades |
-| Один говорящий | One speaker per generation for reliable lip-sync; locked medium close-up during the line |
-| Полная озвучка | A fully voiced Russian piece is not reliably achievable in-model: generate with room tone or short lines, then dub and lip-sync in post (see [audio-post-delivery](../audio-post-delivery.md)) |
-| Доступ из РФ | Access from Russia typically runs through third-party wrappers - treat their model names, prices, and limits as wrapper-specific, never official |
-| Бюджет реплики | ~10-15 words maximum per phrase, fewer is safer; long phrases drift into noise |
-| Аудио-референс | On surfaces that accept a voice clip, attach your own recorded or licensed Russian voice so the model lip-syncs to it instead of synthesizing - the field-reported fix for English-accented articulation |
+Stable framing and one speaker turn are useful test conditions. Offer native generation, a supported rights-cleared voice-reference workflow, or post dubbing according to the brief. Do not promise reference playback or declare an entire Russian production impossible. See [audio-guide](../audio-guide.md) and [calibration protocol](../sync-budget-protocol.md).
 
 ## Slop Traps
 

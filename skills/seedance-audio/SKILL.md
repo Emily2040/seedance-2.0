@@ -25,7 +25,7 @@ Before producing prompt text, a prompt-ready block, a rewrite, an example, or a 
 
 Use this for dialogue, lip-sync, sound layers, music, ambience, beat-sync, audio-reference mapping, desync troubleshooting, or sound-driven visual timing. Audio should support the visible beat instead of becoming a second competing prompt.
 
-Load [audio-guide](../../references/audio-guide.md) for how the audio model behaves, per-language dialogue capacity, the voice-reference lip-sync path, beat-sync, desync repair, audio-reference conflicts, and multi-character workarounds. Load [audio-post-delivery](../../references/audio-post-delivery.md) when the user needs stems, M&E, dubbing, loudness, sync, mix, or delivery guidance.
+Load [audio-guide](../../references/audio-guide.md) for the audio evidence boundary, dialogue timing, supported voice-reference options, beat-sync, desync repair, audio-reference conflicts, and multi-character workarounds. Load [audio-post-delivery](../../references/audio-post-delivery.md) when the user needs stems, M&E, dubbing, loudness, sync, mix, or delivery guidance.
 
 ## Intent
 
@@ -33,9 +33,9 @@ Half of every emotion enters through the ears, and users almost always forget so
 
 ## Core Rules
 
-Keep dialogue short, quote spoken lines, and assign every line to a named speaker. Prefer locked or stable framing for lip-sync. Remove head-turning, large face motion, extreme camera moves, or busy hand gestures while mouth accuracy matters. Treat `@Audio1` as a rhythm, pacing, mood, voice-tone, or ambience reference unless the active platform documents exact playback behavior; on surfaces that accept a spoken-voice reference, field reports indicate an attached voice clip can drive lip-sync directly: the model syncs to your audio instead of synthesizing speech - the most reliable field-reported path for non-English dialogue. Use only rights-cleared voices.
+Preserve the user's exact dialogue, language, script, and register. Quote each line and name its speaker. Stable framing and one speaker turn are useful starting heuristics when mouth accuracy matters; do not remove required performance or rewrite words without authorization. Check spoken duration and inspect the returned words, performance, and visible sync separately.
 
-Reliability is probabilistic and language-dependent: field reports rank Mandarin strongest for lip-sync, English a close second, with Japanese, Korean, Russian, and others weaker. Keep non-English lines very short or use a voice reference, and budget retakes rather than promising a clean voiced take. See [audio-guide](../../references/audio-guide.md) for the field-observed per-language dialogue-capacity table.
+Treat `@Audio1` as a reference for its assigned role. Use a spoken-voice workflow only when the active operation supports it, with rights-cleared material; do not promise exact playback or guaranteed lip-sync. Offer native generation, a supported reference workflow, and post dubbing with their tradeoffs. No universal Mandarin-first ranking or per-language line ceiling is established by this repository. See [audio-guide](../../references/audio-guide.md) for the scoped model-card evidence and [dialogue calibration](../../references/sync-budget-protocol.md) for an optional pilot within the user's existing take/spend authorization.
 
 ## Sound Layer Pattern
 
@@ -55,7 +55,7 @@ Use one speaker per short clip when reliability matters. If two characters must 
 
 ## Failure Fixes
 
-If dialogue desyncs, shorten the line, lock the camera, remove head turns, clean the audio role, and reduce competing SFX. If the wrong speaker talks, assign tags and split lines by speaker. If audio is ignored, remove extra music/SFX instructions and make the reference role explicit.
+If dialogue desyncs, offer a shorter line if wording can change, lock the camera, remove head turns, clean the audio role, and reduce competing SFX. If the wrong speaker talks, assign tags and split lines by speaker. If audio is ignored, remove extra music/SFX instructions and make the reference role explicit.
 
 If audio and video references fight each other, mute the reference video before upload when possible, or make the priority explicit: `@Video1 controls camera only; @Audio1 controls tempo and energy`.
 
@@ -66,3 +66,5 @@ When sequence state is present, inherit completed dialogue, active dialogue, amb
 ## Output Contract
 
 Return speaker map, quoted dialogue, sound layers, audio reference role, lip-sync constraints, post/delivery notes if needed, and a compact prompt-ready audio block.
+
+For worked examples with a chosen approach, copyable prompt, evidence boundary and failure checks, load [performance and dialogue cards](../../references/performance-example-cards.md). These are authored concepts, not observed generation results.

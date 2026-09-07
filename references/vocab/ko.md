@@ -111,37 +111,13 @@ Use these when the Korean prompt is part of a v6 sequence project, continuation,
 
 ## Dialogue Notes
 
-Field-observed and under-tested as of 2026; test per surface, never promise results. Korean dialogue is supported but quantitatively under-reported - do not assume parity with Mandarin or English.
-
-- Keep to one short line, about one breath; treat Korean as the weaker tier until tested on the active surface.
-- 대사 형식: 화자 이름 + 동작 + 큰따옴표 대사, with the speech level already decided (see below). Example: `남자: 고개를 들며 "다시 한 번만요."` (해요체). Quotation marks separate the words to be spoken from the performance direction.
-- Reference tags stay Latin inside a Korean prompt: `@Image1`, never `@이미지1`. No surface documents translated Korean tags; the localized `@图片1` family belongs to Chinese-UI surfaces only.
-- For reliable Korean voice, prefer a voice reference (attach the spoken line so the model lip-syncs to it) or plan a post-dub.
+No validated language-wide line ceiling is established here. Preserve the user's exact dialogue and intended register. Time the spoken performance rather than treating written counts as seconds. A short speaker turn and stable framing are useful starting conditions; review pronunciation, performance, and visible sync separately. See [audio-guide](../audio-guide.md) for task-scoped benchmark evidence. Voice references and post dubbing are options, not mandatory remedies for this language. Reference tags such as `@Image1` stay unchanged.
 
 ## Speech Level (말투)
 
-Korean has no neutral register. Every spoken line commits to a speech level, so leaving it unstated does not avoid the decision - it hands it to the model. Declare one.
+Preserve the user's wording and characterization. For newly drafted speech, choose 합니다체, 해요체, or an appropriate informal form from the relationship, situation, and intended tone. These examples are not an exhaustive account of Korean speech levels, and no register has a fixed syllable multiplier. A deliberate shift can express a change in relationship; do not automatically flatten it.
 
-This is a budget decision as well as a characterization one. The reliable-sync budget in [audio-guide](../audio-guide.md) is counted in syllables, and the same sentence costs a different number of them at each level:
-
-| 같은 뜻 (same meaning) | 반말 → 해요체 → 합니다체, 음절 수 (syllable count) |
-|---|---|
-| thank you | 고마워 (3) → 고마워요 (4) → 감사합니다 (5) |
-| it's done | 끝났어 (3) → 끝났어요 (4) → 끝났습니다 (5) |
-| I don't know | 몰라 (2) → 몰라요 (3) → 모릅니다 (4) |
-| come here | 이리 와 (3) → 이리 오세요 (5) → 이리 오십시오 (6) |
-
-합니다체 runs roughly 1.5-2x the syllables of 반말 for identical content. On a language already flagged as the weaker sync tier, an unconsidered formal register can spend the whole budget on politeness endings.
-
-Choosing:
-
-- **합니다체** - news, announcements, corporate and public-facing VO, a subordinate addressing a superior. Most formal, most syllables.
-- **해요체** - the safe default for a single-line commercial or a stranger-to-stranger exchange. Polite without the full formal cost.
-- **반말** - close friends, family, a character speaking to a child, internal monologue. Shortest, and wrong to a Korean viewer if the relationship does not license it.
-
-With two speakers, the pair of levels *is* the relationship: senior to junior in 반말 answered in 해요체 reads as a hierarchy, both in 해요체 reads as peers or strangers. Keep each character's level consistent across a sequence - drifting between levels mid-project reads as a translation error, not a character choice, and it is the kind of continuity that no frame-level QC catches.
-
-If the user has not stated a level and the relationship does not imply one, ask once rather than defaulting silently; it is one question and it changes both the performance and the syllable budget.
+고마워, 고마워요, and 감사합니다 illustrate different wording and social use. Their lengths do not establish a universal cost ratio. Measure the actual delivery with pauses, and do not choose casual speech merely to save syllables. If the relationship is unclear and materially changes the line, ask one focused question or offer labeled alternatives. Naturalness remains pending a qualified Korean-language review.
 
 ## Aesthetic Registers (미학)
 

@@ -76,5 +76,41 @@
     "directors_read": null,
     "utility_intent": "Make part order, orientation, and completed assembly legible without continuity drift.",
     "refusal": "No invented frustration, rivalry, personality, dramatic hesitation, or emotional payoff."
+  },
+  {
+    "id": "joyful-dance-observation",
+    "brief": "A joyful dancer in yellow rain boots taps through puddles; held wide camera, normal speed, no sadness or competitive story.",
+    "expected_lane": "non_narrative",
+    "directors_read": null,
+    "utility_intent": "Share the delight and rhythm of heel taps sending water from the yellow rain boots.",
+    "refusal": "No invented grief, rivalry, concealed mistake, or recovery arc.",
+    "compiled_carriers": "Hold wide as the dancer in yellow rain boots taps through the puddles at normal speed; each heel tap sends water outward and the final pose holds while the ripples settle."
+  },
+  {
+    "id": "silent-pottery-process",
+    "brief": "Observe a potter trimming a damp clay bowl in silence. Show the continuous ribbon of clay, without a backstory.",
+    "expected_lane": "non_narrative",
+    "directors_read": null,
+    "utility_intent": "Let the viewer follow the continuous ribbon of damp clay separating from the bowl.",
+    "refusal": "No invented frustration, secret history, struggle, or triumphant reveal.",
+    "compiled_carriers": "Hold beside the wheel as the potter trims the damp bowl and a continuous ribbon of clay curls away from its base; keep the tool contact visible."
+  },
+  {
+    "id": "visual-comedy-performance",
+    "brief": "A performer keeps pulling a ridiculously long striped scarf out of a sleeve. One held medium view, playful demonstration, no hidden motive.",
+    "expected_lane": "non_narrative",
+    "directors_read": null,
+    "utility_intent": "Enjoy the absurd length and accumulating loops of the striped scarf in one uninterrupted pull.",
+    "refusal": "No invented humiliation, concealed trick failure, rivalry, or emotional reversal.",
+    "compiled_carriers": "Hold a medium view as the performer pulls the striped scarf from a sleeve; loops keep piling on the stool, and the last short tug releases another long loop."
+  },
+  {
+    "id": "quiet-wildlife-observation",
+    "brief": "Watch a heron lifting one foot out of shallow water and setting it down beside a reed. No predator or chase story.",
+    "expected_lane": "non_narrative",
+    "directors_read": null,
+    "utility_intent": "Notice the heron foot lifting from shallow water and the ripples around the reed.",
+    "refusal": "No invented predator, danger, pursuit, rescue, or symbolic grief.",
+    "compiled_carriers": "Keep a low steady view as the heron lifts one foot from shallow water, pauses, then sets it beside the reed; hold as the ripples spread."
   }
 ]

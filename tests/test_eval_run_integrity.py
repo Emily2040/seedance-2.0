@@ -349,8 +349,11 @@ class AggregateIntegrityTests(unittest.TestCase):
         )
 
         self.assertEqual(report["scope"], "COMPLETE")
-        self.assertEqual(report["selected_count"], 126)
-        self.assertEqual(report["total_expected"], 126)
+        expected_count = len(json.loads(
+            (REPO_ROOT / "evals/evals.json").read_text(encoding="utf-8")
+        )["cases"])
+        self.assertEqual(report["selected_count"], expected_count)
+        self.assertEqual(report["total_expected"], expected_count)
         self.assertEqual(report["run_verdict"], "FAIL")
         self.assertEqual(report["release_verdict"], "FAIL")
         self.assertEqual(report["exit_code"], 1)
@@ -375,8 +378,11 @@ class AggregateIntegrityTests(unittest.TestCase):
         )
 
         self.assertEqual(report["scope"], "COMPLETE")
-        self.assertEqual(report["selected_count"], 126)
-        self.assertEqual(report["total_expected"], 126)
+        expected_count = len(json.loads(
+            (REPO_ROOT / "evals/evals.json").read_text(encoding="utf-8")
+        )["cases"])
+        self.assertEqual(report["selected_count"], expected_count)
+        self.assertEqual(report["total_expected"], expected_count)
         self.assertEqual(report["run_verdict"], "PASS")
         self.assertEqual(report["release_verdict"], "PASS")
         self.assertEqual(report["integrity_errors"], [])
@@ -415,6 +421,10 @@ class AggregateIntegrityTests(unittest.TestCase):
                     root / "scripts" / "eval_run.py",
                 )
                 shutil.copy2(
+                    REPO_ROOT / "scripts" / "eval_ledger_format.py",
+                    root / "scripts" / "eval_ledger_format.py",
+                )
+                shutil.copy2(
                     REPO_ROOT / "evals" / "evals.json",
                     root / "evals" / "evals.json",
                 )
@@ -436,7 +446,13 @@ class AggregateIntegrityTests(unittest.TestCase):
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module
                 try:
-                    spec.loader.exec_module(module)
+                    formatter_spec = importlib.util.spec_from_file_location(
+                        "fixture_ledger_format", root / "scripts" / "eval_ledger_format.py"
+                    )
+                    formatter = importlib.util.module_from_spec(formatter_spec)
+                    formatter_spec.loader.exec_module(formatter)
+                    with mock.patch.dict(sys.modules, {"eval_ledger_format": formatter}):
+                        spec.loader.exec_module(module)
                     with self.assertRaisesRegex(
                         module.HarnessError,
                         "canonical evaluation contract changed",
@@ -622,7 +638,7 @@ class JudgeIntegrityTests(unittest.TestCase):
         response = mock.MagicMock()
         response.__enter__.return_value.read.return_value = b"{not-json"
         with mock.patch.object(
-            eval_run.urllib.request, "urlopen", return_value=response
+            eval_run, "_open_provider_request", return_value=response
         ):
             with self.assertRaisesRegex(
                 eval_run.ProviderResponseError, "invalid JSON"
@@ -640,7 +656,7 @@ class JudgeIntegrityTests(unittest.TestCase):
             b"x" * (eval_run.MAX_PROVIDER_RESPONSE_BYTES + 1)
         )
         with mock.patch.object(
-            eval_run.urllib.request, "urlopen", return_value=response
+            eval_run, "_open_provider_request", return_value=response
         ):
             with self.assertRaisesRegex(
                 eval_run.ProviderResponseError, "response exceeded"
@@ -661,7 +677,7 @@ class JudgeIntegrityTests(unittest.TestCase):
             eval_run.http.client.IncompleteRead(b"partial")
         )
         with mock.patch.object(
-            eval_run.urllib.request, "urlopen", return_value=response
+            eval_run, "_open_provider_request", return_value=response
         ):
             with self.assertRaisesRegex(
                 eval_run.ProviderResponseError,
@@ -682,7 +698,7 @@ class JudgeIntegrityTests(unittest.TestCase):
         for failure in open_failures:
             with self.subTest(boundary="open", failure=type(failure).__name__):
                 with mock.patch.object(
-                    eval_run.urllib.request, "urlopen", side_effect=failure
+                    eval_run, "_open_provider_request", side_effect=failure
                 ):
                     with self.assertRaises(eval_run.ProviderResponseError) as raised:
                         eval_run.call_api(
@@ -704,7 +720,7 @@ class JudgeIntegrityTests(unittest.TestCase):
                         ConnectionResetError("reset reading response")
                     )
                 with mock.patch.object(
-                    eval_run.urllib.request, "urlopen", return_value=response
+                    eval_run, "_open_provider_request", return_value=response
                 ):
                     with self.assertRaises(eval_run.ProviderResponseError) as raised:
                         eval_run.call_api(
@@ -728,7 +744,7 @@ class JudgeIntegrityTests(unittest.TestCase):
             response_stream,
         )
         with mock.patch.object(
-            eval_run.urllib.request, "urlopen", side_effect=error
+            eval_run, "_open_provider_request", side_effect=error
         ):
             with self.assertRaises(eval_run.ProviderResponseError) as raised:
                 eval_run.call_api(
@@ -772,7 +788,7 @@ class JudgeIntegrityTests(unittest.TestCase):
                     response = mock.MagicMock()
                     response.__enter__.return_value.read.return_value = body
                     with mock.patch.object(
-                        eval_run.urllib.request, "urlopen", return_value=response
+                        eval_run, "_open_provider_request", return_value=response
                     ):
                         with self.assertRaisesRegex(
                             eval_run.ProviderResponseError, "invalid JSON"
@@ -812,7 +828,7 @@ class JudgeIntegrityTests(unittest.TestCase):
                         completion_payload(provider_name, model, content)
                     ).encode("utf-8")
                     with mock.patch.object(
-                        eval_run.urllib.request, "urlopen", return_value=response
+                        eval_run, "_open_provider_request", return_value=response
                     ):
                         with self.assertRaises(eval_run.ProviderResponseError):
                             eval_run.call_api(
@@ -844,7 +860,7 @@ class JudgeIntegrityTests(unittest.TestCase):
                 )
             ).encode("utf-8")
             with mock.patch.object(
-                eval_run.urllib.request, "urlopen", return_value=response
+                eval_run, "_open_provider_request", return_value=response
             ):
                 with self.assertRaisesRegex(
                     eval_run.ProviderResponseError, "unsupported type"
@@ -1180,7 +1196,7 @@ class InputContractTests(unittest.TestCase):
 
             for argv, expected_code, expected_message in (
                 (["eval_run.py", str(root), "--self-test"], 1, "self-test FAILED"),
-                (["eval_run.py", str(root)], 2, "Could not freeze evaluation inputs"),
+                (["eval_run.py", "--live", "--max-calls", "10000", str(root)], 2, "Could not freeze evaluation inputs"),
             ):
                 with self.subTest(argv=argv):
                     output = io.StringIO()
@@ -1321,7 +1337,7 @@ class InputContractTests(unittest.TestCase):
                 real_freeze = eval_run.freeze_repository
                 with (
                     mock.patch.object(
-                        sys, "argv", ["eval_run.py", str(root), "--limit", "1"]
+                        sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root), "--limit", "1"]
                     ),
                     mock.patch.dict(
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
@@ -1467,7 +1483,7 @@ class InputContractTests(unittest.TestCase):
                 real_freeze = eval_run.freeze_repository
                 with (
                     mock.patch.object(
-                        sys, "argv", ["eval_run.py", str(root), "--limit", "1"]
+                        sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root), "--limit", "1"]
                     ),
                     mock.patch.dict(
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
@@ -1506,7 +1522,7 @@ class InputContractTests(unittest.TestCase):
             output = io.StringIO()
             real_freeze = eval_run.freeze_repository
             with (
-                mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                 mock.patch.dict(
                     os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                 ),
@@ -1547,7 +1563,7 @@ class InputContractTests(unittest.TestCase):
                 api_call = mock.Mock(return_value="candidate response")
                 output = io.StringIO()
                 with (
-                    mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                    mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                     mock.patch.dict(
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                     ),
@@ -1581,7 +1597,7 @@ class InputContractTests(unittest.TestCase):
             api_call = mock.Mock(return_value="candidate response")
             output = io.StringIO()
             with (
-                mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                 mock.patch.dict(
                     os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                 ),
@@ -1616,7 +1632,7 @@ class InputContractTests(unittest.TestCase):
                 api_call = mock.Mock(return_value="candidate response")
                 output = io.StringIO()
                 with (
-                    mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                    mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                     mock.patch.dict(
                         os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                     ),
@@ -1694,7 +1710,7 @@ class InputContractTests(unittest.TestCase):
                     1,
                     "self-test FAILED",
                 ),
-                (["eval_run.py", str(root)], 2, "Could not freeze evaluation inputs"),
+                (["eval_run.py", "--live", "--max-calls", "10000", str(root)], 2, "Could not freeze evaluation inputs"),
             ):
                 output = io.StringIO()
                 with (
@@ -1756,7 +1772,7 @@ class InputContractTests(unittest.TestCase):
             output = io.StringIO()
             call = mock.Mock()
             with (
-                mock.patch.object(sys, "argv", ["eval_run.py", str(root)]),
+                mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", str(root)]),
                 mock.patch.dict(
                     os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True
                 ),
@@ -1830,7 +1846,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                 side_effect=release_like_freeze,
             ),
             mock.patch.object(eval_run, "_verify_canonical_evaluation_contract"),
-            mock.patch.object(eval_run, "_verify_evaluator_execution_identity"),
+            mock.patch.object(eval_run, "_verify_evaluator_modules"),
             mock.patch.object(eval_run, "run_case", call),
             redirect_stdout(output),
         ):
@@ -1849,7 +1865,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, output, call, judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--id",
                     "missing",
@@ -1882,7 +1898,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, output, call, judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--limit",
                     "1",
@@ -1914,7 +1930,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, _output, _call, _judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--limit",
                     "1",
@@ -1946,7 +1962,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, _output, _call, _judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--limit",
                     "1",
@@ -1975,7 +1991,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, _output, _call, _judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--ledger",
                     "evals/eval-run-ledger.md",
@@ -2012,7 +2028,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--ledger",
                         "evals/eval-run-ledger.md",
@@ -2064,7 +2080,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--ledger",
                         "evals/eval-run-ledger.md",
@@ -2118,7 +2134,7 @@ class LedgerIntegrityTests(unittest.TestCase):
                     sys,
                     "argv",
                     [
-                        "eval_run.py",
+                        "eval_run.py", "--live", "--max-calls", "10000",
                         str(root),
                         "--ledger",
                         "evals/eval-run-ledger.md",
@@ -3395,7 +3411,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, output, _call, _judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--ledger",
                     "evals/eval-run-ledger.md",
@@ -3455,7 +3471,7 @@ class LedgerIntegrityTests(unittest.TestCase):
 
             code, _output, call, judge = self.run_main(
                 [
-                    "eval_run.py",
+                    "eval_run.py", "--live", "--max-calls", "10000",
                     str(root),
                     "--provider",
                     "minimax",

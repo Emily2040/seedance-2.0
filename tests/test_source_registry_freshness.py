@@ -171,6 +171,7 @@ class CommandLineBehaviourTests(unittest.TestCase):
         *,
         registry_verified: date | None = None,
         registry_stamp: str | None = None,
+        review_scope: str | None = None,
         api_status_text: str | None = None,
         reference_text: str | None = None,
         fixture_observer: Callable[[Path], None] | None = None,
@@ -200,6 +201,7 @@ class CommandLineBehaviourTests(unittest.TestCase):
                     [
                         "# Source Registry",
                         f"last_verified: {registry_stamp}",
+                        f"review_scope: {review_scope}" if review_scope is not None else "",
                         "`confirmed` `volatile` `field-observed` `unverified` `internal`",
                         "seed.bytedance.com volcengine.com arxiv.org runwayml.com",
                     ]
@@ -390,6 +392,24 @@ class CommandLineBehaviourTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("api-status.md last_verified", result.stdout)
         self.assertIn("future", result.stdout.lower())
+
+    def test_fresh_partial_review_keeps_the_scheduled_warning(self) -> None:
+        result = self.run_fixture(review_scope="partial")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("WARNINGS:", result.stdout)
+        self.assertIn("unreviewed inventory still needs re-verification", result.stdout)
+
+    def test_fresh_full_review_does_not_add_a_scope_warning(self) -> None:
+        result = self.run_fixture(review_scope="full")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("WARNINGS:", result.stdout)
+
+    def test_invalid_or_duplicate_scope_cannot_silently_clear_review(self) -> None:
+        for scope in ("", "done", "partial\nreview_scope: full"):
+            with self.subTest(scope=scope):
+                result = self.run_fixture(review_scope=scope)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("review_scope must be one full or partial field", result.stdout)
 
     def test_explicit_current_stamp_is_not_harmed_by_historical_dates(self) -> None:
         today = date.today().isoformat()

@@ -1,89 +1,55 @@
 # Interview Starting Points (Multilingual)
 
-Localized versions of the `seedance-interview` blank-slate menu and its invites, so the front door speaks the user's language. Use these for a user who has no idea yet; skip them when the idea already has a direction. Run the whole interview - questions, options, treatment, switches - in the user's language, and keep reference tags literal (`@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`).
+Use this when the user wants help choosing a direction. A specific brief goes straight to drafting. A vague single clip can receive a draft with a reversible assumption; an options menu is not a mandatory first step. Keep the existing short-interview question limit.
 
-Each language gives the same six lanes, one invite line, and one "simple or precise" offer so a professional can opt into a precise spec.
+## Offer three consequences, not three style labels
 
-## English
+For an unresolved creative choice, offer up to three brief-specific directions. Each needs only a plain title, one sentence describing what the viewer sees or hears, and the consequence of choosing it. Change staging, attention, timing, information, or performance. Different adjectives applied to the same slow push-in are one direction, not three.
 
-| Pick a lane | What it becomes |
+- Preserve supplied subject, reference roles, exact dialogue, duration, camera requirements, and rejected ideas in every option.
+- Include a held-camera or energetic approach when both fit the brief; neither is a compulsory house style. A specified locked camera can still support energetic action.
+- Name a material tradeoff, such as clearer product proof versus a stronger surprise. Do not invent a success rate, credit saving, or provider setting.
+- Offer “choose for me,” mixing compatible parts, and describing another idea. If the user delegates the choice, select one now, give a short reason tied to their brief, and draft. No second permission loop.
+- Carry the selected direction and rejected choices in conversation or an already authorized project handoff. Do not create new persistent files just to remember an answer. A later user correction supersedes the earlier choice.
+- Choosing a direction authorizes drafting within the request; it does not authorize uploads or paid generation.
+
+Keep option explanations outside the final prompt's copy block. After selection, use the [Director's Read](directors-read.md) to turn the choice into visible or audible direction. Show internal rationale only when useful or requested.
+
+## Original example: a repaired kettle
+
+Brief: “Show that this old kettle matters to its owner. I haven't picked a direction.” These are fictional, ungenerated teaching options; the repair and history need actual reference evidence or permission to invent.
+
+| Direction | What the viewer experiences | Tradeoff |
+|---|---|---|
+| Follow the repair | Close view of a loose handle being secured, then the first steady pour into the owner's chipped cup. | Clear physical proof; little backstory. |
+| Notice the habit | A held kitchen view: the owner reaches past a newer kettle and places the repaired one on the same worn stove ring. | The relationship emerges from a choice; the repair itself remains off-screen. |
+| Share the return | The owner sets out a second cup as the kettle begins to whistle; someone arrives and recognizes it before sitting down. | More human context; needs enough time and distinct blocking for two people. |
+
+“Choose one, combine compatible parts, or ask me to pick.” If the owner says “keep it practical, no second person,” preserve that rejection and draft the repair or habit version instead of offering the arrival again.
+
+## Original example: a joyful kite afternoon
+
+Brief: “A bright, energetic kite video; no sadness and no slow motion.”
+
+| Direction | What the viewer experiences | Tradeoff |
+|---|---|---|
+| Run with the launch | Follow a runner at normal speed until the kite catches the wind; finish looking up along the taut line. | Physical energy; more moving elements to coordinate. |
+| Let the action cross the frame | Hold a wide view as the runner crosses and the kite rises into the open sky. | Clear geography and the full action; less facial detail. |
+| Watch the shared rhythm | Frame two friends at waist height passing the spool and adjusting the line together, with the kite visible beyond them. | Makes the coordination readable; less emphasis on the first launch. |
+
+Do not add melancholy, a sunset, or a slow push-in to make these “cinematic.” The user's stated energy and normal-speed motion are already direction.
+
+## Invitations in the user's language
+
+Run the whole exchange in the user's language and preserve literal reference tags such as `@Image1`, `@Video1`, and `@Audio1`. These are working invitation phrases, not independently reviewed locale-quality evidence. Build the actual choices from the user's brief rather than translating a fixed six-item style menu.
+
+| Language | Invitation |
 |---|---|
-| A product, made to look expensive | clean hero light, one slow move, logo and label preserved |
-| A quiet real-life moment | close framing, soft light, one small gesture, room tone |
-| A tiny story with a twist | one setup, one turn, one visible change by the end |
-| A scenic, mood piece | wide frame, slow drift, weather and light as the subject |
-| A character reacting to something | held camera, one true expression, an off-screen cause |
-| A satisfying transformation | one clear before, one clear after, across the clip |
+| English | Pick one, mix compatible parts, describe your own, or say “choose for me” and I'll draft one. |
+| 中文 | 挑一个、组合合适的部分，或者说说你自己的想法；也可以说“你来选”，我先写一版。 |
+| 日本語 | 一つ選ぶ、合う部分を組み合わせる、自由に説明する、どれでも大丈夫です。「おまかせ」なら、こちらで選んで一案を書きます。 |
+| 한국어 | 하나를 고르거나, 어울리는 부분을 섞거나, 직접 설명해 주세요. “알아서 골라 줘”라고 하면 제가 골라 한 가지 안을 써 드릴게요. |
+| Español | Elige una, combina partes compatibles, describe la tuya o di «elige por mí» y preparo una propuesta. |
+| Русский | Выберите вариант, соедините совместимые детали, опишите своё или скажите «выбери за меня» — и я подготовлю один вариант. |
 
-- Invite: "Pick one, mix two, or describe your own - or say *surprise me* and I'll draft a complete one you can tweak."
-- Depth: "I can keep this simple - or, if you already think in shots and lenses, tell me and I'll go straight to a precise spec."
-
-## 中文
-
-| 选一个方向 | 会变成 |
-|---|---|
-| 把产品拍得高级 | 干净的主体光、一个慢镜头、logo 和标签原样保留 |
-| 一个安静的生活瞬间 | 近景、柔光、一个小动作、房间环境声 |
-| 一个带反转的小故事 | 一个铺垫、一个转折、结尾一个看得见的变化 |
-| 一段有氛围的风景 | 远景、缓慢移动、天气和光就是主角 |
-| 一个人物的反应 | 固定镜头、一个真实的表情、画外的起因 |
-| 一次爽快的变身 / 转变 | 一个清楚的「之前」，一个清楚的「之后」 |
-
-- 邀请语：「挑一个、混两个，或者说说你自己的想法——也可以说『随便给我一个』，我先写一版完整的，你再改。」
-- 深浅：「可以很简单——如果你本来就用景别、镜头这些词思考，直接告诉我，我就跳到精确的分镜规格。」
-
-## 日本語
-
-| 方向を選ぶ | どうなるか |
-|---|---|
-| 商品を高級に見せる | きれいな主光、ゆっくり一手のカメラ、ロゴとラベルは保持 |
-| 静かな日常のひと瞬間 | 寄りの構図、柔らかい光、小さな仕草ひとつ、部屋の環境音 |
-| どんでん返しのある小さな物語 | 一つの前振り、一つの転換、最後に見える変化ひとつ |
-| 雰囲気のある風景 | ワイド、ゆっくりの移動、天気と光が主役 |
-| 何かに反応する人物 | 固定カメラ、本物の表情ひとつ、画面外の原因 |
-| 気持ちいい変身・変化 | はっきりした「前」と、はっきりした「後」 |
-
-- 誘い：「一つ選ぶ、二つ混ぜる、自由に描く——または『おまかせ』と言ってくれれば、まず完成形を一つ書きます。あとで直せます。」
-- 深さ：「シンプルに進められます——普段からショットやレンズで考えるなら、そう言ってくれれば精密な仕様に飛びます。」
-
-## 한국어
-
-| 방향 고르기 | 무엇이 되나 |
-|---|---|
-| 제품을 고급스럽게 | 깨끗한 주광, 느린 카메라 한 번, 로고와 라벨 유지 |
-| 조용한 일상의 한 순간 | 가까운 프레이밍, 부드러운 빛, 작은 몸짓 하나, 방의 소리 |
-| 반전이 있는 작은 이야기 | 하나의 설정, 하나의 전환, 끝에 보이는 변화 하나 |
-| 분위기 있는 풍경 | 와이드, 느린 이동, 날씨와 빛이 주인공 |
-| 무언가에 반응하는 인물 | 고정 카메라, 진짜 표정 하나, 화면 밖 원인 |
-| 만족스러운 변신 · 변화 | 분명한 '이전'과 분명한 '이후' |
-
-- 권유: "하나 고르거나, 둘을 섞거나, 직접 설명하세요 — 아니면 '알아서 해줘'라고 하면 완성본을 먼저 써 드릴게요. 나중에 고치면 됩니다."
-- 깊이: "간단하게 갈 수 있어요 — 평소 샷과 렌즈로 생각하신다면 말씀만 하세요, 바로 정밀한 사양으로 넘어갑니다."
-
-## Español
-
-| Elige una vía | En qué se convierte |
-|---|---|
-| Un producto que parezca caro | luz principal limpia, un movimiento lento, logo y etiqueta intactos |
-| Un momento cotidiano y tranquilo | plano cercano, luz suave, un pequeño gesto, sonido de sala |
-| Una pequeña historia con giro | un planteamiento, un giro, un cambio visible al final |
-| Una pieza de paisaje con atmósfera | plano abierto, deriva lenta, el clima y la luz como protagonistas |
-| Un personaje que reacciona a algo | cámara fija, una expresión verdadera, una causa fuera de cuadro |
-| Una transformación satisfactoria | un "antes" claro y un "después" claro |
-
-- Invitación: «Elige una, mezcla dos o describe la tuya — o di *sorpréndeme* y te escribo una completa para ajustar.»
-- Profundidad: «Puedo mantenerlo simple — o, si ya piensas en planos y lentes, dímelo y voy directo a una especificación precisa.»
-
-## Русский
-
-| Выберите путь | Во что превращается |
-|---|---|
-| Продукт, снятый дорого | чистый ключевой свет, одно медленное движение, логотип и этикетка сохранены |
-| Тихий момент из жизни | близкий кадр, мягкий свет, один небольшой жест, звук комнаты |
-| Маленькая история с поворотом | одна завязка, один поворот, одно видимое изменение к финалу |
-| Атмосферный пейзаж | общий план, медленное движение, погода и свет — главные герои |
-| Персонаж, реагирующий на что-то | статичная камера, одно настоящее выражение, причина за кадром |
-| Приятное превращение | ясное «до» и ясное «после» |
-
-- Приглашение: «Выберите одно, смешайте два или опишите своё — или скажите *удиви меня*, и я напишу готовый вариант, который вы поправите.»
-- Глубина: «Могу сделать просто — а если вы уже мыслите планами и объективами, скажите, и я перейду сразу к точной спецификации.»
+For a professional, use their production terms directly. Offer a choice only where their specification leaves a real decision open; never require a beginner menu before executing an exact shot request.

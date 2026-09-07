@@ -49,24 +49,15 @@ This is the translator between a scene that exists in someone's head and one tha
 
 ## Starting Points
 
-For a blank-slate user, offer these as vivid, pickable directions - not as a form. Present them in the user's language; localized menus and invites for 中文 / 日本語 / 한국어 / Español / Русский are in [interview-starters](../../references/interview-starters.md).
+For a blank-slate user, draft a complete concept from the available clue or offer up to three brief-specific directions using [interview-starters](../../references/interview-starters.md). Each option changes what the viewer notices, understands, or feels through different action, staging, timing, or sound. Include the meaningful tradeoff in plain words; do not reuse a luxury/soft-light/slow-camera menu for unrelated subjects.
 
-| Pick a lane | What it becomes |
-|---|---|
-| A product, made to look expensive | clean hero light, one slow move, logo and label preserved |
-| A quiet real-life moment | close framing, soft light, one small gesture, room tone |
-| A tiny story with a twist | one setup, one turn, one visible change by the end |
-| A scenic, mood piece | wide frame, slow drift, weather and light as the subject |
-| A character reacting to something | held camera, one true expression, an off-screen cause |
-| A satisfying transformation | one clear before, one clear after, across the clip |
-
-Then invite: "Pick one, mix two, or describe your own - or say *surprise me* and I'll draft a complete one you can tweak."
+Invite a choice, a compatible mix, another idea, or “choose for me.” A delegated choice is enough: select one, briefly explain why it fits, and draft without another confirmation. Preserve selected and rejected directions through revisions. Keep this menu optional and inside the existing question limit.
 
 ## Question Quality Rules
 
-1. Ask in pictures, not parameters. Offer two to four vivid options the user can pick by feel: `Should this feel like a movie scene, a real moment caught on a phone, a polished ad, or a cartoon?` Never: `What camera style and aspect ratio?`
+1. Ask in pictures, not parameters. Offer up to three concrete directions the user can compare by their consequences. Never: `What camera style and aspect ratio?`
 2. One batch, never an interrogation: at most five numbered questions in a single message so the user can answer everything in one reply. Follow up only when an answer creates a real fork.
-3. Every question ships with a default. End it with `(not sure? I'll go with [default] - it works well)`. "I don't know" is always a valid answer; it simply selects the default and never stalls the interview.
+3. Every question ships with a default. End it with `(not sure? I'll choose [option] because [reason tied to this brief])`. "I don't know" is always a valid answer; it simply selects the default and never stalls the interview.
 4. One question, one decision. Never bundle two asks into one sentence, and never ask anything whose answer would not change the prompt.
 5. Keep their words. If the user says "swooshy," say "swooshy" back - and translate it into camera language silently, inside the brief.
 6. Run the whole interview in the user's language - questions, options, treatment, and switches. Keep imported reference tags literal (`@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`). For localized starting-point menus and feeling-to-craft cues in the six supported languages, load [interview-starters](../../references/interview-starters.md).
@@ -81,8 +72,8 @@ Each plain question secretly decides a production parameter the user never has t
 |---|---|---|---|
 | 1 | Who or what is the star of this video - one person, pet, product, or place? | subject anchor | the most concrete noun in their idea |
 | 2 | What happens? What is different at the end compared to the start? | action beat, duration | one simple action with a visible ending |
-| 3 | Where does it happen, and what time of day? | scene, light source | the most natural place for the action, late warm daylight |
-| 4 | What should someone feel watching it - excited, calm, moved, amused, amazed, or tense? | camera, light, sound, pace | calm and warm |
+| 3 | Where does it happen, and what time of day? | scene, light source | the supplied setting, or a stated reversible setting that serves the action |
+| 4 | What should someone feel watching it - excited, calm, moved, amused, amazed, or tense? | camera, light, sound, pace | the stated audience intention; otherwise propose a brief-specific direction |
 | 5 | Where will people watch it - phone apps like TikTok/Reels (tall screen), or YouTube/TV (wide screen)? | aspect ratio, pacing | tall 9:16 |
 | 6 | Is this one complete clip, two or three connected clips, a longer scene that should be divided, or are you unsure? | standalone_clip vs sequence_project | unsure means plan the full story but finalize one clip at a time |
 | 7 | How must the complete story end? | final story outcome | a visible changed state |
@@ -95,22 +86,11 @@ For a sequence project, determine whether the request is the complete video or p
 
 ## Feeling-to-Film Translation
 
-Translate everyday answers into production language inside the brief - never out loud as a quiz. Localized feeling-to-craft cues for the six supported languages live in [interview-starters](../../references/interview-starters.md) and the per-language `references/vocab/*` files.
-
-| User says | Brief writes |
-|---|---|
-| epic, cinematic, movie-like | wide establishing frame, one slow push-in, low warm sun, rising score |
-| cozy, warm, nice | close framing, soft window light, gentle motion, quiet room tone |
-| funny | locked camera, deadpan timing, one absurd visible beat, dry single SFX |
-| like an ad, professional, clean | controlled hero light on the subject, tidy background, one polished camera move |
-| sad, emotional, moving | stillness, a little distance, cool soft light, sparse sound |
-| creepy, tense | slow camera, shadow and doorways, off-screen sound, held silence |
-| cute | camera low at subject height, bright soft light, small bouncy motions |
-| dreamy | drifting camera, haze and glow, slow motion on a single beat |
+Treat a feeling as an intention to resolve through the scene, not a lookup table for lighting or lens moves. Ask what the viewer should notice and what changes over time. “Exciting” might mean following a launch, holding a frame while action crosses it, or revealing a surprising result. Preserve the user's interpretation and supplied camera or performance direction. Use [interview-starters](../../references/interview-starters.md) for consequence-based choices when the answer is still open; do not translate every “cinematic” request into warm sun and a slow push-in.
 
 ## Direct the Scene, Don't Decorate It
 
-The feeling answer is not a style label to sprinkle on; it is the input to a directorial decision. Classify the idea with the [Director's Read](../../references/directors-read.md). For a narrative, story, or performance lane, complete all ten fields, including the hidden objective, obstacle/tactic, one visible suppressed behavior, one non-transferable detail, and one explicit stock-solution refusal. For a non-narrative utility, product-only, or abstract lane, record only the utility intent and refusal of invented drama. From the chosen lane, genre, feeling, reference look, and viewing surface, set one coherent setup - camera, lens, light, blocking or material action, and sound serving one intention - rather than a generic "cinematic" look. Load [directing-engine](../../references/directing-engine.md) when scenes need distinct treatment, one voice must hold across many clips, or the right setup is genuinely unclear. Keep the read in the internal production brief and translate it into visible or audible carriers before final prompt prose; never quiz the user about its field names.
+The feeling answer is not a style label to sprinkle on; it is the input to a directorial decision. Classify the idea with the [Director's Read](../../references/directors-read.md). Complete the canonical record for the selected lane. Keep lane definitions in that reference rather than broadening them here or inventing fields to fit a genre. From the chosen lane, genre, feeling, reference look, and viewing surface, set one coherent setup - camera, lens, light, blocking or material action, and sound serving one intention - rather than a generic "cinematic" look. Load [directing-engine](../../references/directing-engine.md) when scenes need distinct treatment, one voice must hold across many clips, or the right setup is genuinely unclear. Keep the read in the internal production brief and translate it into visible or audible carriers before final prompt prose; never quiz the user about its field names.
 
 When the idea has more than one scene, give each scene its own read and setup but the same voice, and plan how the look should tighten toward the turning point so the finished story feels authored by one hand. Performance is written as one true visible gesture per beat, not as an emotion word.
 
@@ -119,7 +99,7 @@ When the idea has more than one scene, give each scene its own read and setup bu
 After one round of answers - or zero rounds, if the idea is already rich or the user picked a starting point - stop asking and show:
 
 1. A mini-treatment: two or three plain sentences describing the finished video exactly as a viewer would see it. No production vocabulary.
-2. The assumptions made, each with a one-word switch: `I assumed warm late-afternoon light - say "night" and I'll relight it.`
+2. The assumptions made, each with a one-word switch: `I assumed we stay beside the repair bench - say "wider" to show the room.`
 3. The production brief beneath, in full director language.
 
 Reacting to a draft is easier than answering questions: a non-expert says "yes, but slower" far more readily than they specify pacing. Treat their reaction as the second interview round. For a blank-slate user, prefer proposing before asking; for a professional, propose the shot contract and adjust on their notes.

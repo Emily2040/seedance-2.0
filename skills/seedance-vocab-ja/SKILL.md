@@ -46,7 +46,7 @@ Prefer concise production Japanese over literal translation. Keep the structure 
 
 ## Register Rule
 
-The moment a prompt contains dialogue, load Register (文体) in [Japanese vocabulary](../../references/vocab/ja.md) and declare one register per speaker - 敬語, です・ます体, or 普通体 - with a first-person pronoun that matches it. An unstated register is a decision handed to the model, and the mora cost differs enough to break the sync budget (ありがとう 5 → ありがとうございます 10).
+Preserve user-supplied dialogue. When drafting or adapting speech, load Register (文体) in [the vocabulary guide](../../references/vocab/ja.md) and keep the relationship and intended tone explicit. Offer register choices only where they affect the brief. Measure the actual spoken line; do not use a fixed multiplier or change politeness to fit an invented sync budget. Record any unresolved locale-review need.
 
 ## De-Slop Rule
 
