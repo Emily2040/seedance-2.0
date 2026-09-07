@@ -1,52 +1,55 @@
-# V6 Front Page Design
+# README design acceptance
 
-The repository does not currently contain a standalone web app. The public frontend is the GitHub README, generated bitmap hero/infographic assets, and SVG support diagrams.
+The public surface is a GitHub README, not a standalone application. Its first
+job is to explain the skill, show one useful prompt and make installation easy
+to find. Keep the deterministic light/dark masthead. Put generation provenance
+beside any teaching art, and keep captions and instructions as searchable text.
 
-## V6 Design Goals
+## Automated checks
 
-- Lead with the v6 sequence-state promise: one story state, one current clip contract, one compiled Seedance prompt.
-- Make the README useful to English, Chinese, Japanese, and Korean readers before they reach the install section, including full localized docs and active example skills.
-- Show Seedance's practical range: references, first/last-frame continuity, continuation, product reveal, timeline control, audio, and camera direction.
-- Use generated cinematic infographics for the operating-system overview, skill map, skill capability map, CDN delivery map, reference role map, production delivery map, and QC stack.
-- Allow text-rich infographics when the text is large, corrected, visually balanced, and repeated in nearby searchable Markdown.
-- Keep SVG assets as support diagrams, not the primary emotional surface.
-- Validate README completeness, gallery coverage, PNG dimensions, and asset presence with `scripts/design_audit.py`.
+Run `python scripts/design_audit.py` from the repository root. It checks the
+supported inline Markdown/HTML link subset, local file and heading destinations,
+case-correct paths, six quickstart links, Start Here and Install destinations,
+nonempty image descriptions, supported PNG/SVG media and explicit byte ceilings.
+PNG checks inspect signatures and dimensions, not full pixel decoding or craft.
+Every embedded SVG is parsed as XML and checked for accessible title/description,
+scripts and external resources. The three canonical SVG assets also retain
+their outlined-typography and editorial constraints.
+The separate deterministic masthead build check remains mandatory.
 
-## Multilingual Reader Requirements
+There is no minimum README length, bitmap byte count, picture count or gallery
+quota. A small optimized image is allowed; a large image is not evidence of
+quality. The initial 24 MiB aggregate ceiling accommodates the existing page
+during migration. Lower it with the front-page refactor. Count all local
+embedded assets once, including both picture-theme alternatives; this is a
+conservative asset-size bound, not a measured network trace or load-time score.
+Remote embedded images cannot be bounded by this offline check and are rejected.
 
-- The first screen must say the project is current v6 work.
-- The README must include visible Chinese, Japanese, and Korean copy, not only English labels saying those languages exist.
-- Localized-language rows must link to active skill files and active vocabulary references, not migrated legacy files.
-- Japanese and Korean must have active example-skill routes equal in status to Chinese examples.
-- Reference tags such as `@Image1`, `@Video1`, `@Audio1`, `@图片1`, and `@视频1` must be shown exactly so readers do not translate them away.
-- Localization guidance must keep subtitles, legal copy, and market copy in post-production unless the user explicitly asks for simple on-screen generated text.
+This parser supports the repository's inline links and ATX headings; it is not
+a complete GitHub Markdown renderer or accessibility certification. Reference
+links, rich HTML, unusual heading punctuation and browser behavior still need
+rendered inspection. Never treat a passing structural check as visual approval.
 
-## Assets
+## Manual acceptance before publishing a redesign
 
-- `assets/hero-command-center.png`
-- `assets/hero-global-filmmaker-mode.png`
-- `assets/infographic-skill-capabilities.png`
-- `assets/infographic-cdn-delivery-map.png`
-- `assets/infographic-reference-role-map.png`
-- `assets/infographic-production-delivery.png`
-- `assets/infographic-professional-qc-stack.png`
-- `assets/hero-cinematic.png`
-- `assets/skill-os-infographic.png`
-- `assets/skill-map-cinematic.png`
-- `assets/hero-dark.svg`
-- `assets/hero-light.svg`
-- `assets/skill-map.svg`
+Inspect light and dark themes at 390, 768 and 1280 CSS pixels. Record which
+surface was actually tested: real GitHub or a local approximation. Test:
 
-## Design Rules
+1. With optional sections closed, identify the skill, reach a usable example and
+   find installation without scrolling past a gallery or maintainer commands.
+2. At 390px, read the prompt and evidence caption without horizontal page
+   scrolling. Wide technical tables may scroll inside their own region.
+3. Use Tab and Enter to follow entry links and open/close each details summary.
+   Confirm visible focus and a meaningful summary name.
+4. Follow all six language entry links. Distinguish available docs from pending
+   native review and avoid claiming full README parity for ES/RU.
+5. With images unavailable, the example still teaches its action and endpoint.
+   Keep art labels outside the bitmap; no fake UI, metrics or certification.
+6. Review generated image hands, objects, contact, light and scene intent at
+   full size and mobile size. No still image establishes motion or lip-sync.
+7. Run the installation tests: source-only art and evaluator material must not
+   create broken dependencies or change the installed trust boundary.
 
-- No external fonts or scripts in SVG.
-- Every SVG needs `<title>` and `<desc>`.
-- README should stay readable on mobile and dark mode.
-- Avoid dense badge walls and noisy decorative text.
-- Use text-rich generated infographics only for big, short labels that remain legible at README width.
-- Inspect every generated text image; reject garbled words, ugly typography, poor contrast, or placeholder-looking panels before commit.
-- Keep equivalent Markdown explanation beside every text-rich image so the repo remains accessible and searchable.
-
-## V6 Editorial System
-
-The masthead moved from generated bitmap art to a hand-built editorial system: serif display over monospace specification labels, warm ink/paper themes with a single amber accent, film sprocket and viewfinder line work, and zero gradients. `assets/hero-dark.svg` and `assets/hero-light.svg` are served through a `prefers-color-scheme` picture element so the hero matches the viewer's GitHub theme; `assets/skill-map.svg` was rebuilt as a specification diagram (gates -> root -> clusters -> reference library -> validation). Badges were unified to flat-square ink/amber. Generated bitmaps - the hero shots and text-rich infographics, including assets/infographic-cdn-delivery-map.png - remain in the curated Visual Gallery with searchable alt text, plus the operating-system art relocated from the body. Tokens live in `references/frontend-design-system.md`.
+Archive illustrations may remain available through a link. They need not load
+on the front page. Do not remove audit history or relabel old concept art as a
+product screenshot, rendered benchmark or verified production workflow.
