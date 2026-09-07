@@ -13,6 +13,8 @@ Run these commands from a reviewed source checkout. The installer and read-only 
 
 The client paths follow the [Codex documentation](https://learn.chatgpt.com/docs/build-skills) and [Claude Code documentation](https://code.claude.com/docs/en/skills), reviewed 2026-09-07. Directory guidance is separate from [observed host behavior](HOST_COMPATIBILITY.md).
 
+These choices select standard directories; they do not discover a running client's configuration. Use `--dest` when a customized client profile loads skills elsewhere.
+
 For a new Codex user installation:
 
 ```sh

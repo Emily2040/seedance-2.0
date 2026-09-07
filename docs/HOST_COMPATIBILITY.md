@@ -25,7 +25,7 @@ An initial attempt from a synced Documents checkout was refused because `validat
 
 ## Directory guidance versus runtime evidence
 
-The [current Codex documentation](https://learn.chatgpt.com/docs/build-skills), reviewed 2026-09-07, lists project `.agents/skills` scopes and the user-level `~/.agents/skills` location. The installer now offers [explicit client and scope options](INSTALL_SCOPES.md); its no-option default remains `$CODEX_HOME/skills` or `~/.codex/skills` for compatibility. That historical default is not newly verified by this report. The historical receipts below used `--dest`; later CLI additions do not retroactively extend their evidence.
+The [current Codex documentation](https://learn.chatgpt.com/docs/build-skills), reviewed 2026-09-07, lists project `.agents/skills` scopes and the user-level `~/.agents/skills` location. The installer now offers [explicit client and scope options](INSTALL_SCOPES.md); its no-option default remains `$CODEX_HOME/skills` or `~/.codex/skills` for compatibility. That historical default is not newly verified by this report. The historical receipts used `--dest`; later CLI additions do not retroactively extend their evidence.
 
 The [Claude Code documentation](https://code.claude.com/docs/en/skills), reviewed the same day, lists project `.claude/skills` and personal `~/.claude/skills`. Its documented precedence rules can let a personal skill override a project copy. A local CLI result does not establish behavior in Claude's cloud or Cowork sessions. These sources support directory guidance; they are not test results for this repository.
 
