@@ -58,11 +58,7 @@ Use this reference for precise English Seedance prompt wording. English is the d
 
 ## Dialogue Notes
 
-Field-observed from 2026 community testing; test per surface, never promise results. English has the second-strongest lip-sync after Mandarin.
-
-- Reliable-sync budget is roughly 16-20 words in a ~15s clip; longer lines compress the mix. Keep each line to 5-10 words.
-- The acoustic budget (~35-40 words in 15s at natural pace) is higher than the reliable-sync budget - stay under the sync budget, not the acoustic one.
-- A written beat between sentences is field-reported to act as a re-sync anchor: `She pauses, then continues:` - test it rather than assume it.
+No validated English word ceiling or universal second-place language ranking is established here. Preserve quoted dialogue and time the actual delivery with pauses. A short speaker turn and stable framing are starting heuristics, not limits. Evaluate words, performance, and sync separately using [audio-guide](../audio-guide.md); a written pause is direction, not a guaranteed re-sync mechanism.
 
 ## Slop Traps
 

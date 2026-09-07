@@ -46,7 +46,7 @@ Translate the production intention rather than every English word. Keep the Kore
 
 ## Speech Level Rule
 
-The moment a prompt contains dialogue, load Speech Level (말투) in [Korean vocabulary](../../references/vocab/ko.md) and declare one level per speaker - 합니다체, 해요체, or 반말. Korean has no neutral register, and the syllable cost differs enough to break the sync budget (고마워 3 → 감사합니다 5).
+Preserve user-supplied dialogue. When drafting or adapting speech, load Speech Level (말투) in [the vocabulary guide](../../references/vocab/ko.md) and keep the relationship and intended tone explicit. Offer register choices only where they affect the brief. Measure the actual spoken line; do not use a fixed multiplier or change politeness to fit an invented sync budget. Record any unresolved locale-review need.
 
 ## De-Slop Rule
 
