@@ -30,7 +30,9 @@ Chinese production wording can use compact compounds, but compression is useful 
 
 ## Usage Rule
 
-Do not translate reference tags. Keep `@Image1`, `@Video1`, and `@Audio1` unchanged. Use short production phrases instead of abstract adjectives.
+Preserve actual reference tags exactly; their spelling is independent of the prompt language. Use short production phrases instead of abstract adjectives.
+
+Before adapting a reference example below, load [Using Reference Examples](../../references/surface-prompt-profiles.md#using-reference-examples). Bind its placeholders to real assets by the requested role, then preserve the actual token, including its script, case, spacing and punctuation. A written example token does not attach a file.
 
 Load [vocab/zh](../../references/vocab/zh.md) for dense role-binding, first/last-frame, camera, lighting, audio, edit/extend, constraint, and safety vocabulary.
 

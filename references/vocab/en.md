@@ -1,6 +1,6 @@
 # English Vocabulary
 
-Use this reference for precise English Seedance prompt wording. English is the default prompting language and the most heavily moderated surface, and it fails in two ways at once: empty quality words ("cinematic, stunning, 8K") add zero signal, and vague threat-adjacent wording trips false-positive filters. Precision fixes both - concrete production English reads better to the model and to the filter. Keep reference tags unchanged: `@Image1`, `@Video1`, and `@Audio1` stay literal.
+Use this reference for precise English Seedance prompt wording. English is the default prompting language and the most heavily moderated surface, and it fails in two ways at once: empty quality words ("cinematic, stunning, 8K") add zero signal, and vague threat-adjacent wording trips false-positive filters. Precision fixes both - concrete production English reads better to the model and to the filter. Keep reference tags unchanged when translating surrounding prose. The tokens in these tables and templates are examples, not attached assets or universal syntax. Before adapting them, follow [Using Reference Examples](../surface-prompt-profiles.md#using-reference-examples) and preserve the actual binding token, whatever its script or format.
 
 | Function | English wording | What it decides |
 |---|---|---|
