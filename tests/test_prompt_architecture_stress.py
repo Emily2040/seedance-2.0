@@ -238,6 +238,64 @@ class LexicalEvidenceTests(unittest.TestCase):
                 self.assertIn("context unassessed", row["dims"]["slop_free"]["note"])
 
 
+class AdvisoryLexicalGateTests(unittest.TestCase):
+    def case(self, suffix: str = "") -> dict:
+        record = copy.deepcopy(next(r for r in shipped_corpus() if r["id"] == "b09-s"))
+        record["prompt"] += suffix
+        return record
+
+    def test_style_dialogue_and_delivery_flags_do_not_fail_otherwise_valid_cases(self) -> None:
+        for suffix in (' Chosen look: cinematic.', ' Exact line: "Beautiful."', ' Delivery target: 8K.'):
+            with self.subTest(suffix=suffix):
+                record = self.case(suffix)
+                result = stress.score_prompt(record)
+                self.assertLess(result["dims"]["slop_free"]["score"], 3)
+                self.assertTrue(result["lexical_review"]["matched_terms"])
+                self.assertEqual(stress.arm_gate_findings([record], [result], "skill_formula"), [])
+                self.assertNotIn("slop_free", result["gate_dimensions"])
+
+    def test_legacy_overall_is_retained_but_cannot_leak_into_gate_average(self) -> None:
+        record = self.case(' Cinematic beautiful masterpiece award-winning epic.')
+        result = stress.score_prompt(record)
+        scores = result["dims"]
+        self.assertEqual(result["dims"]["slop_free"]["score"], 0)
+        self.assertEqual(result["overall"], round(statistics.mean(v["score"] for v in scores.values()), 3))
+        self.assertEqual(result["gate_overall"], round(statistics.mean(v["score"] for k, v in scores.items() if k != "slop_free"), 3))
+        self.assertLess(result["overall"], result["gate_overall"])
+        self.assertEqual(result["gate_version"], "architecture-v2-nonlexical")
+        self.assertEqual(stress.arm_gate_findings([record], [result], "skill_formula"), [])
+        self.assertFalse(result["lexical_review"]["context_assessed"])
+
+    def test_each_remaining_dimension_still_has_a_blocking_floor(self) -> None:
+        record = self.case()
+        baseline = stress.score_prompt(record)
+        for dimension in baseline["gate_dimensions"]:
+            with self.subTest(dimension=dimension):
+                result = copy.deepcopy(baseline)
+                result["dims"][dimension]["score"] = 2.9
+                findings = stress.case_floor_findings([result])
+                self.assertTrue(any(dimension + "=" in item for item in findings), findings)
+        reference = stress.score_prompt(dict(record, mode="R2V"))
+        self.assertIn("ref_integrity", reference["gate_dimensions"])
+        self.assertTrue(any("ref_integrity=" in item for item in stress.case_floor_findings([reference])))
+
+    def test_advisory_words_do_not_rescue_irrelevance_or_repeated_padding(self) -> None:
+        irrelevant = dict(self.case(), brief="Surgeon scrubs in before an operation")
+        padded = self.case(" " + " ".join(["cinematic motion detail"] * 20))
+        for record, dimension in ((irrelevant, "brief_traceability"), (padded, "repetition")):
+            with self.subTest(dimension=dimension):
+                result = stress.score_prompt(record)
+                findings = stress.arm_gate_findings([record], [result], "skill_formula")
+                self.assertTrue(any(dimension in item for item in findings), findings)
+
+    def test_cli_accepts_advisory_flags_and_names_the_versioned_gate(self) -> None:
+        result = run_strict_corpus([self.case(' Delivery target: 8K.')])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("architecture-v2-nonlexical", result.stdout)
+        self.assertIn("legacy", result.stdout)
+        self.assertIn("now advisory", result.stdout)
+
+
 class AdversarialMutationTests(unittest.TestCase):
     def test_near_duplicate_with_one_subject_mutation_is_rejected(self) -> None:
         base = next(r["prompt"] for r in shipped_corpus() if r["id"] == "b09-s")

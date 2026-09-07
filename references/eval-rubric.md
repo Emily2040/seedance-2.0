@@ -28,15 +28,16 @@ Dimensions: routing correctness, story architecture, clip-scope control, actual-
 Release threshold: all critical continuation cases score 4, no dimension scores below 3, overall average is at least 3.5, and existing standalone behavior does not regress.
 
 For `scripts/prompt_architecture_stress.py --strict`, “no dimension below 3”
-means every applicable dimension on every `skill_formula` case, not an average
-dimension score across the arm. The arm average must also remain at least 3.5,
+means every applicable non-lexical dimension on every `skill_formula` case, not
+an average dimension score across the arm. The v2 gate excludes `slop_free` from
+both dimension floors and its overall average; lexical flags remain advisory. The arm average must also remain at least 3.5,
 and cross-case duplicate or near-duplicate prompts fail when their briefs are
 materially different. This deterministic gate catches structural, relevance,
 explicit contradiction, and repetition failures only. It does not judge
 creativity or originality; comparative creative quality requires blinded model
 evaluation and native-language human review.
 
-## Legacy Lexical Score and Context Review
+## Advisory Lexical Score and Context Review
 
 The architecture report's `lexical_v1` column retains the JSON dimension name
 `slop_free` for compatibility. It is a fixed lexical proxy, not a judgment that
@@ -65,9 +66,31 @@ Preserve exact speech, reference bindings, useful style choices and delivery
 requirements. The matcher does not exempt quoted text or infer intent; keyword
 exceptions alone would not create a contextual creative judge.
 
-This reporting change keeps the term list, numeric scores, aggregate calculations,
-frozen corpus and strict thresholds unchanged. Consequently, the legacy gate can
-still fail a useful phrase on this dimension. Treat that as a limitation to review,
-not an instruction to erase the phrase. Any later scoring migration must explicitly
-compare old and new results, retain regression evidence and document threshold
-changes; this release does not claim that contextual scoring has been solved.
+## Gate Migration: architecture-v2-nonlexical
+
+The keyword list, lexical formula and every individual dimension score remain
+unchanged. JSON `overall` still contains the legacy average including the lexical
+proxy. New fields identify the actual release gate: `gate_version`,
+`gate_dimensions` (the applicable dimensions other than `slop_free`) and
+`gate_overall` (their mean, rounded to three decimals). The CLI displays both
+`gate_v2` and `legacy` averages so they cannot be mistaken for the same baseline.
+
+Strict validation now uses only `gate_overall` and non-lexical floors. Every case
+and applicable non-lexical dimension must still score at least 3, and the arm's
+mean gate score must remain at least 3.5. Duplicate/near-duplicate checks remain
+blocking. Reference integrity is included for modes where it applies. No threshold
+was lowered, but excluding a dimension changes the aggregate; compare the two
+averages explicitly rather than calling them equivalent.
+
+A useful style label, quoted line or delivery target cannot fail the gate solely
+because it matches the lexical list. Equally, a generic adjective bank attached
+to an otherwise structurally valid brief can pass: this gate does not judge its
+creative usefulness. Irrelevance, explicit contradictions, repetition and missing
+reference bindings remain separate failures. Review lexical flags in context;
+passing the gate is not an instruction to retain redundant praise or a quality
+certification.
+
+The frozen corpus is retained for before/after comparison. Migration tests cover
+useful flagged contexts, unchanged legacy values, the remaining dimension floors,
+irrelevant or repeated padding, and real CLI behavior. This is a change to the
+role of a diagnostic, not a semantic classifier or evidence of improved rendering.

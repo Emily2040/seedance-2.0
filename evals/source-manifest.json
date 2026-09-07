@@ -119,7 +119,7 @@
     {
       "path": "references/eval-rubric.md",
       "role": "evaluator",
-      "sha256": "fdf3b26d3a504d1352fd87259e04dca5e5e4b0c01b1c5752b584f87200c3e16e"
+      "sha256": "49d673d2709b578daf478f9270dc1132ef9988b45ae48ccb2325de3c5312f552"
     },
     {
       "path": "references/event-density.md",
@@ -474,7 +474,7 @@
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "960e80efe6b72054935f92e7de6da6b7229282da73447dec335cf434cbbc232e"
+      "sha256": "a55e2d906782a510d91a260ac3339e8f3c0cfc52737de90c4277ebc8aa5fdee0"
     },
     {
       "path": "scripts/eval_ledger_format.py",
