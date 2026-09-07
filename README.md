@@ -622,6 +622,8 @@ python scripts/eval_run.py --provider minimax --region global_en --limit 1
 python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 --limit 1
 ```
 
+For advisory current/proposed/plain comparisons, use the [outcome protocol](references/outcome-comparison.md). It separates useful behavior from exact route agreement, preserves hard gates, and produces no aggregate score for incomplete runs. This offline support does not replace release evaluation.
+
 Without `--live`, the harness prints an offline JSON plan, even if a key or
 `--ledger` is supplied. `--self-test` remains the separate offline wiring check.
 A live run uses `ANTHROPIC_API_KEY` or `MINIMAX_API_KEY` from the environment.

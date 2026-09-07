@@ -327,6 +327,11 @@
       "sha256": "d7f90d9f418a589b027281cee70f9d04ee4498f18dd03b0b17ec52029bfadb82"
     },
     {
+      "path": "references/outcome-comparison.md",
+      "role": "evaluator",
+      "sha256": "5fd8abe8c5e077ac219fdaaf1410477c91d90e29f308a7c58d6e14003e45ce37"
+    },
+    {
       "path": "references/performance-example-cards.md",
       "role": "responder",
       "sha256": "cfff6b7922690d23c3d3090a1e14aa4ce32fe862c54ab731a5db6a66a19614f6"
