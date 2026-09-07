@@ -6141,7 +6141,10 @@ def assert_destination_outside_source(destination: Path, repo_root: Path) -> Non
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Install this repository as a local Codex skill.")
+    parser = argparse.ArgumentParser(
+        description="Install this repository as a local Codex skill.",
+        epilog="For read-only diagnosis, run python scripts/install_doctor.py from a source checkout; see docs/INSTALL_DOCTOR.md.",
+    )
     parser.add_argument(
         "--dest",
         type=Path,
