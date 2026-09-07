@@ -2797,7 +2797,8 @@ def rewrite_installed_readme_text(text: str) -> str:
         README_GALLERY_END,
         "The generated bitmap gallery is kept in the source repository rather "
         "than the installed runtime package. "
-        f"[View the full visual gallery in the source repository]({REPOSITORY_URL}#visual-gallery).",
+        f"[View the full visual gallery in the source repository]({REPOSITORY_URL}/blob/main/docs/visual-archive.md). "
+        f"[View current teaching examples]({REPOSITORY_URL}#start-here).",
         "gallery",
     )
     return replace_marked_section(
