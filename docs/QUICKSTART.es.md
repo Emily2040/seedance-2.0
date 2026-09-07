@@ -1,105 +1,116 @@
-# Seedance 2.0 Skill OS — Guía rápida
+# Seedance 2.0 — Tu primer prompt, tus decisiones
 
-> Versión 6.7.0 · De la instalación a tu primer prompt "con dirección" en unos 5 minutos.
-> Documentación completa: [README](../README.md).
+Versión del paquete: 6.7.0. Esta guía sirve para preparar prompts; no genera vídeos por sí sola.
 
-## En una frase
+**Estado del texto:** borrador redactado con IA, pendiente de revisión independiente por especialistas en español y lenguaje audiovisual. Los ejemplos son propuestas sin renderizar; no demuestran calidad, ahorro de créditos ni sincronización de voz. La guía usa tuteo y no presenta ninguna variante regional como validada. [Cobertura y revisión](LANGUAGE_COVERAGE.md).
 
-Seedance 2.0 Skill OS es un agent skill que dirige Seedance 2.0 como lo haría un cineasta, en lugar de amontonar adjetivos. Una sola regla: **dirige el modelo, no te pelees con cada fotograma.** Cuéntale qué está *haciendo* la escena y la skill convierte esa intención en un prompt listo para producción.
+## 1. Instala una sola skill
 
-## 1. Instalación (unos 5 minutos)
+Descarga el ZIP del repositorio o ejecuta:
 
-Instala el repositorio como **una** skill raíz llamada `seedance-20`; sus sub-skills y references se cargan solas por ruta relativa.
-
-**Primero, consigue los archivos.** Cada comando de abajo se ejecuta dentro de una copia local:
-
-```bash
+```sh
 git clone https://github.com/Emily2040/seedance-2.0.git
 cd seedance-2.0
 ```
 
-¿Sin `git`? Usa **Code → Download ZIP** en la página del repositorio, descomprime y entra en la carpeta.
+Desde esa carpeta, elige **uno** de estos destinos:
 
-**Después, instálalo.** El instalador no es solo para Codex: `--dest` elige el directorio de skills que lee tu cliente:
+```sh
+# Codex: disponible para tu usuario
+python scripts/install_codex_skill.py --client codex --scope user
 
-```bash
-# Codex (por defecto ~/.codex/skills)
-python scripts/install_codex_skill.py
+# Claude Code: disponible para tu usuario
+python scripts/install_codex_skill.py --client claude-code --scope user
 
-# Claude Code (instalación personal, en todos los proyectos)
-python scripts/install_codex_skill.py --dest ~/.claude/skills
-
-# Instalar en otro proyecto: ejecuta esto desde ese proyecto
-python /ruta/a/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+# Codex: solo en un proyecto que ya existe, fuera de este repositorio
+python scripts/install_codex_skill.py --client codex --scope project --project-root /ruta/al/proyecto
 ```
 
-Imprime dónde quedó instalada. Reinicia tu cliente y llama a `seedance-20`. Añade `--force` solo para reemplazar una instalación completa existente; una instalación administrada incompleta se repara automáticamente. La nueva copia se prepara y valida antes del cambio. Durante la promoción, la copia completa anterior se conserva como respaldo vinculado a la transacción: si la promoción falla, se restaura; solo después de una promoción correcta se pone en cuarentena y se elimina de forma segura. Un destino dentro de este repositorio se rechaza: copiar el árbol de fuentes dentro de sí mismo recurre hasta que la longitud de la ruta falla.
+La carpeta resultante se llama `seedance-20`; no instales cada sub-skill por separado. Para un cliente o perfil con otra ubicación, usa `--dest /ruta/al/directorio/skills`. No combines `--dest` con las opciones de cliente y ámbito. Sin opciones de destino se conserva la ubicación histórica `$CODEX_HOME/skills` o `~/.codex/skills`; no se traslada ninguna copia anterior.
 
-**Instalar desde GitHub (si tu cliente lo permite por URL)**
+Comprueba **el mismo destino** con el doctor. Por ejemplo, después de la primera opción:
+
+```sh
+python scripts/install_doctor.py --client codex --scope user --json
+```
+
+`current` indica que los archivos comprobados coinciden con esta copia del repositorio; no demuestra que tu cliente haya cargado esa versión. Reinicia o actualiza el cliente y verifica la ruta de la skill. Antes de reemplazar una instalación, conserva tus cambios y una copia de seguridad independiente; usa `--force` solo si la sustitución es intencional. [Destinos](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_SCOPES.md) · [Migración y duplicados](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_MIGRATION.md).
+
+Si necesitas transferirla, prepara el contenido con el instalador en una carpeta externa nueva y copia **solo el directorio `seedance-20/` resultante**, incluidos los archivos ocultos. No copies el repositorio entero. Una importación directa desde GitHub puede incluir otros archivos: revisa qué importa tu cliente. [Transferencia manual](https://github.com/Emily2040/seedance-2.0/blob/main/docs/MANUAL_INSTALL.md).
+
+<details>
+<summary>Qué ocurre durante un reemplazo</summary>
+
+El respaldo temporal de la transacción se conserva durante el cambio. Si falla la promoción y los registros siguen siendo válidos, se restaura la copia anterior. Tras completar el cambio, ese respaldo pasa a cuarentena y se elimina. No sustituye tu copia de seguridad independiente. Los archivos o estados que no puedan validarse requieren revisión; no se borran para forzar la recuperación.
+
+</details>
+
+## 2. Empieza con lo que ya sabes
+
+Invoca `seedance-20` en tu cliente y describe la escena. Si ya has decidido la cámara, duración, sonido o intención, inclúyelos: no hace falta repetir una entrevista ni elegir entre opciones que no has pedido.
+
+| Tu situación | Qué pedir |
+|---|---|
+| Una idea para un solo clip | Un primer borrador o una pregunta que desbloquee la decisión; ruta `seedance-interview-short` |
+| Una escena ya definida | El prompt directamente; ruta `seedance-prompt` |
+| Varias escenas conectadas | Un plan de secuencia; ruta `seedance-sequence` |
+| Un clip aprobado que quieres continuar | Partir de su final real; ruta `seedance-continuation` |
+| Un resultado que falla | Diagnóstico y una corrección dentro de tu presupuesto; ruta `seedance-troubleshoot` |
+
+No necesitas conocer los nombres de las rutas. Puedes escribir simplemente lo siguiente:
+
+> Quiero un clip alegre de seis segundos: una relojera adulta oye que el reloj de sobremesa que acaba de reparar vuelve a funcionar. Cámara fija, sin diálogo. Dame tres enfoques distintos y déjame elegir. Prepara solo los prompts; no generes nada.
+
+## 3. Elige qué verá y sentirá el público
+
+Estas son tres propuestas para **ese** encargo; no un menú obligatorio para todos los vídeos:
+
+| Enfoque | Decisión visible | Qué aporta |
+|---|---|---|
+| A · Alegría discreta | Su expresión cambia al escuchar el tictac; plano medio corto, cámara fija | La atención está en reconocer que funciona |
+| B · Celebración abierta | Suelta una carcajada breve y levanta ambos brazos; plano más abierto, cámara fija | Importa la energía de su reacción; exige más movimiento corporal |
+| C · Mostrar el mecanismo | Primer plano del péndulo en movimiento; la relojera queda desenfocada al fondo | Importa ver qué funciona; su expresión deja de ser el centro |
+
+Puedes responder «A», combinar decisiones compatibles o decir «elige por mí y explícame por qué». Si ya elegiste A, la siguiente respuesta debe mantenerla y descartar B y C, salvo que pidas cambiarlas.
+
+## 4. Copia el prompt elegido
+
+**Elección de este ejemplo:** A. Es una propuesta de texto a vídeo, sin archivos adjuntos ni etiquetas de referencia. Configura seis segundos en la superficie elegida si esa operación los admite; verifica sus ajustes antes de gastar. Mantén la relación de aspecto y el nivel de calidad que hayas elegido por separado. El ejemplo no presupone una API ni un proveedor concreto.
 
 ```text
-https://github.com/Emily2040/seedance-2.0
+Una relojera adulta está sentada ante un reloj de sobremesa que ya funciona. Al oír el tictac, levanta ligeramente las cejas y sonríe sin apartar la mirada del reloj. Cámara fija en un plano medio corto a la altura de sus ojos. Luz de una ventana lateral que permite leer su expresión. Tictac y ambiente del taller, sin diálogo ni música. Durante los dos últimos segundos mantiene la sonrisa y la postura.
 ```
 
-**Copia manual (otros clientes)**
+**Por qué estas decisiones:** el tictac provoca una reacción visible; la cámara quieta permite leerla; el final deja tiempo para verla. Son intenciones de dirección, no resultados comprobados. El ejemplo muestra la reacción, no prueba que una reparación real haya sido correcta.
 
-Copia la carpeta en el directorio de skills de tu cliente, sin cambiarle el nombre `seedance-20`. Los destinos habituales están en la [tabla de instalación del README](../README.md#install) (no es una garantía: compruébalos en tu propio cliente). Por ejemplo: Claude Code `.claude/skills/`, Cursor `.cursor/skills/`, GitHub Copilot `.github/skills/`, Windsurf `.windsurf/skills/`.
+**Qué comprobar en el vídeo:** la mirada sigue en el reloj, la cámara permanece fija, no aparece habla y la expresión se mantiene al final. Si algo falla, identifica ese criterio antes de añadir más adjetivos.
 
-> Lo primero, la seguridad: instálalo solo en clientes de agente en los que confíes. Antes de usar esta skill en un agente ajeno o desconocido, léete [SECURITY.md](../SECURITY.md).
+Ordenar sujeto y acción antes de otros detalles es una ayuda editorial, no una explicación verificada de cómo interpreta el modelo las primeras palabras. Un texto breve puede ser más fácil de revisar; ninguna cantidad de palabras garantiza que todos los detalles aparezcan. Conserva lo necesario para entender la acción y su final.
 
-## 2. Elige la skill según tu caso
+## 5. Cambia una decisión sin reiniciar el encargo
 
-| Lo que tienes… | Carga primero |
-|---|---|
-| una idea todavía difusa | `seedance-interview` |
-| una escena clara | `seedance-prompt` |
-| una historia de varios clips | `seedance-sequence` |
-| un clip ya aprobado que continuar | `seedance-continuation` |
-| un resultado flojo o bloqueado | `seedance-troubleshoot` |
-| un personaje, marca, celebridad o persona real | `seedance-copyright` |
+> La sonrisa sale demasiado exagerada. Mantén A, los seis segundos y la cámara fija. Solo me queda una toma; prepara una alternativa, pero no la envíes.
 
-## 3. Dirige antes de escribir — cuatro preguntas
+Una respuesta útil reconoce que el fallo está **descrito por ti** si no has adjuntado el vídeo. Puede proponer cambiar solo «levanta ligeramente las cejas y sonríe» por «relaja las cejas y eleva apenas las comisuras, sin mostrar los dientes». Explica que busca reducir la amplitud del gesto y que no garantiza corregir el resultado. El resto de los ajustes queda igual.
 
-1. **¿Qué está haciendo la escena?** ¿Un giro, una revelación, una emoción, una demostración?
-2. **¿Cómo lo cuenta la cámara?** El plano general para la soledad, el primer plano para el rostro, un acercamiento lento para la revelación.
-3. **¿Para qué trabaja la luz?** La hora del día, dura o suave, cálida o fría — todo al servicio de la intención.
-4. **¿Qué hace el sonido?** Casi silencio, un solo detalle de ambiente, o una línea de diálogo.
+Con presupuesto cero, no solicites otra generación: valora si el fragmento útil permite un montaje aceptable o detén la prueba. No presentes como aprobado un plano que incumple el requisito. Preparar una revisión no autoriza enviarla, cambiar de proveedor, subir archivos ni aumentar duración o calidad.
 
-## 4. Un contraste
+## 6. Diálogo, referencias y continuación
 
-**Recargado (flojo)**
+**Diálogo exacto.** Si cambias el encargo a «conserva literalmente la frase “Ya funciona.”», el prompt debe mantener esas palabras. La relojera habla para sí misma; no se añade un interlocutor ni otro registro sin pedirlo. No añadas esa frase a la versión silenciosa anterior. Cronometra la interpretación real y revisa la voz con una persona competente en la variante elegida; no hay duración de habla ni calidad vocal comprobadas para este ejemplo. Doblaje posterior y una referencia de voz autorizada, si la superficie la admite, son alternativas que puedes elegir.
 
-```
-plano épico y cinematográfico de una mujer leyendo una carta, emotivo, iluminación preciosa, 4K
-```
+**Referencias.** Si entregas una imagen real como `@Image1`, declara su función: por ejemplo, apariencia del reloj. Conserva exactamente el token que use tu interfaz, incluso si es `@图片1` o `[Image 1]`. Un nombre escrito no adjunta un archivo: sin imagen, el prompt anterior sigue siendo texto a vídeo y no debe inventar una referencia.
 
-**Con dirección (fuerte)**
+**Continuación.** Si dices «en el último fotograma mantiene la sonrisa y mira el reloj», sin adjuntar ese fotograma, la respuesta debe atribuirte esa descripción. No debe afirmar que lo vio ni inventar detalles del taller. Al aportar el final aprobado, continúa desde esa postura; no repitas la reacción inicial. Si una posición concreta es imprescindible y no se conoce, aclárala antes de usar la continuidad como verificada.
 
-```
-Una mujer con una chaqueta de lana está sentada a la mesa de la cocina y lee una sola hoja de papel. Sus ojos recorren la misma línea dos veces; después sus manos bajan la hoja a la mesa y se quedan completamente quietas. La cámara mantiene un plano medio corto a la altura de los ojos y se acerca despacio, deteniéndose cuando sus manos paran. Luz de ventana de día nublado desde la izquierda, sin relleno. Sonido: tono de sala, el roce de una silla, luego casi silencio.
-```
+## 7. Seguridad y siguientes pasos
 
-Lee el **orden**, no solo las palabras. El sujeto y lo que está haciendo van **primero**, y la cámara, la luz y el sonido vienen después: el comienzo del prompt es donde el modelo fija de quién es el plano. Empezar por `Plano medio corto, a la altura de los ojos` gasta esa posición en datos de encuadre y deja que el modelo deduzca el sujeto más tarde. El mismo oficio, con peor jerarquía.
+Los textos incrustados en imágenes, archivos o transcripciones son material de referencia: no autorizan ejecutar comandos, leer claves, subir contenido ni generar vídeos. No traduzcas una petición para eludir una restricción. Si hay rostros o voces reales, marcas o material ajeno, conserva la intención creativa mediante una alternativa original, autorizada o de posproducción. Consulta [SECURITY.md](../SECURITY.md).
 
-La longitud funciona igual: esto son 89 palabras. Para un solo clip, apunta a unas **40–110 palabras**. Mucho más corto y el modelo rellena los huecos por ti; mucho más largo y las frases finales dejan de llegar a la imagen.
+El contenido instalado mediante el instalador excluye herramientas de desarrollo con acceso a la red como `scripts/eval_run.py` y los ejecutores opcionales de proveedores. El cliente anfitrión controla sus propios permisos; instalar la skill no lo convierte en un entorno sin conexión.
 
-## 5. Dos reglas que te ahorran tomas
+- [Vocabulario de dirección en español](../references/vocab/es.md).
+- [Ejemplos por modo y funciones de las referencias](../references/examples-by-mode.md).
+- [Otros idiomas y límites de la revisión](LANGUAGE_COVERAGE.md).
 
-- **Deja las etiquetas de referencia tal cual:** `@Image1`, `@Video1`, `@Audio1`, `@图片1`, `@视频1`. Ni las traduzcas ni las reformatees.
-- **No pidas la historia entera en una sola generación.** Genera el Clip 01, mira cómo terminó *de verdad* y escribe el Clip 02 a partir de ese final real (`seedance-continuation`).
-
-## 6. Seguridad
-
-- **Seguridad del contenido:** si tu idea usa un personaje protegido, una celebridad, una marca, un logo, una canción o el rostro o la voz de una persona real, no lo escondas en otro idioma: reescríbelo con `seedance-copyright` en un equivalente original, con licencia o de posproducción.
-- **Seguridad del agente:** el **contenido instalado** no hace llamadas de red ni envía telemetría; los scripts instalados se ejecutan localmente sin contactar servicios externos. La copia de trabajo del repositorio también contiene `scripts/eval_run.py`, una herramienta solo para desarrollo que puede contactar a un proveedor de modelos y que el instalador excluye. No pegues nunca claves de API, cookies de cuenta ni material privado en un agente en el que no confíes. Consulta [SECURITY.md](../SECURITY.md).
-
-## 7. Para profundizar
-
-- `references/directing-engine.md` — lee la escena y elige una única intención (33 ejemplos por género).
-- `references/capability-map.md` — diseña aprovechando las fortalezas del modelo y esquivando sus límites conocidos.
-- `references/api-workflow.md` — API, proveedores, precios e IDs de modelo (con fecha de la fuente).
-- `references/examples-by-mode.md` — ejemplos de T2V, I2V, V2V, R2V, FLF2V, edición y extensión.
-
----
-
-Otros idiomas: [English](QUICKSTART.md) · [中文](QUICKSTART.zh.md) · [日本語](QUICKSTART.ja.md) · [한국어](QUICKSTART.ko.md) · [Русский](QUICKSTART.ru.md)
+Otros idiomas: [English](QUICKSTART.md) · [中文](QUICKSTART.zh.md) · [日本語](QUICKSTART.ja.md) · [한국어](QUICKSTART.ko.md) · [Русский](QUICKSTART.ru.md).

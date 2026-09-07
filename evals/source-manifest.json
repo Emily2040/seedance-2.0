@@ -444,7 +444,7 @@
     {
       "path": "references/vocab/es.md",
       "role": "responder",
-      "sha256": "d5bdc96283d012ba0ae6ffd015a86840dd06264a751bd7811bda660281ada693"
+      "sha256": "8978276f86b047927380e961bdccead121f1ee54b1eebda6c4206e4d0defcfd2"
     },
     {
       "path": "references/vocab/ja.md",
@@ -599,7 +599,7 @@
     {
       "path": "skills/seedance-vocab-es/SKILL.md",
       "role": "responder",
-      "sha256": "56f8d9a98606183eb716dc19c6c6caf7be107bc970db54a01f48c79b340c8468"
+      "sha256": "57466bae945ac03f37c8da86f6ebb7f439aebfcea5092bc6a0ca81aca676ebe9"
     },
     {
       "path": "skills/seedance-vocab-ja/SKILL.md",
