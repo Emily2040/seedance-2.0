@@ -13,10 +13,10 @@ All essential instructions remain in Markdown if the image is unavailable.
 
 ## Provenance
 
-- Created 2026-09-07 with the built-in image-generation tool, followed by two
+- Created 2026-09-07 with the built-in image-generation tool, followed by three
   targeted edits with that tool. No Seedance/Dreamina generation was run.
 - Final file: `assets/paper-fan-teaching.png`, 1536 × 1024 pixels, PNG,
-  2,029,237 bytes. SHA-256 is recorded in `data/paper-fan-art.json`.
+  1,933,563 bytes. SHA-256 is recorded in `data/paper-fan-art.json`.
 - No private reference asset, real person's likeness or third-party product was
   supplied. Each edit used the preceding generated illustration as its reference.
 - The final generated PNG is copied without crop, recoloring or re-encoding.
@@ -45,11 +45,24 @@ Edit only the ivory paper object. It currently resembles a thick stack of book p
 The maintainer rejected the original hands and requested feminine hands with
 polished nails. The second edit replaces the hands and cuffs with an adult
 woman's hands, dusty-rose almond nails, fine gold accents and navy blouse cuffs.
-Future commissioned hand-focused imagery for this repository should follow that
-preference. This is the maintainer's visual brief, not a rule for users' prompts.
+This intermediate revision was superseded by the more specific brief below.
 
 ```text
 Use case: precise-object-edit. Edit target: the supplied paper-fan README illustration. Replace the existing hands and forearms with those of an adult woman: elegant slender feminine hands, softly tapered fingers, natural skin texture, well-groomed cuticles, and a beautiful professional manicure. Give every visible nail a consistent medium-length soft almond shape with glossy dusty-rose polish and delicate fine champagne-gold accent lines; tasteful refined nail art clearly readable on the nearer hand. Natural anatomically coherent hands, five fingers per hand, plausible joints and contact with the fan, no duplicated or fused fingers. Replace the heavy work-shirt cuffs with simple dark navy silk blouse cuffs, retaining their position and understated appearance. Keep the exact thin ivory accordion fan, its folds and position, worn walnut table, lamp in upper left, warm side lighting, dark background, oblique camera angle, framing and 3:2 landscape composition. Keep the hands in the same functional gesture around the fan so the scene still communicates careful making. No face or extra person, no rings or extra props, no text, logos, watermark, UI, labels or panels. This is fictional AI-generated teaching concept art, not a Seedance render or a verified craft tutorial.
+```
+
+## Refined hand and premium manicure brief
+
+The maintainer then specified an adult East Asian woman, fair skin, longer
+slender fingers and longer nails with a premium finish. The third edit follows
+that casting and styling brief with long almond nails, a pearl-blush base,
+ivory French tips and fine gold accents. This is the generation brief, not a
+claim that ethnicity can be verified from a hand image. Future commissioned
+hand-focused imagery for this repository should follow this preference. It does
+not constrain the creative choices of people using the skill.
+
+```text
+Use case: precise-object-edit. Edit target: the supplied paper-fan README illustration. Refine both hands and forearms to belong to an ADULT East Asian woman, age 25 or older. Follow the client's specific appearance brief: noticeably longer, slender gracefully tapered fingers and fair porcelain-toned skin with subtle natural texture, realistic knuckles and warm lamp-light shading. Replace the current short-to-medium nails with visibly LONG almond-shaped salon nails, each extending about 10-12 mm beyond the fingertip. Beautiful premium manicure: sheer milky blush-pink base, luminous pearlescent glazed finish, fine ivory micro-French tips, and restrained champagne-gold filigree on two accent nails. Nail lengths and shapes must be coherent across both hands, nail plates attach correctly, reflections follow their curvature; sophisticated jewelry-like finish without bulky gems. Show the manicure clearly, especially on the nearer right-side hand. Five anatomically coherent fingers per hand, natural joints, plausible grasp and contact with the fan, no extra or fused digits. Preserve the thin ivory accordion fan, its folds and position, worn walnut table, lamp upper left, warm side lighting, dark navy blouse cuffs, quiet dark background, oblique camera angle and 3:2 landscape framing. Keep the same two-handed making gesture. Do not whiten the paper, change the light, add a face, show a child, add jewelry or props, or introduce text, logos, watermark, UI or panels. Fictional AI-generated teaching concept, not a Seedance render or craft verification.
 ```
 
 ## Acceptance boundaries

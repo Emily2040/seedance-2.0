@@ -45,7 +45,7 @@ without submitting a paid generation request.
 <!-- teaching-image:placement -->
 <!-- installed-readme-gallery:start -->
 
-![An adult woman's hands with rose-and-gold nail art hold an ivory paper fan under a desk lamp.](assets/paper-fan-teaching.png)
+![Slender hands with long pearl-blush nails, ivory tips and gold accents hold an ivory paper fan under a desk lamp.](assets/paper-fan-teaching.png)
 
 *AI-generated teaching concept, not Seedance output.* The still illustrates
 material, framing and light; it does not prove the action or sound will render.
