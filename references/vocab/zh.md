@@ -126,9 +126,9 @@ No universal Mandarin-first ranking or character ceiling is established here. Ke
 
 ## Aesthetic Registers (美学语域)
 
-Chinese carries genre-aesthetic registers with no one-word English equivalent. They are legitimate intent words — but they are intent, not instruction: alone in a prompt they behave like feel-words and destabilize the output. Name the register, then spend the words on the physical elements that produce it, exactly as the Slop Traps table repairs feel-words.
+Chinese genre and aesthetic terms can carry useful creative intent. Preserve the user's chosen term; when the intended shot is unclear, ask what matters or propose a scene-specific visible or audible detail. The examples below are authored possibilities, not definitions of a culture or mandatory ingredients. This is editorial guidance for making direction reviewable, not evidence that these terms destabilize Seedance output. Independent language and production-language review remains pending.
 
-| Register | Decompose into |
+| Term | One possible scene treatment |
 |---|---|
 | 武侠 (wuxia) | physical craft, not the label: `竹林间的剑客、衣袂随步伐摆动、足尖点地的轻功起跳、竹叶纷落` |
 | 仙侠 (xianxia) | one supernatural element grounded in physics: `御剑离地三尺悬停、云海在脚下流动、法器发出的冷光映在脸上` |
@@ -171,19 +171,19 @@ Record the variant with the delivery target, not the prompt, and keep it fixed f
 
 ## Slop Traps
 
-社区共识：抽象的“感觉词”会让模型无法判断该强调哪个元素。把感觉词拆解成制造这种感觉的物理元素——材质、光线、色彩、空气——画面立即变稳。
+编辑建议：只有在意图不清时，才把抽象形容词补充为能看见或听见的指令；有用的风格词可以保留。这有助于核对创作要求，不代表模型必然无法理解形容词，也不保证画面更稳定或节省生成额度。以下是写法示例，不是通用配方；不要自动加入慢推镜、雾气或青橙调色。保留用户选定的风格、情绪强度、对白、参考标签和设置；若不同理解会明显改变场景，给出少量有区别的选项，或按用户授权代选。
 
-| 套话 | 改写为 |
+| 套话 | 可按场景补充的指令 |
 |---|---|
-| `电影感` | 写出景别、运镜、光源和调色：`宽幅远景，缓慢推镜，低角度暖阳，低饱和青橙调` |
-| `氛围感` | 写出制造氛围的物理元素：`薄雾、逆光轮廓、湿润地面反光、低环境声` |
-| `高级感` | 写出光线与材质行为：`柔和侧光、受控反光、干净背景、金属拉丝纹理` |
-| `大片感` | 写出物理规模：人群数量、镜头距离、建筑高度 |
-| `质感`（单独使用） | 指明哪种质感：`磨砂玻璃、丝绒吸光、纸张纤维` |
-| `震撼` | 写出造成震撼的那一个画面对比或揭示 |
-| `唯美` | 写出色彩、构图与光的具体行为 |
-| `史诗级` | 删除，或换成具体的空间尺度与人数 |
-| `超高清 / 8K / 4K` | 删除；分辨率是参数，不是描述 |
-| `杰作 / 顶级品质` | 删除；质量不是请求出来的 |
-| `绝美` | 写出最重要的那一个视觉细节 |
-| `酷炫转场` | 写出转场名称：`匹配剪辑、硬切、甩镜` |
+| `电影感` | 例如钟表匠听见滴答声后微笑的片段：`固定镜头与她的眼睛同高；滴答声响起，她才微笑；结尾停留在这个表情上`。这是该片段的一种选择，不要求其他场景也静止克制 |
+| `氛围感` | 先明确场景需要哪种氛围，再选择相关声画细节；工作室可写`停下工具后，钟的滴答声仍清晰可闻`，不必添加雾或湿地反光 |
+| `高级感` | 明确要展示哪种工艺或材质，例如`侧光扫过表盘上的拉丝纹理，刻度保持可读`；不要默认换成空白背景或金色装饰 |
+| `大片感` | 若意图是规模，说明人物与空间的关系；若意图是紧张或惊喜，说明造成它的动作，不自动增加人群 |
+| `质感`（单独使用） | 指明哪个物体、哪种表面，以及镜头需要看见什么：`近处纸张边缘露出纤维` |
+| `震撼` | 指明造成冲击的对比、动作或揭示；保留用户要求的强烈表现 |
+| `唯美` | 按选定风格明确构图、色彩或光的行为，不强制柔光或低饱和 |
+| `史诗级` | 若指空间尺度，写出主体与环境的比例；若指风格，保留该意图并补充本场景的表现方式 |
+| `超高清 / 8K / 4K` | 记录实际交付分辨率要求，在当前操作支持的设置中处理；不要把提示词里的数字当作输出分辨率保证 |
+| `杰作 / 顶级品质` | 明确本片段的验收项，如表盘刻度可读、动作衔接连续；这些是要求，不是已达到的结果 |
+| `绝美` | 明确最重要的视觉细节，并保留用户选定的审美方向 |
+| `酷炫转场` | 明确从什么画面切到什么画面、靠哪个动作衔接；只有需要该效果时才选择匹配剪辑、硬切或甩镜 |

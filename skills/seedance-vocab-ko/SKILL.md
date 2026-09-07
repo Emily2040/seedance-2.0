@@ -26,7 +26,7 @@ Use Korean cinematic vocabulary when the user asks for Korean prompt wording, bi
 
 ## Intent
 
-Korean prompt direction should convert mood words into observable light, framing, blocking, and timing instead of treating a label as sufficient direction. Keep the relationship and speech level explicit whenever dialogue is added. The shipped independent review artifact is empty, so treat these choices as working production wording pending locale-specialist review.
+Korean prompt direction should preserve useful mood or style terms and clarify ambiguous intent through observable light, framing, blocking, or timing. Keep the relationship and speech level explicit whenever dialogue is added. The shipped independent review artifact is empty, so treat these choices as working production wording pending locale-specialist review.
 
 ## Usage Rule
 
@@ -50,7 +50,7 @@ Preserve user-supplied dialogue. When drafting or adapting speech, load Speech L
 
 ## De-Slop Rule
 
-When the prompt leans on `영화 같은`, `감성적인`, `분위기 있는`, `웅장한`, or `고퀄리티`, load the Slop Traps table in [Korean vocabulary](../../references/vocab/ko.md) and decompose each into the physical elements that produce it - 카메라 동사+속도+시점, 광원+방향+행동.
+When an adjective leaves the intended shot unclear, load Slop Traps in [Korean vocabulary](../../references/vocab/ko.md). Preserve a useful style or aesthetic term and add only the scene-specific action, framing, light, or sound needed to clarify it. The table offers authored options, not a default look or a proven model-performance rule. Keep the user's chosen energy, dialogue, reference tags, and settings. Offer distinct choices only when the ambiguity changes the scene; if the user delegated the choice, decide within that scope.
 
 ## Output Contract
 

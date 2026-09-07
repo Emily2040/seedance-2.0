@@ -50,7 +50,7 @@ Preserve user-supplied dialogue. When drafting or adapting speech, load Register
 
 ## De-Slop Rule
 
-When the prompt leans on `映画のような`, `エモい`, `雰囲気のある`, `壮大な`, or `高画質`, load the Slop Traps table in [Japanese vocabulary](../../references/vocab/ja.md) and decompose each into the physical elements that produce it - 動作動詞＋速度＋視点, 光源＋方向＋挙動.
+When an adjective leaves the intended shot unclear, load Slop Traps in [Japanese vocabulary](../../references/vocab/ja.md). Preserve a useful style or aesthetic term and add only the scene-specific action, framing, light, or sound needed to clarify it. The table offers authored options, not a default look or a proven model-performance rule. Keep the user's chosen energy, dialogue, reference tags, and settings. Offer distinct choices only when the ambiguity changes the scene; if the user delegated the choice, decide within that scope.
 
 ## Output Contract
 
