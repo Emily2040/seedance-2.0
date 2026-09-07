@@ -134,6 +134,10 @@ DIRECTORS_READ_CASES = {
     "abstract-logo-reveal": "non_narrative",
     "dancer-masks-missed-cue": "narrative",
     "hands-only-assembly-demo": "non_narrative",
+    "joyful-dance-observation": "non_narrative",
+    "silent-pottery-process": "non_narrative",
+    "visual-comedy-performance": "non_narrative",
+    "quiet-wildlife-observation": "non_narrative",
 }
 
 GENRE_LIBRARY_LANES = {

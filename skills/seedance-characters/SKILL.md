@@ -23,7 +23,7 @@ metadata:
 
 Use this for identity, consistency, multi-character blocking, wardrobe continuity, hand safety, expression control, and likeness-sensitive character guidance. Character prompting must remove ambiguity before adding style.
 
-Load [shot-list-continuity](../../references/shot-list-continuity.md) when character identity, wardrobe, props, eyeline, screen direction, or emotional state must survive across multiple shots. Load [directing-engine](../../references/directing-engine.md) to direct performance: give each character a playable objective, show subtext through contradiction between word and action, and keep one performance register consistent with the project's directorial voice.
+Load [shot-list-continuity](../../references/shot-list-continuity.md) when character identity, wardrobe, props, eyeline, screen direction, or emotional state must survive across multiple shots. Load [directing-engine](../../references/directing-engine.md) to deepen performance after the canonical lane decision. For dramatic acting, use playable objectives and subtext; for observation or direct expression, preserve the requested movement, rhythm, or delight without inventing a conflict. Keep the intended performance register consistent with the project's voice.
 
 ## Intent
 

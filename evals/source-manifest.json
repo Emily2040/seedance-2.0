@@ -99,12 +99,12 @@
     {
       "path": "references/directors-read.md",
       "role": "responder",
-      "sha256": "065fd48f0767c31e7ab3068db6b74e53850005b05d0d95e4c7e9e755a7afa7c5"
+      "sha256": "f7021ac0e01d5c570fa262f9c3970272377eb775dc7c0616e6e8b6af2859071d"
     },
     {
       "path": "references/directing-engine.md",
       "role": "responder",
-      "sha256": "89c126bd888e6530bfa5085664cdd9355a6e9cd6b293505eafd8c93a4c8d0f9f"
+      "sha256": "c212896169e073c73efa20ca1cb82a26b415346b168f2f0b697aa72f3ca12487"
     },
     {
       "path": "references/directing-engine-genre-library.md",
@@ -339,7 +339,7 @@
     {
       "path": "references/prompt-compiler.md",
       "role": "responder",
-      "sha256": "3fb3bd667a3db0ded4d374d5f21810b67089ec4f97b250d1938497701d1d6218"
+      "sha256": "eb481e7c3b46d02dc9c115cac9effd5e9783a9a742afd58d291dd6922e6bedcb"
     },
     {
       "path": "references/prompt-examples.md",
@@ -444,7 +444,7 @@
     {
       "path": "SKILL.md",
       "role": "root",
-      "sha256": "adc3ddaf0e62e8ed588f66258f506897de633108751612e53e14858400a82620"
+      "sha256": "e1710cbecd5039fbe549a622590f0aff6a2abadf4b08872993116368ee0474fd"
     },
     {
       "path": "scripts/eval_run.py",
@@ -469,12 +469,12 @@
     {
       "path": "skills/seedance-characters/SKILL.md",
       "role": "responder",
-      "sha256": "1db60a2e0f427573f889135c46b84875935d0d4a978fb3a36de71f5cf6642d9d"
+      "sha256": "f524d24f8f44f0431f8bc553fc7737c6c7bbf5a3d2c17d97016d9f8b0cec9424"
     },
     {
       "path": "skills/seedance-continuation/SKILL.md",
       "role": "responder",
-      "sha256": "8029af2d99b3ea6f629c1b1f5cfd7516d96d61b193494706061b745534c8dc82"
+      "sha256": "0b9e354918e555495de5ae720c8fadc6f584681e51efca64a127824ce52005bc"
     },
     {
       "path": "skills/seedance-copyright/SKILL.md",
@@ -529,12 +529,12 @@
     {
       "path": "skills/seedance-prompt/SKILL.md",
       "role": "responder",
-      "sha256": "16d9a9cdb3c966e4233984bfa7b602b2ab9a3c3c8817b5689b8e7b696f429c8a"
+      "sha256": "8f33bdef8c3f9dacc3050b9ce5eb401ab44ec082ec1f19c7ce3393882f3f1768"
     },
     {
       "path": "skills/seedance-prompt-short/SKILL.md",
       "role": "responder",
-      "sha256": "3225ea5b3dd377112ac60e7edb12dbe97e687b620f5a0ef8124b60cc517794a7"
+      "sha256": "645e1a50cb4b4a2a5eba420716592cc49bd9114ec2f081b9982c3cd7b36f625f"
     },
     {
       "path": "skills/seedance-recipes/SKILL.md",
@@ -544,7 +544,7 @@
     {
       "path": "skills/seedance-sequence/SKILL.md",
       "role": "responder",
-      "sha256": "23a6525f57eb87e7cfc0b8bfa5c18e02e3e6ccc9070dff5f0407eb7f0f72ad4b"
+      "sha256": "8c8e85ee081ee9cbe73c46a7b0dedd6cf5b7a6627fcdde498f9a46c2b58592ed"
     },
     {
       "path": "skills/seedance-style/SKILL.md",
