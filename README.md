@@ -186,13 +186,15 @@ A destination inside this repository is refused rather than attempted because it
 
 This repository keeps dense facts in references so the active skill stays small.
 
-If your client supports installing a skill directly from a GitHub repository, use this repository URL:
+For a client that imports a local skill folder, first prepare the filtered payload in a new staging directory outside this checkout:
 
-```text
-https://github.com/Emily2040/seedance-2.0
+```bash
+python scripts/install_codex_skill.py --dest /absolute/path/to/new-staging/skills
 ```
 
-For manual installation, copy this repository into the skill directory used by your agent client. The directory name should match the root skill name, `seedance-20`. Treat the table below as common local targets to verify in your own client, not a universal support guarantee.
+Import the resulting `skills/seedance-20/` folder, or run the installer with `--dest` set directly to the skills parent directory your client scans. Keep the directory name `seedance-20` and its relative layout. A raw repository clone or a client-managed GitHub import may include the evaluator, provider helpers, tests and archives; it does not carry the installer's filtered-payload guarantee. Inspect how that client packages files before using a direct import. See [manual transfer and verification](docs/MANUAL_INSTALL.md).
+
+Treat the table below as common local targets to verify in your own client, not a universal support guarantee.
 
 | Platform | Typical install target (verify in your client) |
 |---|---|
