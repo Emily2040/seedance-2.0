@@ -43,7 +43,7 @@ path = "/absolute/path/to/old/seedance-20/SKILL.md"
 enabled = false
 ```
 
-Use the actual old path, preferably forward slashes in TOML on Windows. Back up the client configuration and update an existing entry for that path rather than appending a conflicting duplicate. Preserve other settings. Restart Codex and confirm that the intended new path is enabled and the old path is disabled. This is a manual client configuration choice; neither repository script makes it for you. The guide has not tested retirement in your personal configuration.
+Use the actual old path, preferably forward slashes in TOML on Windows. If your profile uses a custom configuration location, identify that active file first; do not assume the default file controls the session. Back up the client configuration and update an existing entry for that path rather than appending a conflicting duplicate. Preserve other settings. Restart Codex and confirm that the intended new path is enabled and the old path is disabled. This is a manual client configuration choice; neither repository script makes it for you. The guide has not tested retirement in your personal configuration.
 
 **Claude Code:** its documentation gives enterprise precedence over personal, and personal over project. A new project copy can therefore be shadowed by an older personal copy. Verify the source before blaming the prompt or reinstalling. If you own the old copy and choose to retire it, preserve a verified backup outside all scanned skill directories, then move only that identified directory out of discovery. Do not change organization-managed files; have their owner reconcile the duplicate. Refresh the client and verify the selected source again.
 
