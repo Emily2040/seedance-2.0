@@ -49,6 +49,9 @@ Retain a brief quote, candidate quote and reason for every judgment, including
 hard gates. A dimension below 2 fails even if the average is high. Resolve
 material human disagreement through recorded adjudication, never by silently
 averaging it away. Route agreement is an advisory boolean only in this study.
+The reducer retains it and reports separate match/mismatch counts over validly
+scored rows, even for an incomplete study; errors are neither matches nor
+mismatches. These diagnostic counts do not affect quality scores or pass decisions.
 The canonical `eval_run.py` exact-route gate and release thresholds remain in
 force; this comparison cannot produce release eligibility or overwrite its ledger.
 

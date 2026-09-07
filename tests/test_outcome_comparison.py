@@ -25,6 +25,17 @@ class OutcomeComparisonTests(unittest.TestCase):
     def test_equivalent_route_can_pass(self):
         self.assertTrue(assess(good())["passed"])
 
+    def test_route_diagnostic_survives_without_changing_quality(self):
+        rows = [{"case_id": "one", "arm": a, "judgment": good()} for a in ARMS]
+        before = compare(["one"], rows)
+        rows[0]["judgment"]["route_matches"] = True
+        after = compare(["one"], rows)
+        self.assertEqual(after["arms"]["current"]["route_matches"], 1)
+        self.assertEqual(after["arms"]["current"]["route_mismatches"], 0)
+        self.assertEqual(before["arms"]["current"]["route_matches"], 0)
+        self.assertEqual(before["arms"]["current"]["mean_score"], after["arms"]["current"]["mean_score"])
+        self.assertEqual(before["arms"]["current"]["passed"], after["arms"]["current"]["passed"])
+
     def test_generic_prose_and_hard_gate_fail_independently(self):
         for category, key, value in [("dimensions", "specificity", 0), ("gates", "state", False),
                                      ("gates", "safety", False), ("gates", "reference_fidelity", False)]:
@@ -35,12 +46,14 @@ class OutcomeComparisonTests(unittest.TestCase):
 
     def test_error_is_never_a_score(self):
         error = {"status": "harness_error", "gates": None, "dimensions": None, "route_matches": None, "error": "timeout"}
-        self.assertEqual(assess(error), {"status": "harness_error", "score": None, "passed": None})
+        self.assertEqual(assess(error), {"status": "harness_error", "score": None, "passed": None, "route_matches": None})
         rows = [{"case_id": "one", "arm": a, "judgment": good()} for a in ARMS]
         rows[0]["judgment"] = error
         report = compare(["one"], rows)
         self.assertFalse(report["complete"])
         self.assertTrue(all(a["mean_score"] is None for a in report["arms"].values()))
+        self.assertEqual(report["arms"]["current"]["route_matches"], 0)
+        self.assertEqual(report["arms"]["current"]["route_mismatches"], 0)
 
     def test_missing_rows_do_not_create_partial_average(self):
         report = compare(["one"], [{"case_id": "one", "arm": "current", "judgment": good()}])

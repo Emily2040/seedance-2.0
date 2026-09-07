@@ -21,7 +21,7 @@ def assess(record: dict) -> dict:
                 or record["route_matches"] is not None
                 or not isinstance(record["error"], str) or not record["error"].strip()):
             raise ValueError("harness errors require an error and no judgments")
-        return {"status": "harness_error", "score": None, "passed": None}
+        return {"status": "harness_error", "score": None, "passed": None, "route_matches": None}
     if record["status"] != "scored" or record["error"] is not None:
         raise ValueError("unknown outcome status or contradictory error")
     if type(record["route_matches"]) is not bool:
@@ -36,7 +36,7 @@ def assess(record: dict) -> dict:
     if any(type(v) is not int or not 0 <= v <= 3 for v in dimensions.values()):
         raise ValueError("outcome dimensions require integers from 0 through 3")
     score = sum(dimensions.values()) / len(DIMENSIONS)
-    return {"status": "scored", "score": score,
+    return {"status": "scored", "score": score, "route_matches": record["route_matches"],
             "passed": all(gates.values()) and min(dimensions.values()) >= 2}
 
 
@@ -73,6 +73,8 @@ def compare(case_ids: list[str], records: list[dict]) -> dict:
             "scored": len(scored),
             "harness_errors": sum(r["status"] == "harness_error" for r in rows),
             "missing": len(case_ids) - len(rows),
+            "route_matches": sum(r["route_matches"] for r in scored),
+            "route_mismatches": sum(not r["route_matches"] for r in scored),
             "mean_score": sum(r["score"] for r in scored) / len(scored) if complete else None,
             "passed": sum(r["passed"] for r in scored) if complete else None,
         }
