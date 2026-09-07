@@ -8,10 +8,10 @@ Scores three arms of the same 34 briefs against each other:
                     fixed it - kept as a frozen regression arm, not a current doc
   skill_formula     seedance-prompt's Director Formula, followed literally
 
-The point is the gap between arms. If the skill's doctrine is sound, the
-skill_formula arm clears the release bar in references/eval-rubric.md and the
-others do not - and if a beginner-facing example teaches a shape that misses
-that bar, this is where it shows up rather than in user feedback.
+The comparison is a regression check on hand-authored fixtures, not evidence
+that one approach produces better video. The v2 gate excludes the lexical proxy
+from floors and averages while retaining legacy scores for comparison; see
+references/eval-rubric.md for the migration contract.
 
 Scores are mechanical and intentionally bounded. They catch structural,
 brief-relevance, explicit contradiction, and repetition failures. They do not
@@ -163,13 +163,17 @@ DIM_NAMES = [
     "repetition",
 ]
 
+GATE_VERSION = "architecture-v2-nonlexical"
+
 BOUNDARY = (
     "Boundary: this deterministic gate catches structural, brief-relevance, "
     "explicit contradiction, and repetition failures. It does not judge "
     "creativity or originality; comparative creative quality still requires "
-    "blinded model evaluation and native-language human review. "
+    "blinded model evaluation and native-language human review.\n"
     "The slop_free dimension is a legacy lexical proxy: matches and their "
-    "position do not establish useless wording or model token importance."
+    "position do not establish useless wording or model token importance. "
+    "Lexical flags are advisory and excluded from the v2 gate; "
+    "the legacy overall remains available for comparison."
 )
 
 TOKEN = re.compile(r"[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)?")
@@ -5797,11 +5801,16 @@ def score_prompt(rec: dict) -> dict:
     dims["coherence"] = score_coherence(p)
     dims["repetition"] = score_repetition(p)
     overall = statistics.mean(v[0] for v in dims.values())
+    gate_dims = [name for name in dims if name != "slop_free"]
+    gate_overall = statistics.mean(dims[name][0] for name in gate_dims)
     return {
         "id": rec["id"], "arm": rec["arm"], "mode": mode, "brief": brief,
         "words": len(words(p)),
         "dims": {k: {"score": round(v[0], 2), "note": v[1]} for k, v in dims.items()},
         "overall": round(overall, 3),
+        "gate_overall": round(gate_overall, 3),
+        "gate_version": GATE_VERSION,
+        "gate_dimensions": gate_dims,
         "ref_note": ref[1],
         "lexical_review": flags,
     }
@@ -5812,10 +5821,10 @@ def case_floor_findings(results: list[dict], arm: str = "skill_formula") -> list
     for result in results:
         if result["arm"] != arm:
             continue
-        if result["overall"] < 3.0:
-            findings.append(f"{result['id']}: overall={result['overall']:.2f} (<3.00)")
+        if result["gate_overall"] < 3.0:
+            findings.append(f"{result['id']}: gate_overall={result['gate_overall']:.2f} (<3.00)")
         for dimension, value in result["dims"].items():
-            if value["score"] < 3.0:
+            if dimension != "slop_free" and value["score"] < 3.0:
                 findings.append(
                     f"{result['id']}: {dimension}={value['score']:.2f} (<3.00) - "
                     f"{value['note']}"
@@ -5828,7 +5837,7 @@ def arm_gate_findings(records: list[dict], results: list[dict], arm: str) -> lis
     if not arm_results:
         return [f"no {arm} arm in this corpus"]
     findings = case_floor_findings(results, arm)
-    average = statistics.mean(result["overall"] for result in arm_results)
+    average = statistics.mean(result["gate_overall"] for result in arm_results)
     if average < 3.5:
         findings.append(f"{arm}: arm average={average:.2f} (<3.50)")
     if arm == "skill_formula":
@@ -5844,7 +5853,8 @@ def main() -> int:
         "--strict", action="store_true",
         help=(
             "exit non-zero if any skill_formula case/dimension is below 3, the arm "
-            "average is below 3.5, or materially different briefs reuse a prompt"
+            "average is below 3.5, or materially different briefs reuse a prompt "
+            "(v2 excludes advisory lexical flags)"
         ),
     )
     args = parser.parse_args()
@@ -5869,14 +5879,15 @@ def main() -> int:
 
     dim_names = DIM_NAMES
     print(f"Corpus: {len(results)} prompts across {len(arms)} arms\n")
-    header = f"{'arm':<22}{'n':>4}{'overall':>9}" + "".join(
+    header = f"{'arm':<22}{'n':>4}{'gate_v2':>9}{'legacy':>9}" + "".join(
         f"{('lexical_v1' if d == 'slop_free' else d[:11]):>13}" for d in dim_names
     )
     print(header)
     print("-" * len(header))
-    for arm in sorted(arms, key=lambda a: -statistics.mean(x["overall"] for x in arms[a])):
+    for arm in sorted(arms, key=lambda a: -statistics.mean(x["gate_overall"] for x in arms[a])):
         rs = arms[arm]
-        row = f"{arm:<22}{len(rs):>4}{statistics.mean(x['overall'] for x in rs):>9.2f}"
+        row = (f"{arm:<22}{len(rs):>4}{statistics.mean(x['gate_overall'] for x in rs):>9.2f}"
+               f"{statistics.mean(x['overall'] for x in rs):>9.2f}")
         for d in dim_names:
             vals = [x["dims"][d]["score"] for x in rs if d in x["dims"]]
             row += f"{statistics.mean(vals):>13.2f}" if vals else f"{'-':>13}"
@@ -5884,11 +5895,11 @@ def main() -> int:
 
     print(
         "\nlexical_v1 = slop_free in JSON: unchanged legacy keyword score, "
-        "including its first-25-word penalty. Context is unassessed; "
+        "including its first-25-word penalty, now advisory. Context is unassessed; "
         "neither matches nor absence of matches judge creative quality. "
         "Do not remove style, dialogue or delivery requirements merely to pass."
     )
-    print("\nRelease gate (every case and applicable dimension >= 3; arm average >= 3.5;")
+    print(f"\nRelease gate {GATE_VERSION} (every case and non-lexical dimension >= 3; arm average >= 3.5;")
     print("no cross-case duplicate/near-duplicate prompts for materially different briefs)")
     gate_findings = {
         arm: arm_gate_findings(corpus, results, arm)
@@ -5896,17 +5907,17 @@ def main() -> int:
     }
     for arm in sorted(arms):
         rs = arms[arm]
-        avg = statistics.mean(x["overall"] for x in rs)
+        avg = statistics.mean(x["gate_overall"] for x in rs)
         findings = gate_findings[arm]
         verdict = "PASS" if not findings else "FAIL"
         suffix = f"  findings={len(findings)}" if findings else ""
         print(diagnostic_text(f"  {arm:<22} avg={avg:.2f}  {verdict}{suffix}"))
 
-    print("\nPer-mode overall (skill_formula arm)")
+    print("\nPer-mode gate_v2 overall (skill_formula arm)")
     modes: dict[str, list[float]] = {}
     for r in results:
         if r["arm"] == "skill_formula":
-            modes.setdefault(r["mode"], []).append(r["overall"])
+            modes.setdefault(r["mode"], []).append(r["gate_overall"])
     for m in sorted(modes, key=lambda m: statistics.mean(modes[m])):
         print(
             diagnostic_text(
@@ -5915,13 +5926,13 @@ def main() -> int:
             )
         )
 
-    worst = sorted((r for r in results if r["arm"] == "skill_formula"), key=lambda r: r["overall"])[:8]
-    print("\nWeakest skill-formula prompts")
+    worst = sorted((r for r in results if r["arm"] == "skill_formula"), key=lambda r: r["gate_overall"])[:8]
+    print("\nWeakest skill-formula prompts by gate_v2")
     for r in worst:
-        bad = [f"{k}={v['score']} ({v['note']})" for k, v in r["dims"].items() if v["score"] < 3]
+        bad = [f"{k}={v['score']} ({v['note']})" for k, v in r["dims"].items() if k != "slop_free" and v["score"] < 3]
         print(
             diagnostic_text(
-                f"  {r['id']:<8} {r['overall']:.2f}  "
+                f"  {r['id']:<8} {r['gate_overall']:.2f}  "
                 f"{r['brief'][:44]:<44} {'; '.join(bad)[:90]}"
             )
         )
@@ -5938,8 +5949,8 @@ def main() -> int:
             print(f"\n{BOUNDARY}")
             return 1
         doctrine = [r for r in results if r["arm"] == "skill_formula"]
-        avg = statistics.mean(r["overall"] for r in doctrine)
-        print(f"\nskill_formula holds the release bar (avg={avg:.2f}, no dimension below 3).")
+        avg = statistics.mean(r["gate_overall"] for r in doctrine)
+        print(f"\nskill_formula holds the release bar (avg={avg:.2f}, no non-lexical dimension below 3).")
     print(f"\n{BOUNDARY}")
     return 0
 
