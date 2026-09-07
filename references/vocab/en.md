@@ -62,22 +62,22 @@ No validated English word ceiling or universal second-place language ranking is 
 
 ## Slop Traps
 
-English prompts attract empty evaluation words. Each adds tokens and zero signal; replace with something a camera, microphone, light meter, or stopwatch could detect.
+Review these phrases in context. They can communicate useful style or mood; this repository has no measured basis for calling them universally zero-signal. Keep the intended energy and clarify only a material ambiguity. These are possible decisions, not required replacements. Follow [anti-slop-lexicon](../anti-slop-lexicon.md) for shared preservation and delivery rules.
 
-| Slop | Say instead |
+| Phrase to review | Preserve or clarify |
 |---|---|
-| cinematic | name the shot scale, camera move, and light source |
-| epic | physical scale: crowd size, lens distance, structure height |
-| stunning / breathtaking | the one visible contrast or reveal that earns it |
-| beautiful | color, texture, material, light behavior |
-| masterpiece / award-winning | delete; quality is not a request |
-| 8K / ultra-HD / hyper-detailed | delete; resolution is a render setting, not prose |
-| dynamic | the specific movement, its speed, and its endpoint |
-| dramatic | blocking, shadow, silence, or camera pressure |
-| atmosphere of mystery | what is hidden, by what: doorway, shadow, fog |
-| ultra-realistic | material behavior, skin texture, natural motion |
-| insanely detailed | the two details that matter, named |
-| trending / viral style | the actual format: vertical, fast hook, caption-safe framing |
+| cinematic | Keep the intended film language; clarify framing, pacing or light where needed, without imposing a stock look |
+| epic | Preserve the ambition; clarify whether scale, emotional stakes or another intensity matters |
+| stunning / breathtaking | Clarify the intended impact or reveal without inventing a new event |
+| beautiful | Keep the aesthetic preference; clarify relevant color, texture, material or performance |
+| masterpiece / award-winning | Remove unsupported praise when redundant; retain any actual reference role or concrete requirement |
+| 8K / ultra-HD | Retain the delivery target in supported settings; state unknown support or a mismatch instead of silently deleting or lowering it |
+| hyper-detailed / insanely detailed | Name the important details if needed; do not invent an output resolution or an arbitrary two-detail limit |
+| dynamic | Clarify what moves, its speed and endpoint; an energetic scene can keep a locked camera |
+| dramatic | Preserve the intended tension or acting; shadows, silence and camera pressure are choices |
+| atmosphere of mystery | Preserve the intended uncertainty; use the existing scene before adding fog, darkness or concealment |
+| ultra-realistic | Keep the realism direction; add relevant material or motion detail without promising a rendered result |
+| trending / viral style | Clarify the intended format or reference; do not assume vertical framing, a fast hook or engagement results |
 
 ## Wording in Context
 
