@@ -4,7 +4,7 @@ These are original, safety-screened examples distilled from public multilingual 
 
 ## Boundary
 
-Language mixing can reduce false positives only when it clarifies a benign creative intent. Do not use another language to hide unsafe content, protected identity copying, real-person imitation, graphic harm, or platform-rule evasion.
+Use language mixing only when it clarifies the user's benign creative intent. This guide does not establish a measured reduction in moderation errors or guarantee acceptance. Do not use another language to hide unsafe content, protected identity copying, real-person imitation, graphic harm, or platform-rule evasion.
 
 Safe language mixing means:
 

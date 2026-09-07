@@ -149,7 +149,7 @@
     {
       "path": "references/filter-vocab.md",
       "role": "responder",
-      "sha256": "21dd32fad88ec88d0afb7df197121bcf01ce6206a2e32a61cca0d20f41984f1e"
+      "sha256": "1f10bd00d010f19b4c318164324c483c3ccaf4662417d3260712a0c439fc7217"
     },
     {
       "path": "references/first-last-frame-guide.md",
@@ -314,7 +314,7 @@
     {
       "path": "references/multilingual-community-examples.md",
       "role": "responder",
-      "sha256": "4d5da3b83718f12ee67e9ae775f2ec2fc8515ddc03afe9c7f462f46ec941dfb4"
+      "sha256": "5909c38b0b3b1c7acbe0bd35f523e74ae77cc1bd18c96f1732f6a17e9575036b"
     },
     {
       "path": "references/multilingual-native-review.md",
@@ -439,7 +439,7 @@
     {
       "path": "references/vocab/en.md",
       "role": "responder",
-      "sha256": "61b81a79c61441fbe6de037ec263c3b5f8cebd52a6a5a08eb426ad74faa18920"
+      "sha256": "9a00e0ab98be3f972b85ef0e8bca987e6cb571c30488de6b6d85ae37b77ca008"
     },
     {
       "path": "references/vocab/es.md",
@@ -529,7 +529,7 @@
     {
       "path": "skills/seedance-filter/SKILL.md",
       "role": "responder",
-      "sha256": "343d3d47d12cb0d1732177402476bfe94f0bcc3f9b79c5043dd7c2b97e8bc3d0"
+      "sha256": "55e365bfdea735db78c9a0c93e2d49c7cb43fbd673c6e44d601322b68204f460"
     },
     {
       "path": "skills/seedance-interview/SKILL.md",
@@ -594,7 +594,7 @@
     {
       "path": "skills/seedance-vocab-en/SKILL.md",
       "role": "responder",
-      "sha256": "2ee4cdacf3c729d8ab2709b67b4167e59d008b03ee47a3eea8825ce3df54e878"
+      "sha256": "95f53685f8ff4f6c974fd90adc32914afacf55314b5c535a1241a422afc5c180"
     },
     {
       "path": "skills/seedance-vocab-es/SKILL.md",
