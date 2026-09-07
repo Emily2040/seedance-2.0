@@ -174,6 +174,70 @@ class FalseGreenRegressionTests(unittest.TestCase):
         self.assertIn("native-language human review", result.stdout)
 
 
+class LexicalEvidenceTests(unittest.TestCase):
+    def test_useful_and_redundant_contexts_receive_the_same_literal_flags(self) -> None:
+        # These are review fragments, not proposed generation prompts. The
+        # scanner must expose its inability to distinguish each pair.
+        pairs = (
+            ("Chosen cinematic look with the existing locked framing.",
+             "Make it cinematic.", "cinematic"),
+            ('Keep exact dialogue: "You are beautiful."',
+             "Make everything beautiful.", "beautiful"),
+            ("Delivery requirement: 8K; verify operation support.",
+             "8K quality.", "8k"),
+        )
+        for useful, vague, term in pairs:
+            for prompt in (useful, vague):
+                with self.subTest(prompt=prompt):
+                    flags = stress.lexical_flags(prompt)
+                    self.assertEqual(flags["matched_terms"], [term])
+                    self.assertFalse(flags["context_assessed"])
+                    self.assertFalse(flags["rewrite_recommended"])
+                    self.assertLess(stress.score_slop(prompt)[0], 3)
+                    self.assertIn("context unassessed", stress.score_slop(prompt)[1])
+
+    def test_no_matches_does_not_claim_a_clean_or_creative_prompt(self) -> None:
+        for prompt in ("", "thing stuff whatever"):
+            score, note = stress.score_slop(prompt)
+            self.assertEqual(score, 4.0)
+            self.assertEqual(stress.lexical_flags(prompt)["matched_terms"], [])
+            self.assertIn("context unassessed", note)
+            self.assertNotIn("clean", note)
+
+    def test_legacy_position_penalty_and_unique_term_count_remain_explicit(self) -> None:
+        self.assertEqual(stress.score_slop("cinematic")[0], 1.75)
+        late = "word " * 25 + "cinematic"
+        self.assertEqual(stress.score_slop(late)[0], 2.75)
+        self.assertEqual(stress.lexical_flags(late)["early_matched_terms"], [])
+        repeated = stress.lexical_flags("cinematic cinematic")
+        self.assertEqual(repeated["matched_terms"], ["cinematic"])
+        self.assertEqual(repeated["unique_terms_per_100_words"], 50.0)
+        self.assertEqual(stress.score_slop("cinematic cinematic")[0], 1.75)
+
+    def test_flags_preserve_legacy_case_and_word_boundary_matching(self) -> None:
+        self.assertEqual(stress.lexical_flags("CINEMATIC")['matched_terms'], ["cinematic"])
+        self.assertEqual(stress.lexical_flags("cinematically")['matched_terms'], [])
+        self.assertEqual(stress.lexical_flags("8K")['metric'], "legacy-lexical-v1")
+
+    def test_json_export_carries_evidence_and_cli_explains_legacy_gate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="lexical-report-") as temp:
+            output = Path(temp) / "scores.json"
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), str(CORPUS_PATH), "--strict", "--out", str(output)],
+                cwd=ROOT, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("lexical_v1 = slop_free in JSON", result.stdout)
+            self.assertIn("Do not remove style, dialogue or delivery requirements", result.stdout)
+            exported = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(len(exported), len(shipped_corpus()))
+            for row in exported:
+                self.assertIn("slop_free", row["dims"])
+                self.assertFalse(row["lexical_review"]["context_assessed"])
+                self.assertFalse(row["lexical_review"]["rewrite_recommended"])
+                self.assertIn("context unassessed", row["dims"]["slop_free"]["note"])
+
+
 class AdversarialMutationTests(unittest.TestCase):
     def test_near_duplicate_with_one_subject_mutation_is_rejected(self) -> None:
         base = next(r["prompt"] for r in shipped_corpus() if r["id"] == "b09-s")
