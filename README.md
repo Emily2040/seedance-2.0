@@ -74,13 +74,13 @@ Start with the [quickstart](docs/QUICKSTART.md),
 
 ## Install
 
-Get a local copy, then run the installer from that folder. The default installs
-the root skill for Codex; other clients and replacement details are below.
+Get a local copy, then run the installer from that folder. This example selects
+Codex user scope; other clients and replacement details are below.
 
 ```bash
 git clone https://github.com/Emily2040/seedance-2.0.git
 cd seedance-2.0
-python scripts/install_codex_skill.py
+python scripts/install_codex_skill.py --client codex --scope user
 ```
 
 Download ZIP also works: extract it and run the installer inside that folder.
@@ -108,18 +108,29 @@ Without `git` installed, use the green **Code → Download ZIP** button on the r
 
 ### Step 2 — install it into your client
 
-The installer is not Codex-only. It copies the skill into any client that reads a skills directory — point `--dest` at the directory yours scans:
+The installer is not Codex-only. Choose a client and scope below, or point `--dest` at another client's documented skills parent directory:
 
 ```bash
-# Codex (default: $CODEX_HOME/skills, else ~/.codex/skills)
-python scripts/install_codex_skill.py
+# Codex — user scope at ~/.agents/skills
+python scripts/install_codex_skill.py --client codex --scope user
 
-# Claude Code — personal install, available in every project
-python scripts/install_codex_skill.py --dest ~/.claude/skills
+# Claude Code — personal install at ~/.claude/skills
+python scripts/install_codex_skill.py --client claude-code --scope user
 
-# Any client — install into another project, run from that project
-python /path/to/seedance-2.0/scripts/install_codex_skill.py --dest .claude/skills
+# One existing project, outside this source checkout
+python scripts/install_codex_skill.py --client codex --scope project --project-root /path/to/project
+
+# Any other client — use its documented skills parent directory
+python scripts/install_codex_skill.py --dest /path/to/client/skills
 ```
+
+Choose either `--dest` or `--client` with `--scope`; project scope requires an
+existing `--project-root` and never guesses from your current directory. The
+[scope guide](https://github.com/Emily2040/seedance-2.0/blob/main/docs/INSTALL_SCOPES.md)
+explains the paths. No-option commands preserve the historical
+`$CODEX_HOME/skills` or `~/.codex/skills` default for existing workflows; they do
+not migrate old copies. Use the same destination options with the read-only
+`install_doctor.py` before deciding on replacement.
 
 The command stages and validates the repository before promoting it to
 `<dest>/seedance-20`, then prints where it landed. Concurrent installers
@@ -199,7 +210,7 @@ Treat the table below as common local targets to verify in your own client, not 
 | Platform | Typical install target (verify in your client) |
 |---|---|
 | Claude Code | `~/.claude/skills/seedance-20/` (personal) or `.claude/skills/seedance-20/` (project) — both via `scripts/install_codex_skill.py --dest` |
-| Codex | `.agents/skills/seedance-20/` or `~/.codex/skills/seedance-20/` via `scripts/install_codex_skill.py` |
+| Codex | project `.agents/skills/seedance-20/` or user `~/.agents/skills/seedance-20/`; no-option installer keeps its historical path |
 | Google Antigravity | `.agents/skills/seedance-20/` (workspace) or `~/.gemini/config/skills/seedance-20/` (global across Antigravity products) |
 | OpenClaw | workspace `skills/seedance-20/` or `~/.openclaw/skills/seedance-20/` via `openclaw skills install` (ClawHub-compatible; skills already carry `openclaw:` metadata) |
 | Hermes Agent | `~/.hermes/skills/seedance-20/` (primary); a project `skills/seedance-20/` directory is discovered only after its parent is added to `skills.external_dirs` in `~/.hermes/config.yaml` |

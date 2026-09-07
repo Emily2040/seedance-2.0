@@ -104,6 +104,46 @@ def default_skills_dir() -> Path:
     return Path.home() / ".codex" / "skills"
 
 
+def add_destination_arguments(parser: argparse.ArgumentParser) -> None:
+    """Share one destination contract between installation and inspection."""
+    choice = parser.add_mutually_exclusive_group()
+    choice.add_argument(
+        "--dest", type=Path,
+        help="Explicit skills parent directory; cannot be combined with --client or --scope.",
+    )
+    choice.add_argument("--client", choices=("codex", "claude-code"),
+                        help="Select a documented client directory; requires --scope.")
+    parser.add_argument("--scope", choices=("user", "project"),
+                        help="Required with --client. Project scope also requires --project-root.")
+    parser.add_argument("--project-root", type=Path,
+                        help="Existing project directory, used only with --scope project.")
+
+
+def skills_dir_from_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Path:
+    """Select one parent without scanning, moving or removing other installs.
+
+    Do not resolve links here: the normal installer/doctor path guards must
+    inspect the original spelling and every parent before accessing payloads.
+    """
+    if args.client is None:
+        if args.scope is not None or args.project_root is not None:
+            parser.error("--scope and --project-root require --client")
+        return args.dest.expanduser() if args.dest is not None else default_skills_dir()
+    if args.scope is None:
+        parser.error("--client requires --scope user or --scope project")
+    if args.scope == "user":
+        if args.project_root is not None:
+            parser.error("--project-root is only valid with --scope project")
+        root = Path.home()
+    else:
+        if args.project_root is None:
+            parser.error("--scope project requires an explicit --project-root")
+        root = args.project_root.expanduser()
+        if not root.is_dir():
+            parser.error("--project-root must name an existing directory")
+    return root / (".agents" if args.client == "codex" else ".claude") / "skills"
+
+
 def ignore_runtime_noise(_src: str, names: list[str]) -> set[str]:
     ignored: set[str] = set()
     for name in names:
@@ -6157,20 +6197,15 @@ def assert_destination_outside_source(destination: Path, repo_root: Path) -> Non
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Install this repository as a local Codex skill.",
-        epilog="For read-only diagnosis, run python scripts/install_doctor.py from a source checkout; see docs/INSTALL_DOCTOR.md.",
+        description="Install the filtered skill into a selected agent client directory.",
+        epilog="With no destination options, the legacy $CODEX_HOME/skills or ~/.codex/skills default is preserved. For read-only diagnosis, run python scripts/install_doctor.py from a source checkout; see docs/INSTALL_DOCTOR.md.",
     )
-    parser.add_argument(
-        "--dest",
-        type=Path,
-        default=default_skills_dir(),
-        help="Codex skills directory. Defaults to $CODEX_HOME/skills or ~/.codex/skills.",
-    )
+    add_destination_arguments(parser)
     parser.add_argument("--force", action="store_true", help="Replace an existing seedance-20 install.")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
-    skills_dir = args.dest.expanduser()
+    skills_dir = skills_dir_from_args(parser, args)
     destination = skills_dir / SKILL_NAME
     destination_existed_at_start = _path_exists(destination)
     # Reported as a message rather than a traceback: this is the first command a

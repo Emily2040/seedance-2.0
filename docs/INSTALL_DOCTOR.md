@@ -4,6 +4,7 @@ Run this read-only command from a reviewed source checkout:
 
 ```sh
 python scripts/install_doctor.py
+python scripts/install_doctor.py --client codex --scope user --json
 python scripts/install_doctor.py --dest /path/to/skills --json
 ```
 
@@ -11,6 +12,12 @@ python scripts/install_doctor.py --dest /path/to/skills --json
 doctor appends `seedance-20`. It does not install, update, back up, delete,
 recover transactions, contact providers or read credentials. It is a source
 checkout tool, not part of the installed runtime payload.
+
+The [client and scope options](INSTALL_SCOPES.md) are shared with the installer.
+Use the same options for both commands. With no destination options, both retain
+the historical `$CODEX_HOME/skills` or `~/.codex/skills` path; neither searches for
+another installed copy. Text output names the selected target, and JSON includes
+its absolute `destination`. Redact that path before sharing a report publicly.
 
 | Status | Meaning and next action |
 |---|---|
