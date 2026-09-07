@@ -4,6 +4,7 @@ import struct
 import unittest
 
 from scripts.strict_json import load_json
+from scripts.install_codex_skill import rewrite_installed_readme_text
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,7 +38,10 @@ class TeachingArtTests(unittest.TestCase):
 
     def test_installed_gallery_fallback_can_reach_the_current_art(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
-        gallery = text.split("## Visual Gallery", 1)[1].split("<details>", 1)[0]
-        self.assertIn("/blob/main/docs/PAPER_FAN_ART.md", gallery)
+        transformed = rewrite_installed_readme_text(text)
+        self.assertIn("[View current teaching examples](https://github.com/Emily2040/seedance-2.0#start-here)", transformed)
+        teaching = text.split("## Start Here", 1)[1].split("## Choose a workflow", 1)[0]
+        self.assertIn("assets/paper-fan-teaching.png", teaching)
+        self.assertIn("docs/PAPER_FAN_ART.md", teaching)
         provenance = (ROOT / "docs/PAPER_FAN_ART.md").read_text(encoding="utf-8")
         self.assertIn("[View the full paper-fan illustration](../assets/paper-fan-teaching.png)", provenance)
