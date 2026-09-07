@@ -25,7 +25,7 @@ dependency-free, like every other check here.
 Dimensions (0-4, matching references/eval-rubric.md's V6 scale):
   opening_authority  subject/action (or reference binding) in the lead clause
   length_fit         official 60-100 word band; skill's 40-110 fast-lane band
-  slop_free          density of anti-slop-lexicon terms
+  slop_free          legacy lexical proxy; not a contextual quality judgment
   coverage           camera move / motivated light / sound / visible endpoint
   structure          prose shooting-brief vs comma tag-salad, negation slop
   ref_integrity      reference tags present and byte-exact for reference modes
@@ -61,7 +61,8 @@ else:
 
 # ---------------------------------------------------------------- vocabularies
 
-# references/anti-slop-lexicon.md - the six slop classes.
+# Frozen lexical list for the legacy numeric gate. The current anti-slop
+# lexicon requires context; matching these words does not establish filler.
 SLOP = [
     "cinematic", "epic", "stunning", "beautiful", "dramatic", "gorgeous",
     "breathtaking", "mesmerizing", "masterpiece", "award-winning", "8k", "4k",
@@ -166,7 +167,9 @@ BOUNDARY = (
     "Boundary: this deterministic gate catches structural, brief-relevance, "
     "explicit contradiction, and repetition failures. It does not judge "
     "creativity or originality; comparative creative quality still requires "
-    "blinded model evaluation and native-language human review."
+    "blinded model evaluation and native-language human review. "
+    "The slop_free dimension is a legacy lexical proxy: matches and their "
+    "position do not establish useless wording or model token importance."
 )
 
 TOKEN = re.compile(r"[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)?")
@@ -5677,19 +5680,45 @@ def score_length(prompt: str) -> tuple[float, str]:
     return 0.0, f"{n}w - far over budget"
 
 
-def score_slop(prompt: str) -> tuple[float, str]:
+def lexical_flags(prompt: str) -> dict:
+    """Report literal matches without classifying their role in the brief.
+
+    Keep the matcher and early-window definition stable for baseline comparison.
+    Quoted dialogue, style labels and delivery settings are not exempted by
+    guessed semantics; callers must not interpret a flag as a rewrite command.
+    """
     low = prompt.lower()
     hits = sorted({t for t in SLOP if re.search(rf"\b{re.escape(t)}\b", low)})
-    n = len(words(prompt))
-    # Slop in the first 25 words is the expensive kind.
-    head = " ".join(words(prompt)[:25]).lower()
+    tokens = words(prompt)
+    head = " ".join(tokens[:25]).lower()
     head_hits = [t for t in hits if re.search(rf"\b{re.escape(t)}\b", head)]
+    return {
+        "metric": "legacy-lexical-v1",
+        "matched_terms": hits,
+        "early_matched_terms": head_hits,
+        "unique_terms_per_100_words": len(hits) / max(len(tokens), 1) * 100,
+        "context_assessed": False,
+        "rewrite_recommended": False,
+    }
+
+
+def _score_lexical_flags(flags: dict) -> tuple[float, str]:
+    hits, head_hits = flags["matched_terms"], flags["early_matched_terms"]
+    # Historical regression weights, not measured model token importance.
     score = 4.0 - 1.25 * len(hits) - 1.0 * len(head_hits)
-    density = len(hits) / max(n, 1) * 100
-    note = "clean" if not hits else f"slop: {', '.join(hits)} ({density:.1f}/100w)"
+    density = flags["unique_terms_per_100_words"]
+    note = "no listed lexical matches; context unassessed" if not hits else (
+        f"lexical flags: {', '.join(hits)} "
+        f"({density:.1f} unique terms/100w); context unassessed"
+    )
     if head_hits:
-        note += f" | {len(head_hits)} in the first 25 words"
+        note += f" | {len(head_hits)} in the first 25 words (legacy weighting)"
     return max(0.0, min(4.0, score)), note
+
+
+def score_slop(prompt: str) -> tuple[float, str]:
+    """Compatibility entry point for the unchanged legacy lexical score."""
+    return _score_lexical_flags(lexical_flags(prompt))
 
 
 def score_coverage(prompt: str, mode: str = "T2V") -> tuple[float, str]:
@@ -5757,7 +5786,8 @@ def score_prompt(rec: dict) -> dict:
     dims: dict[str, tuple[float, str]] = {}
     dims["opening_authority"] = score_opening(p)
     dims["length_fit"] = score_length(p)
-    dims["slop_free"] = score_slop(p)
+    flags = lexical_flags(p)
+    dims["slop_free"] = _score_lexical_flags(flags)
     dims["coverage"] = score_coverage(p, mode)
     dims["structure"] = score_structure(p)
     ref = score_refs(p, mode)
@@ -5773,6 +5803,7 @@ def score_prompt(rec: dict) -> dict:
         "dims": {k: {"score": round(v[0], 2), "note": v[1]} for k, v in dims.items()},
         "overall": round(overall, 3),
         "ref_note": ref[1],
+        "lexical_review": flags,
     }
 
 
@@ -5838,7 +5869,9 @@ def main() -> int:
 
     dim_names = DIM_NAMES
     print(f"Corpus: {len(results)} prompts across {len(arms)} arms\n")
-    header = f"{'arm':<22}{'n':>4}{'overall':>9}" + "".join(f"{d[:11]:>13}" for d in dim_names)
+    header = f"{'arm':<22}{'n':>4}{'overall':>9}" + "".join(
+        f"{('lexical_v1' if d == 'slop_free' else d[:11]):>13}" for d in dim_names
+    )
     print(header)
     print("-" * len(header))
     for arm in sorted(arms, key=lambda a: -statistics.mean(x["overall"] for x in arms[a])):
@@ -5849,6 +5882,12 @@ def main() -> int:
             row += f"{statistics.mean(vals):>13.2f}" if vals else f"{'-':>13}"
         print(diagnostic_text(row))
 
+    print(
+        "\nlexical_v1 = slop_free in JSON: unchanged legacy keyword score, "
+        "including its first-25-word penalty. Context is unassessed; "
+        "neither matches nor absence of matches judge creative quality. "
+        "Do not remove style, dialogue or delivery requirements merely to pass."
+    )
     print("\nRelease gate (every case and applicable dimension >= 3; arm average >= 3.5;")
     print("no cross-case duplicate/near-duplicate prompts for materially different briefs)")
     gate_findings = {
