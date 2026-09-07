@@ -30,7 +30,7 @@ class TeachingArtTests(unittest.TestCase):
 
     def test_example_still_has_action_and_endpoint_without_the_image(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
-        before = text.split("<!-- teaching-image:placement -->")[0]
+        before = " ".join(text.split("<!-- teaching-image:placement -->")[0].split())
         self.assertIn("the last fold of a paper fan and let go.", before)
         self.assertIn("The fan settles on the wood.", before)
         self.assertIn("No music.", before)
