@@ -84,6 +84,7 @@ references/directing-engine.md
 references/directors-read.md
 references/eval-rubric.md
 references/event-density.md
+references/example-card-format.md
 references/examples-by-mode.md
 references/failure-atlas.md
 references/field-observed-tips.md

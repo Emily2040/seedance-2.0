@@ -1,5 +1,7 @@
 # Examples By Mode
 
+For examples with explicit choices, asset requirements, evidence labels and acceptance checks, use the [teaching-card format](example-card-format.md). The format is optional for ordinary prompt requests; its example is a concept, not a rendered result.
+
 Use these as safe structures, not fixed scripts. They are original examples and avoid protected characters, celebrities, logos, and copied community prompts.
 
 ## T2V Director Instruction
