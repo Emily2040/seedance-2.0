@@ -606,17 +606,33 @@ labels; the responder receives only the sources it selected, and the judge then
 scores the answer against [`eval-rubric.md`](references/eval-rubric.md):
 
 ```bash
-export ANTHROPIC_API_KEY=...
-python scripts/eval_run.py --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+# No network, credential read or ledger write: inspect the selected work first.
+python scripts/eval_run.py --limit 1
 
-# The harness defaults to the current documented MiniMax-M3. The endpoint also
-# accepts the documented MiniMax-M2.7, M2.5, M2.1, M2 and highspeed variants.
-export MINIMAX_API_KEY=...
-python scripts/eval_run.py --provider minimax --region global_en \
-  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
-python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 \
-  --ledger evals/eval-run-ledger.md --stamp 2026-06-28
+# Explicit, bounded live smoke run. Supply the key through your environment.
+python scripts/eval_run.py --live --limit 1 --max-calls 3 --max-output-tokens 3300 \
+  --ledger eval-runs/smoke.md --stamp 2026-09-05
+
+# Preview an alternate provider/region before choosing a live ceiling.
+python scripts/eval_run.py --provider minimax --region global_en --limit 1
+python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 --limit 1
 ```
+
+Without `--live`, the harness prints an offline JSON plan, even if a key or
+`--ledger` is supplied. `--self-test` remains the separate offline wiring check.
+A live run uses `ANTHROPIC_API_KEY` or `MINIMAX_API_KEY` from the environment.
+Each attempted request reserves one call and its requested maximum output tokens
+before transport; failed requests do not refund that reservation. The default
+ceilings are three calls and 3,300 output tokens per selected case. A full suite
+requires an explicit `--max-calls`; inspect the plan and choose your ceiling.
+Only a complete run may replace `evals/eval-run-ledger.md`.
+
+Exhausting a ceiling stops the run with an incomplete/error assessment. The final
+console summary reports attempted calls, reserved output tokens and validated
+provider-reported usage; preserve that summary with the run log. Input tokens,
+cache charges and currency cost are not capped or estimated, and failed requests
+may still be billed. No live quality result is implied by an offline plan.
+
 
 The harness uses `Authorization: Bearer <API_KEY>` as documented by both the
 [global](https://platform.minimax.io/docs/api-reference/text-chat-anthropic) and

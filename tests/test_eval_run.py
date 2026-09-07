@@ -1005,7 +1005,7 @@ class EvalRunProviderTests(unittest.TestCase):
     def test_live_mode_requires_the_selected_provider_key(self) -> None:
         output = io.StringIO()
         with (
-            mock.patch.object(sys, "argv", ["eval_run.py", "--provider", "minimax"]),
+            mock.patch.object(sys, "argv", ["eval_run.py", "--live", "--max-calls", "10000", "--provider", "minimax"]),
             mock.patch.dict(os.environ, {}, clear=True),
             redirect_stdout(output),
         ):
