@@ -916,6 +916,34 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         self.assertTrue(any("stock_solution_refused" in error for error in errors), errors)
         self.assertEqual(sum("missing exact prompt carrier" in error for error in errors), 1)
 
+    def test_observation_and_performance_use_existing_state_and_carrier_checks(self) -> None:
+        cases = load_json("validation/fixtures/directors-read-cases.json")
+        selected = {
+            "joyful-dance-observation", "silent-pottery-process",
+            "visual-comedy-performance", "quiet-wildlife-observation",
+        }
+        self.assertEqual({case["id"] for case in cases} & selected, selected)
+        for case in cases:
+            if case["id"] not in selected:
+                continue
+            with self.subTest(case=case["id"]):
+                state = {
+                    "utility_intent": case["utility_intent"],
+                    "non_narrative_refusal": case["refusal"],
+                }
+                project = load_json("examples/standalone-clip/project-state.json")
+                for clip in project["clips"]:
+                    clip["directors_read_lane"] = "non_narrative"
+                    clip["authoring_state"] = copy.deepcopy(state)
+                self.assertEqual(self.validate_project_copy(project, strict=True), [])
+                self.assertEqual(project_state_check.compiled_prompt_errors(
+                    case["compiled_carriers"], state, case["id"], lane="non_narrative",
+                ), [])
+                unrelated = project_state_check.compiled_prompt_errors(
+                    "An impressive cinematic masterpiece.", state, case["id"], lane="non_narrative",
+                )
+                self.assertTrue(any("utility_intent" in error for error in unrelated), unrelated)
+
     def test_non_narrative_prompt_must_relate_to_utility_intent(self) -> None:
         state = {
             "utility_intent": "Show the latch closing cleanly in one readable motion.",

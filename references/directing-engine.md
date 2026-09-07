@@ -10,7 +10,7 @@ Load the [Director's Read](directors-read.md) first on every route. Load this de
 
 ## Step 1 - Expand the Canonical Director's Read
 
-Before any technique, complete the exact ten-field narrative record in the [Director's Read](directors-read.md), or its two-line non-narrative refusal when no agency, story, or performance is requested. Do not fabricate drama for utility, packshot, functional product, abstract, VFX, or ambient work. The five lenses below deepen parts of the narrative record; they are not a shorter substitute for its hidden objective, obstacle/tactic, visible suppressed behavior, non-transferable detail, or stock-solution refusal.
+Before any technique, complete the exact ten-field narrative record in the [Director's Read](directors-read.md), or its two-line non-narrative record for observation/performance without a dramatic story turn or for utility. Do not fabricate conflict for joyful expression, sensory observation, direct demonstration, or ambient work. Genre-library entries below are authored example beats, not rules that every scene in that genre needs their narrative lane. The five lenses below deepen parts of the narrative record; they are not a shorter substitute for its hidden objective, obstacle/tactic, visible suppressed behavior, non-transferable detail, or stock-solution refusal.
 
 1. **Function.** What is this scene for in the larger story - introduce, deepen, turn, or pay off? A scene that earns its place changes something.
 2. **The turn.** Name the single shift the scene exists to deliver as a value flip: safe to threatened, hope to despair, stranger to ally, control to helplessness, ordinary to wonder. If nothing flips, the scene is decoration and should be cut or merged.
