@@ -297,6 +297,7 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`continuation-handoff.md`](references/continuation-handoff.md) | Accepted-source continuation gate, observed state capture, continuation types, and beat exclusions. |
 | [`prompt-compiler.md`](references/prompt-compiler.md) | Compiles project state and current clip contract into one natural-language prompt. |
 | [`reference-transfer-contract.md`](references/reference-transfer-contract.md) | Exact tag preservation, reference role separation, and transfer/ignore clauses. |
+| [`continuity-example-cards.md`](references/continuity-example-cards.md) | Three concept cards: motion-role isolation, editorial order and an accepted-frame continuation. |
 | [`surface-prompt-profiles.md`](references/surface-prompt-profiles.md) | Surface-specific duration, prompt budget, reference role, timeline, edit, extension, and audio constraints. |
 | [`event-density.md`](references/event-density.md) | Clip-scope firewall for completed, current, reserved, and do-not-show-yet beats. |
 | [`continuity-qc.md`](references/continuity-qc.md) | Boundary checks for immutable and transient continuity across accepted clips. |
