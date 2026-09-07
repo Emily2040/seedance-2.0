@@ -7,7 +7,11 @@
     "codex": "codex-cli 0.153.4"
   },
   "runtime_stages": {
-    "discovery": "not_run",
+    "discovery": {
+      "codex": "passed_exact_project_path",
+      "claude": "not_run",
+      "codex_automatic_selection": "not_run"
+    },
     "short_prompt": "not_run",
     "continuation": "not_run"
   },
@@ -116,5 +120,25 @@
         }
       ]
     }
-  ]
+  ],
+  "codex_discovery": {
+    "date": "2026-09-07",
+    "client_version": "codex-cli 0.153.4",
+    "method": "skills/list",
+    "forceReload": true,
+    "expected_relative_path": ".agents/skills/seedance-20/SKILL.md",
+    "matching_project_entries": 1,
+    "same_name_entries": 2,
+    "matching_source_errors": 0,
+    "project_skill_sha256": "e1710cbecd5039fbe549a622590f0aff6a2abadf4b08872993116368ee0474fd",
+    "entry_flags": [
+      {
+        "name": "seedance-20",
+        "scope": "repo",
+        "enabled": true
+      }
+    ],
+    "thread_created": false,
+    "model_turn_started": false
+  }
 }
