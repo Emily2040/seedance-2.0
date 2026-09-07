@@ -49,26 +49,33 @@ Provider/router surfaces are integration conveniences, not source-of-truth model
 
 ### Atlas Cloud executable path
 
-The optional Atlas Cloud helper is a source-checkout tool; it is intentionally excluded from the offline installed-skill payload. It uses the live model name `bytedance/seedance-2.0/text-to-video` and the `/api/v1/model/generateVideo` task endpoint verified on 2026-08-29. Recheck the catalog and schema before production use because model fields and availability can change.
+The optional Atlas Cloud helper is a source-checkout tool, excluded from the offline installed-skill payload. Its fixed model and request fields follow the [provider's T2V schema](https://www.atlascloud.ai/docs/more-models/bytedance/seedance-2.0-text-to-video/generateVideo); polling follows the [prediction guide](https://www.atlascloud.ai/docs/predictions). Documentation was reviewed 2026-09-07; account access, live generation, pricing and output quality were not tested. Recheck those before production use. These are Atlas-specific fields, not an official ByteDance API contract.
 
-Preview the exact request without credentials or a paid submission:
+Preview the request without reading credentials or opening the network (also the default without `--dry-run`):
 
 ```bash
 python scripts/atlas_seedance_generate.py \
-  --prompt "A single continuous dolly shot through a rain-lit night market" \
+  --prompt "Locked medium shot: one vendor closes her paper fan and places it beside a blue cup. Hold the final arrangement." \
   --duration 5 --resolution 720p --ratio 16:9 --dry-run
 ```
 
-Submit once and poll the returned prediction with bounded GET requests:
+After explicit authorization for the request and provider cost, supply `ATLASCLOUD_API_KEY` through the environment. Submit once and poll with bounded GET requests:
 
 ```bash
-export ATLASCLOUD_API_KEY="..."
 python scripts/atlas_seedance_generate.py \
   --prompt-file prompt.md --duration 5 --resolution 720p --ratio 16:9 \
-  --wait --max-polls 120 --poll-interval 5
+  --live --wait --max-polls 120 --poll-interval 5
 ```
 
-The helper never automatically retries the generation POST. A network failure after submission is ambiguous and must be reconciled from provider history before another paid create. Only prediction GET requests are repeated, up to `--max-polls`.
+The helper prints the validated prediction ID before waiting. To resume an existing job without another generation POST:
+
+```bash
+python scripts/atlas_seedance_generate.py --prediction-id YOUR_PREDICTION_ID --live --wait
+```
+
+The helper never automatically retries the generation POST. A failure after submission is ambiguous and must be reconciled from provider history before another paid create. Only prediction GET requests are repeated, at most 120 polls. `--timeout` bounds socket operations and the response read deadline; it is not a total generation-time or currency ceiling. Output URLs are printed as data and never downloaded. With `--wait`, stdout can contain an initial JSON record followed by a completed record.
+
+Transport uses Python's TLS verification and a fixed Atlas host; it does not follow redirects or load curl/proxy configuration. IDs, status, model echoes, response size and strict JSON are checked. Errors omit remote bodies and credentials. The local prompt input cap is 64 KiB; this is a helper safeguard, not a model capability claim. Validation is offline with mocked responses; the helper is not a generation-quality benchmark.
 
 Chinese-language search results need classification before use. Official ByteDance/Volcengine/BytePlus/Doubao/Jimeng/Jianying pages can support China-facing surface guidance. Hosted workflows, Chinese blogs, pricing comparisons, and business-partner news can provide context, but they are not public API contracts unless they link to provider-owned API docs.
 
