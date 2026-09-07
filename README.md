@@ -288,11 +288,11 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`agent-compatibility.md`](references/agent-compatibility.md) | Agent Skills structure, Codex compatibility, and packaging notes. |
 | [`api-workflow.md`](references/api-workflow.md) | Volcengine, BytePlus, Runway, provider/router APIs, async task, reference-file, pricing, and production workflow checklist. |
 | [`capability-map.md`](references/capability-map.md) | Design into model strengths and around known limits before prompting. |
-| [`directors-read.md`](references/directors-read.md) | Mandatory narrative/story/performance read, non-narrative refusal boundary, and internal-to-visible compilation contract. |
+| [`directors-read.md`](references/directors-read.md) | Drama, observation/performance and utility classification, existing lane records, and internal-to-visible prompt compilation. |
 | [`directing-engine.md`](references/directing-engine.md) | Read the scene, choose one intention, make every instrument cohere, hold one directorial voice, and shape the look across a long story. |
 | [`directing-engine-genre-library.md`](references/directing-engine-genre-library.md) | 33 fully worked genre examples (product, music video, horror, anime, action, documentary, and more), loaded on demand. |
-| [`model-mechanics.md`](references/model-mechanics.md) | Why the rules work: eight mechanisms of the generator, novel-case derivation, mechanism-indexed diagnosis. |
-| [`retake-protocol.md`](references/retake-protocol.md) | The iteration economy: take triage, the one-variable rule, attempt budgets, cost awareness, the shot log. |
+| [`model-mechanics.md`](references/model-mechanics.md) | Eight troubleshooting hypotheses, useful comparisons, and limits on hidden-model explanations. |
+| [`retake-protocol.md`](references/retake-protocol.md) | Evidence-based take decisions, user-authorized attempt and currency limits, refunds, stop conditions and review logs. |
 | [`sequence-project-state.md`](references/sequence-project-state.md) | Stateful project model, canon reconciliation, visual state fields, and Project State Capsule. |
 | [`continuation-handoff.md`](references/continuation-handoff.md) | Accepted-source continuation gate, observed state capture, continuation types, and beat exclusions. |
 | [`prompt-compiler.md`](references/prompt-compiler.md) | Compiles project state and current clip contract into one natural-language prompt. |
@@ -314,6 +314,7 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`subtitles-localization.md`](references/subtitles-localization.md) | Subtitle, SDH, forced narrative, dubbing, textless, and cultural localization planning. |
 | [`audio-post-delivery.md`](references/audio-post-delivery.md) | Dialogue, SFX, music, stems, M&E, loudness, dubbing, and sync handoff guidance. |
 | [`delivery-qc.md`](references/delivery-qc.md) | Professional preflight for picture, color, audio, captions, rights, metadata, versioning, and human QC. |
+| [`example-card-format.md`](references/example-card-format.md) | Teaching cards: creative choices, copyable prompts, asset bindings, evidence labels and acceptance checks. |
 | [`examples-by-mode.md`](references/examples-by-mode.md) | Mode-specific prompt examples for T2V, I2V, V2V, R2V, FLF2V, edit, extend, and troubleshooting. |
 | [`multilingual-community-examples.md`](references/multilingual-community-examples.md) | Original Chinese, Russian, Japanese, Korean, Spanish, and mixed-language prompt structures from safe community pattern mining. |
 | [`multilingual-native-review.md`](references/multilingual-native-review.md) | Independent human-review rubric and evidence contract for three zh-CN, ja-JP, and ko-KR fixture prompts; it is not authorship proof. |

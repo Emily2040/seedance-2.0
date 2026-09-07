@@ -122,9 +122,14 @@
       "sha256": "181d3bcf36f6f79a5c28d7b5e22d9ebe6d6c72c05c2814b3474ffbc8de49ee87"
     },
     {
+      "path": "references/example-card-format.md",
+      "role": "responder",
+      "sha256": "0d85937a39c1143ee8c5f7a133559cc87e0f4dfd608e141f78163a2175488dc2"
+    },
+    {
       "path": "references/examples-by-mode.md",
       "role": "responder",
-      "sha256": "029dabc3971248e596c7e1be382d4c1419dbbc0af00a6bd25dd89f6de30be0f6"
+      "sha256": "96c10252fb7fb3a0f149adba5a47f7d254a41e39e5a10d99f3981028795b024d"
     },
     {
       "path": "references/failure-atlas.md",
