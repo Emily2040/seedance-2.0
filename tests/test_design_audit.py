@@ -41,6 +41,39 @@ class ReadmeDesignTests(unittest.TestCase):
         text += f"\n```md\n[Hidden]({LANGUAGE_PATHS[5]})\n```\n<!-- [Hidden]({LANGUAGE_PATHS[5]}) -->"
         self.assertTrue(any(LANGUAGE_PATHS[5] in e for e in readme_findings(self.root, text)))
 
+    def test_language_entry_requires_a_readable_name(self):
+        original = f"[Start 5]({LANGUAGE_PATHS[5]})"
+        for replacement in (f"[]({LANGUAGE_PATHS[5]})", f"[** **]({LANGUAGE_PATHS[5]})",
+                            f'<a href="{LANGUAGE_PATHS[5]}"></a>',
+                            f'<a href="{LANGUAGE_PATHS[5]}"><strong></strong></a>'):
+            with self.subTest(replacement=replacement):
+                errors = readme_findings(self.root, self.text.replace(original, replacement))
+                self.assertTrue(any(LANGUAGE_PATHS[5] in e for e in errors))
+        named = f'<a href="{LANGUAGE_PATHS[5]}"><strong>Read Russian</strong></a>'
+        self.assertEqual(readme_findings(self.root, self.text.replace(original, named)), [])
+
+    def test_fence_with_trailing_info_does_not_close_code(self):
+        link = f"[Start 5]({LANGUAGE_PATHS[5]})"
+        text = self.text.replace(link, "") + f"\n```text\n```python\n{link}\n```\n"
+        self.assertTrue(any(LANGUAGE_PATHS[5] in e for e in readme_findings(self.root, text)))
+        text = self.text.replace(link, "") + f"\n```text\ncode\n``` \t\n{link}\n"
+        self.assertEqual(readme_findings(self.root, text), [])
+
+    def test_additional_svg_gets_the_same_structural_and_resource_checks(self):
+        good = '<svg xmlns="http://www.w3.org/2000/svg"><title>Mark</title><desc>A simple mark</desc><path d="M0 0h1"/></svg>'
+        path = self.root / "new.svg"
+        text = self.text + "\n![New illustration](new.svg)"
+        path.write_text(good, encoding="utf-8")
+        self.assertEqual(readme_findings(self.root, text), [])
+        for bad in ("not SVG", good.replace('<desc>A simple mark</desc>', ''),
+                    good.replace('</svg>', '<script>alert(1)</script></svg>'),
+                    good.replace('</svg>', '<image href="https://example.com/p.png"/></svg>'),
+                    good.replace('</svg>', '<style>@font-face{src:url(font.woff)}</style></svg>'),
+                    good.replace('<svg ', '<svg onload="run()" ')):
+            path.write_text(bad, encoding="utf-8")
+            with self.subTest(bad=bad):
+                self.assertTrue(readme_findings(self.root, text))
+
     def test_fragment_and_case_mismatch_fail(self):
         self.assertEqual(readme_findings(self.root, self.text + "\n[Install](#install)"), [])
         for target in ("#missing", "docs/QUICKSTART.md#missing", "docs/quickstart.md"):
