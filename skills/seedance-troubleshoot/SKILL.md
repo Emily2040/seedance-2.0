@@ -28,7 +28,7 @@ When the diagnostic tree has no row for the failure, load [model-mechanics](../.
 
 ## Intent
 
-A failed generation feels personal - the user showed the machine their idea and the machine returned something broken. The soul of this skill is rescue without blame: name the mechanism, never the user; save the idea, not just the prompt. They should leave with a fix and their confidence intact.
+A failed generation feels personal - the user showed the machine their idea and the machine returned something broken. The soul of this skill is rescue without blame: describe a plausible failure mechanism without blaming the user; preserve the idea as well as the prompt. They should leave with a fix and their confidence intact.
 
 ## Diagnostic Tree
 
@@ -57,7 +57,7 @@ A failed generation feels personal - the user showed the machine their idea and 
 
 ## Repair Process
 
-First quote the failing phrase or missing element. Then name the root cause. Next, remove conflicts rather than adding complexity. Recommend one primary repair variable rather than adding more adjectives. Finally, produce one conservative retry prompt and one optional creative variant only if the user wants exploration.
+First quote the failing phrase or missing element. Then state a plausible cause or testable hypothesis, with its uncertainty; call it a root cause only when the evidence establishes causation. Next, remove conflicts rather than adding complexity. Recommend one primary repair variable rather than adding more adjectives. Finally, produce one conservative retry prompt and one optional creative variant only if the user wants exploration.
 
 ## Conservative Retry Pattern
 
@@ -71,4 +71,4 @@ For edit/extend failures, preserve the source clip first and change only the fai
 
 ## Output Contract
 
-Return root cause, evidence from the prompt or result, repaired prompt, and one conservative retry variant.
+Return the failed criterion, observed or user-reported evidence, a plausible cause or testable hypothesis with uncertainty, and a repaired prompt when useful. Add a conservative retry proposal only when it serves the diagnosis; preserve the user's existing settings and authorization. Do not present uncertain causation as a proven root cause or submit a generation merely because a revision was requested.

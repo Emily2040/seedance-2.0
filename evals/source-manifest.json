@@ -369,7 +369,7 @@
     {
       "path": "references/retake-protocol.md",
       "role": "responder",
-      "sha256": "2263a9a9412c7b46a7468363df477856f70a3ed082d7979cf010241fec07b7c7"
+      "sha256": "c80829e305045a6568bb2ffc52c7b25e0afd48eb4041a469e6b57d8d672b6780"
     },
     {
       "path": "references/sequence-project-state.md",
@@ -554,7 +554,7 @@
     {
       "path": "skills/seedance-troubleshoot/SKILL.md",
       "role": "responder",
-      "sha256": "4a6f85676c87727e98e5d40f881c4bdd78da7f775e41ca0b7ed370fff6d4835e"
+      "sha256": "05d90729cc530c7c98be99f5664a8b9ae208c034f98dfe83bc7b6227c36b24a8"
     },
     {
       "path": "skills/seedance-vfx/SKILL.md",

@@ -22,7 +22,7 @@ Separate a plausible cause from an established fact. The same failure in two or 
 ## Check the authorization before an external action
 
 1. Reuse the user's existing authorization. Distinguish permission to review or rewrite from permission to submit a generation, edit, upload, or batch.
-2. Identify the remaining limit: authorized takes minus attempted submissions, and any applicable currency or other cap. Include failed or uncertain submissions unless their non-submission or refund is confirmed. An uncertain timeout is not permission to submit a duplicate; query the existing job only through an authorized read path when available.
+2. Track each take and currency cap against its own authorization baseline. “One more take” after Take 3 grants one additional attempt from that point, not a lifetime total of one; preserve any other active cap unless the user changes it. Count failed or uncertain submissions against the applicable attempt allowance unless non-submission is confirmed. A monetary refund restores only the currency budget it actually refunds, not a user-set attempt cap; an attempt allowance needs its own explicit restoration. An uncertain timeout is not permission to submit a duplicate; query the existing job only through an authorized read path when available.
 3. Preserve model/tier, operation, duration, resolution, reference roles, and output scope. Changing one of these is a proposal unless the user's existing authorization covers it. A request to “try again” does not imply an upgrade or longer clip.
 4. If a currency cap applies, use current surface-specific pricing and a defensible maximum charge before submitting. Unknown pricing stays unknown; a take cap alone is not a money cap. Do not invent a price, refund, retry allowance, or a new budget.
 5. At zero/exhausted budget or an explicit stop, request no further generation. Continue with authorized review, a draft revision, or a post plan if useful. Do not pressure the user to top up. If a new external action is requested but its scope is missing, prepare the concrete change first and ask only for the missing authorization.
@@ -59,6 +59,8 @@ These cases specify intended skill behavior, not measured live-model results:
 | Zero takes left; user asks what to change | Provide a draft change or post option; submit nothing and do not request an automatic top-up. |
 | User approves one retry at the same settings | Preserve tier, duration, resolution, and scope; do not upgrade to Standard or lengthen the clip. |
 | User asks only to rewrite the prompt | Return the revision without submitting a generation or asking for an unnecessary generation budget. |
+| User says “one more take” after three earlier attempts | Start an additional one-attempt allowance at that authorization; preserve any still-active currency cap. |
+| Failed attempt is refunded under a two-attempt user cap | Restore confirmed money only; the attempted submission still counts unless that attempt allowance is explicitly restored. |
 | Prior submission timed out and charge/job status is unknown | Count it conservatively; do not blindly resubmit or assume the attempt was free. |
 | A Fast draft works but exact final dialogue matters | Explain that the final setting still needs review; any further test requires remaining authorization. |
 
