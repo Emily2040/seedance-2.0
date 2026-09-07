@@ -2,6 +2,8 @@
 
 These cards are authored concepts with no attached media. They teach reference authority, editorial order and a continuation boundary; they do not establish that an active surface supports a particular operation. Check the surface before choosing an input mode. A conceptual final frame or planned pose is never an accepted source.
 
+Reference tokens shown here are teaching placeholders. Before using a conditional prompt, replace them in both its binding record and prose with the active surface's exact bound tokens, preserving the user's supplied spelling. Do not submit a literal placeholder or invent a binding; leave the prompt conditional if the actual asset or token is unavailable.
+
 ## Card: Borrow the steps, keep the new performer
 
 **Evidence:** Concept; not generated or inspected.
