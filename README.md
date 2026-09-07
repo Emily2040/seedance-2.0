@@ -313,6 +313,7 @@ Concept art for the system, generated and curated. Every image is paired with se
 | [`aspect-ratio-delivery.md`](references/aspect-ratio-delivery.md) | Creative framing, delivery containers, social cutdowns, safe areas, and textless/version planning. |
 | [`subtitles-localization.md`](references/subtitles-localization.md) | Subtitle, SDH, forced narrative, dubbing, textless, and cultural localization planning. |
 | [`audio-post-delivery.md`](references/audio-post-delivery.md) | Dialogue, SFX, music, stems, M&E, loudness, dubbing, and sync handoff guidance. |
+| [`performance-example-cards.md`](references/performance-example-cards.md) | Four concept cards: joy, physical comedy, exact single-speaker dialogue and quiet observation. |
 | [`delivery-qc.md`](references/delivery-qc.md) | Professional preflight for picture, color, audio, captions, rights, metadata, versioning, and human QC. |
 | [`examples-by-mode.md`](references/examples-by-mode.md) | Mode-specific prompt examples for T2V, I2V, V2V, R2V, FLF2V, edit, extend, and troubleshooting. |
 | [`multilingual-community-examples.md`](references/multilingual-community-examples.md) | Original Chinese, Russian, Japanese, Korean, Spanish, and mixed-language prompt structures from safe community pattern mining. |

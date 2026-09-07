@@ -317,6 +317,11 @@
       "sha256": "d7f90d9f418a589b027281cee70f9d04ee4498f18dd03b0b17ec52029bfadb82"
     },
     {
+      "path": "references/performance-example-cards.md",
+      "role": "responder",
+      "sha256": "cfff6b7922690d23c3d3090a1e14aa4ce32fe862c54ab731a5db6a66a19614f6"
+    },
+    {
       "path": "references/platform-constraints.md",
       "role": "responder",
       "sha256": "955b02a35b090cbec2358bc4e7ce19eac5233c9857f2edaff0c32dd33c7ff8b6"
@@ -459,7 +464,7 @@
     {
       "path": "skills/seedance-audio/SKILL.md",
       "role": "responder",
-      "sha256": "d3e81fb5297a23d4c1401cf6cb167c1de6ccda6503fbbb60785377131c168fa9"
+      "sha256": "f163f7bf6f5b075800bef2e03cf313ee9aee9d3c23f135a630bafc8ed92c1245"
     },
     {
       "path": "skills/seedance-camera/SKILL.md",

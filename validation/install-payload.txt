@@ -100,6 +100,7 @@ references/model-name-map.md
 references/multilingual-community-examples.md
 references/multilingual-native-review.md
 references/multishot-grammar.md
+references/performance-example-cards.md
 references/platform-constraints.md
 references/platform-surface-matrix.md
 references/pro-filmmaking-standards.md

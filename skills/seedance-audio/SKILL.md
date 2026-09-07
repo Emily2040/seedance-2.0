@@ -66,3 +66,5 @@ When sequence state is present, inherit completed dialogue, active dialogue, amb
 ## Output Contract
 
 Return speaker map, quoted dialogue, sound layers, audio reference role, lip-sync constraints, post/delivery notes if needed, and a compact prompt-ready audio block.
+
+For worked examples with a chosen approach, copyable prompt, evidence boundary and failure checks, load [performance and dialogue cards](../../references/performance-example-cards.md). These are authored concepts, not observed generation results.
