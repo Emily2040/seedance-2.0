@@ -22,13 +22,13 @@ metadata:
 
 Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
 
-If the take is partially good rather than failed, route to [retake-protocol](../../references/retake-protocol.md) triage first - most takes deserve a verdict, not a rewrite. Diagnose failure before rewriting. Do not simply add more adjectives. Identify whether the failure came from mode mismatch, overload, ambiguity, fragile identity, unsafe wording, unsupported platform behavior, or missing preservation constraints.
+Use [retake-protocol](../../references/retake-protocol.md) to record the failed criterion, observed or user-reported evidence, useful parts of the take, one plausible repair, and the remaining authorized limits. Diagnose before rewriting; repeated failures do not prove the prompt is wrong. Consider mode mismatch, conflicting references, ambiguity, unsupported controls, model variation, or missing preservation constraints. A review or rewrite request does not authorize another generation. At zero/exhausted budget, submit nothing; preserve model/tier, duration, resolution, and reference roles unless an already authorized change covers them.
 
 When the diagnostic tree has no row for the failure, load [model-mechanics](../../references/model-mechanics.md) and propose a testable hypothesis from the observed failure: conflicting priorities, ambiguous constraints, action timing, continuity state, reference roles, detail readability, or audio attribution. Do not present a diagnosis as proof of hidden model internals. Load [field-observed-tips](../../references/field-observed-tips.md), [reference-workflow](../../references/reference-workflow.md), and [api-workflow](../../references/api-workflow.md) when the failure involves continuation, edit/extend, source clips, audio references, or platform-specific errors. Load [shot-list-continuity](../../references/shot-list-continuity.md) for multi-shot drift and [delivery-qc](../../references/delivery-qc.md) for final-client or delivery failures. When sequence state is present, load [failure-atlas](../../references/failure-atlas.md), [continuation-handoff](../../references/continuation-handoff.md), and [continuity-qc](../../references/continuity-qc.md); diagnose against continuity locks, completed beats, exact reference tags, and reserved future beats.
 
 ## Intent
 
-A failed generation feels personal - the user showed the machine their idea and the machine returned something broken. The soul of this skill is rescue without blame: name the mechanism, never the user; save the idea, not just the prompt. They should leave with a fix and their confidence intact.
+A failed generation feels personal - the user showed the machine their idea and the machine returned something broken. The soul of this skill is rescue without blame: describe a plausible failure mechanism without blaming the user; preserve the idea as well as the prompt. They should leave with a fix and their confidence intact.
 
 ## Diagnostic Tree
 
@@ -57,7 +57,7 @@ A failed generation feels personal - the user showed the machine their idea and 
 
 ## Repair Process
 
-First quote the failing phrase or missing element. Then name the root cause. Next, remove conflicts rather than adding complexity. Recommend one primary repair variable rather than adding more adjectives. Finally, produce one conservative retry prompt and one optional creative variant only if the user wants exploration.
+First quote the failing phrase or missing element. Then state a plausible cause or testable hypothesis, with its uncertainty; call it a root cause only when the evidence establishes causation. Next, remove conflicts rather than adding complexity. Recommend one primary repair variable rather than adding more adjectives. Finally, produce one conservative retry prompt and one optional creative variant only if the user wants exploration.
 
 ## Conservative Retry Pattern
 
@@ -71,4 +71,4 @@ For edit/extend failures, preserve the source clip first and change only the fai
 
 ## Output Contract
 
-Return root cause, evidence from the prompt or result, repaired prompt, and one conservative retry variant.
+Return the failed criterion, observed or user-reported evidence, a plausible cause or testable hypothesis with uncertainty, and a repaired prompt when useful. Add a conservative retry proposal only when it serves the diagnosis; preserve the user's existing settings and authorization. Do not present uncertain causation as a proven root cause or submit a generation merely because a revision was requested.
