@@ -87,7 +87,7 @@ def inspect_install(repo_root: Path, destination: Path) -> dict:
             marker_before = None
         record = None
         if marker_before is not None:
-            record, checked_marker = installer._completion_record(destination)
+            record, checked_marker = installer._completion_metadata(destination)
             if marker_before != checked_marker:
                 raise ValueError("marker changed")
             result["managed"] = True

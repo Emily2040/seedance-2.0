@@ -167,3 +167,20 @@ class InstallDoctorTests(unittest.TestCase):
     def test_version_labels_are_bounded(self):
         self.assertIsNone(doctor._version(b"---\nversion: " + b"9" * 1000 + b".0.0\n---\n"))
         self.assertEqual(doctor._version(b'---\nversion: "6.7.0-beta.1"\n---\n'), "6.7.0-beta.1")
+
+    def test_modified_or_deleted_payload_allowlist_is_a_managed_edit(self):
+        path = self.target / installer.PAYLOAD_MANIFEST
+        original = path.read_bytes()
+        for replacement in (b"# a local edit\n", None):
+            with self.subTest(replacement=replacement):
+                if replacement is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(replacement)
+                report = self.inspect()
+                self.assertEqual(report["status"], "modified")
+                self.assertTrue(report["managed"])
+                self.assertIn(installer.PAYLOAD_MANIFEST.as_posix(), report["modified_since_install"])
+                # Diagnostic classification must not weaken installer acceptance.
+                self.assertFalse(installer.validate_completed_install(self.target)[0])
+                path.write_bytes(original)
