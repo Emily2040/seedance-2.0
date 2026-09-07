@@ -1,6 +1,6 @@
 # Russian Vocabulary
 
-Use this reference for Russian Seedance prompt wording, role binding, and compact translation. Keep reference tags unchanged: `@Image1`, `@Video1`, and `@Audio1` stay literal.
+Use this reference for Russian Seedance prompt wording, role binding, and compact translation. Keep reference tags unchanged when translating surrounding prose. The tokens in these tables and templates are examples, not attached assets or universal syntax. Before adapting them, follow [Using Reference Examples](../surface-prompt-profiles.md#using-reference-examples) and preserve the actual binding token, whatever its script or format.
 
 | Function | Russian | English meaning |
 |---|---|---|

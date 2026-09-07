@@ -23,7 +23,9 @@ metadata:
 
 Before producing prompt text, a prompt-ready block, a rewrite, an example, or a compiled clip, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete its canonical narrative or non-narrative record. Translate that record into visible or audible carriers and keep its internal labels out of final generation prose.
 
-English is the default prompting language and fails in two ways at once: slop (empty evaluation words that add tokens and no signal) and false positives (vague threat-adjacent wording that trips the heaviest moderation surface). The cure for both is the same: concrete production English. Preserve reference tags exactly: `@Image1`, `@Video1`, `@Audio1` must never be reworded.
+English is the default prompting language and fails in two ways at once: slop (empty evaluation words that add tokens and no signal) and false positives (vague threat-adjacent wording that trips the heaviest moderation surface). The cure for both is the same: concrete production English. Preserve actual reference tags exactly; their spelling is independent of the prompt language.
+
+Before adapting a reference example below, load [Using Reference Examples](../../references/surface-prompt-profiles.md#using-reference-examples). Bind its placeholders to real assets by the requested role, then preserve the actual token, including its script, case, spacing and punctuation. A written example token does not attach a file.
 
 ## Intent
 

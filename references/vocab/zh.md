@@ -2,7 +2,7 @@
 
 **Guide convention: primarily Simplified Chinese (简体中文, zh-Hans), with some Traditional-script examples.** This is the guide's writing convention, not a required prompt script or provider restriction. See Script Variant when choosing or adapting prompt or delivery text.
 
-Use this reference for Chinese Seedance prompt wording, role binding, and compact prompt compression. Keep reference tags unchanged: `@Image1`, `@Video1`, and `@Audio1` stay literal.
+Use this reference for Chinese Seedance prompt wording, role binding, and compact prompt compression. Keep reference tags unchanged when translating surrounding prose. The tokens in these tables and templates are examples, not attached assets or universal syntax. Before adapting them, follow [Using Reference Examples](../surface-prompt-profiles.md#using-reference-examples) and preserve the actual binding token, whatever its script or format.
 
 | Function | Chinese | English meaning |
 |---|---|---|
@@ -80,7 +80,7 @@ Use this reference for Chinese Seedance prompt wording, role binding, and compac
 
 `@图片1锁定原创人物身份与服装。@视频1仅参考运镜，不复制人物、地点或品牌。@音频1仅参考节奏与氛围。`
 
-On a Latin-tag surface, the same template with unchanged tags: `@Image1锁定原创人物身份。@Video1仅参考运镜。@Audio1仅参考节奏。` Never mix the two tag families in one prompt.
+Alternative illustration using Latin tokens: `@Image1锁定原创人物身份。@Video1仅参考运镜。@Audio1仅参考节奏。` These spellings are not interchangeable bindings. Use the active operation's verified asset mapping; do not translate, renumber or combine example tokens to make a prompt appear consistent.
 
 ## Timeline Template
 
