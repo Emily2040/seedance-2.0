@@ -43,6 +43,15 @@ demonstration. Tell the agent which one you want to keep. A draft can be revised
 without submitting a paid generation request.
 
 <!-- teaching-image:placement -->
+<!-- installed-readme-gallery:start -->
+
+![Slender hands with long pearl-blush nails, ivory tips and gold accents hold an ivory paper fan under a desk lamp.](assets/paper-fan-teaching.png)
+
+*AI-generated teaching concept, not Seedance output.* The still illustrates
+material, framing and light; it does not prove the action or sound will render.
+[Image provenance and prompts](docs/PAPER_FAN_ART.md).
+
+<!-- installed-readme-gallery:end -->
 
 More examples: [performance and dialogue](references/performance-example-cards.md),
 [product and process](references/product-example-cards.md),
@@ -509,12 +518,12 @@ For longer stories in any language, start with [`seedance-sequence`](skills/seed
 
 ## Visual Gallery
 
-<!-- installed-readme-gallery:start -->
+Current teaching example: [paper-fan illustration and provenance](https://github.com/Emily2040/seedance-2.0/blob/main/docs/PAPER_FAN_ART.md).
+The provenance page links to the full image and records its generation/edit prompts.
 
-[Historical concept-art archive](docs/visual-archive.md). These illustrations are
+[Historical concept-art archive](https://github.com/Emily2040/seedance-2.0/blob/main/docs/visual-archive.md). These illustrations are
 not application screenshots, verified workflows or Seedance benchmark results.
 
-<!-- installed-readme-gallery:end -->
 
 <details>
 <summary>Maintainer validation and design documentation</summary>
