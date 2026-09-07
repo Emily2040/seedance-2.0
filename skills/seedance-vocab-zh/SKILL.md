@@ -53,7 +53,7 @@ When the deliverable targets 台灣, 香港, or any Traditional-script audience,
 
 ## De-Slop Rule
 
-When the prompt leans on `电影感`, `氛围感`, `高级感`, `大片感`, or bare `质感`, load the Slop Traps table in [Chinese vocabulary](../../references/vocab/zh.md) and decompose each into the physical elements that produce it - 材质, 光线, 色彩, 空气.
+When an adjective leaves the intended shot unclear, load Slop Traps in [Chinese vocabulary](../../references/vocab/zh.md). Preserve a useful style or aesthetic term and add only the scene-specific action, framing, light, or sound needed to clarify it. The table offers authored options, not a default look or a proven model-performance rule. Keep the user's chosen energy, dialogue, reference tags, and settings. Offer distinct choices only when the ambiguity changes the scene; if the user delegated the choice, decide within that scope.
 
 ## Output Contract
 

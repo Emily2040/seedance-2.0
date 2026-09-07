@@ -121,9 +121,9 @@ Preserve the user's wording and characterization. For newly drafted speech, choo
 
 ## Aesthetic Registers (미학)
 
-Korean carries aesthetic concepts with no one-word English equivalent. They are legitimate intent words — but they are intent, not instruction: alone in a prompt they behave like any feel-word and destabilize the output. Name the register, then spend the words on the physical elements that produce it, exactly as the Slop Traps table repairs feel-words.
+Korean aesthetic terms can carry useful creative intent. Preserve the user's chosen term; when the intended shot is unclear, ask what matters or propose a scene-specific visible or audible detail. The examples below are authored possibilities, not definitions of a culture or mandatory ingredients. This is editorial guidance for making direction reviewable, not evidence that these terms destabilize Seedance output. Independent language and production-language review remains pending.
 
-| Register | Decompose into |
+| Term | One possible scene treatment |
 |---|---|
 | 한 (han — grief that stays) | stillness and weight, not tears: `움직임을 멈춘 인물, 긴 그림자, 식은 밥상, 빗소리만` |
 | 정 (jeong — accumulated closeness) | small physical care between people: `말없이 반찬을 옮겨 주는 손, 어깨에 걸쳐 주는 외투` |
@@ -133,18 +133,18 @@ Korean carries aesthetic concepts with no one-word English equivalent. They are 
 
 ## Slop Traps
 
-커뮤니티 공통 결론: 추상적인 품질 단어는 모델이 어떤 요소를 강조해야 할지 판단하지 못하게 만들어 출력을 불안정하게 한다. 느낌 단어는 그 느낌을 만드는 물리 요소(카메라 동사+속도+시점, 광원+방향+행동)로 분해한다.
+편집 지침: 의도가 불분명할 때 추상적인 형용사에 보이는 동작이나 들리는 소리를 덧붙인다. 의도를 전달하는 스타일 이름은 남겨도 된다. 이는 제작 의도를 확인하기 위한 방법이며, 모델이 형용사를 이해하지 못한다는 실증이나 영상 안정성·생성 비용 개선의 보장이 아니다. 아래 예시는 공통 처방이 아니다. 느린 돌리 인, 안개, 틸 앤 오렌지를 자동으로 추가하지 않는다. 사용자가 정한 스타일, 표현의 강도, 대사, 참조 태그, 설정을 유지한다. 해석에 따라 장면이 크게 달라질 때만 차이가 분명한 선택지를 소수 제시한다. 선택을 위임받았다면 그 범위에서 결정한다.
 
-| 상투어 | 바꿔 쓰기 |
+| 상투어 | 장면에 맞춰 덧붙일 지시 |
 |---|---|
-| `영화 같은 / 시네마틱한` | 샷 크기·카메라 움직임·광원·색보정으로 쓴다: `넓은 설정 샷, 느린 돌리 인, 낮은 노을빛, 틸 앤 오렌지` |
-| `감성적인 / 감성` | 감성을 만드는 물리 요소로 쓴다: `해질녘 역광, 긴 그림자, 멀리서 들리는 기차 소리` |
-| `분위기 있는` | 분위기를 만드는 요소를 지목한다: `얇은 안개, 젖은 노면 반사, 낮은 환경음` |
-| `아름다운` | 색·질감·구도·빛의 움직임으로 쓴다 |
-| `웅장한` | 물리적 규모로 쓴다: 군중 수, 렌즈 거리, 구조물 높이 |
-| `고퀄리티 / 고화질 / 8K` | 삭제한다. 해상도는 설정이지 문장이 아니다 |
-| `압도적인` | 압도하는 한 가지 대비나 드러남을 쓴다 |
-| `몽환적인`(단독) | 몽환을 만드는 요소로 쓴다: `떠다니는 먼지, 볼류메트릭 라이트, 느린 부유` |
-| `미친 퀄리티` | 삭제한다. 품질은 요청하는 것이 아니다 |
-| `멋있는` | 구체적인 포즈·움직임·카메라로 쓴다 |
-| `다이내믹한` | 움직임의 종류·속도·끝점으로 쓴다 |
+| `영화 같은 / 시네마틱한` | 시계 수리공이 째깍 소리를 듣고 미소 짓는 장면이라면: `눈높이에 카메라를 고정한다. 시계 소리가 난 뒤 그녀가 미소 짓는다. 마지막에는 그 표정을 유지한다`. 이 장면의 한 가지 선택이며, 모든 연기를 조용하고 절제되게 만드는 규칙이 아니다 |
+| `감성적인 / 감성` | 어떤 반응을 보여 줄지 정하고 동작이나 소리로 쓴다. 기쁨이라면 웃음소리나 큰 몸짓도 선택할 수 있다. 노을이나 쓸쓸함을 자동으로 더하지 않는다 |
+| `분위기 있는` | 필요한 분위기를 확인하고 그 장소의 소리나 빛을 고른다. 작업실이라면 `공구를 내려놓은 뒤에도 시계 소리가 들린다`. 안개나 젖은 노면은 필수가 아니다 |
+| `아름다운` | 선택한 스타일에 맞춰 색·질감·구도·빛의 움직임을 구체화한다. 부드러운 빛만으로 제한하지 않는다 |
+| `웅장한` | 규모가 목적이면 인물과 공간의 크기 관계를 쓴다. 다른 뜻이라면 확인하고 군중을 자동으로 늘리지 않는다 |
+| `고퀄리티 / 고화질 / 8K` | 실제 납품 해상도와 확인 항목을 기록하고 지원되는 설정을 확인한다. 프롬프트의 숫자만으로 출력 해상도가 보장되지는 않는다 |
+| `압도적인` | 인상을 만드는 대비·동작·드러나는 순간을 쓴다. 요청된 강한 표현을 약화하지 않는다 |
+| `몽환적인`(단독) | 무엇이 평소와 다른지 정하고 그 움직임이나 소리를 쓴다. 입자나 안개를 자동으로 더하지 않는다 |
+| `미친 퀄리티` | 이 장면에서 확인할 항목을 쓴다. 예를 들어 시계 눈금의 가독성이나 동작의 연결이다. 이는 요구 사항이며 이미 확인된 결과가 아니다 |
+| `멋있는` | 그 인물에게 맞는 자세·동작·보여 주는 방식을 고른다 |
+| `다이내믹한` | 움직임의 종류·속도·끝점을 쓴다. 피사체의 움직임과 카메라의 움직임을 구분한다 |
