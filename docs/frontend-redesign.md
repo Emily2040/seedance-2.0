@@ -19,8 +19,8 @@ The separate deterministic masthead build check remains mandatory.
 
 There is no minimum README length, bitmap byte count, picture count or gallery
 quota. A small optimized image is allowed; a large image is not evidence of
-quality. The initial 24 MiB aggregate ceiling accommodates the existing page
-during migration. Lower it with the front-page refactor. Count all local
+quality. The front page has a 4 MiB aggregate embedded-asset ceiling after
+the gallery was moved to an optional archive. Count all local
 embedded assets once, including both picture-theme alternatives; this is a
 conservative asset-size bound, not a measured network trace or load-time score.
 Remote embedded images cannot be bounded by this offline check and are rejected.

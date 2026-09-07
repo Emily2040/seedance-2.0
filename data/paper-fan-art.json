@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "evidence_status": "ai_generated_teaching_concept",
+  "seedance_output": false,
+  "path": "assets/paper-fan-teaching.png",
+  "format": "PNG",
+  "width": 1536,
+  "height": 1024,
+  "bytes": 1933563,
+  "sha256": "e6a33e97f80c7f6a0b38cbeb9b662118a1f096ec2e3b81062709e53317bfa08d",
+  "generated_at": "2026-09-07",
+  "method": "built-in image generation followed by three targeted edits",
+  "prompt_record": "docs/PAPER_FAN_ART.md",
+  "installed": false
+}
