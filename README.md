@@ -192,7 +192,7 @@ For a client that imports a local skill folder, first prepare the filtered paylo
 python scripts/install_codex_skill.py --dest /absolute/path/to/new-staging/skills
 ```
 
-Import the resulting `skills/seedance-20/` folder, or run the installer with `--dest` set directly to the skills parent directory your client scans. Keep the directory name `seedance-20` and its relative layout. A raw repository clone or a client-managed GitHub import may include the evaluator, provider helpers, tests and archives; it does not carry the installer's filtered-payload guarantee. Inspect how that client packages files before using a direct import. See [manual transfer and verification](docs/MANUAL_INSTALL.md).
+Import the resulting `skills/seedance-20/` folder, or run the installer with `--dest` set directly to the skills parent directory your client scans. Keep the directory name `seedance-20` and its relative layout. A raw repository clone or a client-managed GitHub import may include the evaluator, provider helpers, tests and archives; it does not carry the installer's filtered-payload guarantee. Inspect how that client packages files before using a direct import. See [manual transfer and verification](https://github.com/Emily2040/seedance-2.0/blob/main/docs/MANUAL_INSTALL.md).
 
 Treat the table below as common local targets to verify in your own client, not a universal support guarantee.
 
