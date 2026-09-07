@@ -163,3 +163,7 @@ class InstallDoctorTests(unittest.TestCase):
     def test_budget_failure_is_unsafe(self):
         with patch.object(installer, "MAX_INSTALL_PAYLOAD_BYTES", 1):
             self.assertEqual(self.inspect()["status"], "unsafe")
+
+    def test_version_labels_are_bounded(self):
+        self.assertIsNone(doctor._version(b"---\nversion: " + b"9" * 1000 + b".0.0\n---\n"))
+        self.assertEqual(doctor._version(b'---\nversion: "6.7.0-beta.1"\n---\n'), "6.7.0-beta.1")

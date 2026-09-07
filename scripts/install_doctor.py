@@ -37,7 +37,7 @@ def _version(raw: bytes) -> str | None:
         return None
     frontmatter = text.split("---", 2)[1]
     match = re.search(r'^\s*version:\s*["\']?(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?)["\']?\s*$', frontmatter, re.M)
-    return match.group(1) if match else None
+    return match.group(1) if match and len(match.group(1)) <= 64 else None
 
 
 def _normalized(raw: bytes) -> bytes:
