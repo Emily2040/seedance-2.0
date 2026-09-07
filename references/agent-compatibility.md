@@ -26,12 +26,14 @@ This repository follows that pattern:
 
 ## Compatibility Rules
 
+The offline-payload guarantee applies to the installer's allowlisted output. Use `scripts/install_codex_skill.py --dest` with the client's skills parent directory, or prepare that output in an external staging directory and transfer only its `seedance-20/` folder. Whole-checkout copies and client-managed GitHub imports can include network-capable source tools. A compatible directory name alone does not establish that those tools were excluded. Here, "copy the folder" means the prepared payload, not this entire source checkout.
+
 - Keep every active `description` in third-person activation wording so tools can match it from a shortened skill list.
 - Keep the root `SKILL.md` small. Route to sub-skills and references instead of copying long tables into the root.
 - Keep volatile facts in dated references such as `api-status.md` and `source-registry.md`.
 - Keep generated bitmap images inside `assets/` if they are referenced by README.
 - Keep `agents/openai.yaml` aligned with the root skill name and make the default prompt invoke `$seedance-20`.
-- Use `scripts/install_codex_skill.py --force` to install or refresh the local user-level Codex copy at `$CODEX_HOME/skills/seedance-20` or `~/.codex/skills/seedance-20`.
+- Use `scripts/install_codex_skill.py` for a fresh local user-level copy at `$CODEX_HOME/skills/seedance-20` or `~/.codex/skills/seedance-20`. Use `--force` only for an intentional replacement after reviewing and backing up the existing installation.
 - Keep scripts deterministic and local. They should validate structure, schema, design, and source metadata without requiring private credentials.
 - Do not store API keys, account cookies, or private prompt corpora in the skill package.
 
