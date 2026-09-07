@@ -1,6 +1,6 @@
 ---
 name: seedance-filter
-description: "This skill should be used when a Seedance 2.0 prompt is blocked, rejected, silently degraded, or likely to trigger a content filter; or when the user asks for a safer rewrite without losing the creative intent."
+description: "This skill should be used when a Seedance 2.0 prompt is blocked or rejected, when moderation is a suspected cause of a problem, or when the user asks for a content-boundary review or safer alternative. Assess the actual request before offering a clarification."
 license: MIT
 user-invocable: true
 tags:
@@ -24,43 +24,28 @@ Before producing prompt text, a prompt-ready block, a rewrite, an example, or a 
 
 ## Intent
 
-A wrongly blocked prompt makes a user feel accused by a machine with no court of appeal. This skill is the advocate: clear the innocent by stating their honest intent plainly, and never coach the guilty. The user's dignity and the platform's boundary are protected in the same gesture.
+Assess the actual scene and available rejection information before proposing a rewrite. Keep legitimate creative intent clear without assuming that every rejection is a false positive or every output defect is moderation.
 
 ## Boundary — read before anything else
 
-This skill repairs **false positives only**: benign production content blocked or degraded by over-broad filtering (medical, historical, athletic, fictional-original contexts). It works by **clarifying legitimate context in plain language** — never by disguising intent. It does not rephrase genuinely prohibited content: anything risky involving minors, real-person likeness without rights, sexual or graphic or illegal material. If the underlying request is prohibited, refuse plainly and offer a legitimate alternative only where one exists.
-
-Use this when a prompt is blocked, degraded, likely to trigger moderation, or needs a safer rewrite without losing creative intent. This skill does not help evade safety systems. It rewrites risky surface wording into professional, non-graphic production language and preserves the safe creative core.
+This skill clarifies benign requests; it does not disguise prohibited content or help bypass safety systems. Evaluate the underlying request and relevant context, including age, consent, identity, rights and harm. Do not invent those facts or infer a content violation from a topic word alone. If the underlying request is prohibited, refuse plainly and offer a legitimate alternative only where one exists.
 
 ## Repair Method
 
-1. Identify the creative intent: action, mood, camera, subject, and final beat.
-2. Identify risky surface wording: graphic harm, protected identity, sexualized framing, real-person likeness, weapons, self-harm, hate, evasion language, or exact IP copying.
-3. Replace risky terms with professional, non-graphic, production-context language.
-4. Preserve composition, action, mood, camera logic, and authorized references.
-5. For likely false positives, clarify benign production context, ownership, and non-graphic intent. Do not help bypass safety systems or provide evasion tactics.
-
-## Safer Rewrite Patterns
-
-| Intent | Safer direction |
-|---|---|
-| Conflict | `staged confrontation, choreographed action beat, no graphic injury` |
-| Aftermath | `non-graphic distress, torn fabric, scattered props, dramatic silence` |
-| Suspense | `threat implied by shadow, locked door, heavy breathing, low light` |
-| Weapon-like prop | `prop object handled safely within a staged action scene` |
-| Horror mood | `eerie atmosphere, flickering practical light, off-screen sound cue` |
-| Protected identity | `original character with broad genre archetype traits` |
+1. Identify the requested scene, its must-haves and the actual error or rejection information available. Separate the provider's stated reason, the user's report and an unverified hypothesis. Leave the cause unknown when the evidence does not establish it.
+2. Assess the underlying content. Ask only for missing context that materially affects the boundary or requested output; do not turn a complete benign brief into another interview.
+3. For an ambiguous phrase with a known benign meaning, clarify that meaning faithfully. Preserve exact dialogue, reference tokens, authorized roles, sound, framing and settings unless their revision was requested.
+4. If a proposal removes or replaces content, describe that change and offer it as an alternative, or draft within the user's already delegated scope. Do not label a different scene an equivalent wording repair or claim that adding “prop”, “original” or “authorized” establishes those facts.
+5. Do not promise acceptance or submit repeated synonym probes. A text revision is not authorization for an upload, retry, provider change or spending. Follow the user's budget and [retake protocol](../../references/retake-protocol.md).
 
 ## Boundary Rule
 
-If the user's request is unsafe, refuse or redirect to a safe alternative. If it is safe but poorly worded, repair the wording. When uncertain, state the risk class and offer a conservative prompt that keeps the non-harmful scene function.
-
-Do not provide filter-bypass, evasion, or hidden-word tactics. The safe path is to clarify production intent, remove unsafe identity or harm elements, and rewrite into an original authorized scene.
+When context is uncertain, state what is unresolved. When content is prohibited, refuse or offer a legitimate alternative rather than disguising it. Do not provide filter-bypass, evasion or hidden-word tactics. A language change does not change the underlying content.
 
 Face-limit or portrait-verification workarounds are not safe prompt tricks. If a surface offers sanctioned virtual portrait, trusted model-output, or authorization asset flows, route the user to those current official paths instead of evasion language.
 
-Load [filter-vocab](../../references/filter-vocab.md) for safer substitutions. Load [multilingual-community-examples](../../references/multilingual-community-examples.md) only when the safe repair needs Chinese/Russian/Japanese/Korean/Spanish or mixed-language wording for clarity.
+Load [filter-vocab](../../references/filter-vocab.md) for conditional wording examples and clearly labeled content alternatives. Load [multilingual-community-examples](../../references/multilingual-community-examples.md) only when a benign clarification needs those language patterns; do not treat them as evidence of acceptance or permission.
 
 ## Output Contract
 
-Return likely trigger class, safer wording, final prompt, what changed, and any content boundary that still applies.
+Return the relevant observation or stated rejection reason, any unresolved hypothesis, and a faithful clarification or explicitly labeled alternative when appropriate. Explain material changes and any remaining boundary. Keep copyable text separate from those notes and do not describe an unsubmitted draft as approved.

@@ -1,6 +1,6 @@
 # English Vocabulary
 
-Use this reference for precise English Seedance prompt wording. English is the default prompting language and the most heavily moderated surface, and it fails in two ways at once: empty quality words ("cinematic, stunning, 8K") add zero signal, and vague threat-adjacent wording trips false-positive filters. Precision fixes both - concrete production English reads better to the model and to the filter. Keep reference tags unchanged when translating surrounding prose. The tokens in these tables and templates are examples, not attached assets or universal syntax. Before adapting them, follow [Using Reference Examples](../surface-prompt-profiles.md#using-reference-examples) and preserve the actual binding token, whatever its script or format.
+Use this reference when the user chooses English Seedance prompt wording. The examples support editorial clarity; they do not establish a language-wide moderation ranking or guarantee that a revised prompt will be accepted. Keep reference tags unchanged when translating surrounding prose. The tokens in these tables and templates are examples, not attached assets or universal syntax. Before adapting them, follow [Using Reference Examples](../surface-prompt-profiles.md#using-reference-examples) and preserve the actual binding token, whatever its script or format.
 
 | Function | English wording | What it decides |
 |---|---|---|
@@ -52,9 +52,9 @@ Use this reference for precise English Seedance prompt wording. English is the d
 | Constraint | `no identity change, no object redesign` | drift guard |
 | Constraint | `one action, one camera move` | the budget rule in six words |
 | Constraint | `nothing else moves` | isolates the hero motion |
-| Safety | `staged confrontation, no graphic injury` | action without harm reading |
-| Safety | `original character with broad archetype traits` | identity without likeness |
-| Safety | `prop object handled safely` | objects without threat reading |
+| Safety | `staged confrontation, no graphic injury` | requests non-graphic staging; context still needs assessment |
+| Safety | `original character with broad archetype traits` | requests an original character; a label does not establish permission |
+| Safety | `prop object handled safely` | requests safe handling of a confirmed prop; not an approval guarantee |
 
 ## Dialogue Notes
 
@@ -79,20 +79,19 @@ English prompts attract empty evaluation words. Each adds tokens and zero signal
 | insanely detailed | the two details that matter, named |
 | trending / viral style | the actual format: vertical, fast hook, caption-safe framing |
 
-## Filter-Trip Repairs
+## Wording in Context
 
-English carries the heaviest moderation. Use this only for safe prompts being misunderstood - the repair is clarity, not evasion. Genuinely prohibited content routes to a plain refusal via the filter skill.
+A blocked result alone does not establish a false positive or reveal a trigger word. These are conditional editorial examples for known benign meanings, not measured filter behavior. Keep exact quoted dialogue unchanged unless the user asks to edit it.
 
-| Trigger-prone English | Professional clarification |
+| Known intended meaning | Faithful clarification |
 |---|---|
-| shoot the scene / shooting | film the scene, capture the take |
-| kill the lights | cut the lights to black |
-| gun it / shot after shot | accelerate hard / take after take |
-| execution of the move | the move performed cleanly |
-| dead silence | held silence, room tone only |
-| blow up the image | enlarge the image to full frame |
-| fight breaks out | choreographed action beat begins, no graphic injury |
+| `shoot the scene` means recording a take | `film the scene` |
+| `kill the lights` means switching the room lights off | `switch off the room lights` |
+| `gun it` means increasing a vehicle's speed | `accelerate the vehicle` |
+| `execution of the move` refers to performance | `performance of the move` |
+| `blow up the image` means increasing its display size | `enlarge the image`; do not invent a new framing or output resolution |
+| `dead silence` refers to sound | Preserve the requested sound state. Ask only if it matters whether the user means a muted track or quiet ambience; do not automatically add room tone |
 
-Anything genuinely risky - minors, real-person likeness, sexual or graphic content - is not a wording problem; route it to the filter skill's boundary for a plain refusal.
+Assess identity, consent, age, harm and other relevant context through [seedance-filter](../../skills/seedance-filter/SKILL.md) or the applicable rights route. A topic label is a reason to assess context, not proof that the request is prohibited or that a synonym will make it permissible. If the underlying request is prohibited, refuse it and offer a legitimate alternative only where appropriate.
 
-Load [filter-vocab](../filter-vocab.md) for the full false-positive repair table and [anti-slop-lexicon](../anti-slop-lexicon.md) for the core replacement rule.
+Load [filter-vocab](../filter-vocab.md) to distinguish clarification from content changes, and [anti-slop-lexicon](../anti-slop-lexicon.md) for editorial vocabulary guidance. No rewrite promises acceptance or authorizes another generation attempt.
