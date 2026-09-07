@@ -27,15 +27,24 @@ one is intentional. FFmpeg streams decoded frames back to this process instead o
 opening a mutable staging pathname. A separate bounded FFmpeg invocation must decode
 the retained PNG before it is written through an owned handle and published
 atomically, so a failed run cannot expose a partial or undecodable final output.
+
+--timeout-seconds sets one shared FFmpeg budget (default 120 seconds), including
+option discovery, streaming decode, PNG verification and encoding. Timeout kills
+and reaps the direct child; cleanup may add up to 10 seconds. Pipe output and
+diagnostics are bounded. Inputs allow only file/pipe protocols; this is not a
+filesystem sandbox, and it cannot interrupt an operating-system filesystem stall.
 """
 from __future__ import annotations
 
 import argparse
 import base64
 import ctypes
+import contextlib
+import contextvars
 import errno
 import functools
 import hashlib
+import math
 import os
 import secrets
 import shutil
@@ -44,6 +53,8 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -2975,8 +2986,138 @@ def _publish_output(
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _MAX_PNG_CHUNK_BYTES = 256 * 1024 * 1024
 _MAX_FRAME_BYTES = 512 * 1024 * 1024
-_PNG_PROBE_TIMEOUT_SECONDS = 60
-_FFMPEG_OPTION_PROBE_TIMEOUT_SECONDS = 15
+_DEFAULT_TIMEOUT_SECONDS = 120.0
+_CLEANUP_TIMEOUT_SECONDS = 5.0
+_MAX_HELP_BYTES = 4 * 1024 * 1024
+_MAX_DIAGNOSTIC_BYTES = 800
+_DEADLINE: contextvars.ContextVar[float | None] = contextvars.ContextVar(
+    "seedance_frame_deadline", default=None
+)
+
+
+@contextlib.contextmanager
+def _deadline_scope(timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS):
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise FrameExtractionError("timeout-seconds must be finite and positive")
+    token = None
+    if _DEADLINE.get() is None:
+        token = _DEADLINE.set(time.monotonic() + timeout_seconds)
+    try:
+        _remaining_time()
+        yield
+    finally:
+        if token is not None:
+            _DEADLINE.reset(token)
+
+
+def _remaining_time() -> float:
+    deadline = _DEADLINE.get()
+    if deadline is None:
+        raise FrameExtractionError("media operation has no deadline")
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise FrameExtractionError("media operation exceeded its safety timeout")
+    return remaining
+
+
+@contextlib.contextmanager
+def _bounded_child(cmd: list[str], input_bytes: bytes | None = None):
+    """Bound pipe reads and process exit under the caller's shared deadline.
+
+    A trusted FFmpeg executable is required. This controls the direct child;
+    it is not a sandbox for an arbitrary executable or kernel/filesystem stalls.
+    """
+    with _deadline_scope(), contextlib.ExitStack() as stack:
+        stdin = subprocess.DEVNULL
+        if input_bytes is not None:
+            if len(input_bytes) > _MAX_FRAME_BYTES:
+                raise FrameExtractionError("encoder input exceeds the safety limit")
+            source = stack.enter_context(tempfile.TemporaryFile(mode="w+b"))
+            source.write(input_bytes)
+            source.seek(0)
+            stdin = source
+        _remaining_time()
+        try:
+            process = subprocess.Popen(
+                cmd, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+        except OSError as exc:
+            raise FrameExtractionError(f"could not start ffmpeg: {exc}") from exc
+        assert process.stdout is not None and process.stderr is not None
+        expired = threading.Event()
+        diagnostics = bytearray()
+        drain_errors: list[OSError] = []
+
+        def kill_child() -> None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+
+        def expire() -> None:
+            expired.set()
+            kill_child()
+
+        def drain_stderr() -> None:
+            try:
+                while True:
+                    chunk = process.stderr.read(65536)
+                    if not chunk:
+                        break
+                    diagnostics.extend(chunk)
+                    del diagnostics[:-_MAX_DIAGNOSTIC_BYTES]
+            except OSError as exc:
+                drain_errors.append(exc)
+                kill_child()
+
+        timer = threading.Timer(max(0.0, _DEADLINE.get() - time.monotonic()), expire)
+        timer.daemon = True
+        drain = threading.Thread(target=drain_stderr, daemon=True, name="seedance-ffmpeg-stderr")
+        try:
+            timer.start()
+            drain.start()
+            try:
+                yield process, diagnostics
+                process.wait(timeout=_remaining_time())
+                _remaining_time()
+            except (subprocess.TimeoutExpired, FrameExtractionError) as exc:
+                if expired.is_set() or time.monotonic() >= _DEADLINE.get():
+                    raise FrameExtractionError("media operation exceeded its safety timeout") from exc
+                raise
+        finally:
+            timer.cancel()
+            if process.poll() is None:
+                kill_child()
+            try:
+                process.wait(timeout=_CLEANUP_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired as exc:
+                raise FrameExtractionError("ffmpeg did not exit within the cleanup timeout") from exc
+            drain.join(timeout=_CLEANUP_TIMEOUT_SECONDS)
+            process.stdout.close()
+            if drain.is_alive():
+                # Do not block closing a buffered stream held by the reader.
+                raise FrameExtractionError("ffmpeg diagnostic pipe did not close within the cleanup timeout")
+            process.stderr.close()
+        if expired.is_set():
+            raise FrameExtractionError("media operation exceeded its safety timeout")
+        if drain_errors:
+            raise FrameExtractionError("could not read ffmpeg diagnostics")
+
+
+def _run_bounded(cmd: list[str], *, input: bytes | None = None,
+                 max_output: int = _MAX_FRAME_BYTES) -> subprocess.CompletedProcess:
+    output = bytearray()
+    with _bounded_child(cmd, input) as (process, diagnostics):
+        while True:
+            chunk = process.stdout.read(65536)
+            if not chunk:
+                break
+            if len(output) + len(chunk) > max_output:
+                raise FrameExtractionError("ffmpeg output exceeds the safety limit")
+            output.extend(chunk)
+    return subprocess.CompletedProcess(cmd, process.returncode, bytes(output), bytes(diagnostics))
+
+
 _OUTPUT_CODECS = {
     ".png": "png",
     ".jpg": "mjpeg",
@@ -3049,6 +3190,8 @@ def _probe_decodable_png(ffmpeg: str, png_frame: bytes) -> None:
         "image2pipe",
         "-vcodec",
         "png",
+        "-protocol_whitelist",
+        "pipe",
         "-i",
         "pipe:0",
         "-map",
@@ -3060,25 +3203,8 @@ def _probe_decodable_png(ffmpeg: str, png_frame: bytes) -> None:
         "null",
         "-",
     ]
-    with tempfile.TemporaryFile(mode="w+b") as stderr_file:
-        try:
-            completed = subprocess.run(
-                cmd,
-                input=png_frame,
-                stdout=subprocess.DEVNULL,
-                stderr=stderr_file,
-                timeout=_PNG_PROBE_TIMEOUT_SECONDS,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise FrameExtractionError(
-                "retained PNG decode probe exceeded the safety timeout"
-            ) from exc
-        except OSError as exc:
-            raise FrameExtractionError(
-                f"could not start the retained PNG decode probe: {exc}"
-            ) from exc
-        stderr_file.seek(0)
-        detail = stderr_file.read().decode("utf-8", errors="replace")[-800:].strip()
+    completed = _run_bounded(cmd, input=png_frame, max_output=0)
+    detail = completed.stderr.decode("utf-8", errors="replace").strip()
     if completed.returncode != 0:
         raise FrameExtractionError(
             detail or "ffmpeg rejected the retained PNG frame during the decode probe"
@@ -3089,20 +3215,10 @@ def _probe_decodable_png(ffmpeg: str, png_frame: bytes) -> None:
 def _frame_sync_options(ffmpeg: str) -> tuple[str, str]:
     """Select the frame-sync spelling supported by this FFmpeg binary."""
 
-    try:
-        completed = subprocess.run(
-            [ffmpeg, "-nostdin", "-hide_banner", "-h", "full"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=_FFMPEG_OPTION_PROBE_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise FrameExtractionError(
-            "ffmpeg option probe exceeded the safety timeout"
-        ) from exc
-    except OSError as exc:
-        raise FrameExtractionError(f"could not probe ffmpeg options: {exc}") from exc
+    completed = _run_bounded(
+        [ffmpeg, "-nostdin", "-hide_banner", "-h", "full"],
+        max_output=_MAX_HELP_BYTES,
+    )
 
     help_text = completed.stdout.decode("utf-8", errors="replace")
     option_fields = {
@@ -3130,6 +3246,8 @@ def _frame_stream_command(ffmpeg: str, clip: Path, first: bool) -> list[str]:
         "-hide_banner",
         "-loglevel",
         "error",
+        "-protocol_whitelist",
+        "file,pipe",
         "-i",
         str(clip),
     ]
@@ -3150,42 +3268,21 @@ def _frame_stream_command(ffmpeg: str, clip: Path, first: bool) -> list[str]:
 
 
 def render_frame_png(ffmpeg: str, clip: Path, first: bool) -> bytes:
-    """Stream every decoded frame and retain only the final complete PNG."""
-
-    cmd = _frame_stream_command(ffmpeg, clip, first)
-
-    with tempfile.TemporaryFile(mode="w+b") as stderr_file:
-        try:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=stderr_file,
-            )
-        except OSError as exc:
-            raise FrameExtractionError(f"could not start ffmpeg: {exc}") from exc
-        assert process.stdout is not None
+    """Stream complete frames and validate the retained PNG under one deadline."""
+    with _deadline_scope():
+        cmd = _frame_stream_command(ffmpeg, clip, first)
         last_frame: bytes | None = None
-        try:
+        with _bounded_child(cmd) as (process, diagnostics):
             while True:
                 frame = _read_png_frame(process.stdout)
                 if frame is None:
                     break
                 last_frame = frame
-        except Exception:
-            process.kill()
-            process.wait()
-            raise
-        finally:
-            process.stdout.close()
-        returncode = process.wait()
-        stderr_file.seek(0)
-        stderr_text = stderr_file.read().decode("utf-8", errors="replace")[-800:].strip()
-    if returncode != 0 or last_frame is None:
-        detail = stderr_text or "ffmpeg returned no complete video frame"
-        raise FrameExtractionError(detail)
-    _probe_decodable_png(ffmpeg, last_frame)
-    return last_frame
+        if process.returncode != 0 or last_frame is None:
+            detail = bytes(diagnostics).decode("utf-8", errors="replace").strip()
+            raise FrameExtractionError(detail or "ffmpeg returned no complete video frame")
+        _probe_decodable_png(ffmpeg, last_frame)
+        return last_frame
 
 
 def _encode_frame_for_output(ffmpeg: str, png_frame: bytes, out: Path) -> bytes:
@@ -3201,6 +3298,8 @@ def _encode_frame_for_output(ffmpeg: str, png_frame: bytes, out: Path) -> bytes:
         "-hide_banner",
         "-loglevel",
         "error",
+        "-protocol_whitelist",
+        "pipe",
         "-i",
         "pipe:0",
         "-frames:v",
@@ -3211,14 +3310,20 @@ def _encode_frame_for_output(ffmpeg: str, png_frame: bytes, out: Path) -> bytes:
         codec,
         "pipe:1",
     ]
-    process = subprocess.run(cmd, input=png_frame, capture_output=True)
+    process = _run_bounded(cmd, input=png_frame)
     if process.returncode != 0 or not process.stdout:
         detail = process.stderr.decode("utf-8", errors="replace")[-800:].strip()
         raise FrameExtractionError(detail or f"ffmpeg could not encode {out.suffix}")
     return process.stdout
 
 
-def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) -> int:
+def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool,
+                  *, timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS) -> int:
+    with _deadline_scope(timeout_seconds):
+        return _extract_frame(ffmpeg, clip, out, first, force)
+
+
+def _extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) -> int:
     _validate_output_target(clip, out, force)
     if out.suffix.lower() not in _OUTPUT_CODECS:
         supported = ", ".join(sorted(_OUTPUT_CODECS))
@@ -3254,7 +3359,9 @@ def extract_frame(ffmpeg: str, clip: Path, out: Path, first: bool, force: bool) 
         content = _encode_frame_for_output(ffmpeg, png_frame, out)
         if stage is None:
             stage = _create_output_stage(out)
+        _remaining_time()
         _write_output_stage(stage, content)
+        _remaining_time()
         _publish_output(stage, clip, out, force, replacement)
         _write_console_line(f"{'first' if first else 'last'} frame -> {out}")
         return 0
@@ -3355,6 +3462,8 @@ def main() -> int:
     )
     parser.add_argument("--first-frame", action="store_true", help="extract the first frame instead")
     parser.add_argument("--ffmpeg", default=None, help="path to ffmpeg if not on PATH")
+    parser.add_argument("--timeout-seconds", type=float, default=_DEFAULT_TIMEOUT_SECONDS,
+                        help="shared FFmpeg time budget in seconds (default: 120); cleanup may add up to 10 seconds")
     parser.add_argument(
         "--force",
         action="store_true",
@@ -3366,6 +3475,8 @@ def main() -> int:
     parser.add_argument("--emit-record", action="store_true", help="print the observation-record skeleton")
     parser.add_argument("--self-test", action="store_true", help="offline wiring check, no ffmpeg or media")
     args = parser.parse_args()
+    if not math.isfinite(args.timeout_seconds) or args.timeout_seconds <= 0:
+        parser.error("--timeout-seconds must be finite and positive")
 
     if args.self_test:
         return self_test()
@@ -3388,7 +3499,8 @@ def main() -> int:
     suffix = ".first.png" if args.first_frame else ".last.png"
     out = Path(args.output) if args.output else clip.with_suffix(clip.suffix + suffix)
     try:
-        rc = extract_frame(ffmpeg, clip, out, args.first_frame, args.force)
+        rc = extract_frame(ffmpeg, clip, out, args.first_frame, args.force,
+                           timeout_seconds=args.timeout_seconds)
     except OutputPolicyError as exc:
         _write_console_line(f"output refused: {exc}")
         return 1
