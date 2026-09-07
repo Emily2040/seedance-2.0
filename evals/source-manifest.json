@@ -34,7 +34,7 @@
     {
       "path": "references/api-status.md",
       "role": "responder",
-      "sha256": "a7836f0f9432878308d207a935bc07be5072cbe0e7678adf125e27ab6157d82e"
+      "sha256": "d012e36000a520db212c452cd50936bf00bf9e6efb52280bf62beca3c9487ba9"
     },
     {
       "path": "references/api-workflow.md",
@@ -389,7 +389,7 @@
     {
       "path": "references/source-registry.md",
       "role": "responder",
-      "sha256": "ee07eaa544b40fd8f0369813b9aa80e5cff9d365b20369a682dd58134e179925"
+      "sha256": "c698ad1565c4628975331e06f9a0c8050a12f8ec96c28a0677f534add732d940"
     },
     {
       "path": "references/storytelling-framework.md",

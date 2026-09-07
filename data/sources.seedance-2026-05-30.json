@@ -8,7 +8,7 @@
       "url": "https://seed.bytedance.com/en/blog/seedance-2-0-official-launch",
       "language": "en",
       "source_type": "official",
-      "retrieved_at": "2026-05-30",
+      "retrieved_at": "2026-09-07",
       "published_or_updated": "2026-02-12",
       "confidence": "high",
       "surfaces": ["model"],
@@ -28,7 +28,7 @@
       "url": "https://seed.bytedance.com/en/seedance2_0",
       "language": "en",
       "source_type": "official",
-      "retrieved_at": "2026-05-30",
+      "retrieved_at": "2026-09-07",
       "published_or_updated": null,
       "confidence": "high",
       "surfaces": ["model"],
@@ -47,7 +47,7 @@
       "url": "https://arxiv.org/abs/2604.14148",
       "language": "en",
       "source_type": "official_model_card",
-      "retrieved_at": "2026-05-30",
+      "retrieved_at": "2026-09-07",
       "published_or_updated": "2026-04-15",
       "confidence": "high",
       "surfaces": ["model"],
@@ -263,7 +263,7 @@
       "url": "https://help.runwayml.com/hc/en-us/articles/50488490233363-Creating-with-Seedance-2-0",
       "language": "en",
       "source_type": "official_third_party_surface",
-      "retrieved_at": "2026-05-30",
+      "retrieved_at": "2026-09-07",
       "published_or_updated": "2026-05",
       "confidence": "high",
       "surfaces": ["creator-ui", "workflow"],
@@ -602,6 +602,35 @@
       "volatile_fields": ["buyer_specs", "spec_version", "platform_requirements"],
       "repo_actions": ["add delivery QC reference", "add delivery preflight eval"],
       "do_not_use_for": ["universal buyer spec"]
+    },
+    {
+      "id": "runway-api-model-catalog-2026-09-07",
+      "title": "Runway API Model Catalog",
+      "url": "https://docs.dev.runwayml.com/guides/models/",
+      "language": "en",
+      "source_type": "official_third_party_surface",
+      "retrieved_at": "2026-09-07",
+      "published_or_updated": null,
+      "confidence": "high",
+      "surfaces": [
+        "api"
+      ],
+      "claims": [
+        "catalog lists seedance2, seedance2_fast, seedance2_mini and separate seedance2_5"
+      ],
+      "volatile_fields": [
+        "model_ids",
+        "availability"
+      ],
+      "repo_actions": [
+        "separate model catalog naming from account entitlement"
+      ],
+      "do_not_use_for": [
+        "account access",
+        "pricing",
+        "request field contracts",
+        "Seedance 2.5 capabilities"
+      ]
     }
   ]
 }
