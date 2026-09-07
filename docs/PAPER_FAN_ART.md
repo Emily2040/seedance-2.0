@@ -4,6 +4,8 @@
 illustration, not a photograph of a real craftsperson, a folding tutorial, an
 application screenshot or a rendered-video benchmark.
 
+[View the full paper-fan illustration](../assets/paper-fan-teaching.png).
+
 The README's written example explains a single action and a visible endpoint.
 The image illustrates the paper, hands and motivated desk-lamp light. It cannot
 establish folding technique, motion completion, sound, continuity or model fidelity.

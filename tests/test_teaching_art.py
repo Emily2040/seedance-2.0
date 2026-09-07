@@ -34,3 +34,10 @@ class TeachingArtTests(unittest.TestCase):
         self.assertIn("the last fold of a paper fan and let go.", before)
         self.assertIn("The fan settles on the wood.", before)
         self.assertIn("No music.", before)
+
+    def test_installed_gallery_fallback_can_reach_the_current_art(self):
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        gallery = text.split("## Visual Gallery", 1)[1].split("<details>", 1)[0]
+        self.assertIn("/blob/main/docs/PAPER_FAN_ART.md", gallery)
+        provenance = (ROOT / "docs/PAPER_FAN_ART.md").read_text(encoding="utf-8")
+        self.assertIn("[View the full paper-fan illustration](../assets/paper-fan-teaching.png)", provenance)

@@ -518,6 +518,9 @@ For longer stories in any language, start with [`seedance-sequence`](skills/seed
 
 ## Visual Gallery
 
+Current teaching example: [paper-fan illustration and provenance](https://github.com/Emily2040/seedance-2.0/blob/main/docs/PAPER_FAN_ART.md).
+The provenance page links to the full image and records its generation/edit prompts.
+
 [Historical concept-art archive](https://github.com/Emily2040/seedance-2.0/blob/main/docs/visual-archive.md). These illustrations are
 not application screenshots, verified workflows or Seedance benchmark results.
 
