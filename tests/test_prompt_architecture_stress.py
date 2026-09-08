@@ -387,6 +387,14 @@ class AdvisoryLengthGateTests(unittest.TestCase):
 
 
 class EditorialLengthActionTests(unittest.TestCase):
+    def test_blank_lines_are_bounded_and_cannot_join_separate_clauses(self) -> None:
+        text = "\n" * 20000
+        start = time.perf_counter()
+        self.assertEqual(stress._editorial_length_spans(text), ())
+        self.assertLess(time.perf_counter() - start, 2.0)
+        self.assertEqual(stress._editorial_length_spans("Keep the brief\nunder 40 words."), ())
+        self.assertTrue(stress._editorial_length_spans(text + "Keep the brief under 40 words."))
+
     def case(self, instruction: str) -> dict:
         record = AdvisoryLengthGateTests().short_case()
         record["brief"] = "Subway busker plays to an empty platform; " + instruction

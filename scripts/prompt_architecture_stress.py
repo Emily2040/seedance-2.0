@@ -3955,12 +3955,12 @@ def _action_match_status(
 
 
 EDITORIAL_LENGTH_INSTRUCTION = re.compile(
-    r"(?:^|[.;!?\n])\s*"
-    r"(?:(?:please|(?:can|could|would) you(?: please)?)\s+)?"
-    r"(?P<instruction>(?:keep|make|write|limit|shorten)\s+"
-    r"(?:the|this|your)\s+(?:brief|prompt|response)\s+"
+    r"(?:^|[.;!?\n])[ \t]*"
+    r"(?:(?:please|(?:can|could|would) you(?: please)?)[ \t]+)?"
+    r"(?P<instruction>(?:keep|make|write|limit|shorten)[ \t]+"
+    r"(?:the|this|your)[ \t]+(?:brief|prompt|response)[ \t]+"
     r"(?:short|concise|brief|(?:under|below|within|to|at most|no more than)"
-    r"\s+[0-9]{1,6}\s+(?:words?|characters?)))\s*(?=$|[.;!?\n])",
+    r"[ \t]+[0-9]{1,6}[ \t]+(?:words?|characters?)))[ \t]*(?=$|[.;!?\n])",
     re.I,
 )
 
@@ -3971,7 +3971,8 @@ def _editorial_length_spans(text: str) -> tuple[tuple[int, int], ...]:
 
     Require both a writing object and a length predicate. Whole-clause matching
     leaves shared-verb coordination and named actors to the normal action parser.
-    Recognition does not check whether the requested length was obeyed.
+    Horizontal whitespace keeps clauses separate and avoids quadratic retries
+    over long runs of blank lines. Recognition does not enforce the limit.
     """
     return tuple(match.span("instruction") for match in EDITORIAL_LENGTH_INSTRUCTION.finditer(text))
 
