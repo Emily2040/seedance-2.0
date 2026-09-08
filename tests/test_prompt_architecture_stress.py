@@ -233,6 +233,10 @@ class LexicalEvidenceTests(unittest.TestCase):
             self.assertEqual(len(exported), len(shipped_corpus()))
             for row in exported:
                 self.assertIn("slop_free", row["dims"])
+                self.assertEqual(row["gate_version"], "architecture-v3-advisory-length")
+                self.assertEqual(row["previous_gate"]["version"], "architecture-v2-nonlexical")
+                self.assertEqual(row["length_review"]["count"], row["words"])
+                self.assertFalse(row["length_review"]["operation_limit_assessed"])
                 self.assertFalse(row["lexical_review"]["context_assessed"])
                 self.assertFalse(row["lexical_review"]["rewrite_recommended"])
                 self.assertIn("context unassessed", row["dims"]["slop_free"]["note"])
@@ -260,9 +264,11 @@ class AdvisoryLexicalGateTests(unittest.TestCase):
         scores = result["dims"]
         self.assertEqual(result["dims"]["slop_free"]["score"], 0)
         self.assertEqual(result["overall"], round(statistics.mean(v["score"] for v in scores.values()), 3))
-        self.assertEqual(result["gate_overall"], round(statistics.mean(v["score"] for k, v in scores.items() if k != "slop_free"), 3))
+        self.assertEqual(result["previous_gate"]["overall"], round(statistics.mean(v["score"] for k, v in scores.items() if k != "slop_free"), 3))
+        self.assertEqual(result["gate_overall"], round(statistics.mean(v["score"] for k, v in scores.items() if k not in {"slop_free", "length_fit"}), 3))
         self.assertLess(result["overall"], result["gate_overall"])
-        self.assertEqual(result["gate_version"], "architecture-v2-nonlexical")
+        self.assertEqual(result["gate_version"], "architecture-v3-advisory-length")
+        self.assertEqual(result["previous_gate"]["version"], "architecture-v2-nonlexical")
         self.assertEqual(stress.arm_gate_findings([record], [result], "skill_formula"), [])
         self.assertFalse(result["lexical_review"]["context_assessed"])
 
@@ -291,9 +297,93 @@ class AdvisoryLexicalGateTests(unittest.TestCase):
     def test_cli_accepts_advisory_flags_and_names_the_versioned_gate(self) -> None:
         result = run_strict_corpus([self.case(' Delivery target: 8K.')])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("architecture-v2-nonlexical", result.stdout)
+        self.assertIn("architecture-v3-advisory-length", result.stdout)
         self.assertIn("legacy", result.stdout)
         self.assertIn("now advisory", result.stdout)
+
+
+class AdvisoryLengthGateTests(unittest.TestCase):
+    def short_case(self) -> dict:
+        return {
+            "id": "short-complete", "arm": "skill_formula", "mode": "T2V",
+            "brief": "Under 40 words: subway busker plays to an empty platform.",
+            "prompt": (
+                "A busker plays on an empty subway platform. Camera locked off. "
+                "Fluorescent ceiling lights illuminate her hands. Sound: solo violin "
+                "and ventilation hum. She lowers her bow; hold the final frame."
+            ),
+        }
+
+    def dialogue_case(self) -> dict:
+        record = copy.deepcopy(next(r for r in shipped_corpus() if r["id"] == "b09-s"))
+        # Offline evaluator specimen, not a claim that this speech fits a clip.
+        record["prompt"] += (
+            ' She says exactly: "I used to wait here every Thursday because my '
+            'sister worked the late shift across the river. We would share an '
+            'orange on the steps and listen for the last train. When the station '
+            'closed for repairs, we promised to meet outside the bakery instead. '
+            'Today I found her old ticket folded inside the violin case, beside '
+            'a photograph of our kitchen window. I came back to play the tune '
+            'she always asked for. If you hear it from the stairs, stay a moment. '
+            'There is still room on this bench, and I have brought two oranges."'
+        )
+        record["brief"] += " With the supplied spoken passage verbatim."
+        return record
+
+    def test_complete_short_brief_and_long_dialogue_have_advisory_length(self) -> None:
+        for record in (self.short_case(), self.dialogue_case()):
+            with self.subTest(id=record["id"]):
+                original = copy.deepcopy(record)
+                result = stress.score_prompt(record)
+                self.assertTrue(result["words"] < 40 or result["words"] > 140)
+                self.assertLess(result["dims"]["length_fit"]["score"], 3)
+                self.assertIn("length_fit", result["previous_gate"]["dimensions"])
+                self.assertNotIn("length_fit", result["gate_dimensions"])
+                self.assertLess(result["previous_gate"]["overall"], result["gate_overall"])
+                self.assertEqual(stress.arm_gate_findings([record], [result], "skill_formula"), [])
+                self.assertEqual(record, original)
+
+    def test_legacy_band_edges_remain_frozen(self) -> None:
+        for count, score in ((0, 1.5), (39, 1.5), (40, 3), (59, 3),
+                             (60, 4), (100, 4), (101, 3), (110, 3),
+                             (111, 1.5), (140, 1.5), (141, 0)):
+            with self.subTest(count=count):
+                self.assertEqual(stress.score_length("word " * count)[0], score)
+        self.assertEqual(stress.score_length("word"), (1.5, "1w - under-specified"))
+        self.assertEqual(stress.score_length("word " * 141), (0, "141w - far over budget"))
+
+    def test_report_does_not_certify_limits_timing_or_multilingual_length(self) -> None:
+        for prompt, count in (("", 0), ("她放下琴弓。", 1),
+                              ("彼女は弓を下ろす。", 1), ("그녀는 활을 내린다.", 3),
+                              ("Keep @图片1 unchanged", 3)):
+            with self.subTest(prompt=prompt):
+                review = stress.length_review(prompt)
+                self.assertEqual(review["metric"], "legacy-word-bands-v1")
+                self.assertEqual(review["count"], count)
+                self.assertEqual(review["unit"], "whitespace-separated-chunks")
+                for field in ("context_assessed", "user_limit_assessed", "operation_limit_assessed",
+                              "dialogue_timing_assessed", "rewrite_recommended"):
+                    self.assertFalse(review[field])
+
+    def test_short_incomplete_and_long_repeated_prompts_still_fail(self) -> None:
+        short = dict(self.short_case(), prompt="A busker plays.")
+        long = self.dialogue_case()
+        long["prompt"] += " " + "motion detail " * 30
+        for record, dimension in ((short, "coverage"), (long, "repetition")):
+            with self.subTest(dimension=dimension):
+                result = stress.score_prompt(record)
+                findings = stress.arm_gate_findings([record], [result], "skill_formula")
+                self.assertTrue(any(dimension + "=" in item for item in findings), findings)
+
+    def test_short_and_long_cli_reports_separate_versions_and_boundaries(self) -> None:
+        for record in (self.short_case(), self.dialogue_case()):
+            with self.subTest(id=record["id"]):
+                result = run_strict_corpus([record])
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                for text in ("gate_v3", "prior_v2", "legacy", "now advisory",
+                             "Do not pad a complete brief or cut required dialogue",
+                             "not model tokens", "does not check user length limits"):
+                    self.assertIn(text, result.stdout)
 
 
 class AdversarialMutationTests(unittest.TestCase):

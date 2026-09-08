@@ -24,7 +24,7 @@ dependency-free, like every other check here.
 
 Dimensions (0-4, matching references/eval-rubric.md's V6 scale):
   opening_authority  subject/action (or reference binding) in the lead clause
-  length_fit         official 60-100 word band; skill's 40-110 fast-lane band
+  length_fit         frozen word-band heuristic; not an operation limit
   slop_free          legacy lexical proxy; not a contextual quality judgment
   coverage           camera move / motivated light / sound / visible endpoint
   structure          prose shooting-brief vs comma tag-salad, negation slop
@@ -163,7 +163,8 @@ DIM_NAMES = [
     "repetition",
 ]
 
-GATE_VERSION = "architecture-v2-nonlexical"
+GATE_VERSION = "architecture-v3-advisory-length"
+ADVISORY_DIMENSIONS = frozenset({"slop_free", "length_fit"})
 
 BOUNDARY = (
     "Boundary: this deterministic gate catches structural, brief-relevance, "
@@ -172,8 +173,11 @@ BOUNDARY = (
     "blinded model evaluation and native-language human review.\n"
     "The slop_free dimension is a legacy lexical proxy: matches and their "
     "position do not establish useless wording or model token importance. "
-    "Lexical flags are advisory and excluded from the v2 gate; "
-    "the legacy overall remains available for comparison."
+    "Lexical flags and fixed length bands are advisory in the v3 gate; "
+    "legacy and v2 averages remain available for comparison.\n"
+    "Length counts use whitespace-separated chunks, not model tokens or "
+    "a multilingual word count. The gate does not check user length limits, "
+    "operation limits, or dialogue timing."
 )
 
 TOKEN = re.compile(r"[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)?")
@@ -5670,6 +5674,11 @@ def score_opening(prompt: str) -> tuple[float, str]:
 
 
 def score_length(prompt: str) -> tuple[float, str]:
+    """Preserve historical scores and labels for comparison, not diagnosis.
+
+    The legacy labels (including 'under-specified' and 'over budget') are not
+    contextual findings. See length_review for the limits of this metric.
+    """
     n = len(words(prompt))
     if 60 <= n <= 100:
         return 4.0, f"{n}w - inside the documented 60-100 band"
@@ -5682,6 +5691,20 @@ def score_length(prompt: str) -> tuple[float, str]:
     if n < 40:
         return 1.5, f"{n}w - under-specified"
     return 0.0, f"{n}w - far over budget"
+
+
+def length_review(prompt: str) -> dict:
+    """Expose the frozen count without inferring completeness or permission."""
+    return {
+        "metric": "legacy-word-bands-v1",
+        "count": len(words(prompt)),
+        "unit": "whitespace-separated-chunks",
+        "context_assessed": False,
+        "user_limit_assessed": False,
+        "operation_limit_assessed": False,
+        "dialogue_timing_assessed": False,
+        "rewrite_recommended": False,
+    }
 
 
 def lexical_flags(prompt: str) -> dict:
@@ -5801,7 +5824,8 @@ def score_prompt(rec: dict) -> dict:
     dims["coherence"] = score_coherence(p)
     dims["repetition"] = score_repetition(p)
     overall = statistics.mean(v[0] for v in dims.values())
-    gate_dims = [name for name in dims if name != "slop_free"]
+    previous_gate_dims = [name for name in dims if name != "slop_free"]
+    gate_dims = [name for name in dims if name not in ADVISORY_DIMENSIONS]
     gate_overall = statistics.mean(dims[name][0] for name in gate_dims)
     return {
         "id": rec["id"], "arm": rec["arm"], "mode": mode, "brief": brief,
@@ -5811,8 +5835,14 @@ def score_prompt(rec: dict) -> dict:
         "gate_overall": round(gate_overall, 3),
         "gate_version": GATE_VERSION,
         "gate_dimensions": gate_dims,
+        "previous_gate": {
+            "version": "architecture-v2-nonlexical",
+            "dimensions": previous_gate_dims,
+            "overall": round(statistics.mean(dims[name][0] for name in previous_gate_dims), 3),
+        },
         "ref_note": ref[1],
         "lexical_review": flags,
+        "length_review": length_review(p),
     }
 
 
@@ -5824,7 +5854,7 @@ def case_floor_findings(results: list[dict], arm: str = "skill_formula") -> list
         if result["gate_overall"] < 3.0:
             findings.append(f"{result['id']}: gate_overall={result['gate_overall']:.2f} (<3.00)")
         for dimension, value in result["dims"].items():
-            if dimension != "slop_free" and value["score"] < 3.0:
+            if dimension not in ADVISORY_DIMENSIONS and value["score"] < 3.0:
                 findings.append(
                     f"{result['id']}: {dimension}={value['score']:.2f} (<3.00) - "
                     f"{value['note']}"
@@ -5854,7 +5884,7 @@ def main() -> int:
         help=(
             "exit non-zero if any skill_formula case/dimension is below 3, the arm "
             "average is below 3.5, or materially different briefs reuse a prompt "
-            "(v2 excludes advisory lexical flags)"
+            "(v3 excludes advisory lexical flags and fixed length bands)"
         ),
     )
     args = parser.parse_args()
@@ -5879,7 +5909,7 @@ def main() -> int:
 
     dim_names = DIM_NAMES
     print(f"Corpus: {len(results)} prompts across {len(arms)} arms\n")
-    header = f"{'arm':<22}{'n':>4}{'gate_v2':>9}{'legacy':>9}" + "".join(
+    header = f"{'arm':<22}{'n':>4}{'gate_v3':>9}{'prior_v2':>9}{'legacy':>9}" + "".join(
         f"{('lexical_v1' if d == 'slop_free' else d[:11]):>13}" for d in dim_names
     )
     print(header)
@@ -5887,6 +5917,7 @@ def main() -> int:
     for arm in sorted(arms, key=lambda a: -statistics.mean(x["gate_overall"] for x in arms[a])):
         rs = arms[arm]
         row = (f"{arm:<22}{len(rs):>4}{statistics.mean(x['gate_overall'] for x in rs):>9.2f}"
+               f"{statistics.mean(x['previous_gate']['overall'] for x in rs):>9.2f}"
                f"{statistics.mean(x['overall'] for x in rs):>9.2f}")
         for d in dim_names:
             vals = [x["dims"][d]["score"] for x in rs if d in x["dims"]]
@@ -5899,7 +5930,13 @@ def main() -> int:
         "neither matches nor absence of matches judge creative quality. "
         "Do not remove style, dialogue or delivery requirements merely to pass."
     )
-    print(f"\nRelease gate {GATE_VERSION} (every case and non-lexical dimension >= 3; arm average >= 3.5;")
+    print(
+        "\nlength_fit retains historical word-band scores and labels, now advisory. "
+        "'Under-specified' and 'over budget' are legacy labels, not contextual findings. "
+        "Do not pad a complete brief or cut required dialogue merely to pass. "
+        "Check user limits, current operation limits and dialogue timing separately."
+    )
+    print(f"\nRelease gate {GATE_VERSION} (every case and blocking dimension >= 3; arm average >= 3.5;")
     print("no cross-case duplicate/near-duplicate prompts for materially different briefs)")
     gate_findings = {
         arm: arm_gate_findings(corpus, results, arm)
@@ -5913,7 +5950,7 @@ def main() -> int:
         suffix = f"  findings={len(findings)}" if findings else ""
         print(diagnostic_text(f"  {arm:<22} avg={avg:.2f}  {verdict}{suffix}"))
 
-    print("\nPer-mode gate_v2 overall (skill_formula arm)")
+    print("\nPer-mode gate_v3 overall (skill_formula arm)")
     modes: dict[str, list[float]] = {}
     for r in results:
         if r["arm"] == "skill_formula":
@@ -5927,9 +5964,9 @@ def main() -> int:
         )
 
     worst = sorted((r for r in results if r["arm"] == "skill_formula"), key=lambda r: r["gate_overall"])[:8]
-    print("\nWeakest skill-formula prompts by gate_v2")
+    print("\nWeakest skill-formula prompts by gate_v3")
     for r in worst:
-        bad = [f"{k}={v['score']} ({v['note']})" for k, v in r["dims"].items() if k != "slop_free" and v["score"] < 3]
+        bad = [f"{k}={v['score']} ({v['note']})" for k, v in r["dims"].items() if k not in ADVISORY_DIMENSIONS and v["score"] < 3]
         print(
             diagnostic_text(
                 f"  {r['id']:<8} {r['gate_overall']:.2f}  "
@@ -5950,7 +5987,7 @@ def main() -> int:
             return 1
         doctrine = [r for r in results if r["arm"] == "skill_formula"]
         avg = statistics.mean(r["gate_overall"] for r in doctrine)
-        print(f"\nskill_formula holds the release bar (avg={avg:.2f}, no non-lexical dimension below 3).")
+        print(f"\nskill_formula holds the release bar (avg={avg:.2f}, no blocking dimension below 3).")
     print(f"\n{BOUNDARY}")
     return 0
 
