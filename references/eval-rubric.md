@@ -28,9 +28,10 @@ Dimensions: routing correctness, story architecture, clip-scope control, actual-
 Release threshold: all critical continuation cases score 4, no dimension scores below 3, overall average is at least 3.5, and existing standalone behavior does not regress.
 
 For `scripts/prompt_architecture_stress.py --strict`, “no dimension below 3”
-means every applicable non-lexical dimension on every `skill_formula` case, not
-an average dimension score across the arm. The v2 gate excludes `slop_free` from
-both dimension floors and its overall average; lexical flags remain advisory. The arm average must also remain at least 3.5,
+means every applicable blocking dimension on every `skill_formula` case, not
+an average dimension score across the arm. The v3 gate excludes `slop_free` and
+`length_fit` from both dimension floors and its overall average; lexical flags
+and fixed length bands remain advisory. The arm average must also remain at least 3.5,
 and cross-case duplicate or near-duplicate prompts fail when their briefs are
 materially different. This deterministic gate catches structural, relevance,
 explicit contradiction, and repetition failures only. It does not judge
@@ -66,21 +67,18 @@ Preserve exact speech, reference bindings, useful style choices and delivery
 requirements. The matcher does not exempt quoted text or infer intent; keyword
 exceptions alone would not create a contextual creative judge.
 
-## Gate Migration: architecture-v2-nonlexical
+## Previous Gate: architecture-v2-nonlexical
 
-The keyword list, lexical formula and every individual dimension score remain
-unchanged. JSON `overall` still contains the legacy average including the lexical
-proxy. New fields identify the actual release gate: `gate_version`,
-`gate_dimensions` (the applicable dimensions other than `slop_free`) and
-`gate_overall` (their mean, rounded to three decimals). The CLI displays both
-`gate_v2` and `legacy` averages so they cannot be mistaken for the same baseline.
+The v2 migration left the keyword list, lexical formula and every individual
+dimension score unchanged. JSON `overall` retained the legacy average including
+the lexical proxy. Its gate excluded only `slop_free`, so fixed word bands still
+affected the average and dimension floors. The current report preserves that
+comparison in `previous_gate`, described below.
 
-Strict validation now uses only `gate_overall` and non-lexical floors. Every case
-and applicable non-lexical dimension must still score at least 3, and the arm's
-mean gate score must remain at least 3.5. Duplicate/near-duplicate checks remain
-blocking. Reference integrity is included for modes where it applies. No threshold
-was lowered, but excluding a dimension changes the aggregate; compare the two
-averages explicitly rather than calling them equivalent.
+V2 used non-lexical floors of 3 and an arm mean of at least 3.5. Duplicate and
+near-duplicate checks remained blocking, with reference integrity included for
+modes where it applies. Excluding a dimension changed the aggregate even though
+the numeric thresholds stayed fixed.
 
 A useful style label, quoted line or delivery target cannot fail the gate solely
 because it matches the lexical list. Equally, a generic adjective bank attached
@@ -94,3 +92,55 @@ The frozen corpus is retained for before/after comparison. Migration tests cover
 useful flagged contexts, unchanged legacy values, the remaining dimension floors,
 irrelevant or repeated padding, and real CLI behavior. This is a change to the
 role of a diagnostic, not a semantic classifier or evidence of improved rendering.
+
+## Current Gate: architecture-v3-advisory-length
+
+The fixed `length_fit` bands describe a frozen regression heuristic, not a
+universal Seedance prompt budget or a test of completeness. The legacy function
+awards 4 for 60-100 tokenizer words, 3 for 40-59 or 101-110, 1.5 below 40 or at
+111-140, and 0 above 140. These scores and their historical notes remain unchanged
+for comparison. Labels such as "under-specified" and "over budget" are historical
+labels, not findings about the current brief. Do not pad a complete short brief or
+delete required dialogue to satisfy them.
+
+Each JSON result adds `length_review` with metric `legacy-word-bands-v1`, `count`
+and `unit`. The count splits text on whitespace; it is neither a model token
+count nor a multilingual word count. A Chinese or Japanese sentence without
+spaces counts as one chunk, as does an attached reference tag. Do not use it to compare
+language efficiency or set localized limits. `context_assessed`,
+`user_limit_assessed`, `operation_limit_assessed`, `dialogue_timing_assessed` and
+`rewrite_recommended` are all false: no completeness, compliance, timing or
+rewrite judgment has been performed.
+
+| Decision outside the fixed-band gate | Required handling |
+|---|---|
+| A user asks for a brief under 40 words | Respect that request using its stated unit; retain the necessary action and constraints without padding |
+| Exact dialogue makes the draft longer | Preserve the requested speech; check timing and clip scope, and discuss splitting or an authorized edit if it cannot fit |
+| A selected operation has a documented input cap | Verify the current operation and its counting unit; resolve an overrun before submission |
+| A complete brief has no stated length constraint | Review relevance and clarity; a word-band score alone authorizes neither expansion nor deletion |
+
+The static evaluator does not enforce these user or platform limits and cannot
+certify generation readiness. Passing it does not permit ignoring a limit,
+silently shortening speech, uploading assets or spending credits.
+
+`gate_version` is now `architecture-v3-advisory-length`. `gate_dimensions`
+contains the applicable dimensions other than `slop_free` and `length_fit`;
+`gate_overall` is their mean rounded to three decimals. `previous_gate` retains
+the v2 `version`, `dimensions` and `overall` (excluding only `slop_free`). JSON
+`overall` and all individual dimension scores and notes retain their legacy
+meaning. The CLI shows `gate_v3`, `prior_v2` and `legacy` averages separately.
+Consumers must check the version rather than compare differently defined means.
+
+Every case and applicable blocking dimension must score at least 3; the mean
+of rounded case gate scores for an arm must remain at least 3.5. Reference,
+relevance, explicit contradiction, structure, coverage, opening and repetition
+checks remain blocking, as do cross-brief duplicate/near-duplicate checks. These
+are unchanged heuristics with their own limits. Removing the length floor and
+its contribution to the mean changes acceptance behavior even though the numeric
+thresholds stay fixed; the prior-v2 average is a comparison, not a second gate.
+
+Migration tests include a complete brief below 40 words, a supplied dialogue
+specimen above 140, incomplete short text, repeated long padding, frozen band
+edges and CLI boundaries. The dialogue specimen is an offline regression case,
+not evidence that a platform can deliver that passage in one clip. Neither the
+fixtures nor the frozen corpus are model, native-language or rendered evaluation.
