@@ -144,3 +144,22 @@ specimen above 140, incomplete short text, repeated long padding, frozen band
 edges and CLI boundaries. The dialogue specimen is an offline regression case,
 not evidence that a platform can deliver that passage in one clip. Neither the
 fixtures nor the frozen corpus are model, native-language or rendered evaluation.
+
+### Writing Requests and Scene Actions
+
+Brief traceability excludes recognized standalone English length instructions
+from action requirements and supplied action evidence. For example, "keep the
+brief under 40 words" asks for a writing constraint; it does not require a
+character to perform a `keep` action. The bounded recognizer requires an
+imperative writing verb, a brief/prompt/response object and an explicit shortness
+or numeric word/character predicate in the same complete clause. It also accepts
+the supported polite request forms. Recognition does not enforce the limit.
+
+Named actors, scene objects, non-length predicates and shared-verb coordination
+are not exempted. "A writer keeps the brief under 40 words" and "keep the brief
+under 40 words and the case closed" remain with the action parser. Adjacent
+clauses still require their own actions, actors and objects; an editorial request
+cannot satisfy a real keep/hold action or turn quoted or negated speech into
+depicted action evidence. This is a bounded grammar repair, not a general intent
+classifier or multilingual guarantee. Unsupported phrasings retain the existing
+heuristics; gate version, thresholds and length-assessment flags are unchanged.
