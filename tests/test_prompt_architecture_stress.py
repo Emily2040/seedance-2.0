@@ -447,7 +447,7 @@ class EditorialLengthActionTests(unittest.TestCase):
         self.assertEqual(stress.missing_positive_action_requirements(brief, brief), ())
 
     def test_adjacent_actions_and_negation_survive_editorial_span_removal(self) -> None:
-        for separator in ("; ", ". ", "\n"):
+        for separator in ("; ", ". ", "\n", "\r\n"):
             with self.subTest(separator=separator):
                 brief = "Keep the brief under 40 words" + separator + "Open the case."
                 self.assertEqual(stress.missing_positive_action_requirements(brief, "Open the case."), ())

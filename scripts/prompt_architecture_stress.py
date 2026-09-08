@@ -3955,12 +3955,12 @@ def _action_match_status(
 
 
 EDITORIAL_LENGTH_INSTRUCTION = re.compile(
-    r"(?:^|[.;!?\n])[ \t]*"
+    r"(?:^|[.;!?\r\n])[ \t]*"
     r"(?:(?:please|(?:can|could|would) you(?: please)?)[ \t]+)?"
     r"(?P<instruction>(?:keep|make|write|limit|shorten)[ \t]+"
     r"(?:the|this|your)[ \t]+(?:brief|prompt|response)[ \t]+"
     r"(?:short|concise|brief|(?:under|below|within|to|at most|no more than)"
-    r"[ \t]+[0-9]{1,6}[ \t]+(?:words?|characters?)))[ \t]*(?=$|[.;!?\n])",
+    r"[ \t]+[0-9]{1,6}[ \t]+(?:words?|characters?)))[ \t]*(?=$|[.;!?\r\n])",
     re.I,
 )
 
