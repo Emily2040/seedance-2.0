@@ -386,6 +386,85 @@ class AdvisoryLengthGateTests(unittest.TestCase):
                     self.assertIn(text, result.stdout)
 
 
+class EditorialLengthActionTests(unittest.TestCase):
+    def test_blank_lines_are_bounded_and_cannot_join_separate_clauses(self) -> None:
+        text = "\n" * 20000
+        start = time.perf_counter()
+        self.assertEqual(stress._editorial_length_spans(text), ())
+        self.assertLess(time.perf_counter() - start, 2.0)
+        self.assertEqual(stress._editorial_length_spans("Keep the brief\nunder 40 words."), ())
+        self.assertTrue(stress._editorial_length_spans(text + "Keep the brief under 40 words."))
+
+    def case(self, instruction: str) -> dict:
+        record = AdvisoryLengthGateTests().short_case()
+        record["brief"] = "Subway busker plays to an empty platform; " + instruction
+        return record
+
+    def test_reported_editorial_request_passes_the_real_gate_without_prompt_changes(self) -> None:
+        record = self.case("keep the brief under 40 words.")
+        original = copy.deepcopy(record)
+        result = stress.score_prompt(record)
+        self.assertEqual(result["dims"]["brief_traceability"]["score"], 4)
+        self.assertEqual(stress.arm_gate_findings([record], [result], "skill_formula"), [])
+        self.assertEqual(record, original)
+        cli = run_strict_corpus([record])
+        self.assertEqual(cli.returncode, 0, cli.stdout + cli.stderr)
+
+    def test_bounded_writing_objects_and_length_forms_are_not_scene_actions(self) -> None:
+        for instruction in (
+            "Please keep the prompt concise.", "Make this response short.",
+            "Could you please keep your brief below 40 words?",
+            "Write the prompt within 100 words.", "Limit the response to 100 characters.",
+            "Shorten the brief to 40 words.",
+            "Keep the brief no more than 40 words.",
+        ):
+            with self.subTest(instruction=instruction):
+                record = self.case(instruction)
+                self.assertTrue(stress._editorial_length_spans(instruction))
+                self.assertEqual(stress.missing_positive_action_requirements(record["brief"], record["prompt"]), ())
+
+    def test_named_actors_scene_objects_and_shared_verbs_are_not_exempted(self) -> None:
+        for instruction in (
+            "A writer keeps the brief under 40 words.",
+            "Keep the case closed.", "Hold the case closed.",
+            "Keep the camera locked off.", "Keep the brief open.",
+            "Keep the brief under 40 words and the case closed.",
+            "Keep the brief under 40 words while the surgeon opens the case.",
+        ):
+            with self.subTest(instruction=instruction):
+                self.assertEqual(stress._editorial_length_spans(instruction), ())
+                self.assertTrue(stress.missing_positive_action_requirements(instruction, "A busker plays."))
+
+    def test_length_request_cannot_supply_a_real_keep_or_hold_action(self) -> None:
+        for brief in ("Keep the case closed.", "Hold the case closed."):
+            with self.subTest(brief=brief):
+                self.assertTrue(stress.missing_positive_action_requirements(brief, "Keep the brief under 40 words."))
+        brief = "The surgeon holds the case."
+        for prompt in ("The busker holds the case.", "The surgeon holds the door.",
+                       "The surgeon does not hold the case."):
+            with self.subTest(prompt=prompt):
+                self.assertTrue(stress.missing_positive_action_requirements(brief, prompt))
+        self.assertEqual(stress.missing_positive_action_requirements(brief, brief), ())
+
+    def test_adjacent_actions_and_negation_survive_editorial_span_removal(self) -> None:
+        for separator in ("; ", ". ", "\n", "\r\n"):
+            with self.subTest(separator=separator):
+                brief = "Keep the brief under 40 words" + separator + "Open the case."
+                self.assertEqual(stress.missing_positive_action_requirements(brief, "Open the case."), ())
+                for prompt in ("A busker plays.", "Do not open the case.", "Open the door."):
+                    self.assertTrue(stress.missing_positive_action_requirements(brief, prompt))
+        quoted = 'The busker says "Keep the brief under 40 words. Open the case."'
+        self.assertTrue(stress.missing_positive_action_requirements("Open the case.", quoted))
+
+    def test_recognition_does_not_claim_to_enforce_the_requested_limit(self) -> None:
+        record = self.case("Keep the brief under 1 word.")
+        result = stress.score_prompt(record)
+        self.assertGreater(result["words"], 1)
+        self.assertFalse(result["length_review"]["user_limit_assessed"])
+        self.assertFalse(result["length_review"]["rewrite_recommended"])
+        self.assertEqual(stress.missing_positive_action_requirements(record["brief"], record["prompt"]), ())
+
+
 class AdversarialMutationTests(unittest.TestCase):
     def test_near_duplicate_with_one_subject_mutation_is_rejected(self) -> None:
         base = next(r["prompt"] for r in shipped_corpus() if r["id"] == "b09-s")

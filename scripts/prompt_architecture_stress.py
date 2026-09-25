@@ -3954,6 +3954,29 @@ def _action_match_status(
     return ACTION_ASSERTED
 
 
+EDITORIAL_LENGTH_INSTRUCTION = re.compile(
+    r"(?:^|[.;!?\r\n])[ \t]*"
+    r"(?:(?:please|(?:can|could|would) you(?: please)?)[ \t]+)?"
+    r"(?P<instruction>(?:keep|make|write|limit|shorten)[ \t]+"
+    r"(?:the|this|your)[ \t]+(?:brief|prompt|response)[ \t]+"
+    r"(?:short|concise|brief|(?:under|below|within|to|at most|no more than)"
+    r"[ \t]+[0-9]{1,6}[ \t]+(?:words?|characters?)))[ \t]*(?=$|[.;!?\r\n])",
+    re.I,
+)
+
+
+@lru_cache(maxsize=4096)
+def _editorial_length_spans(text: str) -> tuple[tuple[int, int], ...]:
+    """Recognize standalone English writing requests, not general meta intent.
+
+    Require both a writing object and a length predicate. Whole-clause matching
+    leaves shared-verb coordination and named actors to the normal action parser.
+    Horizontal whitespace keeps clauses separate and avoids quadratic retries
+    over long runs of blank lines. Recognition does not enforce the limit.
+    """
+    return tuple(match.span("instruction") for match in EDITORIAL_LENGTH_INSTRUCTION.finditer(text))
+
+
 @lru_cache(maxsize=4096)
 def _bound_action_mentions(text: str) -> tuple[BoundActionMention, ...]:
     """Extract bounded, status-, actor-, and object-aware action mentions.
@@ -3965,8 +3988,11 @@ def _bound_action_mentions(text: str) -> tuple[BoundActionMention, ...]:
     """
     token_matches = list(TOKEN.finditer(text))
     mentions: list[dict[str, object]] = []
+    editorial_index = _interval_index(_editorial_length_spans(text))
 
     for index, match in enumerate(token_matches):
+        if _position_in_interval_index(editorial_index, match.start()):
+            continue
         canonical_action = _canonical_action_at(text, token_matches, index)
         if position_is_quoted(text, match.start()) or _position_is_displayed_text(
             text, match.start()
