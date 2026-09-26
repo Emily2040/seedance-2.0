@@ -17,7 +17,9 @@ with feeling, idle business and positions written in, acted well and broke the
 geography: the master put the door behind the old man, his reaction looked
 toward the camera as if she stood in front of him, and the next cut was her
 hand at his cup with no walk between, so she appeared to teleport. Every rule
-below is a repair for one of those ten. Load it with
+below is a repair for one of those ten. The procedure that applies these rules is the
+[shot table](shot-table.md): it exists before any prose, and the rules below
+are what its cells must contain. Load both with
 [multishot-grammar](multishot-grammar.md) whenever a prompt has more than one
 shot or more than one person.
 

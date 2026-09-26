@@ -28,8 +28,10 @@ because a classifier refuses words, not intent, and every prompt is [directed fo
 model](references/direct-for-the-model.md): one action per shot while everyone else keeps
 living, reactions written as a feeling plus one physical anchor, prop work written as a hand,
 and a lock line closing every shot that restates the light, the people and where they stand,
-because the model keeps nothing across a cut that the prompt does not repeat. Where a clip has
-not been rendered yet, its slate stands in its place.
+because the model keeps nothing across a cut that the prompt does not repeat. Each prompt was
+rendered from a [shot table](references/shot-table.md) that is published beside it, so the
+geometry can be checked on paper before a take is paid for. Where a clip has not been rendered
+yet, its slate stands in its place.
 
 <table>
 <tr>
@@ -70,7 +72,7 @@ not been rendered yet, its slate stands in its place.
 > toward the voice, calm, almost amused, and says nothing. Light: soft grey daylight from the
 > front window, warm spotlights on the shelves. The woman: thirties, dark hair tied back, white
 > overalls stained with paint, tan work boots, standing just inside the door, facing into the
-> shop.
+> shop. Camera at the back of the shop, facing the door.
 >
 > Shot 2. Cut to a medium shot from the counter side: she walks across the carpet to the white
 > display chaise in the middle of the shop, sits down on it facing the counter, crosses one
@@ -97,10 +99,25 @@ not been rendered yet, its slate stands in its place.
 >
 > Shot 5. Cut to a close insert of the cream carpet: a trail of wet bootprints from the door to
 > the chaise, rain running down the glass door behind. Hold on the bootprints. Same light: soft
-> grey daylight from the front window.
+> grey daylight from the front window. Camera low over the carpet, facing the door.
 >
 > Sound: rain on the glass door, her boots on the carpet, the murmur of the phone line, his
 > voice dropping; no music, no subtitles.
+
+</details>
+
+<details>
+<summary>The shot table the prompt was rendered from</summary>
+
+*Floor plan:* A boutique: the glass front door at one end, the counter along the right wall, the wall of shoes opposite the door, the white chaise in the middle. The manager starts by the counter; the assistants behind it. Grey daylight from the front window, warm spots on the shelves.
+
+| Shot | Camera | In frame | Eye-line | Action | Others | Light | Last frame |
+|---|---|---|---|---|---|---|---|
+| 1 | Back of the shop toward the front door; wide | Woman inside the door, facing in; two assistants behind the counter, right; manager off frame right | She turns her head to the voice on the right | She pushes the door open, steps in, stops on the mat; the manager's line from off frame; calm, almost amused, she says nothing | Assistants fold tissue paper, glance up | Grey daylight from the front window, warm spots on the shelves | Her on the mat, the door behind her |
+| 2 | Counter side; medium | Woman crossing to the chaise, sitting on it facing the counter; assistants behind her | Along the shelves | Walks to the chaise, sits, crosses one muddy boot over the other, looks slowly along the shelves | Assistants exchange a glance | Same daylight and spots | Her on the chaise, boots crossed |
+| 3 | Chaise side; close | Manager by the counter, facing the chaise | Past the lens to her, off frame | Embarrassed: the polite smile fades, he swallows; the phone line, quiet; his eyes go to her and stay | None in frame | Same | His face, eyes on her |
+| 4 | Behind the chaise; two-shot | Her shoulder in the foreground facing the counter; manager walking from the counter to the wall of shoes | Hers to the wall; his to the shoes | She points at one pair; he walks to the wall and lifts it down with both hands, careful now | Assistants stay at the counter | Same | Him at the wall with the shoes in his hands |
+| 5 | Low over the carpet toward the door; insert | Nobody | None | Hold on the wet bootprints from the door to the chaise, rain on the glass door | None | Same daylight | The bootprints |
 
 </details>
 
@@ -152,6 +169,20 @@ not been rendered yet, its slate stands in its place.
 
 </details>
 
+<details>
+<summary>The shot table the prompt was rendered from</summary>
+
+*Floor plan:* A wooden pier running out into black water at night; one sodium lamp on a post at the far end; the boat moored off the far end on a single rope, its bow toward the pier; a wave building beyond it. The man is at the far end with the rope in both hands, facing the boat; the second voice is landward, behind the camera, never seen.
+
+| Shot | Camera | In frame | Eye-line | Action | Others | Light | Last frame |
+|---|---|---|---|---|---|---|---|
+| 1 | Landward end of the pier looking out; wide | Man at the far end, back to camera, facing the boat | The boat | He leans back against the rope, boots sliding on the wet planks, holding on | None | One orange sodium lamp at the pier end, black water | The wave building behind the boat |
+| 2 | His side, deck height; medium | Man braced at the cleat, facing the boat | The rope | Holds, arms shaking; the shout from landward behind the camera; his grip tightens | The voice, unseen | Same lamp | Him braced, rope taut |
+| 3 | In front of him, boat behind the camera; close | His face, facing the boat | The rope; he shouts over his shoulder | The answer, angry and close to tears, without turning his head | None | Same lamp | His face, rain running off his brow |
+| 4 | Low on the planks in front of him, bow behind him | Man at the cleat, boat behind | The rope | The wave breaks over him; it drains; he is still there, bent double, coughing, rope taut | None | Same lamp | Him bent over the rope, the boat behind, the next swell lifting the bow |
+
+</details>
+
 #### Clip 03: 这杯茶
 
 <sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch at the boundary: 5 beats (two inserts at half), load 3 with the recalibrated person row, S = 1.9</sub>
@@ -176,6 +207,22 @@ not been rendered yet, its slate stands in its place.
 > 镜头6：切回桌面特写，机位同镜头4。她的右手转动手腕，把空杯杯口朝下扣在湿桌布上，松开手，手退出画面。画面停在倒扣的杯子和布上漫开的茶水上，他的拳头在桌边慢慢松开。灯光不变：头顶暖黄吊灯。
 >
 > 声音：碰杯声和说笑声，门推开的一声之后全场安静，她的脚步声，杯子放到桌布上的一声，茶水落在布上的声音，说话时全场无声；无配乐。保持无字幕。时长：15秒。
+
+</details>
+
+<details>
+<summary>The shot table the prompt was rendered from</summary>
+
+*Floor plan:* An old hall with a round banquet table under one warm tungsten lamp and a red birthday banner. The head seat faces the hall's main door at the far end; the old man sits there. Guests fill the table. The woman appears in the doorway, blue night behind her, and walks the length of the table to stand beside the head seat.
+
+| Shot | Camera | In frame | Eye-line | Action | Others | Light | Last frame |
+|---|---|---|---|---|---|---|---|
+| 1 | Behind the old man, high, over his shoulder toward the door; wide | Old man at the head seat, back to camera, facing the door; guests around the table; woman in the doorway at the far end, facing the table | Guests to the door | The toast alive, cups touching, laughter; the door opens; laughter stops; heads turn one by one | Guests whisper; nobody stands | Warm tungsten lamp overhead; blue night beyond the door | Her in the doorway, the room turned toward her |
+| 2 | From the door, the reverse of shot 1; close | Old man facing the door and the lens; guests out of focus beside him | Past the lens to her at the door | Caught out: he freezes, alarmed, a swallow; the cup goes down on the cloth; hand to the table edge | Guests look toward the door, murmur | Same lamp | His face, the cup on the cloth |
+| 3 | Beside and behind the old man, toward the door; medium | Her walking from the door along the table toward the lens; his shoulder and white hair in the foreground | Guests follow her; on arrival she looks down at him | The walk, unhurried; she stops beside the head seat | Guests' heads turn with her | Same lamp; her face passes from blue into warm | Her beside him, looking down |
+| 4 | At the table edge; insert | His fist on the cloth; her right hand from frame right | None | Grip the cup by the body, lift a hand's width, tilt toward him, tea onto the cloth until empty; the base stays down | His fist tightens once | Same lamp | The empty cup tilted, steam on the wet cloth |
+| 5 | Table edge, slightly low; close | Her beside the head seat, facing down at him; guests and banner out of focus behind | Down at him, off frame | The line, quiet, every word clear, eyes on him; after it her eyes redden, no tears, lips press | Guests watch | Same lamp | Her face after the line |
+| 6 | Same as shot 4; insert | Her hand; his fist | None | The wrist turns, the cup is set mouth-down on the wet cloth, the hand withdraws | His fist loosens | Same lamp | The inverted cup on the wet cloth |
 
 </details>
 
@@ -204,6 +251,21 @@ not been rendered yet, its slate stands in its place.
 
 </details>
 
+<details>
+<summary>The shot table the prompt was rendered from</summary>
+
+*Floor plan:* A residential corridor at night, a white tube light overhead; an apartment door with warm light inside. The rider stands outside the door facing in; the man stands inside facing out. The threshold is the axis.
+
+| Shot | Camera | In frame | Eye-line | Action | Others | Light | Last frame |
+|---|---|---|---|---|---|---|---|
+| 1 | Corridor, side on to the threshold; medium | Rider outside, facing in, bag in her left hand; man inside, facing her, phone in his right hand | Each other | The door opens; he looks her up and down, impatient, brow tight | None | White tube overhead; warm light from inside | The two across the threshold |
+| 2 | Outside, at her position; close | Man inside the door, facing out | Past the lens to her | Turns the phone screen toward her; the line, sharp; waits, staring | None | White on one side of his face, warm on the other | His face, waiting |
+| 3 | Inside, at his position; close | Rider outside, facing in | Past the lens to him | Unclips and lifts off the helmet: grey hair, sixty or so; tired and embarrassed | None | White overhead, warm on one side | Her bare head, rain on her face |
+| 4 | Same as shot 3 | Rider, helmet at her side | To him | Lifts the bag toward him; the line, low and clear, apologetic; holds it out and waits | None | Same | The bag held out |
+| 5 | Outside, slightly behind her position, she out of frame; medium wide | Man in the doorway, facing out | To her shoes, then aside | Glances at her soaked shoes; steps aside; pulls the door full open; waits for her | None | Same; the warm light falls on the wet tiles | The open door and the puddle on the tiles |
+
+</details>
+
 #### Clip 05: 사직서
 
 <sub>한국어 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch: 4 beats (two at half), load 3, S = 2.1</sub>
@@ -226,6 +288,21 @@ not been rendered yet, its slate stands in its place.
 > 샷 5: 복도 쪽에서 본 와이드 숏, 유리문과 그 너머의 임원실. 그녀가 유리문을 밀고 나와 카메라 옆을 지나 화면 밖으로 걸어가고, 문이 천천히 닫힌다. 유리 너머 책상의 그는 앉은 채 봉투를 내려다보고 있다. 화면은 닫힌 유리문과 그 너머의 그에게서 멈춘다. 같은 조명: 책상 스탠드 하나의 따뜻한 빛과 창밖 도시의 불빛, 복도는 어둡다. 대표: 오십 대 남성, 백발이 섞인 짧은 머리, 소매를 걷은 흰 셔츠, 책상 뒤에 앉아 있다. 직원: 이십 대 후반 여성, 어깨까지 오는 검은 머리, 회색 정장, 문을 나선다. 카메라는 복도.
 >
 > 소리: 펜이 멈추는 순간, 봉투가 종이 위에 놓이는 소리, 구두 소리, 유리문이 닫히는 소리. 대사 중에는 다른 소리를 낮춘다. 음악 없음, 자막 없음.
+
+</details>
+
+<details>
+<summary>The shot table the prompt was rendered from</summary>
+
+*Floor plan:* A glass-walled executive office at night; the desk faces the door; the CEO sits behind it facing the door; one desk lamp and the city beyond the glass. She enters from the door and stops in front of the desk. The last shot is from the dark corridor outside the glass door.
+
+| Shot | Camera | In frame | Eye-line | Action | Others | Light | Last frame |
+|---|---|---|---|---|---|---|---|
+| 1 | From the door toward the desk; wide | CEO seated behind the desk facing the door; employee enters beside the camera, back to it, and stops before the desk | His on the page; hers on him | She walks to the desk | He keeps signing | Desk lamp; city lights behind | Her standing before the desk |
+| 2 | Beside the desk, low; insert | Her hand; his hand with the pen | None | The envelope is placed on the page he is signing; the pen stops | None | Lamp | The envelope over the signature |
+| 3 | Behind the desk at his shoulder, low, looking up; medium | Her before the desk, facing down at him | Down to him below the lens | The line, calm and clear; then a breath, eyes steady | He is out of frame | Lamp, city lights | Her face after the breath |
+| 4 | Where she stands, toward him; close | CEO behind the desk, facing up to her | Up past the lens to her | He raises his head slowly; flustered, lips part | None | Lamp | His face looking up |
+| 5 | Corridor, toward the glass door; wide | She exits past the camera; he seated behind the glass | His on the envelope | She pushes out; the door closes slowly | He looks down at the envelope | Lamp and city lights behind glass; corridor dark | The closed glass door, him behind it |
 
 </details>
 
@@ -253,6 +330,21 @@ not been rendered yet, its slate stands in its place.
 > ショット5：カットして、ホームベース側から、止め絵に近いショット。投手がマウンドで片膝をつき、顔を空に向けている。泣きそうな、しかし笑っている顔。動くのは雨と、息で上下する肩だけ。その前後のショットは二コマ打ち。作画は変わらない：手描きのセル画、水彩の背景。光は変わらない：曇天の平坦な光、濡れた土の反射。投手：泥だらけの白いユニフォーム、紺の帽子、帽子のつばから雨が落ちる、マウンドの上。カメラはホームベース側。
 >
 > 音：雨音、観客のざわめき、ミットの乾いた一音、そのあとは雨音と投手の息だけ。音楽なし、字幕なし。
+
+</details>
+
+<details>
+<summary>The shot table the prompt was rendered from</summary>
+
+*Floor plan:* A rain-soaked stadium in flat overcast light: the mound facing home plate, the catcher behind the plate facing the mound, the batter in the box facing the mound, the crowd behind. Hand-drawn cel over watercolour throughout.
+
+| Shot | Camera | In frame | Eye-line | Action | Others | Light | Last frame |
+|---|---|---|---|---|---|---|---|
+| 1 | Home plate side toward the mound; medium | Pitcher on the mound facing home | Up at the rain | Breathing hard; looks up; tired but not backing down | Crowd colour moves in the paint; flags stir | Flat overcast, wet earth | His face, rain off the cap brim |
+| 2 | Mound side; close | Catcher's mitt behind the plate, facing the mound | None | One sign; the mitt pats twice | None | Flat | The mitt held low |
+| 3 | Home plate side; medium, locked | Pitcher on the mound | The mitt | Wind-up to release on ones, one smear, rain trailing the arm | None | Flat | Release |
+| 4 | Behind the catcher; medium | Batter in the box facing the mound | The ball | Swing and miss; ball into mitt; one inverted impact frame | None | Flat, inverted for one frame | The impact frame |
+| 5 | Home plate side; medium, near-held | Pitcher on one knee on the mound, face to the sky | The sky | Near-still; breathing; close to tears and smiling | Rain only | Flat, wet earth | Him kneeling in the rain |
 
 </details>
 
@@ -304,6 +396,21 @@ not been rendered yet, its slate stands in its place.
 >
 > Звук: тяжёлое дыхание, шум зала за кадром, звон гонга; во время реплики остальные звуки тише.
 > Без музыки, без субтитров.
+
+</details>
+
+<details>
+<summary>The shot table the prompt was rendered from</summary>
+
+*Floor plan:* A dark boxing hall, one lamp over the ring. The corner: the boxer on a stool facing the stands, the trainer standing over him side on, a white towel on the top rope beside the stool. The stands face the ring; one small old woman stands among seated spectators.
+
+| Shot | Camera | In frame | Eye-line | Action | Others | Light | Last frame |
+|---|---|---|---|---|---|---|---|
+| 1 | Hall side, rope height; medium | Boxer on the stool facing the stands; trainer standing over him, side on | His on the floor | He breathes hard; the trainer holds the ice pack to his brow, a hand on his neck | Hall in darkness | One lamp over the ring | The corner, towel on the top rope |
+| 2 | Low at the boxer's shoulder, up at the trainer; close | Trainer over him, facing down | Down past the lens to the boxer | The line, level, tired and loving | None | Same lamp | His face after the line |
+| 3 | From the corner toward the stands; medium | One small old woman standing among seated spectators, facing the ring | The ring | She stands, hands clasped, lips moving without sound | Spectators sit and talk | Lamp on the ring, stands dim | Her standing |
+| 4 | Stands side toward the corner; close | Boxer on the stool facing the stands | Up past the lens to her | Lifts his eyes, finds her, one nod, heavy but decided | None | Same lamp | His face after the nod |
+| 5 | Same as shot 1 | Boxer and trainer in the corner | His forward to the ring | The gong; the trainer pats his shoulder; he stands and walks out of frame to the centre | None | Same lamp | The empty stool, the towel on the rope |
 
 </details>
 

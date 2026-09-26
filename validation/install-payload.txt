@@ -132,6 +132,7 @@ references/retake-protocol.md
 references/sequence-project-state.md
 references/sequence-worked-trace.md
 references/shot-list-continuity.md
+references/shot-table.md
 references/source-registry.md
 references/storytelling-framework.md
 references/subtitles-localization.md
@@ -165,6 +166,7 @@ scripts/prompt_architecture_stress.py
 scripts/prompt_lint.py
 scripts/schema_check.py
 scripts/sequence_eval_check.py
+scripts/shot_table_check.py
 scripts/source_registry_check.py
 scripts/strict_json.py
 scripts/validate_skills.py

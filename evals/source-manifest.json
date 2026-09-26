@@ -4,12 +4,12 @@
     {
       "path": "SKILL.md",
       "role": "root",
-      "sha256": "e17ca03ca02ac8c3f64faa693fca2f60a20791f731213ef1deb04e8fdcca12b0"
+      "sha256": "9cc2161b0dad7f0fb75490106eda34f314de503bcadfba515364053cf7bdcd92"
     },
     {
       "path": "evals/evals.json",
       "role": "evaluator",
-      "sha256": "599e233dd5ee7c5d618d995f5617b2b7509f59686ed93bc637167176648a387b"
+      "sha256": "ff803c002c63b87e2ded30880f82ae7067eef0f67fa8da878ae3edf0c736bb8f"
     },
     {
       "path": "evals/fixtures/sequence-airport-arrival-project-state.json",
@@ -109,7 +109,7 @@
     {
       "path": "references/direct-for-the-model.md",
       "role": "responder",
-      "sha256": "0c845fe9b7fc9b5ec2766ffc48d797630a40ffc738a6edb58518d956d28e70c7"
+      "sha256": "f7358e82eb6f8bfd7ec653bc3e537d0a3dfbb9f01277c3f79f786f1cd017d942"
     },
     {
       "path": "references/directing-engine-genre-library.md",
@@ -149,7 +149,7 @@
     {
       "path": "references/failure-atlas.md",
       "role": "responder",
-      "sha256": "cb5f5185449ac9fe386e2398dda9b4be683029a7f830932122b06e022023c632"
+      "sha256": "b431f40ad3d2111df9c35139d03147d4fadc237a3df64d822b335e3fe9cf4de0"
     },
     {
       "path": "references/field-observed-tips.md",
@@ -339,7 +339,7 @@
     {
       "path": "references/multishot-grammar.md",
       "role": "responder",
-      "sha256": "f93f032c5717a3532ff932af1bbd4bfbb729deac67d7f3f04f2e3ae715812d48"
+      "sha256": "6d48c37565c3d51bc4ebd7a3d57330d8648080f38cf4e690b2af27832808e8dc"
     },
     {
       "path": "references/outcome-comparison.md",
@@ -427,6 +427,11 @@
       "sha256": "b5198924d1b1f236860be3568c9e55069f0da4f4a80b3ba3f03e6dc9a8899061"
     },
     {
+      "path": "references/shot-table.md",
+      "role": "responder",
+      "sha256": "c614f8b5ab86e5f30320d994cc8c8ee62317bcfdcc890b1afe0650e33cca2e50"
+    },
+    {
       "path": "references/source-registry.md",
       "role": "responder",
       "sha256": "065a2bcfa3dff7e7473668e1e6ad1d100348b881843f50302e4534de335cf57a"
@@ -489,7 +494,7 @@
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "5f861c1235c8d7baa91d60dc469af60ce68a24260944b63c08a0b43e437ef8b2"
+      "sha256": "61115060d172a23f3e86c911f57d299d3d1d04c1d67fb6e462168e88753bf525"
     },
     {
       "path": "skills/seedance-antislop/SKILL.md",
@@ -569,12 +574,12 @@
     {
       "path": "skills/seedance-prompt-short/SKILL.md",
       "role": "responder",
-      "sha256": "4a31d543bc4d8c7b77ba36c4884a08fbad0cc200ca17d7f28f3b80194d448c71"
+      "sha256": "b343aba1f8e85696cfc36335da149ab4c373a52580c062361be57a6a2df856c2"
     },
     {
       "path": "skills/seedance-prompt/SKILL.md",
       "role": "responder",
-      "sha256": "dfa03edbc4bcc4c94d0e26c0d6bf17e47a4541c43f75aefa0bd311dc8d9c4a6e"
+      "sha256": "3ae6968f00c6c9a9b07dd90c2e9853af4dc568bb5fd5c4840b59c92153104cfb"
     },
     {
       "path": "skills/seedance-recipes/SKILL.md",
