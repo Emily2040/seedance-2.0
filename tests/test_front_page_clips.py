@@ -18,6 +18,7 @@ from scripts import build_clip_posters
 ROOT = Path(__file__).resolve().parents[1]
 SECOND_RANGE = re.compile(r"\b\d+\s*[-–]\s*\d+\s*(?:s\b|秒|초)")
 STUDIO_NAMES = ("Ghibli", "ジブリ", "Disney", "Pixar", "Marvel")
+TRAPS = json.loads((ROOT / "data/direction-traps.json").read_text(encoding="utf-8"))["traps"]
 
 
 def read(relative: str) -> str:
@@ -48,6 +49,9 @@ class FrontPageClipTests(unittest.TestCase):
                 for name in STUDIO_NAMES:
                     self.assertNotIn(name, clip["prompt"])
                     self.assertNotIn(name, clip["typical_brief"])
+                for language, phrases in TRAPS.items():
+                    for phrase in phrases:
+                        self.assertNotIn(phrase, clip["prompt"], (clip["id"], phrase))
                 if clip["shape"] == "storyboard":
                     self.assertTrue(any(marker in clip["prompt"] for marker in ("Shot 1", "镜头1", "샷 1", "ショット1", "Кадр 1")))
                     self.assertTrue(any(r in clip["rung"] for r in ("Safe", "Stretch")), clip["rung"])
@@ -67,7 +71,7 @@ class FrontPageClipTests(unittest.TestCase):
         for clip in self.clips:
             with self.subTest(clip=clip["id"]):
                 self.assertIn(f"#### Clip {clip['number']:02d}: {clip['title']}", gallery)
-                self.assertIn("".join(clip["prompt"].split()), "".join(gallery.replace("\n> ", " ").split()))
+                self.assertIn("".join(clip["prompt"].split()), "".join(re.sub(r"^> ?", "", gallery, flags=re.M).split()))
                 self.assertIn(clip["typical_brief"], gallery)
 
 

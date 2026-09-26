@@ -39,6 +39,8 @@ class CueMatchingTests(unittest.TestCase):
         self.assertIn("minor", self.scan("少女が木刀を構える"))
         self.assertIn("injury", self.scan("кровавый след на снегу"))
         self.assertIn("institution", self.scan("이혼 서류에 서명한다"))
+        self.assertIn("weapon", self.scan("그가 검을 뽑는다"))
+        self.assertNotIn("weapon", self.scan("어깨까지 오는 검은 머리, 검은 만년필, 총무팀"))
 
     def test_severity_rules(self) -> None:
         hits_minor_alone = self.scan("a boy waits at school")

@@ -4,12 +4,12 @@
     {
       "path": "SKILL.md",
       "role": "root",
-      "sha256": "539966f073a0b175c435c3e756c091172194b5746e608b81396a16d38936fa83"
+      "sha256": "836d4466d536d968346ee137b21eed261a07c511f7f32ebaaeece7ef58efaf84"
     },
     {
       "path": "evals/evals.json",
       "role": "evaluator",
-      "sha256": "95665f9f65b7da08cb83ea6de3eb01bdf4140f8aa61aa757ba5d9f8b393818b4"
+      "sha256": "2c3360575c9ec8fa7579346012bc825e440665f5304bef1f2a4b79e061191c97"
     },
     {
       "path": "evals/fixtures/sequence-airport-arrival-project-state.json",
@@ -107,6 +107,11 @@
       "sha256": "56f5fb1ee320336d3eb09dc0792dcd4d643a048c4efd72dae19ecf92b8556d43"
     },
     {
+      "path": "references/direct-for-the-model.md",
+      "role": "responder",
+      "sha256": "ca13c3d8081a1a176eaba3d8a9de5c62b5255f93558ba8b5668b65b632b1c42b"
+    },
+    {
       "path": "references/directing-engine-genre-library.md",
       "role": "responder",
       "sha256": "4b6fea6102d764e068973dd6a256c0fef74dcd1d1df7ecf807e6d30570b242e9"
@@ -114,7 +119,7 @@
     {
       "path": "references/directing-engine.md",
       "role": "responder",
-      "sha256": "ed62f1d903206aca0e6b1d3d3cbcf1e6698fb754b7393dc72a68025b5f4b0b87"
+      "sha256": "306e6375a38c0d1a7f054128e5385edd6375412aa859795c148054897bc96a07"
     },
     {
       "path": "references/directors-read.md",
@@ -144,7 +149,7 @@
     {
       "path": "references/failure-atlas.md",
       "role": "responder",
-      "sha256": "6e518dfda86ea96a9f7f4b183a0b214d84d2b3729e760cf6476a54e40f47d1c2"
+      "sha256": "5b13f676e473e46a827b242049d8e46b91e4ab793ff4a0d8a301db5630fcf728"
     },
     {
       "path": "references/field-observed-tips.md",
@@ -334,7 +339,7 @@
     {
       "path": "references/multishot-grammar.md",
       "role": "responder",
-      "sha256": "16c0f851264e5a981e45c25d48f6b2f2f9fa482caf8efce381348d43118f5f6e"
+      "sha256": "22c37818837478543b48b4d663e22a602004eee622a7aecee9e4e00b1d6a8413"
     },
     {
       "path": "references/outcome-comparison.md",
@@ -484,7 +489,7 @@
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "fb7b96f2567604e5b9290888732d7e333cbff68512ed9b4c44e40b9c3b84f9f6"
+      "sha256": "1078b9ed3a35378d2965a0ad77696a4834ef47616e265d8d2a008bbe521a616d"
     },
     {
       "path": "skills/seedance-antislop/SKILL.md",
@@ -564,12 +569,12 @@
     {
       "path": "skills/seedance-prompt-short/SKILL.md",
       "role": "responder",
-      "sha256": "81348f09483715a866512c6aa4902ec7b290461c6cbcd193a1955adecac02662"
+      "sha256": "99f73b2afe68e1314349bb88e186d7ba923b4099a7aae3ea21085a34f4fe3d2a"
     },
     {
       "path": "skills/seedance-prompt/SKILL.md",
       "role": "responder",
-      "sha256": "73e0725f8178c055cf9c9ac23f81d11d784aaffe3a9298936ae6aa3252dc7b2f"
+      "sha256": "6accb7d186b8a4e4ca87d81736982b7a1c87f88153aa1859cdbe42d6a1e637fb"
     },
     {
       "path": "skills/seedance-recipes/SKILL.md",

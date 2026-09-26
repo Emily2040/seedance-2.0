@@ -22,6 +22,7 @@ assets/hero-light.svg
 assets/masthead-outlines.json
 assets/skill-map.svg
 data/community-patterns.seedance-2026-05-30.json
+data/direction-traps.json
 data/generation-runs.example.jsonl
 data/moderation-cues.json
 data/sources.seedance-2026-05-30.json
@@ -91,6 +92,7 @@ references/continuity-example-cards.md
 references/continuity-qc.md
 references/delivery-qc.md
 references/dense-storyboard-mode.md
+references/direct-for-the-model.md
 references/directing-engine-genre-library.md
 references/directing-engine.md
 references/directors-read.md
