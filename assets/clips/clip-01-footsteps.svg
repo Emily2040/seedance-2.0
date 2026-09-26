@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" role="img" aria-labelledby="t d">
-<title id="t">Clip 01 slate: Get in.</title>
-<desc id="d">Slate for clip 01 in English: A key in the lock at two in the morning. A knife held low. Then: “Get in.” The exact prompt is published beneath the slate; the clip is rendered by the maintainer on Seedance 2.0.</desc>
+<title id="t">Clip 01 slate: Footsteps</title>
+<desc id="d">Slate for clip 01 in English: A second set of footsteps, a beat late. Her car door is already open. The exact prompt is published beneath the slate; the clip is rendered by the maintainer on Seedance 2.0.</desc>
 <rect width="1600" height="900" fill="#100E0A"/>
 <rect x="40.5" y="40.5" width="1519" height="819" fill="none" stroke="#2E2A22" stroke-width="1"/>
 <text x="88" y="118" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="26" letter-spacing="2" fill="#9A917D">CLIP 01 · ENGLISH · 15 S · 16:9 · STORYBOARD · UNRENDERED SLATE</text>
 <rect x="88" y="140" width="72" height="3" fill="#E2A75E"/>
-<text x="88" y="470" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="84" fill="#EDE6D6">Get in.</text>
-<text x="90" y="560" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="34" fill="#EDE6D6">A key in the lock at two in the morning.</text>
-<text x="90" y="612" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="34" fill="#EDE6D6">A knife held low. Then: “Get in.”</text>
+<text x="88" y="470" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="84" fill="#EDE6D6">Footsteps</text>
+<text x="90" y="560" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="34" fill="#EDE6D6">A second set of footsteps, a beat late.</text>
+<text x="90" y="612" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="34" fill="#EDE6D6">Her car door is already open.</text>
 <line x1="88" y1="768" x2="1512" y2="768" stroke="#2E2A22" stroke-width="1"/>
 <text x="88" y="816" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="24" fill="#9A917D">seedance-20 · prompt beneath this slate · not rendered yet</text>
 <text x="1512" y="816" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="24" fill="#9A917D">01 / 07</text>

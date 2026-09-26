@@ -161,3 +161,14 @@ A 33-entry genre library - product, music video, horror, anime, action, comedy, 
 ## Anti-Slop for Direction
 
 Refuse: technique chosen to impress rather than to mean; "cinematic / epic / beautiful" as a goal; mixing directorial voices inside one project; performance written as an emotion word; a moving camera with no motivated reason; light with no source; instruments that individually look good but point in different directions. The fix is always the same - return to the one-sentence intention and make every choice serve it in the project's single voice.
+
+## Stakes and Peak
+
+The engine's defaults favour containment, and containment is right for most scenes. It is wrong for the scene whose job is to stop a thumb: a short-drama hook, an action beat, a gallery clip. Those scenes add four requirements to the read, and each is a physical cause the model can render:
+
+- **Stakes in frame.** Something the character can lose is visible before the turn: the door still open, the glass still on the table, the train still at the platform.
+- **A force against the character.** A person, a mechanism, weather, a clock. It acts first; the character answers.
+- **Escalation inside the clip.** Three states at most, each larger or worse than the last, named in order.
+- **One visual peak.** A single image the clip is built to reach, written as its physical cause: a lantern in two halves, a chain sliding back, an inverted impact frame. The clip ends within a beat of the peak.
+
+Spend the spectacle where the model is strong: weather, light, cloth, dust, water, crowds and fire at a distance, drawn effects in 2D. Keep contact singular and simple. Never write an accident as the peak; the model stages accidents as intentions. Run the [moderation pre-screen](moderation-prescreen.md) last, because the words that usually carry stakes (weapons, wounds, crimes) are the words classifiers refuse; the craft there keeps the stakes and drops the word.

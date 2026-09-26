@@ -18,20 +18,25 @@ Five-minute quickstarts: [English](docs/QUICKSTART.md) · [中文](docs/QUICKSTA
 
 ## Seen, not told
 
-Seven clips, seven prompts, five languages. Each clip is generated on Seedance 2.0 from the exact prompt beneath it: text to video, no reference assets, one take, no post work. Above each prompt sits the kind of brief people usually type, so the difference is visible before it is explained. Where a clip has not been rendered yet, its slate stands in its place.
+Seven clips, seven prompts, five languages. Each clip is generated on Seedance 2.0 from the
+exact prompt beneath it: text to video, no reference assets, one take, no post work. Above each
+prompt sits the kind of brief people usually type, so the difference is visible before it is
+explained. Every prompt went through the [moderation
+pre-screen](references/moderation-prescreen.md) before publication, because a classifier refuses
+words, not intent. Where a clip has not been rendered yet, its slate stands in its place.
 
 <table>
 <tr>
-<td width="50%" valign="top"><a href="#clip-01-get-in"><img src="assets/clips/clip-01-get-in.svg" alt="Slate for clip 01, English: A key in the lock at two in the morning. A knife held low. Then: “Get in.”" width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-02-last-train"><img src="assets/clips/clip-02-last-train.svg" alt="Slate for clip 02, English: The doors are closing. She puts her arm in. Her coat tail stays pinned in the glass." width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-01-footsteps"><img src="assets/clips/clip-01-footsteps.svg" alt="Slate for clip 01, English: A second set of footsteps, a beat late. Her car door is already open." width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-02-hold-the-line"><img src="assets/clips/clip-02-hold-the-line.svg" alt="Slate for clip 02, English: A wave over the pier. Two hands on one rope. When the water drains, he is still standing." width="100%"></a></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><a href="#clip-03-签字"><img src="assets/clips/clip-03-the-signature.svg" alt="Slate for clip 03, 中文: 婚戒放在签名上。 “房子我不要。孩子的姓，改回来。”" width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-04-雪夜斩灯"><img src="assets/clips/clip-04-lantern-cut.svg" alt="Slate for clip 04, 中文: 雪夜屋脊，一盏灯笼坠落。 一刀，两半，烛火熄灭。" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-03-这杯茶"><img src="assets/clips/clip-03-this-cup-of-tea.svg" alt="Slate for clip 03, 中文: 满座敬茶，她把茶倒在桌布上。 “这杯茶，我妈等了二十年。”" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-04-竹海"><img src="assets/clips/clip-04-bamboo-sea.svg" alt="Slate for clip 04, 中文: 红衣掠过竹海，一竿弯到地面。 伞开，竿起，人已不见。" width="100%"></a></td>
 </tr>
 <tr>
 <td width="50%" valign="top"><a href="#clip-05-사직서"><img src="assets/clips/clip-05-resignation.svg" alt="Slate for clip 05, 한국어: 사직서를 그의 서류 위에 올려놓는다. “제 보고서, 이름만 바꾸셨더군요.”" width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-06-雨の石段"><img src="assets/clips/clip-06-rain-steps.svg" alt="Slate for clip 06, 日本語: 雨の石段、墨の獣、木刀の一振り。 当たった瞬間だけ白黒反転。" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-06-拍手"><img src="assets/clips/clip-06-the-clap.svg" alt="Slate for clip 06, 日本語: 雨の石段、墨の獣、巫女の拍手。 打った瞬間だけ白黒反転。" width="100%"></a></td>
 </tr>
 <tr>
 <td width="50%" valign="top"><a href="#clip-07-ещё-один-раунд"><img src="assets/clips/clip-07-one-more-round.svg" alt="Slate for clip 07, Русский: Угол ринга между раундами. «Ещё один раунд. Потом хоть плачь.»" width="100%"></a></td>
@@ -39,71 +44,72 @@ Seven clips, seven prompts, five languages. Each clip is generated on Seedance 2
 </tr>
 </table>
 
-#### Clip 01: Get in.
+#### Clip 01: Footsteps
 
-<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 2, S = 3.0</sub>
+<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 0.5, S = 4.3</sub>
 
-**What people usually type:** *scary moment, woman hears someone breaking in at night, thriller, cinematic, suspense music, 4k*
-
-<details>
-<summary>The prompt the skill wrote</summary>
-
-> Shot 1. Locked shot down a dark apartment hallway at two in the morning: the front door with its
-> chain on, one bar of streetlight across the floor, and in the foreground a woman in a T-shirt
-> standing very still with a kitchen knife held low along her thigh. A key scrapes in the lock,
-> misses, tries again. Shot 2. Cut to the door from her side as it opens to the length of the
-> chain: in the gap, a teenage boy soaked with rain, a split lip, a school lanyard with the key
-> still in his hand, his eyes on the knife. Shot 3. Cut to a close shot of her face: she takes one
-> breath, the knife hand drops out of frame but the shoulder stays tense, and she says quietly:
-> "Get in." Then she reaches past the camera to slide the chain. Light only from the streetlamp
-> through the window and the stairwell bulb behind him. Sound: the key in the lock, rain on the
-> landing, the chain sliding at the very end. No music, no subtitles.
-
-</details>
-
-#### Clip 02: Last train
-
-<sub>English · 12 s · 16:9 · continuous · slate: not rendered yet</sub>
-
-**What people usually type:** *girl running to catch the last train, action scene, dynamic camera, slow motion, epic*
+**What people usually type:** *scary parking garage scene, someone following a woman, horror, cinematic, jump scare, 4k*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> Handheld tracking shot running alongside a woman in a wet raincoat as she sprints down an empty
-> subway platform toward the last train, her bag slamming against her hip, the door-closing chime
-> already sounding. The doors begin to slide shut; she throws her forearm into the gap; the rubber
-> edges bite, bounce back open, and she gets through as they close behind her, catching the tail
-> of her coat outside the glass. The camera stops at the closed door with her coat tail pinned in
-> it as the train starts to move. Cold fluorescent platform light, warm light inside the carriage.
-> Sound: her footsteps and breath, the chime, the rubber slap of the doors, the train pulling
-> away. No music, no subtitles.
+> Shot 1. Tracking shot from behind a woman in a long coat walking fast through a near-empty
+> underground car park at night, her heels echoing off the concrete, one fluorescent tube ahead of
+> her flickering. A second set of footsteps echoes under hers, slightly out of step. Shot 2. Cut
+> to a close shot of her face as she stops dead and listens: the second set of footsteps stops one
+> beat after hers. She turns her head to look back down the aisle. Nothing there, only the tube
+> flickering over rows of empty bays. Shot 3. Cut to her point of view as she turns back toward
+> her car: the driver's door is already open and the interior light is on. She does not move. Cold
+> green fluorescent light, pools of dark between the tubes. Sound: her heels, the second set of
+> footsteps a beat behind, the tube's electrical buzz, then only the buzz. No music, no subtitles.
 
 </details>
 
-#### Clip 03: 签字
+#### Clip 02: Hold the line
+
+<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 1, S = 3.75</sub>
+
+**What people usually type:** *epic storm at sea, fisherman fights giant wave, slow motion, dramatic music, 8k*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> Shot 1. Wide shot of a wooden pier at night in a storm: a small fishing boat straining at a
+> single mooring rope, its bow lifting and slamming with each swell, rain driven sideways through
+> one sodium lamp, and behind the boat a wave building higher than the mast. Shot 2. Cut to a
+> medium shot at deck height: a man in a soaked oilskin has both hands on the rope, boots braced
+> against a cleat, the rope creaking as the boat pulls; water sheets across the planks around his
+> feet. Shot 3. Cut to a low angle: the wave breaks over the end of the pier and buries him in
+> white water; when it drains away he is still standing, bent double, the rope still taut in his
+> hands, the boat still there. Hold on the taut rope as the next swell lifts the bow. Orange
+> sodium light and black water, nothing else. Sound: wind, the rope creaking, the wave's impact,
+> water draining through the planks. No music, no subtitles.
+
+</details>
+
+#### Clip 03: 这杯茶
 
 <sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 2 beats, load 3, S = 3.0</sub>
 
-**What people usually type:** *霸总短剧，离婚签字名场面，女主逆袭，电影感，高级感，8K*
+**What people usually type:** *豪门家宴反转名场面，女主打脸全场，短剧爆点，电影感，高级感*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 镜头1：固定特写，深夜律师事务所的会议桌，一份离婚协议摊在桌上，一支钢笔在“女方”一栏签下名字，笔尖停顿一下再收；签完，一枚婚戒被摘下来，轻轻放在签名上面。镜头2：镜头切至女方的中近景，她（三十五岁上下，黑色西装，头发全部束起，眼睛不红）看向对面，平静地说：“房子我不要。孩子的姓，改回来。”说完起身离开画面，镜头不跟，停在对面男人放在桌上一动不动的双手上，直到画面结束。灯光只有桌面上方一盏冷白色的吊灯，窗外是城市夜景。声音：钢笔划纸声，戒指落在纸上的轻响，椅子推开的声音，说话时其他声音压低；无配乐。保持无字幕。
+> 镜头1：固定中景，老宅厅堂里的家宴，一张大圆桌坐满了人，主位的老爷子举起茶杯准备说话。桌角，一位三十多岁的女人（黑色旗袍，头发盘起）先一步站起来，端起自己的茶杯，把满杯的茶慢慢倒在白色桌布上，茶水漫开、冒着热气，一直倒到杯子空了，再把空杯倒扣在湿掉的桌布上。镜头2：镜头切至全桌的广角，所有人都僵住，只有她站着。她看着主位，平静地说：“这杯茶，我妈等了二十年。”说完不坐下，画面停在满桌不动的人和那只倒扣的杯子上。灯光只有头顶一盏老式吊灯，暖黄，桌布最亮。声音：茶水落在桌布上的声音，杯底扣在桌上的一声轻响，说话时全场无声；无配乐。保持无字幕。时长：15秒。
 
 </details>
 
-#### Clip 04: 雪夜斩灯
+#### Clip 04: 竹海
 
-<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 1.5, S = 3.3</sub>
+<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 1, S = 3.75</sub>
 
-**What people usually type:** *武侠女侠雪夜拔刀，超燃打戏，运镜炸裂，大片感，特效*
+**What people usually type:** *红衣女侠竹林轻功，唯美国风，仙气飘飘，运镜炸裂，8K*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 镜头1：固定全景，雪夜的古城屋脊，一名女剑客（二十多岁，黑色劲装，斗笠压低）背对镜头站在瓦片上，右手按在刀柄上，雪落在肩头不化。远处一盏红灯笼从高处坠落。镜头2：镜头切至侧面中景，灯笼落到她身前的一瞬，她拔刀，只出一刀，刀光横过画面，灯笼被整齐劈成两半，烛火在半空中晃了一下熄灭，两半灯笼各自落向屋檐两侧。镜头3：镜头切至低角度，缓慢推近她收刀入鞘的手，刀身上沾的雪粒随着入鞘被刮落，最后停在刀镡合上的那一刻，画面保持。全片冷蓝月光，只有灯笼熄灭前的一点暖光。声音：风雪声，拔刀的金属声，灯笼纸被劈开的脆响，入鞘的一声轻响；无配乐，保持无字幕。时长：15秒。
+> 镜头1：固定全景，雨中的竹海，风把整片竹梢压向一边，一个红衣女子从竹梢上掠过，每一步落下，那一竿竹子便弯一下又弹起，雨水从竹叶上被震落。镜头2：镜头切至中景，她落在离镜头最近的一竿竹子上，竹竿在她的重量下慢慢弯下来，越弯越低，把她一直送到镜头前，衣袖和发带被风拉直。镜头3：镜头切至低角度，竹竿弯到最低点的一瞬，她撑开一把油纸伞，伞面被雨打得发亮；竹竿弹回天空时她随竿而起，冲出画面上方，镜头停在空了的、还在摇晃的竹竿和雨帘上。全片青绿色的竹林和一点红衣，雨天的灰白天光。声音：风穿过竹林的声音，竹竿弯曲的吱呀声，伞面撑开时的一声脆响，雨声；无配乐，保持无字幕。时长：15秒。
 
 </details>
 
@@ -120,16 +126,16 @@ Seven clips, seven prompts, five languages. Each clip is generated on Seedance 2
 
 </details>
 
-#### Clip 06: 雨の石段
+#### Clip 06: 拍手
 
 <sub>日本語 · 12 s · 16:9 · continuous · slate: not rendered yet</sub>
 
-**What people usually type:** *神作画の少女バトル、雨の神社、エモい、有名アニメスタジオ風、4K*
+**What people usually type:** *神作画の巫女バトル、雨の神社、エモい、有名アニメスタジオ風、4K*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 手描きの2Dセルアニメーション。セル画のキャラクターを、雨に濡れた夜の神社の石段を描いた背景画の上に置く。作画の密度が高く、限られた色数、フィルムの粒子が乗った質感。石段の中ほどで、少女（十七歳、黒い学生服の上に透明な雨合羽、木刀を両手で構える）が、階段の上から流れ落ちてくる墨のような黒い獣と向かい合う。獣が飛びかかる瞬間、少女は一歩踏み込んで木刀を横に振り抜く。振りの軌道は一枚のスミアで描き、当たった瞬間だけ画面全体を白黒反転のインパクトフレームにする。獣は黒い墨の飛沫になって砕け、雨に混じって石段を流れ落ち、消える。少女は振り抜いた姿勢のまま止め絵になり、肩だけが息で上下し、髪と合羽の裾が遅れて揺れて静止する。動きは踏み込みから振り抜きまでを一コマ打ちのフルアニメーションで、その前後は二コマ打ち、止め絵で終わる。カメラは背景画に対して固定。光は石灯籠の橙色の明かりと、雨に反射する青。音：雨音、踏み込みの足音、風を切る一振り、当たった瞬間の鋭い一音、そのあとは雨音だけ。音楽なし、字幕なし。
+> 手描きの2Dセルアニメーション。セル画のキャラクターを、雨に濡れた夜の神社の石段を描いた背景画の上に置く。作画の密度が高く、限られた色数、フィルムの粒子が乗った質感。石段の中ほどで、白衣に緋袴の巫女（黒髪を一つに束ね、袖が雨で重い）が、階段の上から墨のように流れ落ちてくる黒い獣と向かい合う。獣が飛びかかる瞬間、巫女は一歩踏み込み、胸の前で両手を打ち鳴らす。踏み込みから拍手までを一コマ打ちのフルアニメーションで描き、袖と髪が遅れて大きく振れ、打った瞬間だけ画面全体を白黒反転のインパクトフレームにする。獣は黒い墨の飛沫になって砕け、雨に混じって石段を流れ落ち、消える。巫女は両手を合わせた姿勢のまま止め絵になり、肩だけが息で上下し、袖の揺れが遅れて静止する。その前後は二コマ打ち。カメラは背景画に対して固定。光は石灯籠の橙色の明かりと、雨に反射する青。音：雨音、踏み込みの足音、乾いた拍手の一音、そのあとは雨音だけ。音楽なし、字幕なし。
 
 </details>
 
@@ -143,13 +149,13 @@ Seven clips, seven prompts, five languages. Each clip is generated on Seedance 2
 <summary>The prompt the skill wrote</summary>
 
 > Статичный средний план на уровне канатов, угол ринга между раундами. Ночной боксёрский зал,
-> единственный свет — лампа над рингом. Боксёр (лет двадцать пять, рассечённая бровь, капа во рту)
+> единственный свет — лампа над рингом. Боксёр (лет двадцать пять, опухшая бровь, капа во рту)
 > сидит на табурете, тяжело дышит, смотрит в пол. Тренер (за шестьдесят, полотенце на плече, седая
-> щетина) стоит над ним, прижимает к брови холодный металлический утюжок и, не повышая голоса,
-> говорит. Тренер: «Ещё один раунд. Потом хоть плачь.» Боксёр поднимает глаза, кивает один раз;
-> тренер вынимает капу, проверяет и вставляет обратно. Гонг. Боксёр встаёт и выходит из кадра, а
-> камера остаётся на пустом табурете с полотенцем. Звук: тяжёлое дыхание, шум зала за кадром, звон
-> гонга в конце; во время реплики остальные звуки тише. Без музыки, без субтитров.
+> щетина) стоит над ним, прижимает к брови лёд, завёрнутый в полотенце, и, не повышая голоса,
+> говорит. Тренер: «Ещё один раунд. Потом хоть плачь.» Боксёр поднимает глаза и кивает один раз.
+> Гонг. Он встаёт и выходит из кадра, а камера остаётся на пустом табурете с брошенным полотенцем.
+> Звук: тяжёлое дыхание, шум зала за кадром, звон гонга в конце; во время реплики остальные звуки
+> тише. Без музыки, без субтитров.
 
 </details>
 

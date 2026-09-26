@@ -102,6 +102,7 @@ The complete map of skills and references, moved here from the front page so the
 | [`sequence-worked-trace.md`](../references/sequence-worked-trace.md) | One project walked end to end: plan, deviation, reconciliation, chain cap, re-anchor, and session resume - the prose half of the machine fixtures. |
 | [`dense-storyboard-mode.md`](../references/dense-storyboard-mode.md) | Dense multishot, phased single-take, and 2D storyboard contracts. |
 | [`allocation-model.md`](../references/allocation-model.md) | Where one generation spends its fidelity budget: identity vs motion vs scene density. |
+| [`moderation-prescreen.md`](../references/moderation-prescreen.md) | Cue classes platform classifiers react to, per-language cue lists, and the one-pass rewrite that keeps a benign scene's drama and drops the cue; runs before every delivery and after a block. |
 | [`multishot-grammar.md`](../references/multishot-grammar.md) | Shot order rather than timestamps on Seedance 2.0, the continuous-versus-storyboard shape rule, the load-per-beat ladder (Safe / Stretch / Ambitious), and cut grammar inside one generation. |
 | [`2d-anime-grammar.md`](../references/2d-anime-grammar.md) | Cel/anime medium grammar: layers, burst-vs-held motion, the no-lens rule. |
 | [`pro-filmmaking-standards.md`](../references/pro-filmmaking-standards.md) | Professional production spine and source boundaries for film, commercial, post, localization, and delivery work. |

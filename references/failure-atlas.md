@@ -16,3 +16,5 @@ Use this reference when sequence or continuation output fails.
 | Extension quality degrades | Extension depth and drift were ignored. | Re-anchor or create intentional next shot. |
 | Reference roles contaminate | Transfer/ignore clauses were absent. | Split reference roles and exclusions. |
 | Event density is too high | Several beats were compiled into one prompt. | Reassign future beats to later clips. |
+| Character performs the accident on purpose | An involuntary outcome (a coat caught in a door, a slip, a spill) was written as the endpoint. | Write the deliberate action, or leave the consequence off screen. |
+| Prompt refused before rendering | Cue words stacked: a weapon, an injury, a crime, a minor in peril, a named institution. | Run the moderation pre-screen; remove, move off frame, or replace with the consequence. |

@@ -1,0 +1,450 @@
+{
+  "schema_version": 1,
+  "purpose": "Word-level cues that platform moderation classifiers are observed to react to in otherwise benign video prompts. A hit is a review flag for the pre-delivery screen in references/moderation-prescreen.md, never a verdict, never a bypass list. Every entry is field-observed or heuristic; no platform publishes its trigger list.",
+  "evidence_tier": "field-observed and heuristic; recorded 2026-09-26 after two gallery prompts were refused on the 即梦 surface",
+  "severity": {
+    "high": "one hit in a shipped prompt fails the strict lint and blocks delivery until the pre-screen has run",
+    "medium": "a warning on its own; three or more medium classes stacked in one prompt count as high"
+  },
+  "classes": {
+    "weapon": {
+      "severity": "high",
+      "what_reacts": "a named weapon in a hand, especially in a domestic or contemporary setting, even when no one is harmed",
+      "cues": {
+        "en": [
+          "knife",
+          "knives",
+          "blade",
+          "dagger",
+          "gun",
+          "pistol",
+          "rifle",
+          "shotgun",
+          "sword",
+          "machete",
+          "axe",
+          "bullet"
+        ],
+        "zh": [
+          "刀",
+          "剑",
+          "枪",
+          "匕首",
+          "子弹",
+          "砍"
+        ],
+        "ja": [
+          "ナイフ",
+          "刀",
+          "剣",
+          "銃",
+          "拳銃",
+          "弾"
+        ],
+        "ko": [
+          "칼",
+          "검",
+          "총",
+          "단검",
+          "총알"
+        ],
+        "ru": [
+          "нож",
+          "клинок",
+          "меч",
+          "пистолет",
+          "ружь",
+          "пуля",
+          "кинжал"
+        ]
+      }
+    },
+    "injury": {
+      "severity": "high",
+      "what_reacts": "blood, an open wound, a visible fresh injury on a face, or a body described as dead",
+      "cues": {
+        "en": [
+          "blood",
+          "bloody",
+          "bleeding",
+          "bleeds",
+          "wound",
+          "wounded",
+          "bruise",
+          "bruised",
+          "split lip",
+          "stab",
+          "stabbed",
+          "stabbing",
+          "corpse",
+          "dead body",
+          "scar"
+        ],
+        "zh": [
+          "血",
+          "流血",
+          "伤口",
+          "受伤",
+          "淤青",
+          "尸体"
+        ],
+        "ja": [
+          "血",
+          "出血",
+          "傷",
+          "怪我",
+          "死体",
+          "遺体"
+        ],
+        "ko": [
+          "피가",
+          "피를",
+          "상처",
+          "출혈",
+          "멍이",
+          "시체"
+        ],
+        "ru": [
+          "кровь",
+          "кровав",
+          "рана",
+          "ранен",
+          "рассеч",
+          "синяк",
+          "труп"
+        ]
+      }
+    },
+    "crime": {
+      "severity": "high",
+      "what_reacts": "a named crime or an act of violence against a person, including the framing words that imply one",
+      "cues": {
+        "en": [
+          "break in",
+          "break-in",
+          "breaks in",
+          "breaking in",
+          "intruder",
+          "burglar",
+          "hostage",
+          "kidnap",
+          "kidnapped",
+          "robbery",
+          "robber",
+          "murder",
+          "murdered",
+          "kill",
+          "killed",
+          "killing",
+          "attack",
+          "attacks",
+          "attacked",
+          "attacker",
+          "assault",
+          "threaten",
+          "threatens",
+          "threatening"
+        ],
+        "zh": [
+          "闯入",
+          "入室",
+          "绑架",
+          "人质",
+          "抢劫",
+          "杀",
+          "袭击",
+          "威胁",
+          "小偷"
+        ],
+        "ja": [
+          "侵入",
+          "人質",
+          "誘拐",
+          "強盗",
+          "殺",
+          "襲"
+        ],
+        "ko": [
+          "침입",
+          "인질",
+          "납치",
+          "강도",
+          "살인",
+          "습격",
+          "협박"
+        ],
+        "ru": [
+          "взлом",
+          "заложник",
+          "похищ",
+          "ограбл",
+          "убий",
+          "нападен",
+          "угроз"
+        ]
+      }
+    },
+    "minor": {
+      "severity": "medium",
+      "what_reacts": "a child or teenager in the same prompt as danger, night, injury, a weapon, or an adult conflict; the age word alone is usually fine, the combination is not",
+      "cues": {
+        "en": [
+          "teen",
+          "teenage",
+          "teenager",
+          "boy",
+          "girl",
+          "child",
+          "children",
+          "kid",
+          "kids",
+          "schoolgirl",
+          "schoolboy",
+          "minor",
+          "toddler",
+          "baby"
+        ],
+        "zh": [
+          "未成年",
+          "孩子",
+          "小孩",
+          "儿童",
+          "少女",
+          "少年",
+          "女孩",
+          "男孩",
+          "学生"
+        ],
+        "ja": [
+          "子供",
+          "少女",
+          "少年",
+          "女の子",
+          "男の子",
+          "学生",
+          "中学生",
+          "高校生"
+        ],
+        "ko": [
+          "아이",
+          "어린이",
+          "소녀",
+          "소년",
+          "학생",
+          "여학생"
+        ],
+        "ru": [
+          "ребён",
+          "дети",
+          "подросток",
+          "мальчик",
+          "девочк",
+          "школьни"
+        ]
+      }
+    },
+    "institution": {
+      "severity": "medium",
+      "what_reacts": "named legal, police, medical or custodial settings and documents; a signature on a named legal document; uniforms and insignia",
+      "cues": {
+        "en": [
+          "court",
+          "courtroom",
+          "police",
+          "cop",
+          "officer",
+          "lawyer",
+          "attorney",
+          "divorce",
+          "contract",
+          "verdict",
+          "hospital",
+          "surgery",
+          "prison",
+          "jail",
+          "interrogation",
+          "uniform"
+        ],
+        "zh": [
+          "离婚",
+          "律师",
+          "法院",
+          "警察",
+          "审讯",
+          "医院",
+          "病床",
+          "手术",
+          "监狱",
+          "合同",
+          "制服",
+          "警服"
+        ],
+        "ja": [
+          "離婚",
+          "弁護士",
+          "裁判",
+          "警察",
+          "取調",
+          "病院",
+          "手術",
+          "刑務所",
+          "契約"
+        ],
+        "ko": [
+          "이혼",
+          "변호사",
+          "법원",
+          "경찰",
+          "취조",
+          "병원",
+          "수술",
+          "교도소",
+          "계약"
+        ],
+        "ru": [
+          "развод",
+          "адвокат",
+          "суд",
+          "полици",
+          "допрос",
+          "больниц",
+          "операци",
+          "тюрьм",
+          "контракт"
+        ]
+      }
+    },
+    "substance": {
+      "severity": "medium",
+      "what_reacts": "smoking, drunkenness, drugs and gambling shown as action",
+      "cues": {
+        "en": [
+          "cigarette",
+          "smoking",
+          "vodka",
+          "whisky",
+          "drunk",
+          "drugs",
+          "pills",
+          "syringe",
+          "casino",
+          "gambling"
+        ],
+        "zh": [
+          "香烟",
+          "抽烟",
+          "喝醉",
+          "毒品",
+          "赌"
+        ],
+        "ja": [
+          "煙草",
+          "タバコ",
+          "酔",
+          "薬物",
+          "賭"
+        ],
+        "ko": [
+          "담배",
+          "취한",
+          "마약",
+          "도박"
+        ],
+        "ru": [
+          "сигарет",
+          "курит",
+          "пьян",
+          "водк",
+          "наркот",
+          "казино"
+        ]
+      }
+    },
+    "horror": {
+      "severity": "medium",
+      "what_reacts": "gore and the undead named as such; horror carried by absence, sound and light passes far more often",
+      "cues": {
+        "en": [
+          "ghost",
+          "demon",
+          "possessed",
+          "gore",
+          "severed",
+          "zombie",
+          "haunted"
+        ],
+        "zh": [
+          "鬼",
+          "恶魔",
+          "附身",
+          "血腥",
+          "僵尸",
+          "闹鬼"
+        ],
+        "ja": [
+          "幽霊",
+          "悪魔",
+          "憑",
+          "ゾンビ",
+          "呪"
+        ],
+        "ko": [
+          "귀신",
+          "악마",
+          "빙의",
+          "좀비",
+          "저주"
+        ],
+        "ru": [
+          "призрак",
+          "демон",
+          "одержим",
+          "зомби",
+          "прокля"
+        ]
+      }
+    },
+    "identity_and_symbols": {
+      "severity": "high",
+      "what_reacts": "real people, brands, logos, flags, currency and military or police insignia; these are owned by the copyright route, listed here so the screen does not skip them",
+      "cues": {
+        "en": [
+          "logo",
+          "brand name",
+          "flag",
+          "banknote",
+          "military uniform",
+          "police uniform"
+        ],
+        "zh": [
+          "国旗",
+          "军装",
+          "警服",
+          "人民币",
+          "商标"
+        ],
+        "ja": [
+          "国旗",
+          "軍服",
+          "警察官の制服",
+          "紙幣",
+          "ロゴ"
+        ],
+        "ko": [
+          "국기",
+          "군복",
+          "경찰 제복",
+          "지폐",
+          "로고"
+        ],
+        "ru": [
+          "флаг",
+          "военная форма",
+          "полицейская форма",
+          "банкнот",
+          "логотип"
+        ]
+      }
+    }
+  }
+}

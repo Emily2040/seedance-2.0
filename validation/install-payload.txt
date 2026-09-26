@@ -9,12 +9,12 @@ SECURITY.md
 SKILL.md
 V6_SEQUENCE_PROMPT_COMPILER_MANIFEST.md
 agents/openai.yaml
-assets/clips/clip-01-get-in.svg
-assets/clips/clip-02-last-train.svg
-assets/clips/clip-03-the-signature.svg
-assets/clips/clip-04-lantern-cut.svg
+assets/clips/clip-01-footsteps.svg
+assets/clips/clip-02-hold-the-line.svg
+assets/clips/clip-03-this-cup-of-tea.svg
+assets/clips/clip-04-bamboo-sea.svg
 assets/clips/clip-05-resignation.svg
-assets/clips/clip-06-rain-steps.svg
+assets/clips/clip-06-the-clap.svg
 assets/clips/clip-07-one-more-round.svg
 assets/fonts/OFL.txt
 assets/hero-dark.svg
@@ -23,6 +23,7 @@ assets/masthead-outlines.json
 assets/skill-map.svg
 data/community-patterns.seedance-2026-05-30.json
 data/generation-runs.example.jsonl
+data/moderation-cues.json
 data/sources.seedance-2026-05-30.json
 docs/LANGUAGE_COVERAGE.md
 docs/QUICKSTART.es.md
@@ -109,6 +110,7 @@ references/interview-starters.md
 references/json-schema.md
 references/model-mechanics.md
 references/model-name-map.md
+references/moderation-prescreen.md
 references/multilingual-community-examples.md
 references/multilingual-native-review.md
 references/multishot-grammar.md

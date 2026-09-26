@@ -23,7 +23,9 @@ slate says it is not.
   documented Chinese prose echo 时长：15秒, which is a reinforcement, not a
   control.
 - Paste each prompt exactly as printed. Do not translate it, add quality words,
-  or append a style name.
+  or append a style name. Every prompt has passed the moderation pre-screen; if
+  a surface still refuses one, note the exact message in the render record
+  and do not retry with synonyms.
 - One take is the default. If a take misses the review checklist, generate one
   more with the same prompt and settings; publish the better take and record
   both in the table at the end of this file. A third attempt is a decision the
@@ -47,81 +49,94 @@ already follow.
 Each card gives the typical brief (what the clip would have been made from
 without the skill), the internal read the skill used, the prompt as written,
 the shape and ladder rung from `references/multishot-grammar.md`, and the review
-checklist for the returned take. Every scene has a turn, a threat or a strike:
-these are the clips people stop for, and each one still keeps the rules that
-make a take reviewable (one move per shot, a visible endpoint, no seconds in
-the prompt, no studio names, one speaker).
+checklist for the returned take. Every scene has stakes in frame, a force
+against the character, escalation inside the clip and one visual peak (the
+Stakes and Peak section of `references/directing-engine.md`), and every prompt
+passed `scripts/moderation_prescreen.py` with no finding before publication.
+The spectacle sits where the model renders well: weather, water, cloth, light,
+drawn effects; contact stays singular; no endpoint is an accident.
 
-### Clip 01: Get in.
+### Clip 01: Footsteps
 
-- Language: English. Duration 15 s. 16:9. Shape: storyboard. Rung: Safe (3 beats, load 2, S = 3.0). File: `clip-01-get-in.mp4`.
-- Typical brief: *scary moment, woman hears someone breaking in at night, thriller, cinematic, suspense music, 4k*
-- Internal read (narrative lane). Turn: intruder to shelter. POV: the mother's;
-  the camera stands where she stands. Power: the door holds it, then she does.
-  Hidden want: to keep the home closed. Tactic: the chain and the knife.
-  Subtext: she says "Get in", not "what happened". Visible suppressed
-  behaviour: the knife lowers but the shoulder stays tense. Non-transferable
-  detail: the school lanyard with his key still in his hand (authored choice).
-  Stock solution refused: no scream, no music sting, no jump scare.
-- Load: one person beyond the first (1), one spoken line (1); every shot is
-  locked, so the cuts are free. S = 15 ÷ 5 = 3.0.
+- Language: English. Duration 15 s. 16:9. Shape: storyboard. Rung: Safe (3 beats, load 0.5, S = 4.3). File: `clip-01-footsteps.mp4`.
+- Typical brief: *scary parking garage scene, someone following a woman, horror, cinematic, jump scare, 4k*
+- Internal read (narrative lane). Turn: alone to not alone, without anyone
+  appearing. POV: hers; the audience hears what she hears and sees what she
+  sees. Force: the second set of footsteps, then the open door. Visible
+  suppressed behaviour: she stops dead and does not run. Non-transferable
+  detail: the driver's door already open with the interior light on
+  (authored choice). Stock solution refused: no figure in the shadows, no jump
+  scare, no music sting; the peak is a door that should be shut.
+- Screen: no named crime, no weapon, no injury; the fear is footsteps, a
+  flicker, and a door.
 
-> Shot 1. Locked shot down a dark apartment hallway at two in the morning: the front door with its chain on, one bar of streetlight across the floor, and in the foreground a woman in a T-shirt standing very still with a kitchen knife held low along her thigh. A key scrapes in the lock, misses, tries again. Shot 2. Cut to the door from her side as it opens to the length of the chain: in the gap, a teenage boy soaked with rain, a split lip, a school lanyard with the key still in his hand, his eyes on the knife. Shot 3. Cut to a close shot of her face: she takes one breath, the knife hand drops out of frame but the shoulder stays tense, and she says quietly: "Get in." Then she reaches past the camera to slide the chain. Light only from the streetlamp through the window and the stairwell bulb behind him. Sound: the key in the lock, rain on the landing, the chain sliding at the very end. No music, no subtitles.
+> Shot 1. Tracking shot from behind a woman in a long coat walking fast through a near-empty underground car park at night, her heels echoing off the concrete, one fluorescent tube ahead of her flickering. A second set of footsteps echoes under hers, slightly out of step. Shot 2. Cut to a close shot of her face as she stops dead and listens: the second set of footsteps stops one beat after hers. She turns her head to look back down the aisle. Nothing there, only the tube flickering over rows of empty bays. Shot 3. Cut to her point of view as she turns back toward her car: the driver's door is already open and the interior light is on. She does not move. Cold green fluorescent light, pools of dark between the tubes. Sound: her heels, the second set of footsteps a beat behind, the tube's electrical buzz, then only the buzz. No music, no subtitles.
 
-Review: three framings in this order; the knife lowers but the shoulder stays
-tense; the line is quiet and audible; no scream, no sting, no subtitles; the
-chain slides only at the end.
+Review: the second footsteps stop one beat after hers, audibly; the aisle is
+empty; the car door is open with the interior light on; she does not move at
+the end; no music, no subtitles.
 
-### Clip 02: Last train
+### Clip 02: Hold the line
 
-- Language: English. Duration 12 s. 16:9. Shape: continuous. File: `clip-02-last-train.mp4`.
-- Typical brief: *girl running to catch the last train, action scene, dynamic camera, slow motion, epic*
-- Internal read (non-narrative lane, physical action). Utility intent: one
-  sprint with a mechanical obstacle that answers back, ending on a small
-  humiliation instead of a triumph. Refusal: no slow motion, no hero
-  landing, no second character, no score.
+- Language: English. Duration 15 s. 16:9. Shape: storyboard. Rung: Safe (3 beats, load 1, S = 3.75). File: `clip-02-hold-the-line.mp4`.
+- Typical brief: *epic storm at sea, fisherman fights giant wave, slow motion, dramatic music, 8k*
+- Internal read (narrative lane). Turn: a boat about to be lost to a boat
+  still there. Force: the sea, acting first. Stakes in frame: the boat on one
+  rope. Visible suppressed behaviour: he does not look at the wave; he looks
+  at the rope. Non-transferable detail: boots braced against a cleat while
+  water sheets around them (authored choice). Stock solution refused: no slow
+  motion, no shouted defiance, no music; the peak is the rope still taut when
+  the water drains.
+- Screen: nothing to remove; water is the model's strongest material.
 
-> Handheld tracking shot running alongside a woman in a wet raincoat as she sprints down an empty subway platform toward the last train, her bag slamming against her hip, the door-closing chime already sounding. The doors begin to slide shut; she throws her forearm into the gap; the rubber edges bite, bounce back open, and she gets through as they close behind her, catching the tail of her coat outside the glass. The camera stops at the closed door with her coat tail pinned in it as the train starts to move. Cold fluorescent platform light, warm light inside the carriage. Sound: her footsteps and breath, the chime, the rubber slap of the doors, the train pulling away. No music, no subtitles.
+> Shot 1. Wide shot of a wooden pier at night in a storm: a small fishing boat straining at a single mooring rope, its bow lifting and slamming with each swell, rain driven sideways through one sodium lamp, and behind the boat a wave building higher than the mast. Shot 2. Cut to a medium shot at deck height: a man in a soaked oilskin has both hands on the rope, boots braced against a cleat, the rope creaking as the boat pulls; water sheets across the planks around his feet. Shot 3. Cut to a low angle: the wave breaks over the end of the pier and buries him in white water; when it drains away he is still standing, bent double, the rope still taut in his hands, the boat still there. Hold on the taut rope as the next swell lifts the bow. Orange sodium light and black water, nothing else. Sound: wind, the rope creaking, the wave's impact, water draining through the planks. No music, no subtitles.
 
-Review: one tracking move that stops at the closed door; the forearm goes in,
-the doors reopen, the coat tail is pinned as the train moves; real speed, no
-music, no subtitles.
+Review: the wave builds in shot 1 and breaks in shot 3; the rope is taut
+throughout; he is standing when the water drains and the boat is still there;
+real speed; no music, no subtitles.
 
-### Clip 03: 签字
+### Clip 03: 这杯茶
 
-- Language: Chinese. Duration 15 s. 16:9. Shape: storyboard. Rung: Safe (2 beats, load 3, S = 3.0). File: `clip-03-the-signature.mp4`.
-- Typical brief: *霸总短剧，离婚签字名场面，女主逆袭，电影感，高级感，8K*
-- Internal read (narrative lane). Turn: the party who was owed becomes the
-  party who dictates. POV: hers; his hands are all we get of him. Hidden want:
-  the child's name, not the money. Tactic: sign first, speak second. Subtext:
-  the ring on the signature says what the line does not. Visible suppressed
-  behaviour: the pen pauses before the last stroke. Non-transferable detail:
-  the ring placed on the signature (authored choice). Stock solution refused:
-  no tears, no slap, no music swell; the camera stays on his hands.
-- Load: one person beyond the first (1), one line (1), the ring set on the
-  paper as contact that must land (1). S = 15 ÷ 5 = 3.0.
+- Language: Chinese. Duration 15 s. 16:9. Shape: storyboard. Rung: Safe (2 beats, load 3, S = 3.0). File: `clip-03-this-cup-of-tea.mp4`.
+- Typical brief: *豪门家宴反转名场面，女主打脸全场，短剧爆点，电影感，高级感*
+- Internal read (narrative lane). Turn: the family's toast becomes her
+  verdict on the family. POV: hers; the elder is a raised cup and a frozen
+  table. Hidden want: to be seen refusing, not to be heard arguing. Tactic:
+  stand first, pour, speak last. Visible suppressed behaviour: she pours slowly
+  to the last drop and does not sit. Non-transferable detail: the empty cup
+  set upside down on the wet cloth (authored choice). Stock solution refused:
+  no slap, no thrown glass, no tears, no music; the spectacle is tea spreading
+  on white cloth.
+- Load: one person beyond her (1), one line (1), the cup set down as contact
+  (1); the cuts are free. S = 15 ÷ 5 = 3.0. The prose echo 时长：15秒 follows
+  the documented tip; the duration is still set in the tool.
+- Screen: the first draft of this slot named a legal document, a law office
+  and a child and was refused; this version names none of them.
 
-> 镜头1：固定特写，深夜律师事务所的会议桌，一份离婚协议摊在桌上，一支钢笔在“女方”一栏签下名字，笔尖停顿一下再收；签完，一枚婚戒被摘下来，轻轻放在签名上面。镜头2：镜头切至女方的中近景，她（三十五岁上下，黑色西装，头发全部束起，眼睛不红）看向对面，平静地说：“房子我不要。孩子的姓，改回来。”说完起身离开画面，镜头不跟，停在对面男人放在桌上一动不动的双手上，直到画面结束。灯光只有桌面上方一盏冷白色的吊灯，窗外是城市夜景。声音：钢笔划纸声，戒指落在纸上的轻响，椅子推开的声音，说话时其他声音压低；无配乐。保持无字幕。
+> 镜头1：固定中景，老宅厅堂里的家宴，一张大圆桌坐满了人，主位的老爷子举起茶杯准备说话。桌角，一位三十多岁的女人（黑色旗袍，头发盘起）先一步站起来，端起自己的茶杯，把满杯的茶慢慢倒在白色桌布上，茶水漫开、冒着热气，一直倒到杯子空了，再把空杯倒扣在湿掉的桌布上。镜头2：镜头切至全桌的广角，所有人都僵住，只有她站着。她看着主位，平静地说：“这杯茶，我妈等了二十年。”说完不坐下，画面停在满桌不动的人和那只倒扣的杯子上。灯光只有头顶一盏老式吊灯，暖黄，桌布最亮。声音：茶水落在桌布上的声音，杯底扣在桌上的一声轻响，说话时全场无声；无配乐。保持无字幕。时长：15秒。
 
-Review: the pen pauses and the ring lands on the signature before the cut; the
-line is Mandarin, audible, flat, dry-eyed; the camera stays on his hands; no
-music, no subtitles.
+Review: she stands before the elder speaks; the tea is poured to the last drop
+and the cup set upside down; the line is Mandarin, audible, flat; the table is
+frozen; the clip ends on the cup; no music, no subtitles.
 
-### Clip 04: 雪夜斩灯
+### Clip 04: 竹海
 
-- Language: Chinese. Duration 15 s. 16:9. Shape: storyboard. Rung: Safe (3 beats, load 1.5, S = 3.3). File: `clip-04-lantern-cut.mp4`.
-- Typical brief: *武侠女侠雪夜拔刀，超燃打戏，运镜炸裂，大片感，特效*
-- Internal read (non-narrative lane, performance). Utility intent: one draw,
-  one cut, and the discipline of the sheathing, with the falling lantern as
-  the only opponent. Refusal: no enemy crowd, no wire-work flight, no score.
-- Load: the blade through the lantern is contact that must land (1); the third
-  shot's push-in is the only move (0.5). S = 15 ÷ 4.5 = 3.3. The prose echo
-  时长：15秒 follows the documented tip; the duration is still set in the tool.
+- Language: Chinese. Duration 15 s. 16:9. Shape: storyboard. Rung: Safe (3 beats, load 1, S = 3.75). File: `clip-04-bamboo-sea.mp4`.
+- Typical brief: *红衣女侠竹林轻功，唯美国风，仙气飘飘，运镜炸裂，8K*
+- Internal read (non-narrative lane, performance). Utility intent: weight and
+  release made visible in bamboo, wind and rain, ending on the stalk that
+  springs back empty. Refusal: no opponent, no blade, no wire-work fight, no
+  music.
+- Load: the landing on the near stalk is contact (1); every shot is locked.
+  S = 15 ÷ 4 = 3.75.
+- Screen: the first draft of this slot was a rooftop blade cut and carried
+  two weapon cues; the spectacle moved into bamboo, cloth and rain.
 
-> 镜头1：固定全景，雪夜的古城屋脊，一名女剑客（二十多岁，黑色劲装，斗笠压低）背对镜头站在瓦片上，右手按在刀柄上，雪落在肩头不化。远处一盏红灯笼从高处坠落。镜头2：镜头切至侧面中景，灯笼落到她身前的一瞬，她拔刀，只出一刀，刀光横过画面，灯笼被整齐劈成两半，烛火在半空中晃了一下熄灭，两半灯笼各自落向屋檐两侧。镜头3：镜头切至低角度，缓慢推近她收刀入鞘的手，刀身上沾的雪粒随着入鞘被刮落，最后停在刀镡合上的那一刻，画面保持。全片冷蓝月光，只有灯笼熄灭前的一点暖光。声音：风雪声，拔刀的金属声，灯笼纸被劈开的脆响，入鞘的一声轻响；无配乐，保持无字幕。时长：15秒。
+> 镜头1：固定全景，雨中的竹海，风把整片竹梢压向一边，一个红衣女子从竹梢上掠过，每一步落下，那一竿竹子便弯一下又弹起，雨水从竹叶上被震落。镜头2：镜头切至中景，她落在离镜头最近的一竿竹子上，竹竿在她的重量下慢慢弯下来，越弯越低，把她一直送到镜头前，衣袖和发带被风拉直。镜头3：镜头切至低角度，竹竿弯到最低点的一瞬，她撑开一把油纸伞，伞面被雨打得发亮；竹竿弹回天空时她随竿而起，冲出画面上方，镜头停在空了的、还在摇晃的竹竿和雨帘上。全片青绿色的竹林和一点红衣，雨天的灰白天光。声音：风穿过竹林的声音，竹竿弯曲的吱呀声，伞面撑开时的一声脆响，雨声；无配乐，保持无字幕。时长：15秒。
 
-Review: one draw, one cut, two halves, flame out; the only move is the push-in
-in shot 3, ending as the guard closes; no music, no subtitles.
+Review: each landing bends a stalk that springs back; the near stalk bows to
+camera; the umbrella opens at the lowest point; she leaves the frame upward as
+the stalk springs back; the clip ends on the empty swaying stalk; no music.
 
 ### Clip 05: 사직서
 
@@ -135,8 +150,8 @@ in shot 3, ending as the guard closes; no music, no subtitles.
   Non-transferable detail: the envelope placed over his signature in progress
   (authored choice). Stock solution refused: no raised voice, no applause, no
   music; his face arrives only as a reflection.
-- Load: one person beyond the first (1), one line (1), the envelope placed on
-  the page as contact (1). S = 15 ÷ 5 = 3.0.
+- Screen: no finding; a resignation envelope and a company office carry no
+  cue.
 
 > 샷 1: 밤의 유리벽 임원실, 책상 높이에 고정된 미디엄 숏. 넓은 책상 뒤에서 대표(오십 대 남성, 셔츠 소매를 걷음)가 서류에 서명하고 있고, 고개를 들지 않는다. 젊은 직원(이십 대 후반 여성, 회색 정장, 사원증을 목에 걸음)이 걸어 들어와 봉투 하나를 그가 서명하던 서류 바로 위에 올려놓는다. 봉투에는 ‘사직서’라고 적혀 있다. 그녀는 물러서지 않고 말한다. 직원: “제 보고서, 이름만 바꾸셨더군요.” 샷 2: 컷, 그녀가 돌아서서 문으로 걸어 나가는 뒷모습 너머로 대표가 그제야 고개를 든다. 문이 닫히고, 카메라는 유리에 비친 그의 얼굴에서 멈춘다. 조명은 책상 스탠드 하나와 창밖 도시의 불빛뿐. 소리: 펜 소리가 멈추는 순간, 봉투가 종이 위에 놓이는 소리, 구두 소리, 문이 닫히는 소리. 대사 중에는 다른 소리를 낮춘다. 음악 없음, 자막 없음.
 
@@ -144,24 +159,27 @@ Review: the envelope lands on the page he is signing and the pen stops; the
 line is Korean and audible; he looks up only after she has turned; the clip
 ends on his reflection; no music, no subtitles.
 
-### Clip 06: 雨の石段
+### Clip 06: 拍手
 
-- Language: Japanese. Duration 12 s. 16:9. Shape: continuous, 2D animation. File: `clip-06-rain-steps.mp4`.
-- Typical brief: *神作画の少女バトル、雨の神社、エモい、有名アニメスタジオ風、4K*
+- Language: Japanese. Duration 12 s. 16:9. Shape: continuous, 2D animation. File: `clip-06-the-clap.mp4`.
+- Typical brief: *神作画の巫女バトル、雨の神社、エモい、有名アニメスタジオ風、4K*
   (the studio name people usually attach is exactly what the copyright route
   removes; the prompt names technique, timing and palette instead).
-- Internal read (non-narrative lane, performance). Utility intent: one strike
-  animated the way the medium shows a decisive strike, a smear, an inverted
-  impact frame, a burst on ones, and then a held frame that lets the rain do
-  the rest. Refusal: no dialogue, no transformation sequence, no photographic
-  lens language, no second beast.
+- Internal read (non-narrative lane, performance). Utility intent: one
+  purification clap animated the way the medium shows a decisive act: a burst
+  on ones, sleeves and hair whipping, one inverted impact frame, then a held
+  frame that lets the rain do the rest. Refusal: no dialogue, no
+  transformation sequence, no photographic lens language, no second beast.
+- Screen: the first draft armed a schoolgirl with a wooden practice blade,
+  which stacked a minor with a weapon cue; the shrine maiden, no age given,
+  strikes with a clap.
 
-> 手描きの2Dセルアニメーション。セル画のキャラクターを、雨に濡れた夜の神社の石段を描いた背景画の上に置く。作画の密度が高く、限られた色数、フィルムの粒子が乗った質感。石段の中ほどで、少女（十七歳、黒い学生服の上に透明な雨合羽、木刀を両手で構える）が、階段の上から流れ落ちてくる墨のような黒い獣と向かい合う。獣が飛びかかる瞬間、少女は一歩踏み込んで木刀を横に振り抜く。振りの軌道は一枚のスミアで描き、当たった瞬間だけ画面全体を白黒反転のインパクトフレームにする。獣は黒い墨の飛沫になって砕け、雨に混じって石段を流れ落ち、消える。少女は振り抜いた姿勢のまま止め絵になり、肩だけが息で上下し、髪と合羽の裾が遅れて揺れて静止する。動きは踏み込みから振り抜きまでを一コマ打ちのフルアニメーションで、その前後は二コマ打ち、止め絵で終わる。カメラは背景画に対して固定。光は石灯籠の橙色の明かりと、雨に反射する青。音：雨音、踏み込みの足音、風を切る一振り、当たった瞬間の鋭い一音、そのあとは雨音だけ。音楽なし、字幕なし。
+> 手描きの2Dセルアニメーション。セル画のキャラクターを、雨に濡れた夜の神社の石段を描いた背景画の上に置く。作画の密度が高く、限られた色数、フィルムの粒子が乗った質感。石段の中ほどで、白衣に緋袴の巫女（黒髪を一つに束ね、袖が雨で重い）が、階段の上から墨のように流れ落ちてくる黒い獣と向かい合う。獣が飛びかかる瞬間、巫女は一歩踏み込み、胸の前で両手を打ち鳴らす。踏み込みから拍手までを一コマ打ちのフルアニメーションで描き、袖と髪が遅れて大きく振れ、打った瞬間だけ画面全体を白黒反転のインパクトフレームにする。獣は黒い墨の飛沫になって砕け、雨に混じって石段を流れ落ち、消える。巫女は両手を合わせた姿勢のまま止め絵になり、肩だけが息で上下し、袖の揺れが遅れて静止する。その前後は二コマ打ち。カメラは背景画に対して固定。光は石灯籠の橙色の明かりと、雨に反射する青。音：雨音、踏み込みの足音、乾いた拍手の一音、そのあとは雨音だけ。音楽なし、字幕なし。
 
-Review: drawn 2D cel over a painted background, not photoreal or 3D; the
-strike is one smear and one inverted impact frame; the beast breaks into ink
-and washes down the steps; a held frame with breathing shoulders and settling
-cloth; no music.
+Review: drawn 2D cel over a painted background, not photoreal or 3D; the clap
+is a burst with one inverted impact frame; the beast breaks into ink and washes
+down the steps; a held frame with breathing shoulders and settling sleeves; no
+music.
 
 ### Clip 07: Ещё один раунд
 
@@ -170,24 +188,43 @@ cloth; no music.
 - Internal read (narrative lane). Turn: a fighter who has stopped looking up
   to one who stands. POV: the corner's, at rope height. Hidden want: the
   trainer wants him to finish; the fighter wants permission to stop. Tactic:
-  one flat sentence and the enswell held to the brow. Subtext: "then cry all
-  you want" is tenderness dressed as an order. Visible suppressed behaviour:
-  one nod, nothing else. Non-transferable detail: the mouthguard taken out,
-  checked and put back (authored choice). Stock solution refused: no shouted
-  pep talk, no music, no slow-motion walk-out; the camera stays on the empty
-  stool.
+  one flat sentence and the ice held to the brow. Subtext: "then cry all you
+  want" is tenderness dressed as an order. Visible suppressed behaviour: one
+  nod, nothing else. Non-transferable detail: the towel left on the empty
+  stool (authored choice). Stock solution refused: no shouted pep talk, no
+  music, no slow-motion walk-out.
+- Screen: the first draft had a cut, bleeding brow; it is now a swollen brow
+  under ice, which carries the same round without the injury cue.
 
-> Статичный средний план на уровне канатов, угол ринга между раундами. Ночной боксёрский зал, единственный свет — лампа над рингом. Боксёр (лет двадцать пять, рассечённая бровь, капа во рту) сидит на табурете, тяжело дышит, смотрит в пол. Тренер (за шестьдесят, полотенце на плече, седая щетина) стоит над ним, прижимает к брови холодный металлический утюжок и, не повышая голоса, говорит. Тренер: «Ещё один раунд. Потом хоть плачь.» Боксёр поднимает глаза, кивает один раз; тренер вынимает капу, проверяет и вставляет обратно. Гонг. Боксёр встаёт и выходит из кадра, а камера остаётся на пустом табурете с полотенцем. Звук: тяжёлое дыхание, шум зала за кадром, звон гонга в конце; во время реплики остальные звуки тише. Без музыки, без субтитров.
+> Статичный средний план на уровне канатов, угол ринга между раундами. Ночной боксёрский зал, единственный свет — лампа над рингом. Боксёр (лет двадцать пять, опухшая бровь, капа во рту) сидит на табурете, тяжело дышит, смотрит в пол. Тренер (за шестьдесят, полотенце на плече, седая щетина) стоит над ним, прижимает к брови лёд, завёрнутый в полотенце, и, не повышая голоса, говорит. Тренер: «Ещё один раунд. Потом хоть плачь.» Боксёр поднимает глаза и кивает один раз. Гонг. Он встаёт и выходит из кадра, а камера остаётся на пустом табурете с брошенным полотенцем. Звук: тяжёлое дыхание, шум зала за кадром, звон гонга в конце; во время реплики остальные звуки тише. Без музыки, без субтитров.
 
-Review: the line is Russian and audible with the enswell on the brow; one
-nod, the mouthguard checked and replaced, the gong, he leaves the frame; the
-clip ends on the empty stool; no music, no subtitles.
+Review: the line is Russian and audible with the ice on the brow; one nod, the
+gong, he leaves the frame; the clip ends on the empty stool with the towel; no
+music, no subtitles.
+
+## What the first two drafts taught
+
+The record is kept because the front page claims honesty about its own takes.
+
+- **Draft one (2026-09-26, morning).** Seven quiet observation pieces. Not
+  rendered; withdrawn as too tame for a page whose job is to stop a thumb.
+- **Draft two (2026-09-26, midday).** Seven dramatic scenes. Three were
+  submitted on the 即梦 surface. Clip 01 (a kitchen knife, a teenage boy with
+  a split lip, a 2 a.m. door) and clip 03 (a divorce agreement in a law office,
+  a child's surname) were refused before rendering. Clip 02 (the last train)
+  rendered as take 1: the sprint and the door entry held; the doors were
+  pushed apart with both hands rather than one forearm, and the accidental
+  ending, a coat tail caught in the doors, was staged by the model as the
+  character deliberately stuffing her jacket into the closing door. That take
+  is the origin of two rules now in the skill: never write an involuntary
+  outcome as an endpoint, and run the moderation pre-screen before delivery.
+  The whole draft was replaced by the set above.
 
 ## Optional: one true before-and-after
 
 If credits allow one more generation, render clip 01's typical brief exactly as
-printed (*scary moment, woman hears someone breaking in at night, thriller,
-cinematic, suspense music, 4k*) with the same settings. Shown side by side with the directed take, it
+printed (*scary parking garage scene, someone following a woman, horror,
+cinematic, jump scare, 4k*) with the same settings. Shown side by side with the directed take, it
 is the clearest single image of what the skill changes. It is optional; the
 text contrast on each card already carries the point.
 
