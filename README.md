@@ -18,58 +18,67 @@ Five-minute quickstarts: [English](docs/QUICKSTART.md) · [中文](docs/QUICKSTA
 
 ## Seen, not told
 
-Seven clips, seven prompts, five languages. Each clip is generated on Seedance 2.0 from the
-exact prompt beneath it: text to video, no reference assets, one take, no post work. Above each
-prompt sits the kind of brief people usually type, so the difference is visible before it is
-explained. Every prompt went through the [moderation
-pre-screen](references/moderation-prescreen.md) before publication, because a classifier refuses
-words, not intent. Where a clip has not been rendered yet, its slate stands in its place.
+Seven scenes, seven prompts, five languages. Each is a complete fifteen-second story: the
+situation legible by shot two, a reversal, and a hold on whoever lost, cut like short drama in
+four or five shots. Each clip is generated on Seedance 2.0 from the exact prompt beneath it:
+text to video, no reference assets, one take, no post work. Above each prompt sits the kind of
+brief people usually type, so the difference is visible before it is explained. Every prompt
+went through the [moderation pre-screen](references/moderation-prescreen.md) before publication,
+because a classifier refuses words, not intent. Where a clip has not been rendered yet, its
+slate stands in its place.
 
 <table>
 <tr>
-<td width="50%" valign="top"><a href="#clip-01-footsteps"><img src="assets/clips/clip-01-footsteps.svg" alt="Slate for clip 01, English: A second set of footsteps, a beat late. Her car door is already open." width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-02-hold-the-line"><img src="assets/clips/clip-02-hold-the-line.svg" alt="Slate for clip 02, English: A wave over the pier. Two hands on one rope. When the water drains, he is still standing." width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-01-by-appointment-only"><img src="assets/clips/clip-01-by-appointment-only.svg" alt="Slate for clip 01, English: Paint-stained overalls in a luxury boutique. “The new owner is standing in the shop now.”" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-02-hold-the-line"><img src="assets/clips/clip-02-hold-the-line.svg" alt="Slate for clip 02, English: “Let it go, Tom! It's only a boat!” “It's my father's!” The wave breaks." width="100%"></a></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><a href="#clip-03-这杯茶"><img src="assets/clips/clip-03-this-cup-of-tea.svg" alt="Slate for clip 03, 中文: 满座敬茶，她把茶倒在桌布上。 “这杯茶，我妈等了二十年。”" width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-04-竹海"><img src="assets/clips/clip-04-bamboo-sea.svg" alt="Slate for clip 04, 中文: 红衣掠过竹海，一竿弯到地面。 伞开，竿起，人已不见。" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-03-这杯茶"><img src="assets/clips/clip-03-this-cup-of-tea.svg" alt="Slate for clip 03, 中文: 寿宴上，没人请她来。 “这杯茶，我妈等了二十年。”" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-04-超时二十分钟"><img src="assets/clips/clip-04-twenty-minutes-late.svg" alt="Slate for clip 04, 中文: “超时二十分钟，我要给差评。” 头盔摘下来，是一头花白的短发。" width="100%"></a></td>
 </tr>
 <tr>
 <td width="50%" valign="top"><a href="#clip-05-사직서"><img src="assets/clips/clip-05-resignation.svg" alt="Slate for clip 05, 한국어: 사직서를 그의 서류 위에 올려놓는다. “제 보고서, 이름만 바꾸셨더군요.”" width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-06-拍手"><img src="assets/clips/clip-06-the-clap.svg" alt="Slate for clip 06, 日本語: 雨の石段、墨の獣、巫女の拍手。 打った瞬間だけ白黒反転。" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-06-最後の一球"><img src="assets/clips/clip-06-last-pitch.svg" alt="Slate for clip 06, 日本語: 夏の決勝、九回裏、雨。 最後の一球はミットに収まる。" width="100%"></a></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><a href="#clip-07-ещё-один-раунд"><img src="assets/clips/clip-07-one-more-round.svg" alt="Slate for clip 07, Русский: Угол ринга между раундами. «Ещё один раунд. Потом хоть плачь.»" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-07-ещё-один-раунд"><img src="assets/clips/clip-07-one-more-round.svg" alt="Slate for clip 07, Русский: «Хочешь бросить — бросай. Только мать смотрит.»" width="100%"></a></td>
 <td width="50%" valign="top"></td>
 </tr>
 </table>
 
-#### Clip 01: Footsteps
+#### Clip 01: By appointment only
 
-<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 0.5, S = 4.3</sub>
+<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch: 4 beats, load 3, S = 2.1</sub>
 
-**What people usually type:** *scary parking garage scene, someone following a woman, horror, cinematic, jump scare, 4k*
+**What people usually type:** *rich woman disguised as poor gets humiliated at luxury store, plot twist, satisfying, cinematic, 4k*
+
+**What you know by shot two:** By the end of shot one the audience knows she is being refused because of how she is dressed; shot three tells them she owns the place.
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> Shot 1. Tracking shot from behind a woman in a long coat walking fast through a near-empty
-> underground car park at night, her heels echoing off the concrete, one fluorescent tube ahead of
-> her flickering. A second set of footsteps echoes under hers, slightly out of step. Shot 2. Cut
-> to a close shot of her face as she stops dead and listens: the second set of footsteps stops one
-> beat after hers. She turns her head to look back down the aisle. Nothing there, only the tube
-> flickering over rows of empty bays. Shot 3. Cut to her point of view as she turns back toward
-> her car: the driver's door is already open and the interior light is on. She does not move. Cold
-> green fluorescent light, pools of dark between the tubes. Sound: her heels, the second set of
-> footsteps a beat behind, the tube's electrical buzz, then only the buzz. No music, no subtitles.
+> Shot 1. Wide shot inside a hushed luxury boutique on a rainy afternoon: cream carpet, glass
+> shelves of shoes, two assistants in black. A woman in paint-stained overalls and work boots
+> pushes the door open, dripping, and the manager steps into her path before she has taken three
+> steps, hands folded, a thin smile: "We're by appointment only, ma'am." Shot 2. Cut to a medium
+> shot of her: she does not answer; she sits down on the white display chaise, crosses her muddy
+> boots, and looks around the room like someone measuring it. Shot 3. Cut to a close shot of the
+> manager as his phone buzzes; he answers, listens, and the smile goes: "Yes, sir. The new owner
+> is... standing in the shop now." His eyes lift to her. Shot 4. Cut to a two-shot from behind
+> her: she points at one pair of shoes on the wall without a word, and the manager hurries to
+> fetch them. Hold on the wet bootprints across the cream carpet. Soft grey window light, warm
+> spots on the shelves. Sound: rain on the glass door, her boots on the carpet, the phone's buzz,
+> his voice dropping; no music, no subtitles.
 
 </details>
 
 #### Clip 02: Hold the line
 
-<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 1, S = 3.75</sub>
+<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch: 4 beats, load 3, S = 2.1</sub>
 
 **What people usually type:** *epic storm at sea, fisherman fights giant wave, slow motion, dramatic music, 8k*
+
+**What you know by shot two:** Shot two tells the audience what the rope is worth: an off-screen voice says it is only a boat, and his answer says whose boat.
 
 <details>
 <summary>The prompt the skill wrote</summary>
@@ -78,84 +87,103 @@ words, not intent. Where a clip has not been rendered yet, its slate stands in i
 > single mooring rope, its bow lifting and slamming with each swell, rain driven sideways through
 > one sodium lamp, and behind the boat a wave building higher than the mast. Shot 2. Cut to a
 > medium shot at deck height: a man in a soaked oilskin has both hands on the rope, boots braced
-> against a cleat, the rope creaking as the boat pulls; water sheets across the planks around his
-> feet. Shot 3. Cut to a low angle: the wave breaks over the end of the pier and buries him in
-> white water; when it drains away he is still standing, bent double, the rope still taut in his
-> hands, the boat still there. Hold on the taut rope as the next swell lifts the bow. Orange
-> sodium light and black water, nothing else. Sound: wind, the rope creaking, the wave's impact,
-> water draining through the planks. No music, no subtitles.
+> against a cleat, the rope creaking as the boat pulls. From the dark behind the camera a voice
+> shouts over the wind: "Let it go, Tom! It's only a boat!" Shot 3. Cut to a close shot of his
+> face, rain running off his brow, eyes on the rope, and he shouts back without turning: "It's my
+> father's!" Shot 4. Cut to a low angle: the wave breaks over the end of the pier and buries him
+> in white water; when it drains away he is still standing, bent double, the rope still taut in
+> his hands, the boat still there. Hold on the taut rope as the next swell lifts the bow. Orange
+> sodium light and black water, nothing else. Sound: wind, the rope creaking, the two shouts, the
+> wave's impact, water draining through the planks. No music, no subtitles.
 
 </details>
 
 #### Clip 03: 这杯茶
 
-<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 2 beats, load 3, S = 3.0</sub>
+<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch: 4 beats, load 3, S = 2.1</sub>
 
-**What people usually type:** *豪门家宴反转名场面，女主打脸全场，短剧爆点，电影感，高级感*
+**What people usually type:** *豪门寿宴反转名场面，女主打脸全场，短剧爆点，电影感，高级感*
+
+**What you know by shot two:** Shot one is a birthday banquet and a door opening on a woman nobody invited; shot two is the old man putting his cup down and turning away. The line in shot four says whose daughter she is.
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 镜头1：固定中景，老宅厅堂里的家宴，一张大圆桌坐满了人，主位的老爷子举起茶杯准备说话。桌角，一位三十多岁的女人（黑色旗袍，头发盘起）先一步站起来，端起自己的茶杯，把满杯的茶慢慢倒在白色桌布上，茶水漫开、冒着热气，一直倒到杯子空了，再把空杯倒扣在湿掉的桌布上。镜头2：镜头切至全桌的广角，所有人都僵住，只有她站着。她看着主位，平静地说：“这杯茶，我妈等了二十年。”说完不坐下，画面停在满桌不动的人和那只倒扣的杯子上。灯光只有头顶一盏老式吊灯，暖黄，桌布最亮。声音：茶水落在桌布上的声音，杯底扣在桌上的一声轻响，说话时全场无声；无配乐。保持无字幕。时长：15秒。
+> 镜头1：固定全景，老宅厅堂里的寿宴，红色横幅下一张大圆桌坐满了人，主位的老爷子举起茶杯，全桌跟着举杯。厅堂的门被推开，一个穿旧呢子大衣、头发淋湿的女人站在门口，全桌的人回头看她。镜头2：镜头切至老爷子的近景，他举着的杯子停在半空，然后重重放下，把脸转开；他身边的中年男人半站起来，伸手要拦。镜头3：镜头切至女人的中景，她从最近的座位上端起一只满杯的茶，一步一步走到主位前，桌边的人纷纷把椅子往后挪；她把整杯茶慢慢倒在老爷子面前的白桌布上，茶水漫开、冒着热气，一直倒到杯子空了，再把空杯倒扣在湿桌布上。镜头4：镜头切至两人的中景，她看着他，平静地说：“这杯茶，我妈等了二十年。”说完转身走向门口，镜头不跟，留在老爷子那只放下了、再也没有端起来的杯子上。灯光只有头顶一盏暖黄的老式吊灯。声音：全桌举杯的碰响，门推开的一声，杯子重重放下的声音，椅子挪动，茶水落在布上，说话时全场无声；无配乐。保持无字幕。时长：15秒。
 
 </details>
 
-#### Clip 04: 竹海
+#### Clip 04: 超时二十分钟
 
-<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 1, S = 3.75</sub>
+<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch at the boundary: 4 beats, load 4, S = 1.9</sub>
 
-**What people usually type:** *红衣女侠竹林轻功，唯美国风，仙气飘飘，运镜炸裂，8K*
+**What people usually type:** *外卖员被差评感人反转，正能量短剧，泪目，电影感*
+
+**What you know by shot two:** Shot one is a soaked delivery rider at a door and a man with his phone out; shot two is the threat of a bad review. Shot three shows who is under the helmet.
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 镜头1：固定全景，雨中的竹海，风把整片竹梢压向一边，一个红衣女子从竹梢上掠过，每一步落下，那一竿竹子便弯一下又弹起，雨水从竹叶上被震落。镜头2：镜头切至中景，她落在离镜头最近的一竿竹子上，竹竿在她的重量下慢慢弯下来，越弯越低，把她一直送到镜头前，衣袖和发带被风拉直。镜头3：镜头切至低角度，竹竿弯到最低点的一瞬，她撑开一把油纸伞，伞面被雨打得发亮；竹竿弹回天空时她随竿而起，冲出画面上方，镜头停在空了的、还在摇晃的竹竿和雨帘上。全片青绿色的竹林和一点红衣，雨天的灰白天光。声音：风穿过竹林的声音，竹竿弯曲的吱呀声，伞面撑开时的一声脆响，雨声；无配乐，保持无字幕。时长：15秒。
+> 镜头1：固定中景，深夜住宅楼的走廊，雨声很大。一个穿黄色雨衣、戴着头盔的外卖员浑身滴水地站在门口，双手捧着一袋外卖。门开了，一个穿睡衣、握着手机的中年男人堵在门里，脸色难看。镜头2：镜头切至男人的近景，他把手机屏幕转向对方，说：“超时二十分钟，我要给差评。”镜头3：镜头切至外卖员的近景，她摘下头盔：花白的短发，六十岁上下，雨水顺着脸往下流。她把外卖递过去，低声说：“对不起，钱我退给您。”镜头4：镜头切至男人的近景，他按向屏幕的手指停住了，目光落到她湿透的鞋上；他没有接外卖，而是侧身让开门口，把门拉得更开。画面停在敞开的门和门口那一小滩雨水上。灯光只有走廊的白炽灯和门里透出的暖光。声音：雨声，头盔卡扣打开的声音，塑料袋的窸窣声，说话时其他声音压低；无配乐，保持无字幕。时长：15秒。
 
 </details>
 
 #### Clip 05: 사직서
 
-<sub>한국어 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 2 beats, load 3, S = 3.0</sub>
+<sub>한국어 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch: 3.5 beats (two inserts at half), load 4, S = 2.0</sub>
 
 **What people usually type:** *사이다 사직서 장면, 직장인 드라마, 시네마틱, 4K, 감동*
 
+**What you know by shot two:** Shot one is a CEO signing at night and an employee walking in; shot two is her envelope landing on the page he is signing. Her line says he stole her report and was promoted for it.
+
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 샷 1: 밤의 유리벽 임원실, 책상 높이에 고정된 미디엄 숏. 넓은 책상 뒤에서 대표(오십 대 남성, 셔츠 소매를 걷음)가 서류에 서명하고 있고, 고개를 들지 않는다. 젊은 직원(이십 대 후반 여성, 회색 정장, 사원증을 목에 걸음)이 걸어 들어와 봉투 하나를 그가 서명하던 서류 바로 위에 올려놓는다. 봉투에는 ‘사직서’라고 적혀 있다. 그녀는 물러서지 않고 말한다. 직원: “제 보고서, 이름만 바꾸셨더군요.” 샷 2: 컷, 그녀가 돌아서서 문으로 걸어 나가는 뒷모습 너머로 대표가 그제야 고개를 든다. 문이 닫히고, 카메라는 유리에 비친 그의 얼굴에서 멈춘다. 조명은 책상 스탠드 하나와 창밖 도시의 불빛뿐. 소리: 펜 소리가 멈추는 순간, 봉투가 종이 위에 놓이는 소리, 구두 소리, 문이 닫히는 소리. 대사 중에는 다른 소리를 낮춘다. 음악 없음, 자막 없음.
+> 샷 1: 밤의 유리벽 임원실, 넓은 책상 뒤에서 대표(오십 대 남성, 셔츠 소매를 걷음)가 서류에 서명하고 있고, 고개를 들지 않는다. 젊은 직원(이십 대 후반 여성, 회색 정장, 사원증을 목에 걸음)이 문을 열고 들어와 책상 앞까지 걸어온다. 샷 2: 책상 위 클로즈업, 그녀의 손이 흰 봉투 하나를 그가 서명하던 서류 바로 위에 올려놓는다. 펜이 멈춘다. 샷 3: 그녀의 미디엄 숏, 물러서지 않고 그를 내려다보며 말한다. 직원: “제 보고서, 이름만 바꾸셨더군요. 승진 축하드려요.” 샷 4: 대표의 클로즈업, 펜을 쥔 손이 굳고, 그제야 천천히 고개를 든다. 이미 그녀는 등을 돌려 문으로 걸어가고 있다. 샷 5: 유리문이 닫히고, 카메라는 유리에 비친 그의 얼굴에서 멈춘다. 조명은 책상 스탠드 하나와 창밖 도시의 불빛뿐. 소리: 펜 소리가 멈추는 순간, 봉투가 종이 위에 놓이는 소리, 구두 소리, 문이 닫히는 소리. 대사 중에는 다른 소리를 낮춘다. 음악 없음, 자막 없음.
 
 </details>
 
-#### Clip 06: 拍手
+#### Clip 06: 最後の一球
 
-<sub>日本語 · 12 s · 16:9 · continuous · slate: not rendered yet</sub>
+<sub>日本語 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch: 4 beats (two at half), load 3, S = 2.1</sub>
 
-**What people usually type:** *神作画の巫女バトル、雨の神社、エモい、有名アニメスタジオ風、4K*
+**What people usually type:** *高校野球決勝ラストボール神作画、感動、エモい、有名アニメスタジオ風、4K*
+
+**What you know by shot two:** Shot one is a pitcher on the mound in the rain with the crowd behind him; the sign, the wind-up and the swing say final pitch without a caption.
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 手描きの2Dセルアニメーション。セル画のキャラクターを、雨に濡れた夜の神社の石段を描いた背景画の上に置く。作画の密度が高く、限られた色数、フィルムの粒子が乗った質感。石段の中ほどで、白衣に緋袴の巫女（黒髪を一つに束ね、袖が雨で重い）が、階段の上から墨のように流れ落ちてくる黒い獣と向かい合う。獣が飛びかかる瞬間、巫女は一歩踏み込み、胸の前で両手を打ち鳴らす。踏み込みから拍手までを一コマ打ちのフルアニメーションで描き、袖と髪が遅れて大きく振れ、打った瞬間だけ画面全体を白黒反転のインパクトフレームにする。獣は黒い墨の飛沫になって砕け、雨に混じって石段を流れ落ち、消える。巫女は両手を合わせた姿勢のまま止め絵になり、肩だけが息で上下し、袖の揺れが遅れて静止する。その前後は二コマ打ち。カメラは背景画に対して固定。光は石灯籠の橙色の明かりと、雨に反射する青。音：雨音、踏み込みの足音、乾いた拍手の一音、そのあとは雨音だけ。音楽なし、字幕なし。
+> 手描きの2Dセルアニメーション。セル画のキャラクターを、水彩で描かれた背景画の上に置く。作画の密度が高く、限られた色数、フィルムの粒子が乗った質感。夏の決勝戦の九回裏、雨が降り始めた球場。
+> ショット1：マウンドの投手（泥だらけのユニフォーム、帽子のつばから雨が落ちる）を正面から捉えたミディアムショット。肩で息をしている。背景の観客席は塗りの中でざわめきの色だけが動く。
+> ショット2：カットして捕手のミットのクローズアップ。指がサインを出し、ミットが低く構えられる。
+> ショット3：カットして投手のワインドアップ。振りかぶりからリリースまでを一コマ打ちのフルアニメーションで描き、腕の軌道は一枚のスミア、雨粒が腕の動きに引かれて流れる。
+> ショット4：カットして打者の空振り。バットが空を切った瞬間、ボールがミットに収まる音と同時に画面全体を白黒反転のインパクトフレームにする。
+> ショット5：カットして止め絵。投手がマウンドで膝をつき、帽子を取って空を見上げる。雨だけが動いている。その前後は二コマ打ち。カメラは背景画に対して固定。光は曇天の平坦な光と、濡れた土の反射。音：雨音、観客のざわめき、ミットの乾いた一音、そのあとは雨音と投手の息だけ。音楽なし、字幕なし。
 
 </details>
 
 #### Clip 07: Ещё один раунд
 
-<sub>Русский · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
+<sub>Русский · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Stretch at the boundary: 4 beats (two at half), load 4, S = 1.9</sub>
 
 **What people usually type:** *тренер и боксёр перед решающим раундом, драма, кинематографично, эпично, 4k*
+
+**What you know by shot two:** Shot one is a corner between rounds and a fighter who has stopped looking up; shot two is the trainer's line, and shot three shows who is watching from the stands.
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> Статичный средний план на уровне канатов, угол ринга между раундами. Ночной боксёрский зал,
-> единственный свет — лампа над рингом. Боксёр (лет двадцать пять, опухшая бровь, капа во рту)
-> сидит на табурете, тяжело дышит, смотрит в пол. Тренер (за шестьдесят, полотенце на плече, седая
-> щетина) стоит над ним, прижимает к брови лёд, завёрнутый в полотенце, и, не повышая голоса,
-> говорит. Тренер: «Ещё один раунд. Потом хоть плачь.» Боксёр поднимает глаза и кивает один раз.
-> Гонг. Он встаёт и выходит из кадра, а камера остаётся на пустом табурете с брошенным полотенцем.
-> Звук: тяжёлое дыхание, шум зала за кадром, звон гонга в конце; во время реплики остальные звуки
-> тише. Без музыки, без субтитров.
+> Кадр 1. Статичный средний план на уровне канатов: угол ринга между раундами, ночной боксёрский
+> зал, единственный свет — лампа над рингом. Боксёр (лет двадцать пять, опухшая бровь, капа во
+> рту) сидит на табурете, тяжело дышит и смотрит в пол. Тренер (за шестьдесят, полотенце на плече,
+> седая щетина) прижимает к его брови лёд, завёрнутый в полотенце. Кадр 2. Крупный план тренера,
+> он говорит ровно, не повышая голоса: «Хочешь бросить — бросай. Только мать смотрит.» Кадр 3.
+> Кадр с трибун: среди сидящих зрителей стоит одна маленькая пожилая женщина в пальто, накинутом
+> на плечи, руки сцеплены у груди. Кадр 4. Крупный план боксёра: он поднимает глаза в сторону
+> трибун и один раз кивает. Кадр 5. Гонг. Он встаёт и выходит из кадра, а камера остаётся на
+> пустом табурете с брошенным полотенцем. Звук: тяжёлое дыхание, шум зала за кадром, звон гонга в
+> конце; во время реплики остальные звуки тише. Без музыки, без субтитров.
 
 </details>
 

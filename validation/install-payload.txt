@@ -9,12 +9,12 @@ SECURITY.md
 SKILL.md
 V6_SEQUENCE_PROMPT_COMPILER_MANIFEST.md
 agents/openai.yaml
-assets/clips/clip-01-footsteps.svg
+assets/clips/clip-01-by-appointment-only.svg
 assets/clips/clip-02-hold-the-line.svg
 assets/clips/clip-03-this-cup-of-tea.svg
-assets/clips/clip-04-bamboo-sea.svg
+assets/clips/clip-04-twenty-minutes-late.svg
 assets/clips/clip-05-resignation.svg
-assets/clips/clip-06-the-clap.svg
+assets/clips/clip-06-last-pitch.svg
 assets/clips/clip-07-one-more-round.svg
 assets/fonts/OFL.txt
 assets/hero-dark.svg

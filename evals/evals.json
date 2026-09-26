@@ -3105,6 +3105,21 @@
       "skills_expected_to_activate": [
         "seedance-prompt"
       ]
+    },
+    {
+      "id": "short_drama_hook_states_premise_by_shot_two",
+      "prompt": "Write a 15-second short-drama hook for Seedance 2.0: a woman in paint-stained overalls is refused service at a luxury boutique, and it turns out she owns the building. Make people understand it instantly.",
+      "expected_output": "Four or five numbered shots cut like coverage, with the refusal spoken by shot two so the premise is legible, a reversal carried by a visible or audible cause (the manager's phone call), at least one reaction shot, and a final hold on the person who lost; two speakers only when each speaks alone in their own shot; the ladder rung stated honestly (Stretch for coverage) and the moderation pre-screen run before delivery.",
+      "assertions": [
+        "states the premise by shot two through a spoken line or an unmistakable situation, not by implication",
+        "uses four or five shots in event order including a reaction shot, with the cuts written in words and no absolute seconds",
+        "carries the reversal by a physical or audible cause and ends on the person who lost",
+        "keeps each speaker alone in frame when speaking and runs the pre-screen before delivery"
+      ],
+      "failure_mode": "a single master shot of a subject doing a thing, with the meaning left in the internal read",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ]
     }
   ]
 }

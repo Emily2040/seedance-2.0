@@ -49,7 +49,9 @@ For a storyboard clip, list the beats the user wants (each beat is one shot), th
 | A location or setting change | 2 | A new space is a new composition and light |
 | A sound cue that must land on an action | 0.5 | Sync is probabilistic |
 
-Total load L. Available seconds D come from the surface parameter (4–15 on 2.0). Seconds per load point S = D ÷ (beats + L).
+A reaction shot or an insert, meaning a shot with no new action, no spoken line and no camera move (a face taking in what just happened, a hand on a cup, a door closing), counts half a beat, because it needs one to two seconds and the model holds it easily. This is what lets a fifteen-second scene be cut like coverage, wide, face, insert, reaction, face, without the count reading as reckless.
+
+Total load L. Available seconds D come from the surface parameter (4–15 on 2.0). Seconds per load point S = D ÷ (beats + L), with reactions and inserts at 0.5 each.
 
 | S | Reading | Ladder position |
 |---|---|---|
@@ -57,7 +59,7 @@ Total load L. Available seconds D come from the surface parameter (4–15 on 2.0
 | 2.0 to 3.0 | Tight; dialogue and contact at risk | **Stretch** |
 | Under 2.0 | The official density warning's territory | **Ambitious**: propose two generations instead |
 
-The constants are consistent with the official three-shots-per-15-seconds examples (one move each: S = 3.3, Safe) and with the field-reported 2–4 sub-shots per 8–15 seconds. They are the first thing a rendered calibration pilot should measure; until then, say so when you use them.
+The constants are consistent with the official three-shots-per-15-seconds examples (one move each: S = 3.3, Safe) and with the field-reported 2–4 sub-shots per 8–15 seconds. They are the first thing a rendered calibration pilot should measure; until then, say so when you use them. Short-drama coverage, four or five shots with a reaction and a line or two in fifteen seconds, lands on Stretch by this arithmetic, and that is the honest label: it is the register the genre is cut in, and the front-page gallery runs it on purpose as the calibration the thresholds are waiting for.
 
 Building the ladder from the user's beat list:
 
@@ -76,7 +78,7 @@ Wording the agent uses when the shot count is open:
 Rules:
 
 - The ladder is a menu, and menus stay optional. When the user has fixed the shot count, write that count, state its rung in one line, and offer a neighbour only when the count is Ambitious. When the count is open, present the rungs and a recommendation, then write **one finished prompt** at the recommended or chosen rung; other rungs are written on request. “Choose for me” means draft the recommended rung.
-- Recommend Safe on a first attempt or when one attempt remains; recommend Stretch when the user says they have room to iterate.
+- Recommend Safe on a first attempt or when one attempt remains; recommend Stretch when the user says they have room to iterate, and for short-drama coverage, where a reaction shot is part of the grammar rather than an extra.
 - Never present Ambitious as broken; present the split as the better spend.
 - State the evidence tier once: no official shot ceiling exists, the official examples use three, and the thresholds are this skill's heuristics.
 - After a take review, move the user's rung, not the constants: see [retake-protocol](retake-protocol.md).
