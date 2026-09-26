@@ -25,4 +25,6 @@ Use this reference when sequence or continuation output fails.
 | A sulk or grimace where the scene needed shock, shame or fear | The reaction was a bare list of muscles with no feeling named. | Name the feeling in a plain word, then one physical anchor. |
 | A character is back where an earlier shot left them | The lock line repeated identity but not position. | Restate where each principal stands, relative to a landmark, in every lock line. |
 | A line delivered by a dead face | The only delivery direction was "flat" or 平静地. | Direct the voice and the eyes, and say what the face does after the last word. |
+| A character reacts toward the camera while the thing reacted to is behind them | The master placed the landmark behind the character and the reaction shot named no camera side. | Frame the master over the character's shoulder toward the landmark; write the reaction as a reverse from the landmark's side. |
+| A character teleports across the room between cuts | The walk was elided between the door and the table. | Give the crossing its own shot with the camera placed so the character moves toward or past it. |
 | Prompt refused before rendering | Cue words stacked: a weapon, an injury, a crime, a minor in peril, a named institution. | Run the moderation pre-screen; remove, move off frame, or replace with the consequence. |

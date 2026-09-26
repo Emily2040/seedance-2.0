@@ -4,7 +4,7 @@ A video model is a crew that has never met you, cannot ask a question, and
 takes every word at face value. It renders idioms as pictures, does the first
 action it understands and drops the rest, forgets the light and the blocking
 between cuts, and cannot move the camera unless told to. The rules below were
-recorded from two rendered takes of the same banquet scene on 2026-09-26 and
+recorded from three rendered takes of the same banquet scene on 2026-09-26 and
 2026-09-27. In the first, "his face fell" (脸沉下来) became a face turning
 grey, four actions in one shot became one, a teacup was emptied like a bottle,
 warm lamplight became blue two cuts later, and an ending written for a frame
@@ -12,8 +12,12 @@ the shot did not contain never arrived. The second take, written to the first
 form of these rules, fixed all five and produced three new faults: a room told
 to hold froze mid-toast like mannequins, a reaction written as a list of
 muscles read as a sulk, and the woman delivered her line from the doorway she
-had already left, because her position was never restated. Every rule below
-is a repair for one of those eight. Load it with
+had already left, because her position was never restated. The third take,
+with feeling, idle business and positions written in, acted well and broke the
+geography: the master put the door behind the old man, his reaction looked
+toward the camera as if she stood in front of him, and the next cut was her
+hand at his cup with no walk between, so she appeared to teleport. Every rule
+below is a repair for one of those ten. Load it with
 [multishot-grammar](multishot-grammar.md) whenever a prompt has more than one
 shot or more than one person.
 
@@ -52,7 +56,7 @@ puts the cup down, turns away, and the man beside him half rises" gets one of
 the three. If the scene needs all three, they are three shots or two of them
 are cut.
 
-## 3. The lock line, in every shot: light, identity, position
+## 3. The lock line, in every shot: light, identity, position, and the camera's side
 
 Every shot block ends with a lock line that restates, in the same words as the
 first shot: the light source and its colour; for each principal on screen
@@ -65,10 +69,21 @@ her, two shots after her hand had poured the tea at the table. The lock line
 is the price of a cut; write it even when it feels redundant, because
 redundancy is how continuity is bought.
 
-> 灯光不变：头顶一盏暖黄吊灯，脸在暖黄光里。老爷子：七十多岁，白发向后梳，深棕色缎面唐装，坐在主位。女人：三十多岁，黑色长发淋湿贴在脸侧，旧的深灰色呢子大衣，站在主位旁边。
+Position alone is not geography. Say which way each principal faces relative
+to the landmark, and for every cut say which side of the room the camera is
+on. A reaction is a reverse angle: the camera stands where the thing the
+character reacts to is, so his eyes go past the lens toward it. In the third
+banquet take the master framed the head of the table facing the camera with
+the door behind him, and the model, told he looked at her, had him look
+forward; the fix is a master over his shoulder toward the door, then a reverse
+from the door for his face. The eye-line has to be written; the model does
+not infer it from the room.
+
+> 灯光不变：头顶一盏暖黄吊灯，脸在暖黄光里。老爷子：七十多岁，白发向后梳，深棕色缎面唐装，坐在主位，面对大门。女人：三十多岁，黑色长发淋湿贴在脸侧，旧的深灰色呢子大衣，站在主位旁边。机位在大门方向。
 
 > Same light: one warm tungsten lamp overhead. The manager: fifties, grey suit,
-> steel-rimmed glasses, standing by the counter.
+> steel-rimmed glasses, standing by the counter, facing the chaise. Camera on
+> the chaise side.
 
 ## 4. Prop mechanics, not verbs
 
@@ -89,9 +104,11 @@ cup, and a close-up of a face cannot end on a puddle by the door. Either write
 the camera move that gets there ("the camera tilts down to the wet
 bootprints") or write the next shot. "The camera does not follow" is not an
 ending; the frame it stays on has to be named. The same applies to people
-crossing space: a cut may skip the walk from the door to the table, but the
-next shot of that person must say where she now stands, or the model puts her
-back where it last saw her.
+crossing space, and more strictly: a principal who crosses the room gets the
+walk on screen, as its own shot or as the action of a shot, with the camera
+placed so she moves toward or past it. Cutting from the door straight to her
+hand at the table reads as teleportation, and the walk is usually the most
+charged shot in the scene. The lock line after the walk states the new place.
 
 ## 6. Secondary people are alive, and furniture until directed
 
@@ -116,7 +133,9 @@ a mannequin until the cut.
 Read the draft and answer, per shot: what is the one action; who else is in
 the frame and what idle business keeps them alive; is every reaction a plain
 feeling plus one anchor, never an idiom and never a bare muscle list; does the
-lock line repeat the light, each principal and where they stand; does the
+lock line repeat the light, each principal, where they stand, which way they
+face and which side the camera is on; is every reaction a reverse from the
+side of what is reacted to; is every crossing of the room on screen; does the
 ending sit inside the frame or get a move or a cut; is every prop action
 written as a hand; is every line given a voice and eyes rather than "flat".
 Then run the [moderation pre-screen](moderation-prescreen.md). A prompt that

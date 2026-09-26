@@ -4,7 +4,7 @@
     {
       "path": "SKILL.md",
       "role": "root",
-      "sha256": "1c9eff98aa2da563c8cb680a778fd5b3f384614a5005e50ab5eba508fdc85ab9"
+      "sha256": "e17ca03ca02ac8c3f64faa693fca2f60a20791f731213ef1deb04e8fdcca12b0"
     },
     {
       "path": "evals/evals.json",
@@ -109,7 +109,7 @@
     {
       "path": "references/direct-for-the-model.md",
       "role": "responder",
-      "sha256": "994005cbde24404bbe566049ba3bbd442b8f0aa5a4ffd2692ce6f0aaaab222df"
+      "sha256": "0c845fe9b7fc9b5ec2766ffc48d797630a40ffc738a6edb58518d956d28e70c7"
     },
     {
       "path": "references/directing-engine-genre-library.md",
@@ -119,7 +119,7 @@
     {
       "path": "references/directing-engine.md",
       "role": "responder",
-      "sha256": "1d200d089967fc1ca09f48c935937a277a410750ebf01f1b39bff9515bfbf68e"
+      "sha256": "dcbe307516ab76601abaa1ed5ef6558ac42fedec506e769f73094364c77c6999"
     },
     {
       "path": "references/directors-read.md",
@@ -149,7 +149,7 @@
     {
       "path": "references/failure-atlas.md",
       "role": "responder",
-      "sha256": "6f465613833f97520b843a24f3e5a124fbe46acee46024becd8926de11b703f0"
+      "sha256": "cb5f5185449ac9fe386e2398dda9b4be683029a7f830932122b06e022023c632"
     },
     {
       "path": "references/field-observed-tips.md",
@@ -339,7 +339,7 @@
     {
       "path": "references/multishot-grammar.md",
       "role": "responder",
-      "sha256": "9be4384d2598488b15f200242f1396d62b629717d7aa5019592d1b1f590f2c15"
+      "sha256": "f93f032c5717a3532ff932af1bbd4bfbb729deac67d7f3f04f2e3ae715812d48"
     },
     {
       "path": "references/outcome-comparison.md",
@@ -574,7 +574,7 @@
     {
       "path": "skills/seedance-prompt/SKILL.md",
       "role": "responder",
-      "sha256": "c76e54d5604f6c61e20dc2475efd8b8fa1313bed942b1edeb1236cb77d7de1e4"
+      "sha256": "dfa03edbc4bcc4c94d0e26c0d6bf17e47a4541c43f75aefa0bd311dc8d9c4a6e"
     },
     {
       "path": "skills/seedance-recipes/SKILL.md",
