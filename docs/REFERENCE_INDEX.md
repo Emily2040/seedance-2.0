@@ -102,7 +102,7 @@ The complete map of skills and references, moved here from the front page so the
 | [`sequence-worked-trace.md`](../references/sequence-worked-trace.md) | One project walked end to end: plan, deviation, reconciliation, chain cap, re-anchor, and session resume - the prose half of the machine fixtures. |
 | [`dense-storyboard-mode.md`](../references/dense-storyboard-mode.md) | Dense multishot, phased single-take, and 2D storyboard contracts. |
 | [`allocation-model.md`](../references/allocation-model.md) | Where one generation spends its fidelity budget: identity vs motion vs scene density. |
-| [`multishot-grammar.md`](../references/multishot-grammar.md) | Shot labels, the shots-times-seconds budget, and cut grammar inside one generation. |
+| [`multishot-grammar.md`](../references/multishot-grammar.md) | Shot order rather than timestamps on Seedance 2.0, the continuous-versus-storyboard shape rule, the load-per-beat ladder (Safe / Stretch / Ambitious), and cut grammar inside one generation. |
 | [`2d-anime-grammar.md`](../references/2d-anime-grammar.md) | Cel/anime medium grammar: layers, burst-vs-held motion, the no-lens rule. |
 | [`pro-filmmaking-standards.md`](../references/pro-filmmaking-standards.md) | Professional production spine and source boundaries for film, commercial, post, localization, and delivery work. |
 | [`cinematography-shot-language.md`](../references/cinematography-shot-language.md) | Shot contracts, shot size, lens feel, camera support, movement, blocking, and coverage language. |

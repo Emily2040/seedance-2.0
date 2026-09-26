@@ -137,6 +137,10 @@ REQUIRED_IDS = {
     "felt_intent_survives_compression",
     "observed_state_from_attached_frame",
     "capsule_compaction_long_project",
+    "continuous_shape_gets_one_paragraph",
+    "dialogue_storyboard_offers_ladder_with_split",
+    "zh_storyboard_uses_shot_order_not_second_ranges",
+    "newer_line_timestamp_request_stays_in_boundary",
 }
 
 

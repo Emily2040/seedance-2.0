@@ -20,10 +20,11 @@ The rows below are compressed for scanning, so a single `[official]` label sits 
 | Element | Layer | Actually established by |
 |---|---|---|
 | multi-shot in one call | model capability | provider docs |
-| `Shot 1:/2:/3:` labels | request syntax | optional teaching notation, not a universal parser or language requirement, see [multishot-grammar](multishot-grammar.md) |
+| `Shot 1:/2:/3:` labels | request syntax | the official shot-order device (镜头1/2/3 in the Volcengine guide; `Shot 1` is the English equivalent), organizing content in event order; no source proves a universal parser, and the cut still has to be written in words, see [multishot-grammar](multishot-grammar.md) |
+| timestamps inside the prompt | request syntax | official 2.0 guidance keys on shot order and calls precise ranges such as 0–3 s unstable; integer-second timestamps are documented for the newer model line only and do not transfer (recorded 2026-09-26 from mirrors, see [api-status](api-status.md)) |
 | Tier choice | surface access | check the active endpoint; do not infer a Standard requirement |
 | Duration and `auto` | surface access | only the active endpoint can establish supported values |
-| shots × seconds budget | heuristic | a planning default to test, not a documented limit |
+| load per beat and the Safe / Stretch / Ambitious ladder | heuristic | this repository's planning thresholds, to be calibrated by rendered takes; not a documented limit |
 
 One row, four layers, and two different evidence grades. The provenance label on a row is the strongest claim in it, never a guarantee about every element — which is why the tier claims below carry their own `[field]` marker.
 
@@ -31,7 +32,7 @@ One row, four layers, and two different evidence grades. The provenance label on
 
 | Capability | Extraction move |
 |---|---|
-| Multi-shot in one call [official] | explicit cuts or optional shot labels · one primary action per shot · duration and tier chosen for the active surface · pacing heuristic |
+| Multi-shot in one call [official] | numbered shots in event order with the cut written in words · one primary action and at most one camera move per shot · duration set as the surface parameter, never as seconds inside a block · shot count placed on the load-per-beat ladder [heuristic] |
 | Native synced audio [official] | name specific sounds; dialogue as a natural quoted line on-screen; short lines; clean front face ref; SFX>music>dialogue — test dialogue first |
 | Role-separated references [official] | per-asset role **+ exclusion** ("motion only, no appearance") |
 | Motion transfer via @Video [official/field] | donor clip for choreography/camera rhythm + identity @Image |

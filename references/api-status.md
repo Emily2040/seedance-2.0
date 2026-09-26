@@ -19,6 +19,13 @@ The only rule that matters here is a boundary, and it exists because a user can 
 
 If the user is working on 2.5, say plainly that this skill is built and verified for 2.0, keep the craft guidance, and withhold the platform numbers.
 
+## Time structure inside a prompt *(recorded 2026-09-26 from mirrors; recheck live)*
+
+- Volcengine's Seedance 2.0 prompt guide (document 82379/2222480) organizes multi-shot prompts by shot order, 镜头1 / 镜头2 / 镜头3 in event order, without a forced duration per shot, and says support for precise time ranges such as 0–3 秒 is unstable, with forced durations able to produce abnormal output. ByteDance's `agentkit-samples` troubleshooting file repeats the warning.
+- ByteDance's Seedance 2.5 prompt guide (document 82379/2607689, dated 2026-08-07) lists the version difference: Seedance 2.0 responds to shot numbers, not timestamps; the newer line responds to integer-second timestamps. That is a newer-line capability and does not transfer to 2.0.
+- The Ark create-task document (82379/1520757, mirror) gives `duration` as an integer in 4–15 or -1 for model-chosen length, default 5, and notes that `camera_fixed` is not supported on the 2.0 series. It recommends the prose echo 时长：X秒, written with the Chinese 秒 at the start or end of the prompt, as reinforcement rather than control.
+- These statements were read from hash-recorded mirrors of the official PDFs and from ByteDance's GitHub organisation because the first-party hosts were unreachable from the review environment. `docs/EVIDENCE_NOTES_2026-09-26.md` records the quotes and locators. Recheck the live pages before quoting them as current.
+
 ## Confirmed From Public Sources
 
 - ByteDance's official Seedance 2.0 page describes a unified multimodal audio-video architecture that supports text, image, audio, and video inputs.

@@ -67,6 +67,8 @@ Call `seedance-20` and describe what you already know. For a vague single clip, 
 
 If you want alternatives, ask for up to three directions with different staging, attention or performance, then choose one or say “choose for me.” A menu is optional. Keep the camera, sound, duration and rejected directions you have already decided.
 
+**Shots, not seconds.** For a clip with several shots, the skill numbers them in the order things happen and never writes time ranges such as 0–3 s inside the prompt: the official Seedance 2.0 guide says the model follows shot order and handles precise timing unreliably. When the shot count is open, you get a short ladder with the trade-off in one line each: Safe (every beat has room), Stretch (dialogue or contact may get squeezed), Ambitious (where official guidance says content and lines start to garble, so the skill usually proposes two shorter generations instead), plus one finished prompt at the recommended rung. Pick a rung or say “choose for me.” The thresholds are this skill’s heuristics, not measured limits.
+
 ## 3. Direct before you write — four questions
 
 1. **What is the scene doing?** A turn, a reveal, a feeling, a demonstration?

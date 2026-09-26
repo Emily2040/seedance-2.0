@@ -30,6 +30,10 @@ Before compilation, load the [Director's Read](directors-read.md). Clips classif
 9. Exclusions: completed beats and reserved future beats.
 10. Endpoint: the completed state this clip must reach.
 
+## Shot Blocks on Seedance 2.0
+
+When the current clip contract's shot structure is `dense_multishot`, compile numbered shot blocks in event order (镜头1 / Shot 1, then 镜头2 / Shot 2), each in the official block order: camera move or cut type, subject action and expression, position or space change, audio. Write the cut in words inside the block. Emit no absolute seconds inside a block: Seedance 2.0 keys on shot order and handles precise time ranges unreliably, so a felt length compiles as behaviour ("hold until the hand stops"), never as "0–3 s". Duration is the surface parameter first; a prose echo such as 时长：12秒 (Chinese 秒) is optional on Chinese-facing surfaces and never a substitute for the parameter. One camera move per block; a locked camera is prose. `phased_single_take` and `compact_single_take` compile as one paragraph with no shot labels. The rungs of the shot-count ladder are user-facing planning held in the clip contract; only the chosen rung compiles, and the ladder text never ships to Seedance. See [multishot-grammar](multishot-grammar.md).
+
 ## Source-Carries-State Rule
 
 When an accepted source is attached as a reference, the source carries the state and the text carries the delta. Do not re-describe in prose what the attached source already shows: prose restatement spends budget on information the model already has, and where the words disagree with the pixels, the prose becomes a drift instruction.

@@ -127,7 +127,7 @@ Sequence invariants:
 | Production prompt | [skills/seedance-prompt/SKILL.md](skills/seedance-prompt/SKILL.md), [references/quick-ref.md](references/quick-ref.md), [references/prompt-examples.md](references/prompt-examples.md) |
 | Planning any shot, mode, or budget | [references/capability-map.md](references/capability-map.md) |
 | Where the prompt spends fidelity: identity vs motion vs scene density | [references/allocation-model.md](references/allocation-model.md), [references/intent-vs-precision.md](references/intent-vs-precision.md) |
-| Multi-shot prompt, cuts inside one clip, or shots-per-duration budget | [references/multishot-grammar.md](references/multishot-grammar.md) |
+| Multi-shot prompt, cuts inside one clip, or how many shots fit a duration | [references/multishot-grammar.md](references/multishot-grammar.md) |
 | 2D, anime, or cel-style motion | [references/2d-anime-grammar.md](references/2d-anime-grammar.md), [skills/seedance-style/SKILL.md](skills/seedance-style/SKILL.md) |
 | Professional film, commercial, campaign, or delivery workflow | [references/pro-filmmaking-standards.md](references/pro-filmmaking-standards.md), [references/shot-list-continuity.md](references/shot-list-continuity.md), [references/delivery-qc.md](references/delivery-qc.md) |
 | Compact prompt or Chinese compression | [skills/seedance-prompt-short/SKILL.md](skills/seedance-prompt-short/SKILL.md), [references/vocab/zh.md](references/vocab/zh.md) |

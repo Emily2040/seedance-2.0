@@ -24,7 +24,7 @@ Before producing prompt text, a prompt-ready block, a rewrite, an example, or a 
 
 Build production-ready Seedance prompts from clear concepts or supplied reference assets. Treat the prompt as a short shooting brief: it must say what changes on screen, what the camera does, what the light and sound contribute, and what must stay stable. Keep final prompts under the platform prompt budget and remove filler before delivery.
 
-Load the [Director's Read](../../references/directors-read.md) before any drafting or compression, [quick-ref](../../references/quick-ref.md) for the checklist, [reference-workflow](../../references/reference-workflow.md) for multimodal references, [i2v-guide](../../references/i2v-guide.md) for image-to-video, [first-last-frame-guide](../../references/first-last-frame-guide.md) for first/last-frame work, [examples-by-mode](../../references/examples-by-mode.md) when examples are useful, [shot-list-continuity](../../references/shot-list-continuity.md) for multi-shot professional plans, [multishot-grammar](../../references/multishot-grammar.md) for shot-label grammar, the shots-times-seconds budget, and cut placement inside one generation, and [multilingual-community-examples](../../references/multilingual-community-examples.md) for Chinese/Russian/Japanese/Korean/Spanish or mixed-language prompts. When sequence state is present, load [prompt-compiler](../../references/prompt-compiler.md) and compile only the current clip contract.
+Load the [Director's Read](../../references/directors-read.md) before any drafting or compression, [quick-ref](../../references/quick-ref.md) for the checklist, [reference-workflow](../../references/reference-workflow.md) for multimodal references, [i2v-guide](../../references/i2v-guide.md) for image-to-video, [first-last-frame-guide](../../references/first-last-frame-guide.md) for first/last-frame work, [examples-by-mode](../../references/examples-by-mode.md) when examples are useful, [shot-list-continuity](../../references/shot-list-continuity.md) for multi-shot professional plans, [multishot-grammar](../../references/multishot-grammar.md) for shot order, the continuous-versus-storyboard shape rule, the load-per-beat ladder, and cut placement inside one generation, and [multilingual-community-examples](../../references/multilingual-community-examples.md) for Chinese/Russian/Japanese/Korean/Spanish or mixed-language prompts. When sequence state is present, load [prompt-compiler](../../references/prompt-compiler.md) and compile only the current clip contract.
 
 ## Intent
 
@@ -62,6 +62,12 @@ Choose the mode before drafting. **T2V** needs subject, action, scene, camera, l
 | Edit | Preserve the source clip while changing one layer. | Rewriting the whole scene and losing continuity. | Say `@Video1 is the source clip; change only...` |
 | Extend | Continue from accepted source footage only. | Starting from a planned ending or inventing the clip state. | Route to [seedance-continuation](../seedance-continuation/SKILL.md) and use the observed end state. |
 
+## Time Structure
+
+Seedance 2.0 keys on shot order, not seconds (official guidance recorded 2026-09-26; sources and the full rule in [multishot-grammar](../../references/multishot-grammar.md)). Classify the shape first. One scene with one continuous action or state change is **continuous** and compiles as one paragraph with no shot labels, whatever its duration. Several events, a location change, a reveal that needs a cut, or a comparison is a **storyboard** and compiles as numbered shots in event order, each block ordered camera move or cut, action and expression, space change, audio, with the cut written in words. Never write absolute seconds such as 0–3 s inside a shot block on 2.0; duration is the surface parameter, and a felt length is written as behaviour.
+
+For a storyboard clip, score the load (a camera move, each spoken line, extra people, contact that must land, a location change) and place the requested shot count on the ladder: **Safe**, **Stretch**, or **Ambitious**. When the shot count is open, present up to three rungs with the trade-off in one line each, recommend one (Safe on a first attempt or a last credit, Stretch when the user has room to iterate), say once that the thresholds are this skill's heuristics and that no official shot ceiling exists, and write one finished prompt at the recommended or chosen rung; other rungs are written on request, and "choose for me" means draft the recommendation. When the user has fixed the count, write it and state its rung in one line. Ambitious is never called broken; two shorter generations are offered as the better spend. A request for timestamps on the newer model line stays inside the boundary in [api-status](../../references/api-status.md): keep the craft, withhold the numbers.
+
 ## Sequence Boundary
 
 The generic prompt skill must not independently invent continuation state. If the user asks to continue, extend, make part two, or use a previous clip, route to [seedance-continuation](../seedance-continuation/SKILL.md) unless the accepted clip/final frame and observed end state are already present in the sequence state.
@@ -83,8 +89,9 @@ Return:
 1. Mode: T2V, I2V, V2V, R2V, FLF2V, edit, or extend.
 2. Reference role map, if any.
 3. Final prompt under the verified active-surface prompt budget.
-4. Optional Chinese compressed version when useful.
-5. Shot-list or delivery note when the prompt belongs to a professional sequence.
-6. Safety or copyright note when relevant.
+4. For a storyboard clip with an open shot count: the ladder (up to three rungs, one trade-off line each), the recommendation, and the evidence-tier sentence; the final prompt is the recommended or chosen rung.
+5. Optional Chinese compressed version when useful.
+6. Shot-list or delivery note when the prompt belongs to a professional sequence.
+7. Safety or copyright note when relevant.
 
 Before finalizing, run an anti-slop pass and remove vague quality boosters.
