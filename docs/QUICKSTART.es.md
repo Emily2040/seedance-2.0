@@ -1,6 +1,6 @@
 # Seedance 2.0 — Tu primer prompt, tus decisiones
 
-Versión del paquete: 6.7.0. Esta guía sirve para preparar prompts; no genera videos por sí sola.
+Versión del paquete: 6.8.0. Esta guía sirve para preparar prompts; no genera videos por sí sola.
 
 **Estado del texto:** borrador redactado con IA, pendiente de revisión independiente por especialistas en español y lenguaje audiovisual. Los ejemplos son propuestas sin renderizar; no demuestran calidad, ahorro de créditos ni sincronización de voz. La guía usa tuteo y no presenta ninguna variante regional como validada. [Cobertura y revisión](LANGUAGE_COVERAGE.md).
 

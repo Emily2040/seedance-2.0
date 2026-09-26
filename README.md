@@ -10,7 +10,7 @@ clip. Your video provider handles generation and its costs.
 
 [Watch the clips](#seen-not-told) · [Try a first prompt](#start-here) · [Install](#install) · [Choose a workflow](#choose-a-workflow) · [Evidence status](#evidence-status)
 
-`v6.7.0` · [MIT](LICENSE) · [Changelog](CHANGELOG.md) · [Emily / Iamemily2050](https://github.com/Emily2040)
+`v6.8.0` · [MIT](LICENSE) · [Changelog](CHANGELOG.md) · [Emily / Iamemily2050](https://github.com/Emily2040)
 
 **Languages:** English (this page) · [中文](docs/README.zh.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Русский](docs/README.ru.md)
 
@@ -442,7 +442,10 @@ it does not establish successful folding, motion or audio generation.
 
 For another treatment, choose calm observation, a playful gag or a step-by-step
 demonstration. Tell the agent which one you want to keep. A draft can be revised
-without submitting a paid generation request.
+without submitting a paid generation request. For anything with more than one
+shot or more than one person, the prompt arrives with the shot table it was
+rendered from, so the geography is checked on paper before a generation is paid
+for.
 
 <!-- teaching-image:placement -->
 <!-- installed-readme-gallery:start -->
@@ -617,6 +620,9 @@ Describe the situation; the root skill loads what that situation needs.
 | “I have image, video or audio references.” | [`reference-workflow`](references/reference-workflow.md) | A role map for every asset and what each must not transfer. |
 | “Use this as first frame and that as last.” | [`first-last-frame-guide`](references/first-last-frame-guide.md) | A continuous transition with endpoint locks. |
 | “Make it feel directed, not just cinematic.” | [`directing-engine`](references/directing-engine.md) | One intention per scene and a coherent camera, light, blocking, performance and sound setup. |
+| “How many shots fit in fifteen seconds?” | [`multishot-grammar`](references/multishot-grammar.md) | Shots in event order, never seconds, and the Safe / Stretch / Ambitious ladder with the trade-off stated. |
+| “Write it so the model cannot misread it.” | [`shot-table`](references/shot-table.md), [`direct-for-the-model`](references/direct-for-the-model.md) | A floor plan and one row per shot before any prose, then a prompt with a lock line on every cut; the table comes with the prompt. |
+| “Will this be refused before it renders?” | [`moderation-prescreen`](references/moderation-prescreen.md) | The cue words classifiers react to, removed or moved off frame with the drama intact; prohibited content refused, never reworded. |
 | “The take is 80% right.” | [`retake-protocol`](references/retake-protocol.md) | A triage verdict, a one-variable retake, and an attempt budget. |
 | “It failed or looks bad.” | [`seedance-troubleshoot`](skills/seedance-troubleshoot/SKILL.md) | A root-cause diagnosis and a repaired prompt. |
 | “This uses a character, brand or real person.” | [`seedance-copyright`](skills/seedance-copyright/SKILL.md) | A safer rewrite that keeps the creative function. |
