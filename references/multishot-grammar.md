@@ -84,6 +84,7 @@ Rules:
 - The ladder is a menu, and menus stay optional. When the user has fixed the shot count, write that count, state its rung in one line, and offer a neighbour only when the count is Ambitious. When the count is open, present the rungs and a recommendation, then write **one finished prompt** at the recommended or chosen rung; other rungs are written on request. “Choose for me” means draft the recommended rung.
 - Recommend Safe on a first attempt or when one attempt remains; recommend Stretch when the user says they have room to iterate, and for short-drama coverage, where a reaction shot is part of the grammar rather than an extra.
 - Never present Ambitious as broken; present the split as the better spend.
+- The ladder ranks risk; it never edits the [shot table](shot-table.md). When the count is Ambitious, the remedy is two generations or the user's informed choice, never cutting the crossing or the reaction that carries the geometry.
 - State the evidence tier once: no official shot ceiling exists, the official examples use three, and the thresholds are this skill's heuristics.
 - After a take review, move the user's rung, not the constants: see [retake-protocol](retake-protocol.md).
 

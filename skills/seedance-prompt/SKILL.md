@@ -76,7 +76,7 @@ For sequence prompts, preserve `project_id`, `clip_id`, `parent_clip_id`, contin
 
 ## Prompt Build Process
 
-First, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete the correct lane record before prompt compilation. For a narrative lane, identify the single visible beat and the intention it serves, then map the read to carriers; for a non-narrative lane, keep the concrete utility intent and refuse invented drama. Next, assign reference roles before adding adjectives. Then write a compact first draft in the director formula order. Finally, run a self-check and, when loaded, the directing coherence test from [directing-engine](../../references/directing-engine.md): one main subject, one main action, one motivated main camera move, physically motivated lighting, performance written as a visible gesture rather than an emotion word, assigned character tags, sound intent, and no hollow boosters.
+First, load the [Director's Read](../../references/directors-read.md), classify the brief, and complete the correct lane record before prompt compilation. For a narrative lane, identify the single visible beat and the intention it serves, then map the read to carriers; for a non-narrative lane, keep the concrete utility intent and refuse invented drama. Next, assign reference roles before adding adjectives. For a storyboard, or any clip with more than one person, build the [shot table](../../references/shot-table.md) before any prose: the floor plan in words, then one row per shot with the camera's side, who is in frame and where and facing, the eye-line, the one action, everyone else's idle business, the light and the last frame; run the paper render on it, and only then write the draft, rendering each row into one block in the director formula order. A table with a blank or default cell is not ready to become prose. For a continuous single-subject clip, write a compact first draft in the director formula order. Finally, run a self-check and, when loaded, the directing coherence test from [directing-engine](../../references/directing-engine.md): one main subject, one main action, one motivated main camera move, physically motivated lighting, performance written as a visible gesture rather than an emotion word, assigned character tags, sound intent, and no hollow boosters.
 
 ## Compression Rules
 
@@ -96,9 +96,10 @@ Return:
 2. Reference role map, if any.
 3. Final prompt under the verified active-surface prompt budget.
 4. For a storyboard clip with an open shot count: the ladder (up to three rungs, one trade-off line each), the recommendation, and the evidence-tier sentence; the final prompt is the recommended or chosen rung.
-5. Optional Chinese compressed version when useful.
-6. Shot-list or delivery note when the prompt belongs to a professional sequence.
-7. Safety or copyright note when relevant.
-8. Screen note: one line naming any wording the pre-screen changed, or that it changed nothing.
+5. For a storyboard or multi-person clip: the shot table the prompt was rendered from (floor plan, then one row per shot: camera side, in frame and facing, eye-line, action, others, light, last frame), delivered beneath the prompt, collapsed where the surface allows, so the geometry can be checked on paper before a take is paid for.
+6. Optional Chinese compressed version when useful.
+7. Shot-list or delivery note when the prompt belongs to a professional sequence.
+8. Safety or copyright note when relevant.
+9. Screen note: one line naming any wording the pre-screen changed, or that it changed nothing.
 
 Before finalizing, run an anti-slop pass and remove vague quality boosters.

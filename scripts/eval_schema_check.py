@@ -146,6 +146,8 @@ REQUIRED_IDS = {
     "accident_endpoint_rewritten_as_deliberate_action",
     "short_drama_hook_states_premise_by_shot_two",
     "figurative_reaction_directed_as_muscles_with_lock_line",
+    "storyboard_prompt_is_rendered_from_a_shot_table",
+    "reaction_shot_is_a_reverse_from_the_landmark_side",
 }
 
 

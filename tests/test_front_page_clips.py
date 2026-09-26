@@ -17,6 +17,7 @@ from scripts import build_clip_posters
 
 ROOT = Path(__file__).resolve().parents[1]
 SECOND_RANGE = re.compile(r"\b\d+\s*[-–]\s*\d+\s*(?:s\b|秒|초)")
+SHOT_MARKER = re.compile(r"(?:^|(?<=[\s。！？；」』）)]))(?:Shot\s*\d+[.:]|镜头\s*\d+[：:]|ショット\s*\d+[：:]|샷\s*\d+[:：]|Кадр\s*\d+[.:])")
 STUDIO_NAMES = ("Ghibli", "ジブリ", "Disney", "Pixar", "Marvel")
 TRAPS = json.loads((ROOT / "data/direction-traps.json").read_text(encoding="utf-8"))["traps"]
 
@@ -54,6 +55,12 @@ class FrontPageClipTests(unittest.TestCase):
                         self.assertNotIn(phrase, clip["prompt"], (clip["id"], phrase))
                 if clip["shape"] == "storyboard":
                     self.assertTrue(any(marker in clip["prompt"] for marker in ("Shot 1", "镜头1", "샷 1", "ショット1", "Кадр 1")))
+                    blocks = len(SHOT_MARKER.findall(clip["prompt"]))
+                    self.assertEqual(len(clip["shot_table"]), blocks, "one table row per shot block")
+                    self.assertTrue(clip["floor_plan"].strip())
+                    for r in clip["shot_table"]:
+                        for key in ("shot", "camera", "in_frame", "eye_line", "action", "others", "light", "last_frame"):
+                            self.assertTrue(str(r[key]).strip(), (clip["id"], r["shot"], key))
                     self.assertTrue(any(r in clip["rung"] for r in ("Safe", "Stretch")), clip["rung"])
                     self.assertIn("premise", clip)
 
@@ -73,6 +80,9 @@ class FrontPageClipTests(unittest.TestCase):
                 self.assertIn(f"#### Clip {clip['number']:02d}: {clip['title']}", gallery)
                 self.assertIn("".join(clip["prompt"].split()), "".join(re.sub(r"^> ?", "", gallery, flags=re.M).split()))
                 self.assertIn(clip["typical_brief"], gallery)
+                self.assertIn(clip["floor_plan"], gallery)
+                for r in clip["shot_table"]:
+                    self.assertIn(r["camera"], gallery)
 
 
 if __name__ == "__main__":

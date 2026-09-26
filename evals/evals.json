@@ -3136,6 +3136,36 @@
       "skills_expected_to_activate": [
         "seedance-prompt"
       ]
+    },
+    {
+      "id": "storyboard_prompt_is_rendered_from_a_shot_table",
+      "prompt": "Write a 15-second Seedance 2.0 storyboard, six shots: a woman nobody invited walks into her father's birthday banquet and pours his tea onto the tablecloth in front of everyone. I have one credit left, so I want to check it before I render.",
+      "expected_output": "Before any prose it gives a floor plan in words (the head seat faces the door, the lamp, the guests) and a shot table with one row per shot: camera side relative to a landmark, who is in frame and where and facing, eye-line, the one action, everyone else's idle business, light, last frame; the reaction row is a reverse from the door's side, the walk from the door to the table is its own row, and no cell is blank. The prompt is then rendered from the rows, one block per row with a lock line, and the table is delivered beneath the prompt so the geometry can be checked on paper before the credit is spent; the pre-screen runs last.",
+      "assertions": [
+        "produces a floor plan and a shot table before the prose, with one row per shot and every column filled",
+        "places the camera on the side of what is reacted to for the reaction row and gives the walk its own row",
+        "renders the prompt from the rows with a lock line per block that repeats light, identity, position, facing and camera side",
+        "delivers the table with the prompt as the check to make before spending the credit"
+      ],
+      "failure_mode": "writing the prompt as prose first and leaving camera side, positions or the crossing to the model's defaults",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ]
+    },
+    {
+      "id": "reaction_shot_is_a_reverse_from_the_landmark_side",
+      "prompt": "In my render the wide shot shows the door behind the old man, then his close-up has him staring at the camera as if she stood in front of him, then it cuts straight to her hand at his cup. Fix the geometry.",
+      "expected_output": "It names the two blank cells: no camera side, so the master put the door behind him and the reaction looked at nothing, and no row for the crossing, so she teleported. It re-frames the master over his shoulder toward the door, writes the reaction as a reverse from the door's side with his eyes past the lens, adds her walk up the table as its own shot with the camera placed so she moves toward it, and puts camera side and facing in every lock line, shown as corrected table rows and the re-rendered blocks.",
+      "assertions": [
+        "diagnoses the missing camera side and the elided crossing as the causes",
+        "re-frames the master over his shoulder toward the door and the reaction as a reverse from the door",
+        "adds the walk as its own shot rather than another cut to the hand",
+        "puts camera side and facing in every lock line and shows the corrected rows"
+      ],
+      "failure_mode": "fixing the eye-line with an adjective or another cut instead of a camera side and a crossing row",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ]
     }
   ]
 }
