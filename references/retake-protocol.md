@@ -35,6 +35,14 @@ Prefer changing one relevant variable when the purpose is diagnosis. Record the 
 
 Fast, short, or low-resolution drafts can answer some composition questions, but their behavior may not transfer to the final tier, duration, or resolution. Use a cheaper draft only if it tests the actual criterion and is within the user's authorized scope. Do not claim that ten short drafts necessarily teach more than one longer clip.
 
+## Move the ladder rung, not the constants
+
+When the reviewed take was a storyboard clip planned on the shot-count ladder in [multishot-grammar](multishot-grammar.md), the review also decides the user's next default:
+
+- A Stretch take that returned every beat clean moves the user's default to Stretch for clips of equal or lower load in this project. Say so: "Your four-shot take held; I'll start at four for similar scenes."
+- A take that dropped, merged, or garbled a beat records which beat and why under the one-variable rule above, and the next draft offers the merge or the split rather than the same count again.
+- Session learning changes the recommendation for one user and one project. The thresholds themselves change only through a rendered calibration pilot with a stated method, never from one take.
+
 ## Compact response and take log
 
 For a partial failure, a useful response is:

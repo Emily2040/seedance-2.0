@@ -82,14 +82,17 @@ Use this reference for Chinese Seedance prompt wording, role binding, and compac
 
 Alternative illustration using Latin tokens: `@Image1锁定原创人物身份。@Video1仅参考运镜。@Audio1仅参考节奏。` These spellings are not interchangeable bindings. Use the active operation's verified asset mapping; do not translate, renumber or combine example tokens to make a prompt appear consistent.
 
-## Timeline Template
+## Shot Order Template
 
-社区常用的长提示词骨架（即梦/Dreamina 平台，约 8 秒以上时使用；field-observed）。保持 `@Image1` 等引用标签不变：
+官方《Doubao Seedance 2.0 系列提示词指南》（火山引擎文档 82379/2222480）要求多镜头内容按事件先后使用 镜头1、镜头2、镜头3 组织，不强制限定每段时长；同一指南说明模型对精确时间（如 0–3 秒）的支持不稳定，强行限制时长可能导致生成结果异常（2026-09-26 经镜像记录，引用前请核对原页）。社区流传的 `【时间轴】` 加秒数区间的骨架属于 field-observed 写法，与官方说明相抵触；在 2.0 上不要写绝对秒数，时长交给平台参数，可在提示词首尾附一句 `时长：12秒`（用中文“秒”）作为提醒。每个镜头内先写运镜或切镜，再写主体动作与表情、位置或空间变化、该镜头的声音。保持 `@Image1` 等引用标签不变：
 
 ```
 【风格】[媒介、质感、色调，一句话]
-【时间轴】0-3s：[画面+镜头+音效]；3-6s：[画面+镜头+音效]；6-10s：[画面+镜头+音效]
+镜头1：[运镜或切镜方式]，[主体动作与表情]，[位置或空间变化]，[本镜头声音]
+镜头2：镜头切至[新机位]，[主体动作与表情]，[位置或空间变化]，[本镜头声音]
+镜头3：[运镜或切镜方式]，[完成态终点]，[本镜头声音]
 【声音】[对白/环境声/音效/无配乐]
+【约束】保持无字幕，不要生成Logo，不要生成水印
 【参考】@Image1 锁定主体身份；@Video1 仅参考运镜；@Audio1 仅参考节奏
 ```
 

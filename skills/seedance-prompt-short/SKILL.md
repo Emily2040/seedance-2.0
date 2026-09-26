@@ -28,6 +28,8 @@ Load the [Director's Read](../../references/directors-read.md) before compressio
 
 When sequence state is present, compression must preserve continuity locks, exact reference tags, actual opening state, current clip action, endpoint, completed beat exclusions, and reserved future beats. Do not compress away the words that keep a continuation from replaying completed action or leaking future action.
 
+Storyboard clips keep their structure when compressed: numbered shots in event order, the cut written in words, no absolute seconds inside a block on Seedance 2.0. The shot-count ladder from [multishot-grammar](../../references/multishot-grammar.md) shrinks to one line per rung and one finished prompt at the chosen rung; when the user has fixed the count, state its rung in one line and write it.
+
 ## Intent
 
 Compression is an act of judgment about what the user loves most. What survives the cut is the soul of their shot; everything else goes first. If the user would mourn a deleted word, it was never filler.
@@ -58,6 +60,8 @@ For bilingual or mixed-language compression, load [multilingual-community-exampl
 | I2V | `@Image1 preserved; only [motion/light/camera] changes. Camera: [one move]. Sound: [cue]. Constraint: [what must not change].` |
 | V2V | `@Video1 controls [motion/camera/timing] only; new subject [anchor]. [Action]. Do not transfer [identity/scene/logo].` |
 | Chinese | `@Image1为参考，严格保持[主体]不变；仅加入[动作/光线/镜头]。声音：[提示]。` |
+| Storyboard | `Shot 1: [cut or move], [action and expression], [space], [sound]. Shot 2: cut to [framing], [action to endpoint], [sound]. Constraint: [risk/continuity].` |
+| Chinese storyboard | `镜头1：[运镜或切镜]，[动作与表情]，[声音]。镜头2：镜头切至[机位]，[动作与终点]，[声音]。保持无字幕。` |
 
 ## Output Contract
 

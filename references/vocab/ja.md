@@ -76,14 +76,17 @@ Use this reference for Japanese Seedance prompt wording, role binding, and compa
 
 `@Image1でオリジナル人物を固定する。@Video1はカメラの動きのみ参照し、人物・場所・ブランドはコピーしない。@Audio1はテンポと雰囲気のみ参照する。`
 
-## Timeline Template
+## Shot Order Template
 
-The bracket-timeline skeleton is the Chinese community's long-prompt pattern (`vocab/zh` Timeline Template, field-observed on 即梦/Dreamina). Below is the same structure in Japanese: the *structure* is what is field-observed, a Japanese-specific version is not independently reported, so treat it as a starting scaffold rather than a community guarantee.
+The official Seedance 2.0 prompt guide (Volcengine document 82379/2222480) organizes multi-shot content as 镜头1, 镜头2, 镜头3 in event order without forcing a duration on each shot, and says the model's support for precise time ranges such as 0–3 seconds is unstable, so forced durations can produce abnormal output (recorded from a mirror on 2026-09-26; recheck the live page before quoting). The Chinese community's bracket-timeline skeleton with second ranges is a field-observed convention that this official statement contradicts. On 2.0, write no absolute seconds; the duration belongs to the surface setting. Japanese can use ショット1 as the same device; a Japanese-specific format is not independently reported, so treat this as a scaffold. Inside each shot, lead with the camera move or cut, then the subject's action and expression, then any change of position or space, then that shot's sound. Keep reference tags unchanged:
 
 ```
 【スタイル】[媒介・質感・色調を一文で]
-【タイムライン】0-3s：[画面＋カメラ＋音]；3-6s：[画面＋カメラ＋音]；6-10s：[画面＋カメラ＋音]
+ショット1：[カメラの動きまたは切り替え方]、[主体の動作と表情]、[位置や空間の変化]、[このショットの音]
+ショット2：[新しいアングルへカット]、[主体の動作と表情]、[位置や空間の変化]、[このショットの音]
+ショット3：[カメラの動きまたは切り替え方]、[完了した終点]、[このショットの音]
 【音】[台詞／環境音／効果音／音楽なし]
+【制約】字幕なし、ロゴなし、透かしなし
 【参照】@Image1で人物の同一性を固定；@Video1はカメラの動きのみ参照；@Audio1はテンポのみ参照
 ```
 

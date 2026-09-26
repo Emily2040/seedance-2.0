@@ -1,9 +1,9 @@
 # Source Registry
 
-last_verified: 2026-09-07
+last_verified: 2026-09-26
 review_scope: partial
 
-**Scoped review: 2026-09-07.** The date above covers the review below, not a fresh verification of every historical source. Unlisted provider, pricing, client-installation, and policy claims retain their earlier verification dates and require rechecking before use. The older inventory is preserved for traceability.
+**Scoped reviews: 2026-09-07 (provider surfaces, live) and 2026-09-26 (prompt-structure statements, mirror-read).** The date above covers the two reviews below, not a fresh verification of every historical source. Unlisted provider, pricing, client-installation, and policy claims retain their earlier verification dates and require rechecking before use. The older inventory is preserved for traceability.
 
 `review_scope: partial` keeps the scheduled source-review warning active even while the review date is fresh. Mark it `full` only after the remaining inventory has been checked or explicitly retired; passing the metadata-age gate does not complete that work.
 
@@ -19,7 +19,18 @@ review_scope: partial
 
 **Incomplete retrieval:** the [BytePlus prompt-guide page](https://docs.byteplus.com/api/docs/ModelArk/2222480) exposed a title and August 31 update date but no guide body; the canonical page returned a server error in the browser. Its contents were not reverified. A changed page date alone cannot support new limits or syntax claims. No authenticated console, paid generation, pricing, or regional-access test was performed.
 
-The machine-readable [source inventory](../data/sources.seedance-2026-05-30.json) updates only the records inspected in this pass. Its filename and `generated_at` describe the original inventory; individual `retrieved_at` dates describe subsequent checks. The broader [API status snapshot](api-status.md) retains its August header and dated historical sections.
+## Claims recorded on 2026-09-26 (mirror-read)
+
+The first-party hosts `www.volcengine.com` and `docs.byteplus.com` were unreachable from the review environment, so these statements were read from hash-recorded third-party mirrors of the official PDFs and from ByteDance's own GitHub organisation. They carry the `volatile` label until the live pages are reread; `docs/EVIDENCE_NOTES_2026-09-26.md` holds the quotes and mirror locators.
+
+| Source | Evidence label | Recorded claim | Boundary |
+|---|---|---|---|
+| Volcengine Seedance 2.0 prompt guide, document 82379/2222480 (mirror of the official PDF) | volatile | Multi-shot prompts use 镜头1 / 镜头2 / 镜头3 in event order with no forced per-shot duration; support for precise ranges such as 0–3 秒 is unstable; per-shot block order is camera or cut, action and expression, space change, audio; one camera move per shot; constraint sentences limited to subtitles, logo, watermark. | Official prompting advice, not a shot ceiling and not a guarantee that a numbered shot renders as a cut. Recheck the live page before quoting as current. |
+| ByteDance Seedance 2.5 prompt guide, document 82379/2607689, dated 2026-08-07 (mirror of the official PDF) | volatile | Version difference: Seedance 2.0 responds to shot numbers, not timestamps; the newer line responds to integer-second timestamps, 30-second clips, and up to 50 reference assets. | Newer-line capabilities never transfer to this 2.0 skill; used here only to mark the boundary. Recheck the live page before quoting. |
+| ByteDance `agentkit-samples` repository, `byted-ark-seedance-pe` references (official GitHub organisation) | volatile | Repeats the 2.0 timestamp warning; states the density rule (too little content for the duration and the model improvises; too many 分镜 for the duration and content and lines garble) with the split remedy. | Sample-repository guidance authored by the provider's support team, not an API contract. Recheck the repository before quoting. |
+| Ark create-video-task document 82379/1520757 (mirror) | volatile | `duration` integer in 4–15 or -1 for model-chosen, default 5; `camera_fixed` not supported on the 2.0 series; prose echo 时长：X秒 with the Chinese 秒. | Request fields change by release; recheck before implementation. |
+
+The machine-readable [source inventory](../data/sources.seedance-2026-05-30.json) updates only the records inspected in the 2026-09-07 pass; the 2026-09-26 mirror-read statements are recorded here and in the evidence notes, not in the inventory, because no live page was retrieved. Its filename and `generated_at` describe the original inventory; individual `retrieved_at` dates describe subsequent checks. The broader [API status snapshot](api-status.md) retains its August header and dated historical sections.
 
 Use this registry before making factual claims about Seedance 2.0 platform behavior. Prefer primary public sources, attach a verification date, and mark volatile claims as recheck-required. This file is a claim-boundary map, not a guarantee of access on every product surface or region.
 

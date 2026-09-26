@@ -4,7 +4,7 @@
     {
       "path": "evals/evals.json",
       "role": "evaluator",
-      "sha256": "af82c0458240e576005af073ccd86ffe60bb0f3ce1255479ad7a4aa51112ae93"
+      "sha256": "7199209eaa725a3e9cffedfdefb9aebfee54952037eea36338d77abe4c81e148"
     },
     {
       "path": "evals/fixtures/sequence-airport-arrival-project-state.json",
@@ -34,7 +34,7 @@
     {
       "path": "references/api-status.md",
       "role": "responder",
-      "sha256": "d012e36000a520db212c452cd50936bf00bf9e6efb52280bf62beca3c9487ba9"
+      "sha256": "bc77894c1eea72441d5ecefab724debc7c3ab1f600a6a7e25f93bec7e2b91995"
     },
     {
       "path": "references/api-workflow.md",
@@ -59,7 +59,7 @@
     {
       "path": "references/capability-map.md",
       "role": "responder",
-      "sha256": "51e67e6199eff9f6ce21ef9ff3a912fbcdf8b69e120b3cd0b4a173ae854e9aa3"
+      "sha256": "cd61dd18bcad42e0e5fd86ccd0f41e8edc9ff7977616ff4be54eeb7ff198e68b"
     },
     {
       "path": "references/cinematography-shot-language.md",
@@ -124,7 +124,7 @@
     {
       "path": "references/event-density.md",
       "role": "responder",
-      "sha256": "181d3bcf36f6f79a5c28d7b5e22d9ebe6d6c72c05c2814b3474ffbc8de49ee87"
+      "sha256": "5b7c74b6b2de3fa9ce2725d0d237203b7849445f433b5b1c3745649a936ef997"
     },
     {
       "path": "references/example-card-format.md",
@@ -324,7 +324,7 @@
     {
       "path": "references/multishot-grammar.md",
       "role": "responder",
-      "sha256": "d7f90d9f418a589b027281cee70f9d04ee4498f18dd03b0b17ec52029bfadb82"
+      "sha256": "4fbae832de4014dcd8b781118493a04f916524fe881b3906c87b39f03a85e4b1"
     },
     {
       "path": "references/outcome-comparison.md",
@@ -364,7 +364,7 @@
     {
       "path": "references/prompt-compiler.md",
       "role": "responder",
-      "sha256": "eb481e7c3b46d02dc9c115cac9effd5e9783a9a742afd58d291dd6922e6bedcb"
+      "sha256": "e007ec58fd6499c1fb84479f1f7e025a7a7cef5397110b18eee576f70f2480ef"
     },
     {
       "path": "references/prompt-examples.md",
@@ -394,7 +394,7 @@
     {
       "path": "references/retake-protocol.md",
       "role": "responder",
-      "sha256": "c80829e305045a6568bb2ffc52c7b25e0afd48eb4041a469e6b57d8d672b6780"
+      "sha256": "935f1e644606583a705427b17b4562fa5a8349543724c08eeee4d9b713c05877"
     },
     {
       "path": "references/sequence-project-state.md",
@@ -414,7 +414,7 @@
     {
       "path": "references/source-registry.md",
       "role": "responder",
-      "sha256": "c698ad1565c4628975331e06f9a0c8050a12f8ec96c28a0677f534add732d940"
+      "sha256": "065a2bcfa3dff7e7473668e1e6ad1d100348b881843f50302e4534de335cf57a"
     },
     {
       "path": "references/storytelling-framework.md",
@@ -449,12 +449,12 @@
     {
       "path": "references/vocab/ja.md",
       "role": "responder",
-      "sha256": "666203b89770f3ae6c17f658d3b00c45ee7e95da2e9038d02b9d5985814c9be6"
+      "sha256": "1448b580f87c698831ef9b7bee876028249b4209ac0dfc9f7b19922bd43a8c9d"
     },
     {
       "path": "references/vocab/ko.md",
       "role": "responder",
-      "sha256": "0aecd234a47f917db6664993ce084e0bd76921e9128c0f111ed28e50d61c0d9b"
+      "sha256": "aea14ada62aa0943c2661c6553e5e27adef59c092a2cfc58a176cd19439f02db"
     },
     {
       "path": "references/vocab/ru.md",
@@ -464,17 +464,17 @@
     {
       "path": "references/vocab/zh.md",
       "role": "responder",
-      "sha256": "58da6148b812c269e41dae75a5754014bff52188a13f4cc83fc8a69b78ac024b"
+      "sha256": "73fbb31a934cf0a60d62111523630263d62e5592f81c7c2116a7a0e15a4314e7"
     },
     {
       "path": "SKILL.md",
       "role": "root",
-      "sha256": "e1710cbecd5039fbe549a622590f0aff6a2abadf4b08872993116368ee0474fd"
+      "sha256": "a5da87200769c28263ba4ed77813d340ec426fc278502d1a904e1c7611a098d8"
     },
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "51e233bb90a9f5f05a7f1278690d23a00e74899fda49afaf87aedcb69b166fa6"
+      "sha256": "4e62c9c96f1e33527103355aa7c02897df0d568965213585042ea7e1c9b9d83b"
     },
     {
       "path": "scripts/eval_ledger_format.py",
@@ -559,12 +559,12 @@
     {
       "path": "skills/seedance-prompt/SKILL.md",
       "role": "responder",
-      "sha256": "8f33bdef8c3f9dacc3050b9ce5eb401ab44ec082ec1f19c7ce3393882f3f1768"
+      "sha256": "540e3edace8bdf97a93743af574ba351246430523e8c0197a979fe4762598bee"
     },
     {
       "path": "skills/seedance-prompt-short/SKILL.md",
       "role": "responder",
-      "sha256": "645e1a50cb4b4a2a5eba420716592cc49bd9114ec2f081b9982c3cd7b36f625f"
+      "sha256": "5d1a0afca4b1d4bdc9886888755b7b00c7e64e995eec6b008d0bef06639c82bc"
     },
     {
       "path": "skills/seedance-recipes/SKILL.md",

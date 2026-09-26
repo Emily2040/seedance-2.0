@@ -61,6 +61,8 @@ No necesitas conocer los nombres de las rutas. Puedes escribir simplemente lo si
 
 > Quiero un clip alegre de seis segundos: una relojera adulta oye que el reloj de sobremesa que acaba de reparar vuelve a funcionar. Cámara fija, sin diálogo. Dame tres enfoques distintos y déjame elegir. Prepara solo los prompts; no generes nada.
 
+**Planos, no segundos.** En un clip con varios planos, la skill los numera en el orden en que ocurren las cosas y nunca escribe rangos de tiempo como 0–3 s dentro del prompt: la guía oficial de prompts de Seedance 2.0 indica que el modelo sigue el orden de los planos y responde de forma inestable a tiempos exactos. Si el número de planos está abierto, recibes una escalera corta con la contrapartida de cada peldaño en una línea: Seguro (cada acción tiene tiempo para asentarse), Ajustado (el diálogo o el contacto físico pueden quedar comprimidos) y Ambicioso (la zona donde la guía oficial avisa de que el contenido y las líneas se estropean, así que la skill suele proponer dos generaciones más cortas), más un prompt terminado en el peldaño recomendado. Elige un peldaño o di «elige tú». Los umbrales son heurísticas de esta skill, no límites medidos.
+
 ## 3. Elige qué verá y sentirá el público
 
 Estas son tres propuestas para **ese** encargo; no un menú obligatorio para todos los videos:

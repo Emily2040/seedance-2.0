@@ -1,6 +1,7 @@
 # Design: time structure for one Seedance 2.0 generation
 
-Status: design, 2026-09-26. Answers the customer report that the skill
+Status: design, 2026-09-26, implemented the same day in the files listed under
+Repository changes; the rendered calibration pilot remains open. Answers the customer report that the skill
 "always writes four segments for a 15-second limit while the model can
 sometimes take five or six". Evidence tiers are stated on every threshold;
 sources are in `docs/EVIDENCE_NOTES_2026-09-26.md`.
@@ -58,7 +59,7 @@ beat:
 
 | Element in a beat | Load | Why |
 |---|---|---|
-| A camera move (any move; a locked frame scores 0) | 1 | Official: one move per shot; moves need time to read |
+| A camera move within the shot (a locked frame scores 0; a cut to a new locked framing scores 0, because the cut is already the beat boundary) | 0.5 | Official: one move per shot; a move needs time to read |
 | A spoken line | 1 per 8 English words or 12 Chinese characters, minimum 1 | Speech needs its own seconds; rate constants are unmeasured on 2.0 and stated as such |
 | Each additional person in frame beyond one | 1 | Multi-subject omission and duplication are documented continuation defects; more people, more to hold |
 | Physical contact between bodies or between a body and a prop that must land | 1 | Fragile physics; needs a visible cause and endpoint |
@@ -75,22 +76,26 @@ Total load L. Available seconds D come from the surface parameter (4–15 on
 | < 2.0 | Official density warning territory | **Ambitious**; recommend splitting into two generations instead |
 
 The constants 3.0 and 2.0 are authored heuristics. They are consistent with the
-official three-shots-per-15-s examples (S = 5 with no dialogue) and with the
+official three-shots-per-15-s examples (one move each: S = 3.3, Safe) and with the
 field-reported 2–4 sub-shots per 8–15 s. They are the first thing the 480p
 calibration pilot should measure.
 
 ### Step 3: present the ladder, then defer (the maintainer's design)
 
-For any storyboard clip, the skill drafts up to three versions of the same
-brief and names the trade in one line each. Wording the agent uses:
+For a storyboard clip whose shot count is open, the skill names up to three
+rungs with the trade in one line each, recommends one, and writes one finished
+prompt at the recommended or chosen rung; other rungs are written on request,
+and "choose for me" means draft the recommendation. When the user has fixed
+the count, the skill writes it and states its rung in one line. Menus stay
+optional, as the interview skills already require. Wording the agent uses:
 
-> **Safe, 3 shots.** Each shot has about 5 seconds; the line "It still
+> **Safe, 3 shots.** About 4 seconds per load point; the line "It still
 > ticks" has room to land and settle.
-> **Stretch, 4 shots.** About 3.5 seconds per shot; the reaction after the
-> line may get cut short.
-> **Ambitious, 5 shots.** Under 3 seconds per shot with a spoken line; the
-> official guidance says this is where lines start to garble. If you want
-> five beats, I recommend two generations of 8 seconds instead.
+> **Stretch, 4 shots.** About 2.5 seconds per load point; the reaction after
+> the line may get cut short.
+> **Ambitious, 5 shots.** Under 2 seconds per load point with a spoken line,
+> which is where the official guidance says lines start to garble. If you want
+> five beats, two generations of 8 seconds are the better spend.
 > Pick one, mix two, or say "choose for me". Six-shot prompts you see online
 > are usually simple montages with no dialogue, or Seedance 2.5.
 
@@ -145,19 +150,19 @@ paragraph. The agent does not offer a ladder, and says why in one clause.
 
 **Dialogue scene, 15 s, two people, two lines of six words each.** Shape:
 storyboard (the cut between speakers is a content decision). Beats: line A,
-line B, reaction. Load: 2 speakers beyond one (1), two lines (2), two cuts
-that carry a camera change (2) = 5. S = 15 ÷ (3 + 5) = 1.9. Ambitious already
-at three beats. The agent offers Safe as two generations (line A plus
-reaction; line B plus reaction), or Stretch as one 15-second clip with the
-reaction beat folded into line B's shot, and says the official density
-warning applies.
+line B, reaction. Load: one person beyond the first (1), two lines (2) = 3;
+the cuts are free. S = 15 ÷ (3 + 3) = 2.5, Stretch. Safe is two shots, with
+the reaction held in line B's framing (S = 3.0), or two generations; five
+beats would be Ambitious (S = 1.9). The agent recommends Safe on a first
+attempt, names the model card's multi-speaker lip-sync caveat, and writes
+the Safe prompt unless the user has room to iterate.
 
 **Foot chase, 15 s.** Beats: sprint through a market, vault a stall, land and
-look back. Load: three moves (3), one contact (1) = 4. S = 15 ÷ 7 = 2.1.
-Stretch. Safe is two beats (sprint, vault and land); Ambitious is four. The
-agent recommends Stretch if the user has budget, notes that the official
-guide itself says fast action and turning points do better as separate
-clips edited together.
+look back. Load: three moves (1.5), one contact (1) = 2.5. S = 15 ÷ 5.5 = 2.7,
+Stretch. Safe is two beats (sprint; vault and land, S = 3.75); four beats is
+still Stretch (S = 2.1) and five is Ambitious (S = 1.8). The agent recommends
+Stretch if the user has budget, and notes that the official guide itself says
+fast action and turning points do better as separate clips edited together.
 
 **Three-beat gag, 12 s.** Setup, escalation, payoff; one person; locked
 camera; no lines. Load: contact in the payoff (1). S = 12 ÷ 4 = 3.0. Safe at
@@ -165,6 +170,12 @@ three. The agent writes the three-shot storyboard and offers a four-shot
 Stretch only if the user asks for a fourth beat.
 
 ## Repository changes
+
+Every row below was implemented on 2026-09-26 in the same pull request as this
+document, with two additions the table did not foresee: a mirror-read section
+in `references/source-registry.md` and a regression test,
+`tests/test_time_structure_contract.py`. The rendered pilot is the only open
+item.
 
 | File | Change |
 |---|---|

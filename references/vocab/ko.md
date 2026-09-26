@@ -75,14 +75,17 @@ Use this reference for Korean Seedance prompt wording, role binding, and compact
 
 `@Image1은 오리지널 인물을 고정한다. @Video1은 카메라 움직임만 참고하고 인물, 장소, 브랜드는 복사하지 않는다. @Audio1은 템포와 분위기만 참고한다.`
 
-## Timeline Template
+## Shot Order Template
 
-The bracket-timeline skeleton is the Chinese community's long-prompt pattern (`vocab/zh` Timeline Template, field-observed on 即梦/Dreamina). Below is the same structure in Korean: the *structure* is what is field-observed, a Korean-specific version is not independently reported, so treat it as a starting scaffold rather than a community guarantee.
+The official Seedance 2.0 prompt guide (Volcengine document 82379/2222480) organizes multi-shot content as 镜头1, 镜头2, 镜头3 in event order without forcing a duration on each shot, and says the model's support for precise time ranges such as 0–3 seconds is unstable, so forced durations can produce abnormal output (recorded from a mirror on 2026-09-26; recheck the live page before quoting). The Chinese community's bracket-timeline skeleton with second ranges is a field-observed convention that this official statement contradicts. On 2.0, write no absolute seconds; the duration belongs to the surface setting. Korean can use 샷 1 as the same device; a Korean-specific format is not independently reported, so treat this as a scaffold. Inside each shot, lead with the camera move or cut, then the subject's action and expression, then any change of position or space, then that shot's sound. Keep reference tags unchanged:
 
 ```
 [스타일] [매체·질감·색조를 한 문장으로]
-[타임라인] 0-3s: [화면+카메라+사운드]; 3-6s: [화면+카메라+사운드]; 6-10s: [화면+카메라+사운드]
+샷 1: [카메라 움직임 또는 전환 방식], [주체의 동작과 표정], [위치나 공간 변화], [이 샷의 사운드]
+샷 2: [새 앵글로 컷], [주체의 동작과 표정], [위치나 공간 변화], [이 샷의 사운드]
+샷 3: [카메라 움직임 또는 전환 방식], [완료된 끝 상태], [이 샷의 사운드]
 [사운드] [대사/환경음/효과음/음악 없음]
+[제약] 자막 없음, 로고 없음, 워터마크 없음
 [참조] @Image1 로 인물 동일성 고정; @Video1 은 카메라 움직임만 참조; @Audio1 은 템포만 참조
 ```
 

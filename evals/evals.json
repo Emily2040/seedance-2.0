@@ -1,6 +1,6 @@
 {
   "version": "6.6.0",
-  "updated": "2026-09-07",
+  "updated": "2026-09-26",
   "cases": [
     {
       "id": "vague_idea_interview",
@@ -2010,11 +2010,11 @@
     {
       "id": "dense_storyboard_has_completed_shot_endpoints",
       "prompt": "Storyboard a 6-panel action beat inside one Seedance generation: hero kicks the door, rolls in, draws, fires, reloads, exits.",
-      "expected_output": "It gives each labeled shot a completed endpoint, applies a shots-times-seconds budget, and warns if six beats overflow one short generation rather than writing a vague run-on.",
+      "expected_output": "It gives each labeled shot a completed endpoint, scores the load per beat on the shot-count ladder, and says that six beats sit in Ambitious territory for one short generation, offering a split, rather than writing a vague run-on.",
       "assertions": [
         "assigns each storyboard shot a labeled, completed endpoint state",
-        "applies a shots-times-seconds budget and warns if six beats overflow one short generation",
-        "uses labeled-shot / dense-storyboard grammar",
+        "scores the load per beat, names the ladder rung, and warns that six beats overflow one short generation, offering a split into two generations",
+        "uses labeled-shot / dense-storyboard grammar in event order with the cuts written in words and no absolute seconds inside the shots",
         "keeps each panel's action legible rather than blending into a run-on"
       ],
       "failure_mode": "a dense storyboard whose shots have no completed endpoints and overflow the generation budget",
@@ -2043,14 +2043,14 @@
     {
       "id": "continuous_take_uses_phases_not_shot_labels",
       "prompt": "I want one unbroken 10-second take walking from my front door to the balcony - no cuts. Write it.",
-      "expected_output": "It structures the single take with time phases (for example 0-3s, 3-7s, 7-10s) tied to zones of the walk, not discrete Shot 1 / Shot 2 cut labels.",
+      "expected_output": "It structures the single take as phases of one camera path (Beginning / Then / Finally, tied to zones of the walk), not discrete Shot 1 / Shot 2 cut labels and not second ranges such as 0-3s, which Seedance 2.0 handles unreliably.",
       "assertions": [
-        "structures the unbroken take with time phases (e.g., 0-3s, 3-7s, 7-10s), not Shot 1 / Shot 2 cut labels",
+        "structures the unbroken take as Beginning / Then / Finally phases tied to zones of the walk, not Shot 1 / Shot 2 cut labels",
+        "writes no absolute second ranges such as 0-3s inside the prompt",
         "keeps one continuous camera path with no implied cuts",
-        "ties each phase to a zone of the walk-through",
         "does not use multishot shot-label grammar for a no-cut take"
       ],
-      "failure_mode": "using discrete shot labels that imply cuts for a single continuous no-cut take",
+      "failure_mode": "using discrete shot labels that imply cuts, or second ranges the model handles unreliably, for a single continuous no-cut take",
       "skills_expected_to_activate": [
         "seedance-sequence"
       ],
@@ -2078,10 +2078,10 @@
       "prompt": "A three-shot sequence inside one generation: wide of the city, medium of the courier on the bike, close-up of the package in the basket.",
       "expected_output": "It uses explicit Shot 1 / Shot 2 / Shot 3 labels with cuts between them, each with its framing, rather than collapsing the three framings into one continuous time-phase take.",
       "assertions": [
-        "uses explicit Shot 1 / Shot 2 / Shot 3 labels with cuts between them",
+        "uses explicit Shot 1 / Shot 2 / Shot 3 labels in event order with the cuts written in words",
         "does not collapse the three framings into one continuous no-cut phase structure",
         "gives each shot its size and framing and a clean cut point",
-        "applies the multishot shots-times-seconds budget"
+        "places the three-shot count on the load-per-beat ladder and writes no absolute seconds inside the shots"
       ],
       "failure_mode": "writing a multi-shot cut sequence as a single continuous take with time phases instead of labeled shots",
       "skills_expected_to_activate": [
@@ -2997,6 +2997,68 @@
       "failure_mode": "user decisions or authorization baseline lost during retry planning",
       "skills_expected_to_activate": [
         "seedance-troubleshoot"
+      ]
+    },
+    {
+      "id": "continuous_shape_gets_one_paragraph",
+      "prompt": "Write a 15-second Seedance 2.0 prompt: one woman at a kitchen table reads a letter, her hands lower it and go still, one slow push-in, no dialogue. Should this be shots?",
+      "expected_output": "It classifies the clip as continuous (one scene, one continuous action, one speaker at most), writes one paragraph in the official order with no shot labels and no second ranges, and says in one clause why no shot ladder is offered.",
+      "assertions": [
+        "writes one paragraph with no Shot 1 / Shot 2 labels and no timestamps",
+        "says in one clause that one scene with one continuous action is a continuous shape, so no shot ladder applies",
+        "keeps the single push-in as the only camera move and the hands going still as the endpoint",
+        "does not invent extra events to justify a storyboard"
+      ],
+      "failure_mode": "forcing a storyboard or timestamped segments onto a single continuous action because the clip is long",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ]
+    },
+    {
+      "id": "dialogue_storyboard_offers_ladder_with_split",
+      "prompt": "One 15-second Seedance 2.0 clip: two old friends at a bus stop. She says \"You actually came back.\" He says \"I said I would.\" Then her reaction. How many shots should this be? I have credits for a couple of tries.",
+      "expected_output": "It scores the load (a second person, two spoken lines), presents up to three rungs with the trade-off in one line each, recommends a rung given the user has room to iterate, offers the Ambitious count as two shorter generations rather than calling it broken, states once that the thresholds are this skill's heuristics with no official shot ceiling, and writes one finished prompt at the recommended rung with numbered shots in event order and no absolute seconds inside them.",
+      "assertions": [
+        "presents Safe / Stretch / Ambitious rungs with one trade-off line each rather than a single silent shot count",
+        "names the load that drives the reading: two people and two spoken lines",
+        "offers two shorter generations as the better spend for the Ambitious count instead of calling it impossible",
+        "states once that the thresholds are heuristics and that no official shot ceiling exists",
+        "returns exactly one finished prompt, at the recommended or chosen rung, with the cuts written in words and no 0-3s style ranges"
+      ],
+      "failure_mode": "silently defaulting to one shot count, writing three full prompts, or padding the shots with timestamps",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ]
+    },
+    {
+      "id": "zh_storyboard_uses_shot_order_not_second_ranges",
+      "prompt": "给即梦写一个 12 秒、三个镜头的 Seedance 2.0 提示词：茶馆老板娘擦桌子，抬头看向门口，门口的猫跳上凳子。不要配乐。",
+      "expected_output": "A Chinese prompt with 镜头1 / 镜头2 / 镜头3 in event order, each block leading with the camera move or cut, then action, space, and sound, with no 0-3秒 style ranges; duration goes to the surface setting with an optional 时长：12秒 echo; it notes the three-shot count sits on the Safe rung for 12 seconds with no dialogue.",
+      "assertions": [
+        "uses 镜头1 / 镜头2 / 镜头3 in the order the events happen",
+        "writes the cut inside the block (for example 镜头切至) and no 0-3秒 or 0-3s ranges",
+        "treats duration as the surface setting, with at most an optional 时长：12秒 echo using the Chinese 秒",
+        "states the ladder rung for three shots in one line and keeps 无配乐 as the sound constraint"
+      ],
+      "failure_mode": "writing the bracket-timeline 0-3s skeleton or per-shot seconds for a Seedance 2.0 Chinese prompt",
+      "skills_expected_to_activate": [
+        "seedance-prompt",
+        "seedance-vocab-zh"
+      ]
+    },
+    {
+      "id": "newer_line_timestamp_request_stays_in_boundary",
+      "prompt": "I'm generating on Seedance 2.5. Write my three-shot market chase with timestamps 0-3s, 3-9s, 9-15s so the model follows the timing.",
+      "expected_output": "It says plainly that this skill is built and verified for Seedance 2.0, notes that the official version-difference list says 2.0 responds to shot order while the newer line documents integer-second timestamps, keeps the craft (three shots in event order, one move per shot, cuts written in words, endpoints), and withholds 2.0 platform numbers and any claim about how reliably the newer line honours the timestamps.",
+      "assertions": [
+        "states that the skill is verified for Seedance 2.0 and does not normalize the request to 2.0",
+        "keeps the craft guidance: event-order shots, one camera move per shot, cuts in words, a visible endpoint per shot",
+        "does not restate 2.0 durations, reference ceilings, or shot heuristics as facts about the newer line",
+        "does not promise that the newer line will follow the requested timestamps exactly"
+      ],
+      "failure_mode": "applying 2.0 numbers to the newer line, or promising timestamp adherence the skill has not verified",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
       ]
     }
   ]
