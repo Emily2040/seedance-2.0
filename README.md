@@ -22,125 +22,134 @@ Seven clips, seven prompts, five languages. Each clip is generated on Seedance 2
 
 <table>
 <tr>
-<td width="50%" valign="top"><a href="#clip-01-the-paper-fan"><img src="assets/clips/clip-01-paper-fan.svg" alt="Slate for clip 01, English: Two hands finish the last fold. The fan settles on the wood." width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-02-night-bakery-three-shots"><img src="assets/clips/clip-02-night-bakery.svg" alt="Slate for clip 02, English: Flour in a shaft of light, a loaf scored, the oven door opening toward camera." width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-01-get-in"><img src="assets/clips/clip-01-get-in.svg" alt="Slate for clip 01, English: A key in the lock at two in the morning. A knife held low. Then: “Get in.”" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-02-last-train"><img src="assets/clips/clip-02-last-train.svg" alt="Slate for clip 02, English: The doors are closing. She puts her arm in. Her coat tail stays pinned in the glass." width="100%"></a></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><a href="#clip-03-最后一碗"><img src="assets/clips/clip-03-last-bowl.svg" alt="Slate for clip 03, 中文: 深夜粉店，卷帘门拉下一半。 “还有最后一碗，坐吧。”" width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-04-雨夜面摊三个镜头"><img src="assets/clips/clip-04-rain-noodle-stall.svg" alt="Slate for clip 04, 中文: 蒸汽涌进灯光，一把面落进滚水， 一碗面推到画面前。" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-03-签字"><img src="assets/clips/clip-03-the-signature.svg" alt="Slate for clip 03, 中文: 婚戒放在签名上。 “房子我不要。孩子的姓，改回来。”" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-04-雪夜斩灯"><img src="assets/clips/clip-04-lantern-cut.svg" alt="Slate for clip 04, 中文: 雪夜屋脊，一盏灯笼坠落。 一刀，两半，烛火熄灭。" width="100%"></a></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><a href="#clip-05-새벽-세-시-편의점"><img src="assets/clips/clip-05-three-am-store.svg" alt="Slate for clip 05, 한국어: 차임벨이 울리고, “어서 오세요.” 문 앞에는 젖은 고양이 한 마리." width="100%"></a></td>
-<td width="50%" valign="top"><a href="#clip-06-踏切夕方"><img src="assets/clips/clip-06-railway-crossing.svg" alt="Slate for clip 06, 日本語: 手描き2Dアニメ。電車が通り過ぎ、 向こう側には誰もいない。" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-05-사직서"><img src="assets/clips/clip-05-resignation.svg" alt="Slate for clip 05, 한국어: 사직서를 그의 서류 위에 올려놓는다. “제 보고서, 이름만 바꾸셨더군요.”" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-06-雨の石段"><img src="assets/clips/clip-06-rain-steps.svg" alt="Slate for clip 06, 日本語: 雨の石段、墨の獣、木刀の一振り。 当たった瞬間だけ白黒反転。" width="100%"></a></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><a href="#clip-07-чай-ещё-горячий"><img src="assets/clips/clip-07-tea-still-hot.svg" alt="Slate for clip 07, Русский: Два стакана в подстаканниках, пар над обоими. «Садись. Чай ещё горячий.»" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-07-ещё-один-раунд"><img src="assets/clips/clip-07-one-more-round.svg" alt="Slate for clip 07, Русский: Угол ринга между раундами. «Ещё один раунд. Потом хоть плачь.»" width="100%"></a></td>
 <td width="50%" valign="top"></td>
 </tr>
 </table>
 
-#### Clip 01: The paper fan
+#### Clip 01: Get in.
 
-<sub>English · 8 s · 16:9 · continuous · slate: not rendered yet</sub>
+<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 2, S = 3.0</sub>
 
-**What people usually type:** *cinematic close up of hands folding a paper fan, warm lighting, 4k, ASMR*
-
-<details>
-<summary>The prompt the skill wrote</summary>
-
-> Locked tabletop shot. Two hands finish the last fold of a paper fan and let go. The fan settles on the wood. Hold still for one beat. Warm desk-lamp light; dry paper rustle and room tone. No music.
-
-</details>
-
-#### Clip 02: Night bakery, three shots
-
-<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 1.5, S = 3.3</sub>
-
-**What people usually type:** *artisan bakery b-roll, bread being scored, cinematic warm light, slow motion, multiple shots*
+**What people usually type:** *scary moment, woman hears someone breaking in at night, thriller, cinematic, suspense music, 4k*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> Shot 1. Locked close-up inside a dark bakery before dawn: one bare bulb throws a shaft of light
-> across a floured wooden bench, and flour dust drifts through the beam. Shot 2. Cut to a medium
-> shot at bench height: a baker's hands score a proofed loaf with a razor blade in one clean
-> curve, the cut opening as the blade passes, a little flour lifting off the knuckles. Shot 3. Cut
-> to the oven door swinging open toward camera, then a slow push-in through the heat shimmer until
-> the loaf's dark crust fills the frame; hold there. Warm tungsten light only; the rest of the
-> room falls to black. Sound: the blade through dough, the oven door's hinge, a low burner roar.
-> No music, no subtitles.
+> Shot 1. Locked shot down a dark apartment hallway at two in the morning: the front door with its
+> chain on, one bar of streetlight across the floor, and in the foreground a woman in a T-shirt
+> standing very still with a kitchen knife held low along her thigh. A key scrapes in the lock,
+> misses, tries again. Shot 2. Cut to the door from her side as it opens to the length of the
+> chain: in the gap, a teenage boy soaked with rain, a split lip, a school lanyard with the key
+> still in his hand, his eyes on the knife. Shot 3. Cut to a close shot of her face: she takes one
+> breath, the knife hand drops out of frame but the shoulder stays tense, and she says quietly:
+> "Get in." Then she reaches past the camera to slide the chain. Light only from the streetlamp
+> through the window and the stairwell bulb behind him. Sound: the key in the lock, rain on the
+> landing, the chain sliding at the very end. No music, no subtitles.
 
 </details>
 
-#### Clip 03: 最后一碗
+#### Clip 02: Last train
 
-<sub>中文 · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
+<sub>English · 12 s · 16:9 · continuous · slate: not rendered yet</sub>
 
-**What people usually type:** *深夜小店老板娘温暖治愈的一幕，电影感，氛围感，8K*
+**What people usually type:** *girl running to catch the last train, action scene, dynamic camera, slow motion, epic*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 固定中景，镜头与柜台同高。深夜的小粉店，卷帘门已经拉下一半，柜台上只剩一盏灯。老板娘（五十多岁，围裙，袖口挽起）正把抹布叠好，手停在半空，抬眼看向门口，把一副早就摆好的筷子往前推了推。老板娘平静地说：“还有最后一碗，坐吧。”说完低头继续擦柜台，嘴角不动。灯光只有柜台上方那一盏暖光灯，门外是冷色的路灯。声音：风扇的嗡嗡声，汤锅轻微的咕嘟声，说话时其他声音压低；无配乐。保持无字幕。
+> Handheld tracking shot running alongside a woman in a wet raincoat as she sprints down an empty
+> subway platform toward the last train, her bag slamming against her hip, the door-closing chime
+> already sounding. The doors begin to slide shut; she throws her forearm into the gap; the rubber
+> edges bite, bounce back open, and she gets through as they close behind her, catching the tail
+> of her coat outside the glass. The camera stops at the closed door with her coat tail pinned in
+> it as the train starts to move. Cold fluorescent platform light, warm light inside the carriage.
+> Sound: her footsteps and breath, the chime, the rubber slap of the doors, the train pulling
+> away. No music, no subtitles.
 
 </details>
 
-#### Clip 04: 雨夜面摊，三个镜头
+#### Clip 03: 签字
 
-<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 2, S = 3.0</sub>
+<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 2 beats, load 3, S = 3.0</sub>
 
-**What people usually type:** *雨夜面摊，烟火气，运镜丝滑，多个镜头，大片感*
+**What people usually type:** *霸总短剧，离婚签字名场面，女主逆袭，电影感，高级感，8K*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 镜头1：固定特写，雨夜路边面摊，大锅上的蒸汽涌进头顶那盏白炽灯的光里，雨丝在光里划过，锅沿挂着水珠。镜头2：镜头切至摊主的中景，摊主（六十岁左右的男人，白背心，毛巾搭肩）抓起一把面甩开、抖散，落进滚水里，水面翻起一圈白沫，他随手盖上锅盖。镜头3：镜头切至柜面的低角度，一碗浇了葱花和辣油的面被推到画面前方，一只湿漉漉的手接过碗，碗停在画面中央，蒸汽继续往上冒。全片只有摊头这一盏灯，背景是雨里模糊的车灯。声音：雨声、油锅和滚水的声音、碗底在木板上划过的声音；无配乐，保持无字幕。时长：15秒。
+> 镜头1：固定特写，深夜律师事务所的会议桌，一份离婚协议摊在桌上，一支钢笔在“女方”一栏签下名字，笔尖停顿一下再收；签完，一枚婚戒被摘下来，轻轻放在签名上面。镜头2：镜头切至女方的中近景，她（三十五岁上下，黑色西装，头发全部束起，眼睛不红）看向对面，平静地说：“房子我不要。孩子的姓，改回来。”说完起身离开画面，镜头不跟，停在对面男人放在桌上一动不动的双手上，直到画面结束。灯光只有桌面上方一盏冷白色的吊灯，窗外是城市夜景。声音：钢笔划纸声，戒指落在纸上的轻响，椅子推开的声音，说话时其他声音压低；无配乐。保持无字幕。
 
 </details>
 
-#### Clip 05: 새벽 세 시 편의점
+#### Clip 04: 雪夜斩灯
 
-<sub>한국어 · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
+<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 1.5, S = 3.3</sub>
 
-**What people usually type:** *새벽 편의점 알바생 감성 영상, 시네마틱, 비 오는 날, 고양이*
+**What people usually type:** *武侠女侠雪夜拔刀，超燃打戏，运镜炸裂，大片感，特效*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 카메라는 계산대 높이에 고정된 미디엄 숏. 새벽 세 시의 편의점, 창밖에는 비가 내리고 냉장고 불빛이 통로를 비춘다. 야간 아르바이트생(이십 대 여성, 조끼 유니폼, 머리를 대충 묶음)이 계산대 뒤에서 컵라면 진열을 정리하고 있다. 출입문 차임벨이 울리고, 그녀는 고개를 들지 않은 채 습관처럼 말한다. 아르바이트생: “어서 오세요.” 대답이 없자 고개를 들어 문 쪽을 본다. 문 앞 매트 위에 젖은 고양이 한 마리가 앉아 그녀를 올려다보고 있다. 그녀는 아무 말 없이 반쯤 웃은 얼굴로 멈추고, 카메라는 그 표정에서 끝난다. 조명은 편의점 형광등과 창밖의 파란 새벽빛뿐. 소리: 차임벨, 유리창을 때리는 빗소리, 냉장고의 낮은 웅웅거림, 대사 중에는 다른 소리를 낮춘다. 음악 없음, 자막 없음.
+> 镜头1：固定全景，雪夜的古城屋脊，一名女剑客（二十多岁，黑色劲装，斗笠压低）背对镜头站在瓦片上，右手按在刀柄上，雪落在肩头不化。远处一盏红灯笼从高处坠落。镜头2：镜头切至侧面中景，灯笼落到她身前的一瞬，她拔刀，只出一刀，刀光横过画面，灯笼被整齐劈成两半，烛火在半空中晃了一下熄灭，两半灯笼各自落向屋檐两侧。镜头3：镜头切至低角度，缓慢推近她收刀入鞘的手，刀身上沾的雪粒随着入鞘被刮落，最后停在刀镡合上的那一刻，画面保持。全片冷蓝月光，只有灯笼熄灭前的一点暖光。声音：风雪声，拔刀的金属声，灯笼纸被劈开的脆响，入鞘的一声轻响；无配乐，保持无字幕。时长：15秒。
 
 </details>
 
-#### Clip 06: 踏切、夕方
+#### Clip 05: 사직서
 
-<sub>日本語 · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
+<sub>한국어 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 2 beats, load 3, S = 3.0</sub>
 
-**What people usually type:** *夏の夕方、踏切で電車を待つ少女、エモいアニメ風、有名スタジオっぽく*
+**What people usually type:** *사이다 사직서 장면, 직장인 드라마, 시네마틱, 4K, 감동*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> 手描きの2Dセルアニメーション。セル画で描かれた人物を、水彩で塗られた背景の上に置く。1990年代のテレビアニメ調で、フィルムの粒子がわずかに乗った質感、限られた色数。夕方の住宅地の踏切。麦わら帽子をかぶった少女（十代前半、白いワンピース、片手に金魚の入った袋）が遮断機の前で立ち止まる。警報機が鳴り、電車が画面を横切る。車窓の光が少女の顔に描かれた縞になって明滅し、髪とワンピースの裾が風で遅れて揺れ、電車が抜けた後もひと呼吸だけ揺れが残る。踏切の向こう側には誰もいない。少女は小さく息を吐き、そのまま止め絵になる。カメラは背景の絵に対して固定。動きは基本二コマ打ち、電車の通過だけ背景のスクロールとスピード線で見せる。光は描かれた二段階のセル影、電車の窓明かりは顔の上の白い帯として描く。音：踏切の警報音、電車の通過音、通り過ぎたあとは蝉の声だけが残る。音楽なし、字幕なし。
+> 샷 1: 밤의 유리벽 임원실, 책상 높이에 고정된 미디엄 숏. 넓은 책상 뒤에서 대표(오십 대 남성, 셔츠 소매를 걷음)가 서류에 서명하고 있고, 고개를 들지 않는다. 젊은 직원(이십 대 후반 여성, 회색 정장, 사원증을 목에 걸음)이 걸어 들어와 봉투 하나를 그가 서명하던 서류 바로 위에 올려놓는다. 봉투에는 ‘사직서’라고 적혀 있다. 그녀는 물러서지 않고 말한다. 직원: “제 보고서, 이름만 바꾸셨더군요.” 샷 2: 컷, 그녀가 돌아서서 문으로 걸어 나가는 뒷모습 너머로 대표가 그제야 고개를 든다. 문이 닫히고, 카메라는 유리에 비친 그의 얼굴에서 멈춘다. 조명은 책상 스탠드 하나와 창밖 도시의 불빛뿐. 소리: 펜 소리가 멈추는 순간, 봉투가 종이 위에 놓이는 소리, 구두 소리, 문이 닫히는 소리. 대사 중에는 다른 소리를 낮춘다. 음악 없음, 자막 없음.
 
 </details>
 
-#### Clip 07: Чай ещё горячий
+#### Clip 06: 雨の石段
+
+<sub>日本語 · 12 s · 16:9 · continuous · slate: not rendered yet</sub>
+
+**What people usually type:** *神作画の少女バトル、雨の神社、エモい、有名アニメスタジオ風、4K*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> 手描きの2Dセルアニメーション。セル画のキャラクターを、雨に濡れた夜の神社の石段を描いた背景画の上に置く。作画の密度が高く、限られた色数、フィルムの粒子が乗った質感。石段の中ほどで、少女（十七歳、黒い学生服の上に透明な雨合羽、木刀を両手で構える）が、階段の上から流れ落ちてくる墨のような黒い獣と向かい合う。獣が飛びかかる瞬間、少女は一歩踏み込んで木刀を横に振り抜く。振りの軌道は一枚のスミアで描き、当たった瞬間だけ画面全体を白黒反転のインパクトフレームにする。獣は黒い墨の飛沫になって砕け、雨に混じって石段を流れ落ち、消える。少女は振り抜いた姿勢のまま止め絵になり、肩だけが息で上下し、髪と合羽の裾が遅れて揺れて静止する。動きは踏み込みから振り抜きまでを一コマ打ちのフルアニメーションで、その前後は二コマ打ち、止め絵で終わる。カメラは背景画に対して固定。光は石灯籠の橙色の明かりと、雨に反射する青。音：雨音、踏み込みの足音、風を切る一振り、当たった瞬間の鋭い一音、そのあとは雨音だけ。音楽なし、字幕なし。
+
+</details>
+
+#### Clip 07: Ещё один раунд
 
 <sub>Русский · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
 
-**What people usually type:** *уютная кухня, дедушка пьёт чай, кинематографично, атмосферно, 4k*
+**What people usually type:** *тренер и боксёр перед решающим раундом, драма, кинематографично, эпично, 4k*
 
 <details>
 <summary>The prompt the skill wrote</summary>
 
-> Статичный средний план на уровне стола. Зимний вечер, маленькая кухня в старой квартире: за
-> окном синие сумерки и снег, горит только лампа над столом. Пожилой мужчина (за шестьдесят,
-> вязаный жилет, очки сдвинуты на лоб) сидит боком к камере и режет хлеб. На столе два стакана чая
-> в металлических подстаканниках, над обоими пар. Не поднимая глаз, он двигает второй стакан к
-> пустому стулу на краю кадра и говорит ровно, почти буднично. Мужчина: «Садись. Чай ещё горячий.»
-> Потом возвращается к хлебу, и только рука на мгновение задерживается на стакане. Свет: тёплая
-> лампа над столом и холодный свет из окна. Звук: тиканье кухонных часов, нож по доске, тихий стук
-> стакана о клеёнку; во время реплики остальные звуки тише. Без музыки, без субтитров.
+> Статичный средний план на уровне канатов, угол ринга между раундами. Ночной боксёрский зал,
+> единственный свет — лампа над рингом. Боксёр (лет двадцать пять, рассечённая бровь, капа во рту)
+> сидит на табурете, тяжело дышит, смотрит в пол. Тренер (за шестьдесят, полотенце на плече, седая
+> щетина) стоит над ним, прижимает к брови холодный металлический утюжок и, не повышая голоса,
+> говорит. Тренер: «Ещё один раунд. Потом хоть плачь.» Боксёр поднимает глаза, кивает один раз;
+> тренер вынимает капу, проверяет и вставляет обратно. Гонг. Боксёр встаёт и выходит из кадра, а
+> камера остаётся на пустом табурете с полотенцем. Звук: тяжёлое дыхание, шум зала за кадром, звон
+> гонга в конце; во время реплики остальные звуки тише. Без музыки, без субтитров.
 
 </details>
 
@@ -165,7 +174,7 @@ dry paper rustle and room tone.
 No music.
 ```
 
-This is the prompt behind clip 01 in the gallery above. **Why these choices:** one visible action, a clear endpoint, a fixed camera and
+**Why these choices:** one visible action, a clear endpoint, a fixed camera and
 an explicit sound choice. Duration and aspect ratio belong in your provider's
 controls when that surface owns them. This is an unrendered teaching example;
 it does not establish successful folding, motion or audio generation.

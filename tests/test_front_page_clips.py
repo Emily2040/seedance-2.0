@@ -49,7 +49,7 @@ class FrontPageClipTests(unittest.TestCase):
                     self.assertNotIn(name, clip["prompt"])
                     self.assertNotIn(name, clip["typical_brief"])
                 if clip["shape"] == "storyboard":
-                    self.assertTrue("Shot 1" in clip["prompt"] or "镜头1" in clip["prompt"])
+                    self.assertTrue(any(marker in clip["prompt"] for marker in ("Shot 1", "镜头1", "샷 1", "ショット1")))
                     self.assertIn("Safe", clip["rung"])
 
     def test_slates_match_the_generator_and_are_shipped(self) -> None:
@@ -68,10 +68,6 @@ class FrontPageClipTests(unittest.TestCase):
                 self.assertIn(f"#### Clip {clip['number']:02d}: {clip['title']}", gallery)
                 self.assertIn(clip["prompt"], " ".join(gallery.replace("\n> ", " ").split()))
                 self.assertIn(clip["typical_brief"], gallery)
-
-    def test_start_here_prompt_is_clip_one(self) -> None:
-        block = re.search(r"```text\n(.*?)\n```", self.readme, re.S).group(1)
-        self.assertEqual(" ".join(block.split()), self.clips[0]["prompt"])
 
 
 if __name__ == "__main__":
