@@ -54,8 +54,8 @@ from urllib.parse import unquote, urlparse
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "requirements-masthead.lock"
 FONT_DIR = ROOT / "assets" / "fonts"
-ROMAN = FONT_DIR / "BodoniModa[opsz,wght].ttf"
-ITALIC = FONT_DIR / "BodoniModa-Italic[opsz,wght].ttf"
+ROMAN = FONT_DIR / "BodoniModa-VF.ttf"
+ITALIC = FONT_DIR / "BodoniModa-Italic-VF.ttf"
 TARGET = ROOT / "assets" / "masthead-outlines.json"
 SCRIPT = Path(__file__).resolve()
 

@@ -1371,11 +1371,11 @@ class OutlinedTypeTests(unittest.TestCase):
 
         self.assertEqual(
             gen.repo_relative_posix(gen.ROMAN),
-            "assets/fonts/BodoniModa[opsz,wght].ttf",
+            "assets/fonts/BodoniModa-VF.ttf",
         )
         self.assertEqual(
             gen.repo_relative_posix(gen.ITALIC),
-            "assets/fonts/BodoniModa-Italic[opsz,wght].ttf",
+            "assets/fonts/BodoniModa-Italic-VF.ttf",
         )
         cases = (
             (
