@@ -1,3 +1,5 @@
+# Explicit installed-skill payload. One normalized POSIX relative file path per line.
+# Undeclared repository files and directories are never copied by the installer.
 .gitattributes
 .gitignore
 CHANGELOG.md
