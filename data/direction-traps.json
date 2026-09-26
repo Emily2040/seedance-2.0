@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "purpose": "Figurative expressions that video models render literally or drop. Used by tests/test_front_page_clips.py to keep shipped prompts literal; see references/direct-for-the-model.md.",
+  "traps": {
+    "en": [
+      "his face fell",
+      "her face fell",
+      "the smile goes",
+      "the smile went",
+      "a look that could",
+      "like someone",
+      "as if",
+      "his face darkens",
+      "her face darkens",
+      "the air freezes",
+      "time stands still"
+    ],
+    "zh": [
+      "脸沉下来",
+      "脸色难看",
+      "脸色一变",
+      "脸色一沉",
+      "目光如刀",
+      "心里一紧",
+      "空气凝固",
+      "仿佛",
+      "好像在"
+    ],
+    "ja": [
+      "顔が曇る",
+      "顔が曇り",
+      "目が泳ぐ",
+      "空気が凍る",
+      "まるで",
+      "のように見える"
+    ],
+    "ko": [
+      "얼굴이 어두워",
+      "표정이 무너",
+      "분위기가 얼어",
+      "마치 ",
+      "처럼 보인다"
+    ],
+    "ru": [
+      "лицо потемнело",
+      "лицо вытянулось",
+      "воздух застыл",
+      "как будто",
+      "словно"
+    ]
+  }
+}

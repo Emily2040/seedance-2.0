@@ -145,6 +145,7 @@ REQUIRED_IDS = {
     "named_legal_scene_prescreened_documents_unnamed",
     "accident_endpoint_rewritten_as_deliberate_action",
     "short_drama_hook_states_premise_by_shot_two",
+    "figurative_reaction_directed_as_muscles_with_lock_line",
 }
 
 
