@@ -9,8 +9,8 @@
     "license_text": "assets/fonts/OFL.txt",
     "source": "https://github.com/google/fonts/tree/main/ofl/bodonimoda",
     "vendored": [
-      "assets/fonts/BodoniModa[opsz,wght].ttf",
-      "assets/fonts/BodoniModa-Italic[opsz,wght].ttf"
+      "assets/fonts/BodoniModa-VF.ttf",
+      "assets/fonts/BodoniModa-Italic-VF.ttf"
     ],
     "instances": "opsz tracks rendered size clamped to 6-96; wght=400 throughout",
     "shaping": "HarfBuzz with kern and liga features enabled",
