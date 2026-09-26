@@ -9,6 +9,13 @@ SECURITY.md
 SKILL.md
 V6_SEQUENCE_PROMPT_COMPILER_MANIFEST.md
 agents/openai.yaml
+assets/clips/clip-01-paper-fan.svg
+assets/clips/clip-02-night-bakery.svg
+assets/clips/clip-03-last-bowl.svg
+assets/clips/clip-04-rain-noodle-stall.svg
+assets/clips/clip-05-three-am-store.svg
+assets/clips/clip-06-railway-crossing.svg
+assets/clips/clip-07-tea-still-hot.svg
 assets/fonts/OFL.txt
 assets/hero-dark.svg
 assets/hero-light.svg

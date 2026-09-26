@@ -8,13 +8,143 @@
 skill for planning shots, binding references and continuing from an accepted
 clip. Your video provider handles generation and its costs.
 
-[Try a first prompt](#start-here) · [Install](#install) · [Choose a workflow](#choose-a-workflow) · [Evidence status](#evidence-status)
+[Watch the clips](#seen-not-told) · [Try a first prompt](#start-here) · [Install](#install) · [Choose a workflow](#choose-a-workflow) · [Evidence status](#evidence-status)
 
 `v6.7.0` · [MIT](LICENSE) · [Changelog](CHANGELOG.md) · [Emily / Iamemily2050](https://github.com/Emily2040)
 
 **Languages:** English (this page) · [中文](docs/README.zh.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Русский](docs/README.ru.md)
 
 Five-minute quickstarts: [English](docs/QUICKSTART.md) · [中文](docs/QUICKSTART.zh.md) · [日本語](docs/QUICKSTART.ja.md) · [한국어](docs/QUICKSTART.ko.md) · [Español](docs/QUICKSTART.es.md) · [Русский](docs/QUICKSTART.ru.md)
+
+## Seen, not told
+
+Seven clips, seven prompts, five languages. Each clip is generated on Seedance 2.0 from the exact prompt beneath it: text to video, no reference assets, one take, no post work. Above each prompt sits the kind of brief people usually type, so the difference is visible before it is explained. Where a clip has not been rendered yet, its slate stands in its place.
+
+<table>
+<tr>
+<td width="50%" valign="top"><a href="#clip-01-the-paper-fan"><img src="assets/clips/clip-01-paper-fan.svg" alt="Slate for clip 01, English: Two hands finish the last fold. The fan settles on the wood." width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-02-night-bakery-three-shots"><img src="assets/clips/clip-02-night-bakery.svg" alt="Slate for clip 02, English: Flour in a shaft of light, a loaf scored, the oven door opening toward camera." width="100%"></a></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="#clip-03-最后一碗"><img src="assets/clips/clip-03-last-bowl.svg" alt="Slate for clip 03, 中文: 深夜粉店，卷帘门拉下一半。 “还有最后一碗，坐吧。”" width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-04-雨夜面摊三个镜头"><img src="assets/clips/clip-04-rain-noodle-stall.svg" alt="Slate for clip 04, 中文: 蒸汽涌进灯光，一把面落进滚水， 一碗面推到画面前。" width="100%"></a></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="#clip-05-새벽-세-시-편의점"><img src="assets/clips/clip-05-three-am-store.svg" alt="Slate for clip 05, 한국어: 차임벨이 울리고, “어서 오세요.” 문 앞에는 젖은 고양이 한 마리." width="100%"></a></td>
+<td width="50%" valign="top"><a href="#clip-06-踏切夕方"><img src="assets/clips/clip-06-railway-crossing.svg" alt="Slate for clip 06, 日本語: 手描き2Dアニメ。電車が通り過ぎ、 向こう側には誰もいない。" width="100%"></a></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="#clip-07-чай-ещё-горячий"><img src="assets/clips/clip-07-tea-still-hot.svg" alt="Slate for clip 07, Русский: Два стакана в подстаканниках, пар над обоими. «Садись. Чай ещё горячий.»" width="100%"></a></td>
+<td width="50%" valign="top"></td>
+</tr>
+</table>
+
+#### Clip 01: The paper fan
+
+<sub>English · 8 s · 16:9 · continuous · slate: not rendered yet</sub>
+
+**What people usually type:** *cinematic close up of hands folding a paper fan, warm lighting, 4k, ASMR*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> Locked tabletop shot. Two hands finish the last fold of a paper fan and let go. The fan settles on the wood. Hold still for one beat. Warm desk-lamp light; dry paper rustle and room tone. No music.
+
+</details>
+
+#### Clip 02: Night bakery, three shots
+
+<sub>English · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 1.5, S = 3.3</sub>
+
+**What people usually type:** *artisan bakery b-roll, bread being scored, cinematic warm light, slow motion, multiple shots*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> Shot 1. Locked close-up inside a dark bakery before dawn: one bare bulb throws a shaft of light
+> across a floured wooden bench, and flour dust drifts through the beam. Shot 2. Cut to a medium
+> shot at bench height: a baker's hands score a proofed loaf with a razor blade in one clean
+> curve, the cut opening as the blade passes, a little flour lifting off the knuckles. Shot 3. Cut
+> to the oven door swinging open toward camera, then a slow push-in through the heat shimmer until
+> the loaf's dark crust fills the frame; hold there. Warm tungsten light only; the rest of the
+> room falls to black. Sound: the blade through dough, the oven door's hinge, a low burner roar.
+> No music, no subtitles.
+
+</details>
+
+#### Clip 03: 最后一碗
+
+<sub>中文 · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
+
+**What people usually type:** *深夜小店老板娘温暖治愈的一幕，电影感，氛围感，8K*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> 固定中景，镜头与柜台同高。深夜的小粉店，卷帘门已经拉下一半，柜台上只剩一盏灯。老板娘（五十多岁，围裙，袖口挽起）正把抹布叠好，手停在半空，抬眼看向门口，把一副早就摆好的筷子往前推了推。老板娘平静地说：“还有最后一碗，坐吧。”说完低头继续擦柜台，嘴角不动。灯光只有柜台上方那一盏暖光灯，门外是冷色的路灯。声音：风扇的嗡嗡声，汤锅轻微的咕嘟声，说话时其他声音压低；无配乐。保持无字幕。
+
+</details>
+
+#### Clip 04: 雨夜面摊，三个镜头
+
+<sub>中文 · 15 s · 16:9 · storyboard · slate: not rendered yet · ladder: Safe: 3 beats, load 2, S = 3.0</sub>
+
+**What people usually type:** *雨夜面摊，烟火气，运镜丝滑，多个镜头，大片感*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> 镜头1：固定特写，雨夜路边面摊，大锅上的蒸汽涌进头顶那盏白炽灯的光里，雨丝在光里划过，锅沿挂着水珠。镜头2：镜头切至摊主的中景，摊主（六十岁左右的男人，白背心，毛巾搭肩）抓起一把面甩开、抖散，落进滚水里，水面翻起一圈白沫，他随手盖上锅盖。镜头3：镜头切至柜面的低角度，一碗浇了葱花和辣油的面被推到画面前方，一只湿漉漉的手接过碗，碗停在画面中央，蒸汽继续往上冒。全片只有摊头这一盏灯，背景是雨里模糊的车灯。声音：雨声、油锅和滚水的声音、碗底在木板上划过的声音；无配乐，保持无字幕。时长：15秒。
+
+</details>
+
+#### Clip 05: 새벽 세 시 편의점
+
+<sub>한국어 · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
+
+**What people usually type:** *새벽 편의점 알바생 감성 영상, 시네마틱, 비 오는 날, 고양이*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> 카메라는 계산대 높이에 고정된 미디엄 숏. 새벽 세 시의 편의점, 창밖에는 비가 내리고 냉장고 불빛이 통로를 비춘다. 야간 아르바이트생(이십 대 여성, 조끼 유니폼, 머리를 대충 묶음)이 계산대 뒤에서 컵라면 진열을 정리하고 있다. 출입문 차임벨이 울리고, 그녀는 고개를 들지 않은 채 습관처럼 말한다. 아르바이트생: “어서 오세요.” 대답이 없자 고개를 들어 문 쪽을 본다. 문 앞 매트 위에 젖은 고양이 한 마리가 앉아 그녀를 올려다보고 있다. 그녀는 아무 말 없이 반쯤 웃은 얼굴로 멈추고, 카메라는 그 표정에서 끝난다. 조명은 편의점 형광등과 창밖의 파란 새벽빛뿐. 소리: 차임벨, 유리창을 때리는 빗소리, 냉장고의 낮은 웅웅거림, 대사 중에는 다른 소리를 낮춘다. 음악 없음, 자막 없음.
+
+</details>
+
+#### Clip 06: 踏切、夕方
+
+<sub>日本語 · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
+
+**What people usually type:** *夏の夕方、踏切で電車を待つ少女、エモいアニメ風、有名スタジオっぽく*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> 手描きの2Dセルアニメーション。セル画で描かれた人物を、水彩で塗られた背景の上に置く。1990年代のテレビアニメ調で、フィルムの粒子がわずかに乗った質感、限られた色数。夕方の住宅地の踏切。麦わら帽子をかぶった少女（十代前半、白いワンピース、片手に金魚の入った袋）が遮断機の前で立ち止まる。警報機が鳴り、電車が画面を横切る。車窓の光が少女の顔に描かれた縞になって明滅し、髪とワンピースの裾が風で遅れて揺れ、電車が抜けた後もひと呼吸だけ揺れが残る。踏切の向こう側には誰もいない。少女は小さく息を吐き、そのまま止め絵になる。カメラは背景の絵に対して固定。動きは基本二コマ打ち、電車の通過だけ背景のスクロールとスピード線で見せる。光は描かれた二段階のセル影、電車の窓明かりは顔の上の白い帯として描く。音：踏切の警報音、電車の通過音、通り過ぎたあとは蝉の声だけが残る。音楽なし、字幕なし。
+
+</details>
+
+#### Clip 07: Чай ещё горячий
+
+<sub>Русский · 10 s · 16:9 · continuous · slate: not rendered yet</sub>
+
+**What people usually type:** *уютная кухня, дедушка пьёт чай, кинематографично, атмосферно, 4k*
+
+<details>
+<summary>The prompt the skill wrote</summary>
+
+> Статичный средний план на уровне стола. Зимний вечер, маленькая кухня в старой квартире: за
+> окном синие сумерки и снег, горит только лампа над столом. Пожилой мужчина (за шестьдесят,
+> вязаный жилет, очки сдвинуты на лоб) сидит боком к камере и режет хлеб. На столе два стакана чая
+> в металлических подстаканниках, над обоими пар. Не поднимая глаз, он двигает второй стакан к
+> пустому стулу на краю кадра и говорит ровно, почти буднично. Мужчина: «Садись. Чай ещё горячий.»
+> Потом возвращается к хлебу, и только рука на мгновение задерживается на стакане. Свет: тёплая
+> лампа над столом и холодный свет из окна. Звук: тиканье кухонных часов, нож по доске, тихий стук
+> стакана о клеёнку; во время реплики остальные звуки тише. Без музыки, без субтитров.
+
+</details>
+
+How the clips are made, the settings, the internal read behind each prompt and the render record are in the [front-page clip brief](https://github.com/Emily2040/seedance-2.0/blob/main/docs/FRONT_PAGE_CLIPS.md). A rendered clip proves that one take; it is not a promise about the next one.
 
 ## Start Here
 
@@ -35,7 +165,7 @@ dry paper rustle and room tone.
 No music.
 ```
 
-**Why these choices:** one visible action, a clear endpoint, a fixed camera and
+This is the prompt behind clip 01 in the gallery above. **Why these choices:** one visible action, a clear endpoint, a fixed camera and
 an explicit sound choice. Duration and aspect ratio belong in your provider's
 controls when that surface owns them. This is an unrendered teaching example;
 it does not establish successful folding, motion or audio generation.
@@ -202,8 +332,10 @@ Inspect how that client packages files before using a direct import. See
 
 ## What it routes
 
-Describe the situation; the root skill loads what that situation needs. The
-common cases:
+Describe the situation; the root skill loads what that situation needs.
+
+<details>
+<summary>The common cases, and what each returns</summary>
 
 | You say | It loads | You get |
 |---|---|---|
@@ -220,6 +352,8 @@ common cases:
 | “This uses a character, brand or real person.” | [`seedance-copyright`](skills/seedance-copyright/SKILL.md) | A safer rewrite that keeps the creative function. |
 | “I need this for a client, campaign or delivery.” | [`pro-filmmaking-standards`](references/pro-filmmaking-standards.md) | The production object the role needs, then the prompt that fits inside it. |
 | “API, pricing, model ID, provider?” | [`api-workflow`](references/api-workflow.md) | A source-gated operational checklist. |
+
+</details>
 
 ![Seedance 2.0 Skill OS operating diagram: seven gates feed the seedance-20 root, which routes to the core pipeline, governance, and multilingual vocabulary clusters, backed by the reference library and validators](assets/skill-map.svg)
 
@@ -348,6 +482,12 @@ has its own sealed build toolchain: run
 `python -I -S -B scripts/build_masthead_outlines.py --install-build-deps` once,
 then `--check`; the full trust chain is in the
 [masthead build guide](https://github.com/Emily2040/seedance-2.0/blob/main/docs/MASTHEAD_BUILD.md).
+
+The clip gallery follows one rule: a clip on this page is Seedance 2.0 output
+rendered from the prompt printed beneath it, captioned with surface, date and
+settings, or its slate says it is not rendered yet. Slates are generated from
+`data/front-page-clips.json` by `scripts/build_clip_posters.py`, whose
+`--check` keeps them in step with the data.
 
 The masthead is served through a `prefers-color-scheme` picture element; the
 operating diagram `assets/skill-map.svg` carries its own background so it reads
