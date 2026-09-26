@@ -17,8 +17,12 @@ Use this reference when sequence or continuation output fails.
 | Reference roles contaminate | Transfer/ignore clauses were absent. | Split reference roles and exclusions. |
 | Event density is too high | Several beats were compiled into one prompt. | Reassign future beats to later clips. |
 | Character performs the accident on purpose | An involuntary outcome (a coat caught in a door, a slip, a spill) was written as the endpoint. | Write the deliberate action, or leave the consequence off screen. |
-| A face or object changes colour, or an idiom appears as a picture | Figurative wording ("his face fell", 脸沉下来) was rendered literally. | Write the expression as muscles and objects; colour only as material. |
+| A face or object changes colour, or an idiom appears as a picture | Figurative wording ("his face fell", 脸沉下来) was rendered literally. | Name the feeling in a plain word with one physical anchor; colour only as material. |
 | Only one of several actions in a shot appears | Several actions were stacked in one shot block. | One action per shot; split or cut the rest. |
 | Light or a face changes between cuts | The lock line was written once, not in every shot. | Repeat light and identity in the same words at the end of every block. |
 | The ending never lands on the intended frame | The endpoint was outside the shot's framing with no move or cut. | Write the move that reaches it, or the next shot. |
+| A room of mannequins: a crowd or partner freezes mid-gesture | People were told to hold or not move. | Give secondary people one line of idle business that continues; only objects are still. |
+| A sulk or grimace where the scene needed shock, shame or fear | The reaction was a bare list of muscles with no feeling named. | Name the feeling in a plain word, then one physical anchor. |
+| A character is back where an earlier shot left them | The lock line repeated identity but not position. | Restate where each principal stands, relative to a landmark, in every lock line. |
+| A line delivered by a dead face | The only delivery direction was "flat" or 平静地. | Direct the voice and the eyes, and say what the face does after the last word. |
 | Prompt refused before rendering | Cue words stacked: a weapon, an injury, a crime, a minor in peril, a named institution. | Run the moderation pre-screen; remove, move off frame, or replace with the consequence. |
