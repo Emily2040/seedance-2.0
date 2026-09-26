@@ -9,7 +9,7 @@
     {
       "path": "evals/evals.json",
       "role": "evaluator",
-      "sha256": "6219b1f4e1fce732dc963c412dd04cc68c497cd6d777e6360082e5377497f30f"
+      "sha256": "95665f9f65b7da08cb83ea6de3eb01bdf4140f8aa61aa757ba5d9f8b393818b4"
     },
     {
       "path": "evals/fixtures/sequence-airport-arrival-project-state.json",
@@ -114,7 +114,7 @@
     {
       "path": "references/directing-engine.md",
       "role": "responder",
-      "sha256": "e0ad14249eebe93bbb83006585b6be60d8108f3202f2a75ce86cad95f4e09d88"
+      "sha256": "ed62f1d903206aca0e6b1d3d3cbcf1e6698fb754b7393dc72a68025b5f4b0b87"
     },
     {
       "path": "references/directors-read.md",
@@ -129,7 +129,7 @@
     {
       "path": "references/event-density.md",
       "role": "responder",
-      "sha256": "5b7c74b6b2de3fa9ce2725d0d237203b7849445f433b5b1c3745649a936ef997"
+      "sha256": "cda274d6fe4ead2d834063a0b96641ad640c6671d8787aaed111a2af5cc2e244"
     },
     {
       "path": "references/example-card-format.md",
@@ -334,7 +334,7 @@
     {
       "path": "references/multishot-grammar.md",
       "role": "responder",
-      "sha256": "4fbae832de4014dcd8b781118493a04f916524fe881b3906c87b39f03a85e4b1"
+      "sha256": "16c0f851264e5a981e45c25d48f6b2f2f9fa482caf8efce381348d43118f5f6e"
     },
     {
       "path": "references/outcome-comparison.md",
@@ -484,7 +484,7 @@
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "7f4f045a7a792dd7fa7a67762331980a75a1160e5199354ba74ff15655324605"
+      "sha256": "fb7b96f2567604e5b9290888732d7e333cbff68512ed9b4c44e40b9c3b84f9f6"
     },
     {
       "path": "skills/seedance-antislop/SKILL.md",
@@ -569,7 +569,7 @@
     {
       "path": "skills/seedance-prompt/SKILL.md",
       "role": "responder",
-      "sha256": "c6c7b02990ac163c1140e0c756c252b1a67611775173fc048e0401030cee175a"
+      "sha256": "73e0725f8178c055cf9c9ac23f81d11d784aaffe3a9298936ae6aa3252dc7b2f"
     },
     {
       "path": "skills/seedance-recipes/SKILL.md",

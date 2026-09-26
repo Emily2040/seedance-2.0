@@ -144,6 +144,7 @@ REQUIRED_IDS = {
     "domestic_thriller_prescreened_before_delivery",
     "named_legal_scene_prescreened_documents_unnamed",
     "accident_endpoint_rewritten_as_deliberate_action",
+    "short_drama_hook_states_premise_by_shot_two",
 }
 
 

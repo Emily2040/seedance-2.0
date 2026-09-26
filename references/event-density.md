@@ -28,7 +28,7 @@ ByteDance's own troubleshooting notes for Seedance 2.0 state the rule in both di
 
 Too much duration for too little content and the model improvises; too little duration for several shots and the content and the lines garble. The remedy in the same file is to split: 把原来的四个镜头拆成两个视频，给够人物说英文台词的时间, four shots become two videos so the English line has time to be spoken.
 
-This repository's planning number for that warning is the load score in [multishot-grammar](multishot-grammar.md): seconds per load point S = duration ÷ (beats + load). S of 3.0 or more is Safe, 2.0 to 3.0 is Stretch, under 2.0 is Ambitious and the split is the recommended spend. The thresholds are authored heuristics awaiting rendered calibration, not official limits. Shape comes first: a single continuous action in one scene is one paragraph and needs no score.
+This repository's planning number for that warning is the load score in [multishot-grammar](multishot-grammar.md): seconds per load point S = duration ÷ (beats + load), where a reaction shot or an insert counts half a beat. S of 3.0 or more is Safe, 2.0 to 3.0 is Stretch, under 2.0 is Ambitious and the split is the recommended spend. The thresholds are authored heuristics awaiting rendered calibration, not official limits. Shape comes first: a single continuous action in one scene is one paragraph and needs no score.
 
 ## Splitting Triggers
 

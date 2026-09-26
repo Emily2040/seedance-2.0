@@ -66,8 +66,11 @@ beat:
 | A location or setting change | 2 | A new space is a new composition and light |
 | A sound cue that must land on an action | 0.5 | Sync is probabilistic |
 
-Total load L. Available seconds D come from the surface parameter (4–15 on
-2.0, official). Seconds per load point S = D ÷ (beats + L). The thresholds:
+A reaction shot or an insert (no new action, no line, no move) counts half a
+beat; this was added on 2026-09-26 after the first gallery drafts showed the
+full-beat count pushing every scene to two or three master shots. Total load
+L. Available seconds D come from the surface parameter (4–15 on 2.0,
+official). Seconds per load point S = D ÷ (beats + L). The thresholds:
 
 | S | Reading | Ladder position |
 |---|---|---|
