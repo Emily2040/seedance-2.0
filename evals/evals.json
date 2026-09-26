@@ -3123,15 +3123,16 @@
     },
     {
       "id": "figurative_reaction_directed_as_muscles_with_lock_line",
-      "prompt": "My banquet prompt says the old man's face falls (脸沉下来) when the uninvited woman walks in, then he puts his cup down, turns away, and the man beside him half rises to stop her. The render turned his face grey, did only the cup, and the lamplight went blue by the next cut. Fix the shot.",
-      "expected_output": "It names the causes (idioms render literally, stacked actions collapse to the first one understood, light is not kept across a cut unless restated), rewrites the reaction as muscles and objects (the smile leaves his mouth, the jaw sets, the cup goes down on the cloth), gives the shot one primary action with the neighbour told to hold or moved to his own reaction shot, and ends the block with a lock line that repeats the lamp and the old man's age, hair and wardrobe in the same words as shot one.",
+      "prompt": "My banquet prompt says the old man's face falls (脸沉下来) when the uninvited woman walks in, then he puts his cup down, turns away, and the man beside him half rises to stop her; the guests are told not to move. The render turned his face grey, did only the cup, froze the whole table with cups in the air, and the lamplight went blue by the next cut. Fix the shot.",
+      "expected_output": "It names the causes (idioms render literally, stacked actions collapse to the first one understood, people told not to move freeze like mannequins, light and blocking are not kept across a cut unless restated), rewrites the reaction as a plain feeling plus one physical anchor (stunned, eyes on her, a swallow, then the cup goes down on the cloth) rather than a bare list of muscles, gives the shot one primary action with the neighbour moved to his own reaction shot and the guests given idle business (they look at the door, whisper), and ends the block with a lock line that repeats the lamp, the old man's age, hair and wardrobe, and where he sits, in the same words as shot one.",
       "assertions": [
-        "replaces the idiom with literal muscle or object direction rather than another figure of speech",
-        "reduces the shot to one primary action and holds or moves the others",
-        "ends the shot block with a lock line that repeats the light source and the principal's description",
-        "names the causes: idioms render literally, stacked actions collapse, light drifts across uncaptioned cuts"
+        "replaces the idiom with a plain feeling word plus one physical anchor rather than another figure of speech or a bare muscle list",
+        "reduces the shot to one primary action and moves the neighbour's action to its own shot",
+        "gives the guests idle business instead of telling them not to move",
+        "ends the shot block with a lock line that repeats the light source, the principal's description and his position",
+        "names the causes: idioms render literally, stacked actions collapse, freezes render as mannequins, light and blocking drift across unrepeated cuts"
       ],
-      "failure_mode": "writing expressions as idioms, stacking several actions in one shot block, and leaving light and identity unrepeated across cuts",
+      "failure_mode": "writing expressions as idioms or bare muscle lists, stacking several actions in one shot block, freezing everyone else, and leaving light, identity and position unrepeated across cuts",
       "skills_expected_to_activate": [
         "seedance-prompt"
       ]

@@ -12,7 +12,7 @@ What this means in the prompt:
 
 - Number shots in event order. Chinese prompts use 镜头1 / 镜头2 / 镜头3; English prompts use `Shot 1` / `Shot 2` / `Shot 3` as the same device. Plain prose with “cut to” remains valid prompting ([Runway's official help](https://help.runwayml.com/hc/en-us/articles/50488490233363-Creating-with-Seedance-2-0) shows a multi-shot prose example without headings), and no cited source establishes a universal label parser.
 - Write the cut inside the block, in words: “cut to a low angle from the doorway”, 镜头切至, 硬切. A bare label organises content; it is not a cut command.
-- Order each shot block the way the guide recommends: the camera move or cut type first, then the subject's action and expression, then any position or space change, then the audio for that shot. End every block with a lock line that repeats the light and each principal's identity in the same words as the first shot; the rules for that, for literal expression and for prop mechanics are in [direct-for-the-model](direct-for-the-model.md).
+- Order each shot block the way the guide recommends: the camera move or cut type first, then the subject's action and expression, then any position or space change, then the audio for that shot. End every block with a lock line that repeats the light, each principal's identity, each principal's position and facing, and the camera's side in the same words as the first shot; the rules for that, for feeling-plus-anchor expression, for keeping the rest of the frame alive and for prop mechanics are in [direct-for-the-model](direct-for-the-model.md).
 - Do not write absolute seconds inside shot blocks on 2.0. When a beat needs a felt length, write it as behaviour: “hold on the settled fan for one beat”, not “hold 2 s”. Timestamp lists also compete with an audio reference as a second clock (see [audio-guide](audio-guide.md)).
 - Set duration as the surface parameter. On Chinese-facing surfaces, an optional echo at the start or end of the prompt, 时长：X秒 written with the Chinese 秒, is a documented reinforcing tip, not a control.
 - One camera move per shot. A locked camera is written in prose, because `camera_fixed` is not supported on the 2.0 series.
@@ -44,7 +44,9 @@ For a storyboard clip, list the beats the user wants (each beat is one shot), th
 |---|---|---|
 | A camera move within the shot (a cut to a new locked framing scores 0; the cut is already the beat boundary) | 0.5 | Official: one move per shot; a move needs time to read |
 | A spoken line | 1 per 8 English words or 12 Chinese characters, minimum 1 per line | Speech needs its own seconds; these rate constants are unmeasured on 2.0 |
-| Each person in frame beyond one | 1 | Multi-subject omission and duplication are documented continuation defects, and the model card lists multi-speaker lip-sync errors |
+| Each additional principal who acts in the beat | 1 | Multi-subject omission and duplication are documented continuation defects, and the model card lists multi-speaker lip-sync errors |
+| A second person in frame who only holds, reacts or is walked past | 0.5 | Recalibrated from three rendered banquet takes (below); a held second person costs less than a second performance |
+| A background group with idle business | 0 | Crowds are furniture until directed; see direct-for-the-model |
 | Physical contact between bodies, or between a body and a prop, that must land | 1 | Fragile physics; needs a visible cause and endpoint |
 | A location or setting change | 2 | A new space is a new composition and light |
 | A sound cue that must land on an action | 0.5 | Sync is probabilistic |
@@ -58,6 +60,8 @@ Total load L. Available seconds D come from the surface parameter (4–15 on 2.0
 | 3.0 or more | Comfortable | **Safe** |
 | 2.0 to 3.0 | Tight; dialogue and contact at risk | **Stretch** |
 | Under 2.0 | The official density warning's territory | **Ambitious**: propose two generations instead |
+
+First reading from rendered takes (2026-09-26 and 2026-09-27, 即梦, 15 s, 16:9): three takes of the same banquet scene, five cuts each with one spoken line, a pour insert and a set-down insert, rendered every cut cleanly with each shot near three seconds and slack in the line shot. By the original count that scene scored S = 1.9 with the second person at a full point; the person row above is now split so a held or reacting second person costs half, which places the scene's six-shot form at the same S. Three takes are a first reading, not a measurement; the thresholds stay authored.
 
 The constants are consistent with the official three-shots-per-15-seconds examples (one move each: S = 3.3, Safe) and with the field-reported 2–4 sub-shots per 8–15 seconds. They are the first thing a rendered calibration pilot should measure; until then, say so when you use them. Short-drama coverage, four or five shots with a reaction and a line or two in fifteen seconds, lands on Stretch by this arithmetic, and that is the honest label: it is the register the genre is cut in, and the front-page gallery runs it on purpose as the calibration the thresholds are waiting for.
 
