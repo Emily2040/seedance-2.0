@@ -4,7 +4,7 @@
     {
       "path": "SKILL.md",
       "role": "root",
-      "sha256": "9cc2161b0dad7f0fb75490106eda34f314de503bcadfba515364053cf7bdcd92"
+      "sha256": "b38ff880498b78dfb4cb08924c47c29e19d6ff3066c6e4af426da3cc6b6ed232"
     },
     {
       "path": "evals/evals.json",
@@ -499,142 +499,142 @@
     {
       "path": "skills/seedance-antislop/SKILL.md",
       "role": "responder",
-      "sha256": "9db9204157227e3184cc8516c87046e4a37df9d75be894c1e1c1aa8978cf6146"
+      "sha256": "a5fa590270963f62e9001b92c62d008368cf57d6a73a84c8886e4d19d71a6bb7"
     },
     {
       "path": "skills/seedance-audio/SKILL.md",
       "role": "responder",
-      "sha256": "f163f7bf6f5b075800bef2e03cf313ee9aee9d3c23f135a630bafc8ed92c1245"
+      "sha256": "2a22decdb2a32804dfeefd3da798efe3ea47495dbbc5dbc098e0f778ed5b6d0f"
     },
     {
       "path": "skills/seedance-camera/SKILL.md",
       "role": "responder",
-      "sha256": "1fbc80be6006ba2b9d9b96ba045688e9a8a710d112a93ccd01795ddb619d2628"
+      "sha256": "27e8cf59493ea433670f4d6475d8769558268224c8405986c5549d9a4523eb47"
     },
     {
       "path": "skills/seedance-characters/SKILL.md",
       "role": "responder",
-      "sha256": "f524d24f8f44f0431f8bc553fc7737c6c7bbf5a3d2c17d97016d9f8b0cec9424"
+      "sha256": "3f860f85223adf53ad58404bd70fea088187571befcf126a9d989abee58357c9"
     },
     {
       "path": "skills/seedance-continuation/SKILL.md",
       "role": "responder",
-      "sha256": "0b9e354918e555495de5ae720c8fadc6f584681e51efca64a127824ce52005bc"
+      "sha256": "4d0ce46e98790c08ce4250ad957de74aa44969b7c0a5d2d2d5679966f0e779c6"
     },
     {
       "path": "skills/seedance-copyright/SKILL.md",
       "role": "responder",
-      "sha256": "00f62eab53c7c1a20df7431b2839d74615c57bc732eafa0aadfae4ee72982afe"
+      "sha256": "6ce3cb822cb4dd3b7b0eac7fd764f1989540e78b827404c22e9b9d7637ebfbdc"
     },
     {
       "path": "skills/seedance-examples-ja/SKILL.md",
       "role": "responder",
-      "sha256": "f1ac8498697f40f9a4b78401868bc13a9b3154864f72cfa27c9e357db43618a0"
+      "sha256": "323485f3093f5ce05823ef3c7878b18855873005a3e620af92a959c4a1ff3517"
     },
     {
       "path": "skills/seedance-examples-ko/SKILL.md",
       "role": "responder",
-      "sha256": "19633d37bb759c8493d976744906ba2288351718f7fd1c064d3c52d87bdbf919"
+      "sha256": "6baf27012f456cd493988568e0e0e46e8bdeda4d8ee00ae2936ee4014298a0d8"
     },
     {
       "path": "skills/seedance-examples-zh/SKILL.md",
       "role": "responder",
-      "sha256": "51ddd2139b43ad3a272a2ac6347645c98dedf5f48b944f1a741d3e25380fcef2"
+      "sha256": "d7ec40f97494981b863452f5f3e63fb32fc5318e73649f5bd754fb4f7c45623e"
     },
     {
       "path": "skills/seedance-filter/SKILL.md",
       "role": "responder",
-      "sha256": "8a510514cd44b405fe81794d068120361304bbd565a8d1df37fcd0c6b312e3e5"
+      "sha256": "541fcac9120c7f0b6e30b7080a898b9aaff8c2545396af28727e5aed2ac21ac5"
     },
     {
       "path": "skills/seedance-interview-short/SKILL.md",
       "role": "responder",
-      "sha256": "0a8d99ed110354c9bc6c027e6c55c4064f78712131c2a2e4e6ff57d4573f16f7"
+      "sha256": "5c4001ce4e92dea9491a30f0d8e12b9cee2c09fa0412acafc11d1eae816ff905"
     },
     {
       "path": "skills/seedance-interview/SKILL.md",
       "role": "responder",
-      "sha256": "a408e03d7a112884d41950ef93a8cbb6001b92179bf159cfd5c000a1921bb6b5"
+      "sha256": "93149997bfd1f7badf7490f05726b7a08608e69628695b1a7993094b93548266"
     },
     {
       "path": "skills/seedance-lighting/SKILL.md",
       "role": "responder",
-      "sha256": "def5981f5d9aa752720e07cc6125425139c29945c82988b082287e273e29001b"
+      "sha256": "d9a929966a5409a2a0f49f37f5559275fb2184766daabc7027640a807dd83bd1"
     },
     {
       "path": "skills/seedance-motion/SKILL.md",
       "role": "responder",
-      "sha256": "b0c9d4bc9b84f34be6180dc4ecdf28725244d0879b309bbd5bc0f24508bf1a05"
+      "sha256": "83cc873b312d59a6f168ec1e038cc0c4fa2c6364a0b815bd97839c946d28a1a1"
     },
     {
       "path": "skills/seedance-pipeline/SKILL.md",
       "role": "responder",
-      "sha256": "d54099c3c65c97fdc7f37346a4298078cd7dc7b0c07038ed2cd47cd2af85c283"
+      "sha256": "e0816bec882c31d62ea5a1b9853e68d9ff823ecbbe621b9b74d684f9af7ebdbf"
     },
     {
       "path": "skills/seedance-prompt-short/SKILL.md",
       "role": "responder",
-      "sha256": "b343aba1f8e85696cfc36335da149ab4c373a52580c062361be57a6a2df856c2"
+      "sha256": "44d206d7b33959c8d70e37acb136c3ea781b1c468b3dffee31ebe613f4a8eb42"
     },
     {
       "path": "skills/seedance-prompt/SKILL.md",
       "role": "responder",
-      "sha256": "3ae6968f00c6c9a9b07dd90c2e9853af4dc568bb5fd5c4840b59c92153104cfb"
+      "sha256": "2bcd63649aa4cafed7ca566e2305b5bf52f8593b74e2269fca85ee8ddc444ac2"
     },
     {
       "path": "skills/seedance-recipes/SKILL.md",
       "role": "responder",
-      "sha256": "636549cb16360b99191a3d327aefcb5fc0471c37b65b97719cb89fce14763ee9"
+      "sha256": "4b570db4865207c8f7d03c48660d681bdf0014150d9f89d6a3f0650410bb5557"
     },
     {
       "path": "skills/seedance-sequence/SKILL.md",
       "role": "responder",
-      "sha256": "8c8e85ee081ee9cbe73c46a7b0dedd6cf5b7a6627fcdde498f9a46c2b58592ed"
+      "sha256": "27524e8c58b70bc1570c2e9772d5970351920a32dc8a813a5aa2f3277ed8ea13"
     },
     {
       "path": "skills/seedance-style/SKILL.md",
       "role": "responder",
-      "sha256": "da9ca0c0755216f3b0cbfcf796b3c0b31a3d9df85c9ffd614657d658bedcd3e8"
+      "sha256": "d3a98aae04d9b710b5c01f7a0cc5568a9d8db6286f315fa2bd1df2e07bbef359"
     },
     {
       "path": "skills/seedance-troubleshoot/SKILL.md",
       "role": "responder",
-      "sha256": "05d90729cc530c7c98be99f5664a8b9ae208c034f98dfe83bc7b6227c36b24a8"
+      "sha256": "784264b5a6c72ca5396c0b48561ecc4ce1fd65e1d33c7ad7bdad08cfdad5be75"
     },
     {
       "path": "skills/seedance-vfx/SKILL.md",
       "role": "responder",
-      "sha256": "dc4d91d1acd543a4f33ea2b938a0fd11db7be8950c8e9e7287667f09b4506979"
+      "sha256": "50e803f4756c1b2609f5fd99a4cd872f32228a5adc7c9210ad1eae7f04fd64b1"
     },
     {
       "path": "skills/seedance-vocab-en/SKILL.md",
       "role": "responder",
-      "sha256": "7abdd2b47a878ad1be694f300f01af1217ab41e6a6877c2f6e19d7528744a765"
+      "sha256": "008a227985affb0d9db021a9b0b2679fcce8d4fd8bcebeebcee4cb4676debaad"
     },
     {
       "path": "skills/seedance-vocab-es/SKILL.md",
       "role": "responder",
-      "sha256": "4f073d7e7feebcb9605dbc9a6171f3e0c8671ade63628ed49be8e4024d1a6741"
+      "sha256": "19e04f77c69533d4887e2974e525ab26e50d8cf27e8a5f9874f0673ed1657ad1"
     },
     {
       "path": "skills/seedance-vocab-ja/SKILL.md",
       "role": "responder",
-      "sha256": "28e87b7ed8971df6acabe1348a2a8d0fe9a7123f518b48a4fabdce14cc3a180b"
+      "sha256": "1b55f1fefddd0bc6a8d5dab49802ddb1ba5ae1071a26f32240d9036944786dd1"
     },
     {
       "path": "skills/seedance-vocab-ko/SKILL.md",
       "role": "responder",
-      "sha256": "28033f3fd73f8ebf2bdfcbc7623d5af18c1a1d5cac775e2457ae067f203f07ec"
+      "sha256": "cab9cfabeac7dacbea7f95cfd6ebf5ce213f87e9d08173f7a33e4528e102e662"
     },
     {
       "path": "skills/seedance-vocab-ru/SKILL.md",
       "role": "responder",
-      "sha256": "074d483a42c7a1094b2c9e49c2fb44d694fd1e2405f9a9dd9b92d8ca659bd437"
+      "sha256": "506e5ef5ec07520e99d4ae82f7fef9f179fdb65b4a4f7b27681c25a564524c8c"
     },
     {
       "path": "skills/seedance-vocab-zh/SKILL.md",
       "role": "responder",
-      "sha256": "f6568a49e0c0170dd94381ffe683b497c038bd0d499850e2fb165ce2d572506d"
+      "sha256": "811016698c6613d02ac9227a10e8944ecdcc6733af026d150adc20818c96e9e3"
     }
   ]
 }

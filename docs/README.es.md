@@ -6,7 +6,7 @@
 
 # Seedance 2.0 Skill OS · Español
 
-Convierte una idea en un prompt dirigido, listo para enviar. Esta es la página en español de la versión v6.7.0. No es una traducción de la página en inglés: el orden, los ejemplos y las preguntas están pensados para creadores y agencias de habla hispana. El video lo genera y lo cobra el servicio que tú elijas; esta skill solo se ocupa de escribir bien el prompt.
+Convierte una idea en un prompt dirigido, listo para enviar. Esta es la página en español de la versión v6.8.0. No es una traducción de la página en inglés: el orden, los ejemplos y las preguntas están pensados para creadores y agencias de habla hispana. El video lo genera y lo cobra el servicio que tú elijas; esta skill solo se ocupa de escribir bien el prompt.
 
 **Idiomas:** [English](../README.md) · [中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · Español (esta página) · [Русский](README.ru.md)
 
@@ -60,6 +60,16 @@ El instalador solo copia archivos: no se conecta a la red, no sube nada y no lee
 | Un resultado que falló | [`seedance-troubleshoot`](../skills/seedance-troubleshoot/SKILL.md) | Un diagnóstico de causa y una corrección de una sola variable |
 | Personas reales, personajes, marcas o canciones | [`seedance-copyright`](../skills/seedance-copyright/SKILL.md) | Una reescritura segura que conserva la función creativa |
 | Vocabulario en español | [vocabulario de dirección en español](../references/vocab/es.md) | Encuadres, movimientos de cámara, luz y sonido en español |
+
+## Primero la tabla de planos, después el prompt
+
+Cuando un prompt tiene más de un plano o más de una persona, la skill escribe primero la [tabla de planos](../references/shot-table.md) y genera el prompt a partir de ella. Primero el lugar en unas frases (dónde está la puerta, hacia dónde mira la cabecera de la mesa, de dónde viene la luz); después una fila por plano: de qué lado está la cámara, quién aparece, dónde está y hacia dónde mira, qué mira, la única acción del plano, qué siguen haciendo los demás, la luz y el último fotograma.
+
+La tabla se entrega debajo del prompt para que compruebes la geografía sobre el papel antes de pagar una generación. Una celda vacía o "por defecto" significa que el prompt todavía no se puede enviar.
+
+La escritura sigue [dirigir para el modelo](../references/direct-for-the-model.md): la emoción es una palabra llana más un gesto del cuerpo ("se queda quieto, alarmado, traga saliva"), sin modismos ni listas de músculos; una acción por plano y los demás siguen con lo suyo, nunca "nadie se mueve".
+
+Al final de cada plano se repiten luz, personajes, posición, orientación y lado de la cámara; los objetos se escriben como movimientos de la mano. Antes de entregar, el prompt pasa el [filtro previo de moderación](../references/moderation-prescreen.md).
 
 ## Reglas para prompts en español
 

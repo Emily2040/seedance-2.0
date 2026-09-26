@@ -1,6 +1,6 @@
 # Seedance 2.0 Skill OS — Quickstart
 
-> Version 6.7.0 · From installation to a first directed prompt.
+> Version 6.8.0 · From installation to a first directed prompt.
 > Full documentation: [README](../README.md).
 
 ## What this is

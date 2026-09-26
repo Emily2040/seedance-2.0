@@ -9,7 +9,7 @@ tags:
   - recipes
   - seedance-20
 metadata:
-  version: "6.7.0"
+  version: "6.8.0"
   updated: "2026-08-01"
   parent: "seedance-20"
   author: "Iamemily2050 (@iamemily2050)"

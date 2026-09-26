@@ -67,6 +67,7 @@ class ModelLineBoundaryTests(unittest.TestCase):
         "README.md",
         "CHANGELOG.md",
         "docs/RELEASE_v6.7.0.md",
+        "docs/RELEASE_v6.8.0.md",
         "references/api-status.md",
         "references/api-workflow.md",
         "references/community-source-methodology.md",
