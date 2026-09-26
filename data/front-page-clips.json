@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "purpose": "The front page's clip gallery: seven prompts written by the skill, one per slot, rendered by the maintainer on Seedance 2.0 and shown with the exact prompt beneath each clip. Until a clip is rendered, its slate stands in.",
+  "surface_note": "Text-to-video only, no reference assets, one generation per clip, no post work. Duration and aspect ratio are surface settings, not prompt text; the Chinese storyboards also carry the documented prose echo. Every prompt passed scripts/moderation_prescreen.py before it was published.",
+  "clips": [
+    {
+      "id": "clip-01-footsteps",
+      "number": 1,
+      "language": "en",
+      "language_label": "English",
+      "title": "Footsteps",
+      "poster_lines": [
+        "A second set of footsteps, a beat late.",
+        "Her car door is already open."
+      ],
+      "duration_seconds": 15,
+      "aspect": "16:9",
+      "shape": "storyboard",
+      "rung": "Safe: 3 beats, load 0.5, S = 4.3",
+      "typical_brief": "scary parking garage scene, someone following a woman, horror, cinematic, jump scare, 4k",
+      "prompt": "Shot 1. Tracking shot from behind a woman in a long coat walking fast through a near-empty underground car park at night, her heels echoing off the concrete, one fluorescent tube ahead of her flickering. A second set of footsteps echoes under hers, slightly out of step. Shot 2. Cut to a close shot of her face as she stops dead and listens: the second set of footsteps stops one beat after hers. She turns her head to look back down the aisle. Nothing there, only the tube flickering over rows of empty bays. Shot 3. Cut to her point of view as she turns back toward her car: the driver's door is already open and the interior light is on. She does not move. Cold green fluorescent light, pools of dark between the tubes. Sound: her heels, the second set of footsteps a beat behind, the tube's electrical buzz, then only the buzz. No music, no subtitles.",
+      "review": [
+        "the second footsteps stop one beat after hers, audibly",
+        "the aisle behind her is empty; the car door is open with the interior light on",
+        "she does not move at the end; no music; no subtitles"
+      ],
+      "status": "unrendered",
+      "file": "clip-01-footsteps.mp4"
+    },
+    {
+      "id": "clip-02-hold-the-line",
+      "number": 2,
+      "language": "en",
+      "language_label": "English",
+      "title": "Hold the line",
+      "poster_lines": [
+        "A wave over the pier. Two hands on one rope.",
+        "When the water drains, he is still standing."
+      ],
+      "duration_seconds": 15,
+      "aspect": "16:9",
+      "shape": "storyboard",
+      "rung": "Safe: 3 beats, load 1, S = 3.75",
+      "typical_brief": "epic storm at sea, fisherman fights giant wave, slow motion, dramatic music, 8k",
+      "prompt": "Shot 1. Wide shot of a wooden pier at night in a storm: a small fishing boat straining at a single mooring rope, its bow lifting and slamming with each swell, rain driven sideways through one sodium lamp, and behind the boat a wave building higher than the mast. Shot 2. Cut to a medium shot at deck height: a man in a soaked oilskin has both hands on the rope, boots braced against a cleat, the rope creaking as the boat pulls; water sheets across the planks around his feet. Shot 3. Cut to a low angle: the wave breaks over the end of the pier and buries him in white water; when it drains away he is still standing, bent double, the rope still taut in his hands, the boat still there. Hold on the taut rope as the next swell lifts the bow. Orange sodium light and black water, nothing else. Sound: wind, the rope creaking, the wave's impact, water draining through the planks. No music, no subtitles.",
+      "review": [
+        "the wave builds in shot 1, breaks in shot 3; the rope is taut throughout",
+        "he is still standing when the water drains; the boat is still there",
+        "real speed; no music; no subtitles"
+      ],
+      "status": "unrendered",
+      "file": "clip-02-hold-the-line.mp4"
+    },
+    {
+      "id": "clip-03-this-cup-of-tea",
+      "number": 3,
+      "language": "zh",
+      "language_label": "中文",
+      "title": "这杯茶",
+      "poster_lines": [
+        "满座敬茶，她把茶倒在桌布上。",
+        "“这杯茶，我妈等了二十年。”"
+      ],
+      "duration_seconds": 15,
+      "aspect": "16:9",
+      "shape": "storyboard",
+      "rung": "Safe: 2 beats, load 3, S = 3.0",
+      "typical_brief": "豪门家宴反转名场面，女主打脸全场，短剧爆点，电影感，高级感",
+      "prompt": "镜头1：固定中景，老宅厅堂里的家宴，一张大圆桌坐满了人，主位的老爷子举起茶杯准备说话。桌角，一位三十多岁的女人（黑色旗袍，头发盘起）先一步站起来，端起自己的茶杯，把满杯的茶慢慢倒在白色桌布上，茶水漫开、冒着热气，一直倒到杯子空了，再把空杯倒扣在湿掉的桌布上。镜头2：镜头切至全桌的广角，所有人都僵住，只有她站着。她看着主位，平静地说：“这杯茶，我妈等了二十年。”说完不坐下，画面停在满桌不动的人和那只倒扣的杯子上。灯光只有头顶一盏老式吊灯，暖黄，桌布最亮。声音：茶水落在桌布上的声音，杯底扣在桌上的一声轻响，说话时全场无声；无配乐。保持无字幕。时长：15秒。",
+      "review": [
+        "she stands before the elder speaks; the tea is poured until the cup is empty and the cup is set upside down",
+        "the line is Mandarin, audible, flat; everyone else is frozen",
+        "the clip ends on the table and the upside-down cup; no music; no subtitles"
+      ],
+      "status": "unrendered",
+      "file": "clip-03-this-cup-of-tea.mp4"
+    },
+    {
+      "id": "clip-04-bamboo-sea",
+      "number": 4,
+      "language": "zh",
+      "language_label": "中文",
+      "title": "竹海",
+      "poster_lines": [
+        "红衣掠过竹海，一竿弯到地面。",
+        "伞开，竿起，人已不见。"
+      ],
+      "duration_seconds": 15,
+      "aspect": "16:9",
+      "shape": "storyboard",
+      "rung": "Safe: 3 beats, load 1, S = 3.75",
+      "typical_brief": "红衣女侠竹林轻功，唯美国风，仙气飘飘，运镜炸裂，8K",
+      "prompt": "镜头1：固定全景，雨中的竹海，风把整片竹梢压向一边，一个红衣女子从竹梢上掠过，每一步落下，那一竿竹子便弯一下又弹起，雨水从竹叶上被震落。镜头2：镜头切至中景，她落在离镜头最近的一竿竹子上，竹竿在她的重量下慢慢弯下来，越弯越低，把她一直送到镜头前，衣袖和发带被风拉直。镜头3：镜头切至低角度，竹竿弯到最低点的一瞬，她撑开一把油纸伞，伞面被雨打得发亮；竹竿弹回天空时她随竿而起，冲出画面上方，镜头停在空了的、还在摇晃的竹竿和雨帘上。全片青绿色的竹林和一点红衣，雨天的灰白天光。声音：风穿过竹林的声音，竹竿弯曲的吱呀声，伞面撑开时的一声脆响，雨声；无配乐，保持无字幕。时长：15秒。",
+      "review": [
+        "each landing bends a stalk that springs back; the near stalk bows toward camera",
+        "the umbrella opens at the lowest point; she leaves the frame upward as the stalk springs back",
+        "the clip ends on the empty swaying stalk; no music; no subtitles"
+      ],
+      "status": "unrendered",
+      "file": "clip-04-bamboo-sea.mp4"
+    },
+    {
+      "id": "clip-05-resignation",
+      "number": 5,
+      "language": "ko",
+      "language_label": "한국어",
+      "title": "사직서",
+      "poster_lines": [
+        "사직서를 그의 서류 위에 올려놓는다.",
+        "“제 보고서, 이름만 바꾸셨더군요.”"
+      ],
+      "duration_seconds": 15,
+      "aspect": "16:9",
+      "shape": "storyboard",
+      "rung": "Safe: 2 beats, load 3, S = 3.0",
+      "typical_brief": "사이다 사직서 장면, 직장인 드라마, 시네마틱, 4K, 감동",
+      "prompt": "샷 1: 밤의 유리벽 임원실, 책상 높이에 고정된 미디엄 숏. 넓은 책상 뒤에서 대표(오십 대 남성, 셔츠 소매를 걷음)가 서류에 서명하고 있고, 고개를 들지 않는다. 젊은 직원(이십 대 후반 여성, 회색 정장, 사원증을 목에 걸음)이 걸어 들어와 봉투 하나를 그가 서명하던 서류 바로 위에 올려놓는다. 봉투에는 ‘사직서’라고 적혀 있다. 그녀는 물러서지 않고 말한다. 직원: “제 보고서, 이름만 바꾸셨더군요.” 샷 2: 컷, 그녀가 돌아서서 문으로 걸어 나가는 뒷모습 너머로 대표가 그제야 고개를 든다. 문이 닫히고, 카메라는 유리에 비친 그의 얼굴에서 멈춘다. 조명은 책상 스탠드 하나와 창밖 도시의 불빛뿐. 소리: 펜 소리가 멈추는 순간, 봉투가 종이 위에 놓이는 소리, 구두 소리, 문이 닫히는 소리. 대사 중에는 다른 소리를 낮춘다. 음악 없음, 자막 없음.",
+      "review": [
+        "the envelope lands on the page he is signing; the pen stops",
+        "the line is Korean and audible; he looks up only after she has turned away",
+        "the clip ends on his reflection in the glass; no music; no subtitles"
+      ],
+      "status": "unrendered",
+      "file": "clip-05-resignation.mp4"
+    },
+    {
+      "id": "clip-06-the-clap",
+      "number": 6,
+      "language": "ja",
+      "language_label": "日本語",
+      "title": "拍手",
+      "poster_lines": [
+        "雨の石段、墨の獣、巫女の拍手。",
+        "打った瞬間だけ白黒反転。"
+      ],
+      "duration_seconds": 12,
+      "aspect": "16:9",
+      "shape": "continuous",
+      "rung": "not scored: one continuous action, full-animation burst then a held frame",
+      "typical_brief": "神作画の巫女バトル、雨の神社、エモい、有名アニメスタジオ風、4K",
+      "prompt": "手描きの2Dセルアニメーション。セル画のキャラクターを、雨に濡れた夜の神社の石段を描いた背景画の上に置く。作画の密度が高く、限られた色数、フィルムの粒子が乗った質感。石段の中ほどで、白衣に緋袴の巫女（黒髪を一つに束ね、袖が雨で重い）が、階段の上から墨のように流れ落ちてくる黒い獣と向かい合う。獣が飛びかかる瞬間、巫女は一歩踏み込み、胸の前で両手を打ち鳴らす。踏み込みから拍手までを一コマ打ちのフルアニメーションで描き、袖と髪が遅れて大きく振れ、打った瞬間だけ画面全体を白黒反転のインパクトフレームにする。獣は黒い墨の飛沫になって砕け、雨に混じって石段を流れ落ち、消える。巫女は両手を合わせた姿勢のまま止め絵になり、肩だけが息で上下し、袖の揺れが遅れて静止する。その前後は二コマ打ち。カメラは背景画に対して固定。光は石灯籠の橙色の明かりと、雨に反射する青。音：雨音、踏み込みの足音、乾いた拍手の一音、そのあとは雨音だけ。音楽なし、字幕なし。",
+      "review": [
+        "reads as drawn 2D cel animation over a painted background, not photoreal or 3D",
+        "the clap is a full-animation burst with one inverted impact frame; the beast breaks into ink and washes away",
+        "the clip ends on a held frame with breathing shoulders and settling sleeves; no music"
+      ],
+      "status": "unrendered",
+      "file": "clip-06-the-clap.mp4"
+    },
+    {
+      "id": "clip-07-one-more-round",
+      "number": 7,
+      "language": "ru",
+      "language_label": "Русский",
+      "title": "Ещё один раунд",
+      "poster_lines": [
+        "Угол ринга между раундами.",
+        "«Ещё один раунд. Потом хоть плачь.»"
+      ],
+      "duration_seconds": 10,
+      "aspect": "16:9",
+      "shape": "continuous",
+      "rung": "not scored: one scene, one speaker, one line",
+      "typical_brief": "тренер и боксёр перед решающим раундом, драма, кинематографично, эпично, 4k",
+      "prompt": "Статичный средний план на уровне канатов, угол ринга между раундами. Ночной боксёрский зал, единственный свет — лампа над рингом. Боксёр (лет двадцать пять, опухшая бровь, капа во рту) сидит на табурете, тяжело дышит, смотрит в пол. Тренер (за шестьдесят, полотенце на плече, седая щетина) стоит над ним, прижимает к брови лёд, завёрнутый в полотенце, и, не повышая голоса, говорит. Тренер: «Ещё один раунд. Потом хоть плачь.» Боксёр поднимает глаза и кивает один раз. Гонг. Он встаёт и выходит из кадра, а камера остаётся на пустом табурете с брошенным полотенцем. Звук: тяжёлое дыхание, шум зала за кадром, звон гонга в конце; во время реплики остальные звуки тише. Без музыки, без субтитров.",
+      "review": [
+        "the line is Russian and audible while the ice is held to the brow",
+        "one nod, the gong, he leaves the frame",
+        "the clip ends on the empty stool with the towel; no music; no subtitles"
+      ],
+      "status": "unrendered",
+      "file": "clip-07-one-more-round.mp4"
+    }
+  ]
+}

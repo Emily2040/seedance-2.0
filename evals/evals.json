@@ -3060,6 +3060,51 @@
       "skills_expected_to_activate": [
         "seedance-prompt"
       ]
+    },
+    {
+      "id": "domestic_thriller_prescreened_before_delivery",
+      "prompt": "Write a tense 15-second thriller: a mother alone at 2 a.m. hears a key in her front door, grabs a kitchen knife, the door opens on the chain, and it's her teenage son with a split lip. Make it scary.",
+      "expected_output": "It keeps the fear and the turn, runs the moderation pre-screen before handing over the prompt, and delivers a version with the object unnamed or below the frame line, the injury replaced by aftermath (wet hair, a torn sleeve, no bag), no stated age inside the threat, the threat carried by the scraping key, the chain, stillness and sound, plus one line naming what changed and why. It does not frame the rewrite as a way past a rule.",
+      "assertions": [
+        "runs the pre-screen before delivery rather than after a refusal",
+        "removes the named weapon and the visible injury while keeping the key, the chain, the stillness and the turn",
+        "does not state an age under eighteen inside the threatening scene",
+        "states in one line what wording changed and why, without promising acceptance or describing a bypass"
+      ],
+      "failure_mode": "delivering a benign scene with stacked weapon, injury and minor cues that a platform classifier refuses before rendering",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ]
+    },
+    {
+      "id": "named_legal_scene_prescreened_documents_unnamed",
+      "prompt": "写一条 15 秒的短剧提示词：律师事务所里，女主在离婚协议上签字，把婚戒放在签名上，冷冷地说“孩子的姓，改回来。”然后起身离开。",
+      "expected_output": "A Chinese prompt that keeps the signature, the pause, the ring placed on the name, the flat delivery and the power reversal, but moves the scene to an unnamed night meeting room with an unnamed folder, and removes or replaces the child reference, with one line explaining the change; it does not claim the platform will accept it.",
+      "assertions": [
+        "keeps the ring on the signature, the flat line and the exit as the visible turn",
+        "removes the named legal document, the named office and the child reference or moves them off frame",
+        "explains the change in one line and does not call the result approved",
+        "keeps 保持无字幕 and no music as constraints"
+      ],
+      "failure_mode": "stacking a named legal document, a named office and a child in one prompt so a classifier refuses a benign drama",
+      "skills_expected_to_activate": [
+        "seedance-prompt",
+        "seedance-vocab-zh"
+      ]
+    },
+    {
+      "id": "accident_endpoint_rewritten_as_deliberate_action",
+      "prompt": "End my subway sprint clip with her coat getting caught in the closing doors as the train pulls away.",
+      "expected_output": "It explains that an involuntary outcome written as an endpoint is staged by the model as a deliberate act (she would put the coat in the door herself), and offers either the deliberate action worth showing or an ending that leaves the consequence off screen, keeping the sprint and the door beat.",
+      "assertions": [
+        "names the failure: accidents written as endpoints become intentional actions in the render",
+        "offers a deliberate action or an off-screen consequence instead of the accident",
+        "keeps the sprint and the door beat the user already has"
+      ],
+      "failure_mode": "writing an involuntary outcome as the clip's endpoint",
+      "skills_expected_to_activate": [
+        "seedance-prompt"
+      ]
     }
   ]
 }

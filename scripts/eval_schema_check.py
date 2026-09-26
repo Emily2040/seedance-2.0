@@ -141,6 +141,9 @@ REQUIRED_IDS = {
     "dialogue_storyboard_offers_ladder_with_split",
     "zh_storyboard_uses_shot_order_not_second_ranges",
     "newer_line_timestamp_request_stays_in_boundary",
+    "domestic_thriller_prescreened_before_delivery",
+    "named_legal_scene_prescreened_documents_unnamed",
+    "accident_endpoint_rewritten_as_deliberate_action",
 }
 
 

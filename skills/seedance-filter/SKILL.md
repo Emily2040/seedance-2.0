@@ -44,7 +44,7 @@ When context is uncertain, state what is unresolved. When content is prohibited,
 
 Face-limit or portrait-verification workarounds are not safe prompt tricks. If a surface offers sanctioned virtual portrait, trusted model-output, or authorization asset flows, route the user to those current official paths instead of evasion language.
 
-Load [filter-vocab](../../references/filter-vocab.md) for conditional wording examples and clearly labeled content alternatives. Load [multilingual-community-examples](../../references/multilingual-community-examples.md) only when a benign clarification needs those language patterns; do not treat them as evidence of acceptance or permission.
+Load [moderation-prescreen](../../references/moderation-prescreen.md) for the cue classes, the per-language cue lists in `data/moderation-cues.json`, and the one-pass rewrite method; the same screen runs before delivery on every route, so a block after a screened prompt points to the output classifier or to a cue the lists do not yet carry, which is then added to the data file. Load [filter-vocab](../../references/filter-vocab.md) for conditional wording examples and clearly labeled content alternatives. Load [multilingual-community-examples](../../references/multilingual-community-examples.md) only when a benign clarification needs those language patterns; do not treat them as evidence of acceptance or permission.
 
 ## Output Contract
 

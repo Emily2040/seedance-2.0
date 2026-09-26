@@ -2,9 +2,14 @@
   "version": 1,
   "sources": [
     {
+      "path": "SKILL.md",
+      "role": "root",
+      "sha256": "539966f073a0b175c435c3e756c091172194b5746e608b81396a16d38936fa83"
+    },
+    {
       "path": "evals/evals.json",
       "role": "evaluator",
-      "sha256": "7199209eaa725a3e9cffedfdefb9aebfee54952037eea36338d77abe4c81e148"
+      "sha256": "6219b1f4e1fce732dc963c412dd04cc68c497cd6d777e6360082e5377497f30f"
     },
     {
       "path": "evals/fixtures/sequence-airport-arrival-project-state.json",
@@ -102,19 +107,19 @@
       "sha256": "56f5fb1ee320336d3eb09dc0792dcd4d643a048c4efd72dae19ecf92b8556d43"
     },
     {
-      "path": "references/directors-read.md",
+      "path": "references/directing-engine-genre-library.md",
       "role": "responder",
-      "sha256": "f7021ac0e01d5c570fa262f9c3970272377eb775dc7c0616e6e8b6af2859071d"
+      "sha256": "4b6fea6102d764e068973dd6a256c0fef74dcd1d1df7ecf807e6d30570b242e9"
     },
     {
       "path": "references/directing-engine.md",
       "role": "responder",
-      "sha256": "c212896169e073c73efa20ca1cb82a26b415346b168f2f0b697aa72f3ca12487"
+      "sha256": "e0ad14249eebe93bbb83006585b6be60d8108f3202f2a75ce86cad95f4e09d88"
     },
     {
-      "path": "references/directing-engine-genre-library.md",
+      "path": "references/directors-read.md",
       "role": "responder",
-      "sha256": "4b6fea6102d764e068973dd6a256c0fef74dcd1d1df7ecf807e6d30570b242e9"
+      "sha256": "f7021ac0e01d5c570fa262f9c3970272377eb775dc7c0616e6e8b6af2859071d"
     },
     {
       "path": "references/eval-rubric.md",
@@ -139,7 +144,7 @@
     {
       "path": "references/failure-atlas.md",
       "role": "responder",
-      "sha256": "9a1cf6d7fdb6be98ae744317632f461702952e36e2aeee909389306b3b86c139"
+      "sha256": "6e518dfda86ea96a9f7f4b183a0b214d84d2b3729e760cf6476a54e40f47d1c2"
     },
     {
       "path": "references/field-observed-tips.md",
@@ -312,6 +317,11 @@
       "sha256": "815cce6d46eecaec2217d7c76be5cf737db0520575f5d3a7f562d1d5749850ef"
     },
     {
+      "path": "references/moderation-prescreen.md",
+      "role": "responder",
+      "sha256": "469f2bd3495d49e55bc43490e21750a4243445a5531d304786e4b3070a760a94"
+    },
+    {
       "path": "references/multilingual-community-examples.md",
       "role": "responder",
       "sha256": "5909c38b0b3b1c7acbe0bd35f523e74ae77cc1bd18c96f1732f6a17e9575036b"
@@ -467,19 +477,14 @@
       "sha256": "73fbb31a934cf0a60d62111523630263d62e5592f81c7c2116a7a0e15a4314e7"
     },
     {
-      "path": "SKILL.md",
-      "role": "root",
-      "sha256": "a5da87200769c28263ba4ed77813d340ec426fc278502d1a904e1c7611a098d8"
+      "path": "scripts/eval_ledger_format.py",
+      "role": "evaluator",
+      "sha256": "3d1886dd90a381c0f0645d69a6a13868c6c7c4ee160813169c8e470026ff1c55"
     },
     {
       "path": "scripts/eval_run.py",
       "role": "evaluator",
-      "sha256": "4e62c9c96f1e33527103355aa7c02897df0d568965213585042ea7e1c9b9d83b"
-    },
-    {
-      "path": "scripts/eval_ledger_format.py",
-      "role": "evaluator",
-      "sha256": "3d1886dd90a381c0f0645d69a6a13868c6c7c4ee160813169c8e470026ff1c55"
+      "sha256": "7f4f045a7a792dd7fa7a67762331980a75a1160e5199354ba74ff15655324605"
     },
     {
       "path": "skills/seedance-antislop/SKILL.md",
@@ -529,17 +534,17 @@
     {
       "path": "skills/seedance-filter/SKILL.md",
       "role": "responder",
-      "sha256": "55e365bfdea735db78c9a0c93e2d49c7cb43fbd673c6e44d601322b68204f460"
+      "sha256": "8a510514cd44b405fe81794d068120361304bbd565a8d1df37fcd0c6b312e3e5"
+    },
+    {
+      "path": "skills/seedance-interview-short/SKILL.md",
+      "role": "responder",
+      "sha256": "0a8d99ed110354c9bc6c027e6c55c4064f78712131c2a2e4e6ff57d4573f16f7"
     },
     {
       "path": "skills/seedance-interview/SKILL.md",
       "role": "responder",
       "sha256": "a408e03d7a112884d41950ef93a8cbb6001b92179bf159cfd5c000a1921bb6b5"
-    },
-    {
-      "path": "skills/seedance-interview-short/SKILL.md",
-      "role": "responder",
-      "sha256": "49fbe1961bf9a8a982e1b407bb4d1709d1480d4b6de620d50ee4f2ab7932a1e4"
     },
     {
       "path": "skills/seedance-lighting/SKILL.md",
@@ -557,14 +562,14 @@
       "sha256": "d54099c3c65c97fdc7f37346a4298078cd7dc7b0c07038ed2cd47cd2af85c283"
     },
     {
-      "path": "skills/seedance-prompt/SKILL.md",
-      "role": "responder",
-      "sha256": "540e3edace8bdf97a93743af574ba351246430523e8c0197a979fe4762598bee"
-    },
-    {
       "path": "skills/seedance-prompt-short/SKILL.md",
       "role": "responder",
-      "sha256": "5d1a0afca4b1d4bdc9886888755b7b00c7e64e995eec6b008d0bef06639c82bc"
+      "sha256": "81348f09483715a866512c6aa4902ec7b290461c6cbcd193a1955adecac02662"
+    },
+    {
+      "path": "skills/seedance-prompt/SKILL.md",
+      "role": "responder",
+      "sha256": "c6c7b02990ac163c1140e0c756c252b1a67611775173fc048e0401030cee175a"
     },
     {
       "path": "skills/seedance-recipes/SKILL.md",

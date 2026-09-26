@@ -58,3 +58,7 @@ Route to [seedance-sequence](../seedance-sequence/SKILL.md) when the user reques
 ## Output Contract
 
 Return one compact brief under 150 words, any missing high-impact question, and a recommended skill route. When an optional choice is still pending, show the short options instead of a dossier; after selection, output only the chosen brief unless alternatives were requested. Choosing a direction does not authorize paid generation. Keep Director's Read labels out of final generation prose; show the internal record only when the user requests the planning rationale or when another agent needs the handoff. If the request is a sequence, include the complete story ending, likely clip count, current clip job, and the fact that future prompts stay provisional until accepted footage is reviewed.
+
+## Pre-Delivery Screen
+
+Run the [moderation pre-screen](../../references/moderation-prescreen.md) on the draft before it is shown. A beginner's brief often names the very things classifiers refuse (a knife, a wound, a break-in, a child in danger); keep the scene, drop the cue, and say in one line what changed.
