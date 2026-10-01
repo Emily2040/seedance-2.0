@@ -98,7 +98,7 @@ except OSError:
     # Zip imports are valid for packaging/discovery. A real harness run still
     # fails closed when it binds execution to a frozen regular source file.
     _EXECUTED_EVALUATOR_PATH = None
-_EXECUTED_EVALUATOR_SOURCE_SHA256 = "ad357e29d441220b7344f79014023b69a544943b43a6eac3789231a6d47d4fad"
+_EXECUTED_EVALUATOR_SOURCE_SHA256 = "f0af3ab8e549cc302ca2f620f9172394046e4add4da3b2aec4083c4963532b69"
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 API_URL = ANTHROPIC_API_URL
@@ -131,6 +131,14 @@ ORCAROUTER_MODEL_ECHOES = {
     "anthropic/claude-sonnet-4.6": ("claude-sonnet-4.6", "claude-sonnet-4-6"),
     "anthropic/claude-opus-4.7": ("claude-opus-4.7", "claude-opus-4-7"),
 }
+CHEAPERINFERENCE_API_URL = "https://api.cheaperinference.com/v1/messages"
+# Limited to the routes whose Messages envelope was reviewed (2026-10-01).
+# Other catalog rows need their own response-contract review.
+# See docs/CHEAPERINFERENCE_EVAL.md.
+CHEAPERINFERENCE_MODELS = (
+    "claude-sonnet-5",
+    "gpt-5.4-mini",
+)
 MAX_SOURCE_FILES = 24
 SOURCE_MANIFEST_PATH = "evals/source-manifest.json"
 EVALUATOR_HARNESS_PATHS = frozenset({"scripts/eval_run.py", "scripts/eval_ledger_format.py"})
@@ -272,6 +280,13 @@ PROVIDER_CONFIGS = {
         endpoints={"global_en": ORCAROUTER_API_URL},
         models=ORCAROUTER_MODELS,
         response_schema="orcarouter",
+    ),
+    "cheaperinference": ProviderConfig(
+        api_key_env="CHEAPER_INFERENCE_API_KEY",
+        default_model=CHEAPERINFERENCE_MODELS[0],
+        endpoints={"global_en": CHEAPERINFERENCE_API_URL},
+        models=CHEAPERINFERENCE_MODELS,
+        response_schema="cheaperinference",
     ),
 }
 REGIONS = tuple(
@@ -1704,7 +1719,7 @@ def _validate_usage(usage: object, provider: ProviderConfig) -> None:
         raise ProviderResponseError("model API response has invalid usage")
     if provider.response_schema == "minimax":
         allowed_fields = USAGE_REQUIRED_TOKEN_FIELDS | USAGE_NULLABLE_TOKEN_FIELDS
-    elif provider.response_schema in ("anthropic", "orcarouter"):
+    elif provider.response_schema in ("anthropic", "orcarouter", "cheaperinference"):
         allowed_fields = (
             USAGE_REQUIRED_TOKEN_FIELDS
             | USAGE_NULLABLE_TOKEN_FIELDS
@@ -2063,12 +2078,21 @@ def _validate_provider_legacy_fields(
     body: dict,
 ) -> None:
     common = set(REQUIRED_COMPLETION_FIELDS)
-    if provider.response_schema in ("anthropic", "orcarouter"):
+    if provider.response_schema in ("anthropic", "orcarouter", "cheaperinference"):
+        gateway_fields = (
+            {"cheaper_inference"} if provider.response_schema == "cheaperinference" else set()
+        )
         _reject_extra_keys(
             body,
-            common | {"stop_sequence", "container", "stop_details"},
-            f"{'Anthropic' if provider.response_schema == 'anthropic' else 'OrcaRouter'} response",
+            common | {"stop_sequence", "container", "stop_details"} | gateway_fields,
+            {
+                "anthropic": "Anthropic",
+                "orcarouter": "OrcaRouter",
+                "cheaperinference": "Cheaper Inference",
+            }[provider.response_schema] + " response",
         )
+        if "cheaper_inference" in body:
+            _validate_cheaper_inference_receipt(body["cheaper_inference"])
         if "base_resp" in body:
             raise ProviderResponseError("Anthropic response contains foreign base_resp")
         if "stop_sequence" not in body:
@@ -2151,6 +2175,18 @@ def _validate_provider_legacy_fields(
             f"status_code={base_response['status_code']!r}, "
             f"status_msg={base_response['status_msg']!r}"
         )
+
+
+def _validate_cheaper_inference_receipt(receipt: object) -> None:
+    """Accept only the documented request id and billing receipt."""
+    if not isinstance(receipt, dict):
+        raise ProviderResponseError("Cheaper Inference response has invalid cheaper_inference")
+    _reject_extra_keys(receipt, {"request_id", "billing"}, "Cheaper Inference receipt")
+    request_id = receipt.get("request_id")
+    if not isinstance(request_id, str) or not request_id.strip():
+        raise ProviderResponseError("Cheaper Inference receipt has an invalid request_id")
+    if "billing" in receipt and not isinstance(receipt["billing"], dict):
+        raise ProviderResponseError("Cheaper Inference receipt has invalid billing")
 
 
 def _validate_model_echo(provider: ProviderConfig, model: str, body: dict) -> None:
