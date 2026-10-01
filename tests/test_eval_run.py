@@ -34,6 +34,13 @@ def completion_payload(provider_name: str, model: str) -> dict:
         # message envelope but echoes the *upstream* model id.
         payload["stop_sequence"] = None
         payload["model"] = model.split("/", 1)[-1]
+    elif provider_name == "cheaperinference":
+        # Anthropic-compatible envelope plus the gateway request receipt.
+        payload["stop_sequence"] = None
+        payload["cheaper_inference"] = {
+            "request_id": "req_test",
+            "billing": {"status": "settled", "billed_cost_usd": "0.000001"},
+        }
     return payload
 
 
@@ -287,6 +294,7 @@ class EvalRunProviderTests(unittest.TestCase):
             ("minimax", "global_en"),
             ("minimax", "cn_zh"),
             ("orcarouter", "global_en"),
+            ("cheaperinference", "global_en"),
         ):
             with self.subTest(provider=provider_name, region=region):
                 provider, endpoint, model = eval_run.resolve_provider(
@@ -314,6 +322,7 @@ class EvalRunProviderTests(unittest.TestCase):
             ("minimax", "global_en"),
             ("minimax", "cn_zh"),
             ("orcarouter", "global_en"),
+            ("cheaperinference", "global_en"),
         ):
             provider, endpoint, model = eval_run.resolve_provider(
                 provider_name, region, None
@@ -1236,6 +1245,90 @@ class EvalRunProviderTests(unittest.TestCase):
 
         self.assertEqual(result, 2)
         self.assertIn("ORCAROUTER_API_KEY not set", output.getvalue())
+
+    def test_cheaperinference_configuration_matches_models_and_endpoint(self) -> None:
+        config = eval_run.PROVIDER_CONFIGS["cheaperinference"]
+
+        self.assertEqual(config.api_key_env, "CHEAPER_INFERENCE_API_KEY")
+        self.assertEqual(config.default_model, "claude-sonnet-5")
+        self.assertEqual(
+            config.endpoints,
+            {"global_en": "https://api.cheaperinference.com/v1/messages"},
+        )
+        self.assertEqual(config.auth_header, "x-api-key")
+        self.assertEqual(config.auth_prefix, "")
+        self.assertEqual(config.response_schema, "cheaperinference")
+        self.assertEqual(eval_run.CHEAPERINFERENCE_MODELS, ("claude-sonnet-5", "gpt-5.4-mini"))
+
+    def test_cheaperinference_defaults_and_validation(self) -> None:
+        _, endpoint, model = eval_run.resolve_provider("cheaperinference", "global_en", None)
+
+        self.assertEqual(endpoint, "https://api.cheaperinference.com/v1/messages")
+        self.assertEqual(model, "claude-sonnet-5")
+        for supported in eval_run.CHEAPERINFERENCE_MODELS:
+            self.assertEqual(
+                eval_run.resolve_provider("cheaperinference", "global_en", supported)[2],
+                supported,
+            )
+        with self.assertRaisesRegex(ValueError, "not supported"):
+            eval_run.resolve_provider("cheaperinference", "global_en", "unsupported")
+        with self.assertRaisesRegex(ValueError, "region 'cn_zh'"):
+            eval_run.resolve_provider("cheaperinference", "cn_zh", None)
+
+    def test_cheaperinference_request_uses_gateway_endpoint_and_api_key_auth(self) -> None:
+        config = eval_run.PROVIDER_CONFIGS["cheaperinference"]
+        _, endpoint, model = eval_run.resolve_provider("cheaperinference", "global_en", None)
+        payload = completion_payload("cheaperinference", model)
+        with mock.patch.object(
+            eval_run,
+            "_open_provider_request",
+            return_value=FakeResponse(payload),
+        ) as urlopen:
+            text = eval_run.call_api(
+                "system", "user", model, "test-key", config, endpoint
+            )
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(text, "ok")
+        self.assertEqual(request.full_url, "https://api.cheaperinference.com/v1/messages")
+        self.assertEqual(request.get_header("X-api-key"), "test-key")
+        self.assertIsNone(request.get_header("Authorization"))
+        self.assertEqual(request.get_header("Anthropic-version"), "2023-06-01")
+        self.assertEqual(json.loads(request.data)["model"], "claude-sonnet-5")
+        self.assertIs(json.loads(request.data)["stream"], False)
+
+    def test_cheaperinference_rejects_foreign_or_malformed_receipts(self) -> None:
+        config, endpoint, model = eval_run.resolve_provider("cheaperinference", "global_en", None)
+        bad_receipts = (None, [], {}, {"request_id": ""}, {"request_id": 7},
+                        {"request_id": "req", "billing": "settled"},
+                        {"request_id": "req", "route": "other"})
+        for receipt in bad_receipts:
+            with self.subTest(receipt=receipt):
+                payload = completion_payload("cheaperinference", model)
+                payload["cheaper_inference"] = receipt
+                with mock.patch.object(eval_run, "_open_provider_request", return_value=FakeResponse(payload)), self.assertRaises(eval_run.ProviderResponseError):
+                    eval_run.call_api("system", "user", model, "key", config, endpoint)
+        for provider_name in ("anthropic", "orcarouter"):
+            with self.subTest(provider=provider_name):
+                other, other_endpoint, other_model = eval_run.resolve_provider(provider_name, "global_en", None)
+                payload = completion_payload(provider_name, other_model)
+                payload["cheaper_inference"] = {"request_id": "req"}
+                with mock.patch.object(eval_run, "_open_provider_request", return_value=FakeResponse(payload)), self.assertRaises(eval_run.ProviderResponseError):
+                    eval_run.call_api("system", "user", other_model, "key", other, other_endpoint)
+
+    def test_live_mode_requires_cheaperinference_key(self) -> None:
+        output = io.StringIO()
+        with (
+            mock.patch.object(
+                sys, "argv", ["eval_run.py", "--provider", "cheaperinference", "--live", "--limit", "1", "--max-calls", "3", "--max-output-tokens", "3300"]
+            ),
+            mock.patch.dict(os.environ, {}, clear=True),
+            redirect_stdout(output),
+        ):
+            result = eval_run.main()
+
+        self.assertEqual(result, 2)
+        self.assertIn("CHEAPER_INFERENCE_API_KEY not set", output.getvalue())
 
 
 if __name__ == "__main__":

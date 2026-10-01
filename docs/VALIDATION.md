@@ -146,9 +146,12 @@ python scripts/eval_run.py --live --limit 1 --max-calls 3 --max-output-tokens 33
 python scripts/eval_run.py --provider minimax --region global_en --limit 1
 python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 --limit 1
 python scripts/eval_run.py --provider orcarouter --limit 1
+python scripts/eval_run.py --provider cheaperinference --limit 1
 ```
 
 The optional [OrcaRouter evaluator](ORCAROUTER_EVAL.md) uses its native Messages endpoint and a restricted Claude allowlist. Its default is also an offline plan.
+
+The optional [Cheaper Inference evaluator](CHEAPERINFERENCE_EVAL.md) uses its Anthropic-compatible Messages endpoint and a restricted model allowlist. Its default is also an offline plan.
 
 For advisory current/proposed/plain comparisons, use the [outcome protocol](../references/outcome-comparison.md). It separates useful behavior from exact route agreement, preserves hard gates, and produces no aggregate score for incomplete runs. This offline support does not replace release evaluation.
 
