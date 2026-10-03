@@ -31,6 +31,7 @@ This skill transforms a simple idea into a professional, **sub-2000-character** 
 3.  **"Quick Mode" Exit**: If the user has strong references, offer to switch to the [skill:seedance-prompt] skill to build a prompt directly.
 4.  **Narrative Core**: If needed, ask 1-2 questions to find the emotional anchor.
 5.  **Build & Compress**: Construct the prompt using the Director's Formula, keeping a live character count.
+6.  **Safety Gate (Required)**: If there is celebrity/real-person likeness, brand, franchise, logo, or copyrighted character/style risk, route to [skill:seedance-copyright] before final output. If wording is likely to be filtered, route to [skill:seedance-filter].
 
 ## The Interviewer's Craft
 

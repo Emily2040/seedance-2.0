@@ -42,6 +42,13 @@ This skill helps construct and compress prompts for Seedance 2.0, with a recomme
 - **Use Film Language**: `Dolly shot, camera-left` not `The camera moves smoothly`.
 - **Trust the Model**: `Gourmet hamburger ad, macro shot` not a long description of a hamburger.
 
+## Copyright & Policy Gate (Required)
+
+Before finalizing any prompt, run a safety pass:
+
+- If the request includes a celebrity, real person, recognizable likeness, brand, franchise, logo, or copyrighted character/style, route to [skill:seedance-copyright] first.
+- If the prompt is blocked or likely to trigger a policy filter, route to [skill:seedance-filter] and preserve user intent with safer wording.
+
 ---
 
 For a guided workflow that builds a prompt, use [skill:seedance-interview].
