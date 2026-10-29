@@ -73,10 +73,9 @@ class AtlasSeedanceGenerateTests(unittest.TestCase):
 
     def test_default_plan_does_not_read_key_or_open_transport(self) -> None:
         original_get = atlas.os.environ.get
-        def guarded_get(key, default=None):
-            if key == "ATLASCLOUD_API_KEY":
-                raise AssertionError("key read")
-            return original_get(key, default)
+        guarded_get = lambda key, default=None: (
+            (_ for _ in ()).throw(AssertionError("key read")) if key == "ATLASCLOUD_API_KEY" else original_get(key, default)
+        )
         with mock.patch.object(atlas.os.environ, "get", side_effect=guarded_get), mock.patch.object(atlas, "_request_json", side_effect=AssertionError("network")), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(atlas.main(["--prompt", "A quiet lake"]), 0)
             self.assertEqual(atlas.main(["--prediction-id", "request-1"]), 0)

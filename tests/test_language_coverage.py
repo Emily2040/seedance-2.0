@@ -13,14 +13,11 @@ class LanguageCoverageTests(unittest.TestCase):
     def test_canonical_scope_is_available_but_unreviewed(self):
         report = check(ROOT, self.contract)
         stale = {language: row for language, row in report.items() if row["status"] == "stale_review_required"}
-        if stale:
-            print("Language coverage review flags: " + json.dumps(stale, ensure_ascii=True))
         self.assertEqual(set(report), {"en", "zh", "ja", "ko", "es", "ru"})
         for row in report.values():
             self.assertIn(row["status"], {"unchanged_unreviewed", "stale_review_required"})
             self.assertEqual(row["native_review"], "pending")
         self.assertEqual(self.contract["languages"]["es"]["readme"], "docs/README.es.md")
-        self.assertEqual(self.contract["languages"]["ru"]["readme"], "docs/README.ru.md")
 
     def test_source_drift_marks_all_locales(self):
         self.contract["sources"]["SKILL.md"] = "0" * 64

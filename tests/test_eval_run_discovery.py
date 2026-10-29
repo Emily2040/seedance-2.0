@@ -146,6 +146,12 @@ def sequence_verdict(case: dict) -> dict:
     }
 
 
+def _safe_create_alias(creation_func, test_case_instance, skip_message: str) -> None:
+    try:
+        creation_func()
+    except OSError as exc:
+        test_case_instance.skipTest(f"{skip_message}: {exc}")
+
 class DiscoveryBoundaryTests(unittest.TestCase):
     def snapshot(self, root: Path) -> eval_run.FrozenRepository:
         return eval_run.freeze_repository(root, enforce_canonical_contract=False)
@@ -369,10 +375,13 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             root = Path(tmp)
             make_root(root)
             alias = root / "references" / "rubric-hardlink.md"
-            try:
-                os.link(root / "references" / "eval-rubric.md", alias)
-            except OSError as exc:
-                self.skipTest(f"hard links unavailable: {exc}")
+            
+            _safe_create_alias(
+                lambda: os.link(root / "references" / "eval-rubric.md", alias),
+                self,
+                "hard links unavailable"
+            )
+
             write_manifest(
                 root,
                 role_overrides={
@@ -393,10 +402,13 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             outside.write_text("OUTSIDE-SECRET", encoding="utf-8")
             alias = root / "references" / "actual-reference.md"
             alias.unlink()
-            try:
-                alias.symlink_to(outside)
-            except OSError as exc:
-                self.skipTest(f"symbolic links unavailable: {exc}")
+            
+            _safe_create_alias(
+                lambda: alias.symlink_to(outside),
+                self,
+                "symbolic links unavailable"
+            )
+
             write_manifest(
                 root,
                 role_overrides={"references/private-rubric.md": "evaluator"},

@@ -113,35 +113,33 @@ class AuthoringStateFixtureTests(unittest.TestCase):
     def test_schema_and_strict_field_contracts_stay_in_static_parity(self) -> None:
         project_schema = load_json("schemas/project-state.schema.json")
         contract_schema = load_json("schemas/clip-contract.schema.json")
-        for definition in (
+        definitions = (
             "authoring_state_provenance",
             "authoring_state",
             "narrative_authoring_state",
             "non_narrative_authoring_state",
-        ):
-            self.assertEqual(
-                project_schema["$defs"][definition],
-                contract_schema["$defs"][definition],
-            )
+        )
+        for definition in definitions:
+            with self.subTest(definition=definition):
+                self.assertEqual(
+                    project_schema["$defs"][definition],
+                    contract_schema["$defs"][definition],
+                )
         narrative = project_schema["$defs"]["narrative_authoring_state"]
         non_narrative = project_schema["$defs"]["non_narrative_authoring_state"]
         self.assertEqual(set(narrative["required"]), NARRATIVE_FIELDS)
         self.assertEqual(set(narrative["properties"]), NARRATIVE_FIELDS)
         self.assertEqual(set(non_narrative["required"]), NON_NARRATIVE_FIELDS)
         self.assertEqual(set(non_narrative["properties"]), NON_NARRATIVE_FIELDS)
-        authoring_conditionals = [
-            conditional
-            for conditional in contract_schema["allOf"]
-            if "authoring_state" in json.dumps(conditional["if"], sort_keys=True)
-            or "directors_read_lane" in json.dumps(conditional["if"], sort_keys=True)
-        ]
+        authoring_conditionals = list(
+            filter(
+                lambda c: any(k in json.dumps(c.get("if", {}), sort_keys=True) for k in ("authoring_state", "directors_read_lane")),
+                contract_schema["allOf"],
+            )
+        )
         self.assertEqual(len(authoring_conditionals), 3)
         self.assertTrue(
-            all(
-                "authoring_state_provenance"
-                in conditional["then"].get("required", [])
-                for conditional in authoring_conditionals
-            )
+            all("authoring_state_provenance" in conditional["then"].get("required", []) for conditional in authoring_conditionals)
         )
 
     def test_shipped_mixed_lane_fixture_is_narrative_utility_narrative(self) -> None:
@@ -204,10 +202,10 @@ class AuthoringStateFixtureTests(unittest.TestCase):
 
     def test_contracts_carry_complete_lane_records(self) -> None:
         for path in sorted((ROOT / "examples").rglob("*contract.json")):
-            contract = json.loads(path.read_text(encoding="utf-8"))
-            lane = contract["directors_read_lane"]
-            expected = NARRATIVE_FIELDS if lane == "narrative" else NON_NARRATIVE_FIELDS
             with self.subTest(path=path.relative_to(ROOT)):
+                contract = json.loads(path.read_text(encoding="utf-8"))
+                lane = contract["directors_read_lane"]
+                expected = NARRATIVE_FIELDS if lane == "narrative" else NON_NARRATIVE_FIELDS
                 self.assertEqual(expected, set(contract["authoring_state"]))
                 provenance = contract["authoring_state_provenance"]
                 self.assertEqual(provenance["project_id"], contract["project_id"])
@@ -286,10 +284,10 @@ class AuthoringStateFixtureTests(unittest.TestCase):
     def test_example_prompts_compile_exact_carriers_without_internal_labels(self) -> None:
         example = ROOT / "examples/sequence-airport-arrival"
         for contract_name in ("clip-01-contract.json", "clip-02-continuation-contract.json"):
-            contract = json.loads((example / contract_name).read_text(encoding="utf-8"))
-            prompt_name = f"{contract['clip_id'].replace('_', '-')}-prompt.md"
-            prompt = (example / prompt_name).read_text(encoding="utf-8")
-            with self.subTest(prompt=prompt_name):
+            with self.subTest(contract_name=contract_name):
+                contract = json.loads((example / contract_name).read_text(encoding="utf-8"))
+                prompt_name = f"{contract['clip_id'].replace('_', '-')}-prompt.md"
+                prompt = (example / prompt_name).read_text(encoding="utf-8")
                 self.assertEqual(
                     project_state_check.compiled_prompt_errors(
                         prompt,
@@ -376,11 +374,11 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
     def test_strict_requires_record_for_either_explicit_lane(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")
         for lane in ("narrative", "non_narrative"):
-            probe = copy.deepcopy(project)
-            probe["clips"][0]["directors_read_lane"] = lane
-            probe["clips"][0].pop("authoring_state", None)
-            errors = self.validate_project_copy(probe, strict=True)
             with self.subTest(lane=lane):
+                probe = copy.deepcopy(project)
+                probe["clips"][0]["directors_read_lane"] = lane
+                probe["clips"][0].pop("authoring_state", None)
+                errors = self.validate_project_copy(probe, strict=True)
                 self.assertTrue(any("missing authoring_state" in error for error in errors), errors)
 
     def test_strict_sequence_requires_valid_explicit_lane(self) -> None:
@@ -407,11 +405,18 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
             "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
         )
         current_clip = copy.deepcopy(project["clips"][1])
-        for record in (contract, current_clip):
-            record["directors_read_lane"] = None
-            record.pop("authoring_state", None)
-            record.pop("authoring_state_provenance", None)
-            record.pop("contract_authoring_state_snapshots", None)
+        contract["directors_read_lane"] = None
+        current_clip["directors_read_lane"] = None
+        list(
+            map(
+                lambda r: (
+                    r.pop("authoring_state", None),
+                    r.pop("authoring_state_provenance", None),
+                    r.pop("contract_authoring_state_snapshots", None),
+                ),
+                (contract, current_clip),
+            )
+        )
         errors = []
         project_state_check.validate_contract(
             contract,
@@ -428,10 +433,16 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
 
     def test_default_check_accepts_legacy_sequence_without_lane_or_state(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")
-        for clip in project["clips"]:
-            clip.pop("authoring_state", None)
-            clip.pop("directors_read_lane", None)
-            clip.pop("contract_authoring_state_snapshots", None)
+        list(
+            map(
+                lambda clip: (
+                    clip.pop("authoring_state", None),
+                    clip.pop("directors_read_lane", None),
+                    clip.pop("contract_authoring_state_snapshots", None),
+                ),
+                project["clips"],
+            )
+        )
         self.assertEqual(self.validate_project_copy(project, strict=False), [])
 
     def test_default_contract_with_prompt_accepts_legacy_absence(self) -> None:
@@ -440,11 +451,17 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         contract = load_json(
             "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
         )
-        for record in (clip, contract):
-            record.pop("authoring_state", None)
-            record.pop("directors_read_lane", None)
-            record.pop("authoring_state_provenance", None)
-            record.pop("contract_authoring_state_snapshots", None)
+        list(
+            map(
+                lambda r: (
+                    r.pop("authoring_state", None),
+                    r.pop("directors_read_lane", None),
+                    r.pop("authoring_state_provenance", None),
+                    r.pop("contract_authoring_state_snapshots", None),
+                ),
+                (clip, contract),
+            )
+        )
         prompt = (ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md").read_text(
             encoding="utf-8"
         )
@@ -513,12 +530,20 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         project = load_json("examples/standalone-clip/project-state.json")
         project["project_mode"] = "sequence_project"
         project["story"]["medium"] = "live_action"
-        for clip in project["clips"]:
-            clip["directors_read_lane"] = "non_narrative"
-            clip["authoring_state"] = {
-                "utility_intent": "Show the latch closing cleanly in one readable motion.",
-                "non_narrative_refusal": "No invented desire, rivalry, or emotional performance.",
-            }
+        list(
+            map(
+                lambda clip: clip.update(
+                    {
+                        "directors_read_lane": "non_narrative",
+                        "authoring_state": {
+                            "utility_intent": "Show the latch closing cleanly in one readable motion.",
+                            "non_narrative_refusal": "No invented desire, rivalry, or emotional performance.",
+                        },
+                    }
+                ),
+                project["clips"],
+            )
+        )
         self.assertEqual(self.validate_project_copy(project, strict=True), [])
 
         project["clips"][0]["authoring_state"] = copy.deepcopy(
@@ -549,10 +574,18 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
             "non_narrative_refusal": "No invented agency, psychology, or dramatic meaning.",
         }
         project = load_json("examples/sequence-mixed-lane/project-state.json")
-        for clip in project["clips"][:2]:
-            clip["directors_read_lane"] = "non_narrative"
-            clip["authoring_state"] = copy.deepcopy(utility_state)
-            clip["status"] = "accepted"
+        list(
+            map(
+                lambda clip: clip.update(
+                    {
+                        "directors_read_lane": "non_narrative",
+                        "authoring_state": copy.deepcopy(utility_state),
+                        "status": "accepted",
+                    }
+                ),
+                project["clips"][:2],
+            )
+        )
         project["clips"][0]["parent_clip_id"] = "clip_02"
         project["clips"][1]["parent_clip_id"] = "clip_01"
         project["clips"][2]["parent_clip_id"] = "clip_02"
@@ -769,68 +802,37 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
                 "authoring_state"
             ]
         )
-
-        for source in (
-            None,
-            "the source",
-            "probably supplied",
-            "ref:\u200b",
-            "file:\u2800",
-            "https://\u2060",
-        ):
-            state = copy.deepcopy(base)
-            state["non_transferable_detail_provenance"] = "source_bound"
-            state["non_transferable_detail_source"] = source
-            errors: list[str] = []
-            project_state_check.check_authoring_state(
-                state, "fixture", errors, required=True, lane="narrative"
-            )
+        for source in (None, "the source", "probably supplied", "ref:\u200b", "file:\u2800", "https://\u2060"):
             with self.subTest(source=source):
+                state = copy.deepcopy(base)
+                state.update({"non_transferable_detail_provenance": "source_bound", "non_transferable_detail_source": source})
+                errors: list[str] = []
+                project_state_check.check_authoring_state(state, "fixture", errors, required=True, lane="narrative")
                 self.assertTrue(any("requires an exact reference" in error for error in errors), errors)
 
         state = copy.deepcopy(base)
-        state["non_transferable_detail_provenance"] = "source_bound"
-        state["non_transferable_detail_source"] = "@Image1"
+        state.update({"non_transferable_detail_provenance": "source_bound", "non_transferable_detail_source": "@Image1"})
         errors = []
-        project_state_check.check_authoring_state(
-            state, "fixture", errors, required=True, lane="narrative"
-        )
+        project_state_check.check_authoring_state(state, "fixture", errors, required=True, lane="narrative")
         self.assertFalse(any("source_bound" in error for error in errors), errors)
 
         errors = []
-        project_state_check.check_authoring_state(
-            state,
-            "fixture",
-            errors,
-            required=True,
-            lane="narrative",
-            source_references={"@Image 1"},
-        )
+        project_state_check.check_authoring_state(state, "fixture", errors, required=True, lane="narrative", source_references={"@Image 1"})
         self.assertTrue(any("not present in reference_registry" in error for error in errors), errors)
 
         state["non_transferable_detail_source"] = "@Image 1"
         errors = []
-        project_state_check.check_authoring_state(
-            state,
-            "fixture",
-            errors,
-            required=True,
-            lane="narrative",
-            source_references={"@Image 1"},
-        )
+        project_state_check.check_authoring_state(state, "fixture", errors, required=True, lane="narrative", source_references={"@Image 1"})
         self.assertFalse(any("source_bound" in error for error in errors), errors)
 
         state["non_transferable_detail_provenance"] = "authored_choice"
         errors = []
-        project_state_check.check_authoring_state(
-            state, "fixture", errors, required=True, lane="narrative"
-        )
+        project_state_check.check_authoring_state(state, "fixture", errors, required=True, lane="narrative")
         self.assertTrue(any("source must be null" in error for error in errors), errors)
 
         project = load_json("examples/sequence-airport-arrival/project-state.json")
         project_state = project["clips"][0]["authoring_state"]
-        project_state["non_transferable_detail_provenance"] = "source_bound"
-        project_state["non_transferable_detail_source"] = "@Imaginary999"
+        project_state.update({"non_transferable_detail_provenance": "source_bound", "non_transferable_detail_source": "@Imaginary999"})
         errors = self.validate_project_copy(project, strict=True)
         self.assertTrue(any("not present in reference_registry" in error for error in errors), errors)
 
@@ -1048,150 +1050,69 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         )
 
     def test_prompt_carriers_must_be_in_rendered_generation_prose(self) -> None:
-        state = load_json(
-            "examples/sequence-airport-arrival/clip-01-contract.json"
-        )["authoring_state"]
-        visible = " ".join(state["prompt_carriers"][:-1])
-        hidden = state["prompt_carriers"][-1]
+        state = load_json("examples/sequence-airport-arrival/clip-01-contract.json")["authoring_state"]
+        visible, hidden = " ".join(state["prompt_carriers"][:-1]), state["prompt_carriers"][-1]
         prompts = (
-            f"{visible}\n<!-- {hidden} -->",
-            f"{visible}\n\n[//]: # ({hidden})",
-            f"{visible}\n\n[{hidden}]: https://invalid.example/carrier",
-            f"---\nhidden_carrier: {hidden}\n---\n{visible}",
-            f"---\nhidden_carrier: {hidden}\n...\n{visible}",
-            f"---\rhidden_carrier: {hidden}\r---\r{visible}",
-            f"{visible}\n\n[carrier-note]: https://invalid.example\n \"{hidden}\"",
-            f'{visible}\n\n[carrier-note]: https://invalid.example\n "prefix {hidden} \\"suffix\\""',
-            f'{visible}\n\n[carrier-note]: https://invalid.example\n "prefix\n{hidden}"',
-            f'{visible}\n\n> [carrier-note]: https://invalid.example\n> "{hidden}"',
-            f'{visible}\n\n- [carrier-note]: https://invalid.example\n  "{hidden}"',
-            f"{visible}\n[source](https://invalid.example \"{hidden}\")",
-            f'{visible}\n[source](https://invalid.example "prefix {hidden} \\"suffix\\"")',
-            f'{visible}\n[source](https://invalid.example "prefix\n{hidden}")',
-            f'{visible}\n![decoration](image.png "open\n{hidden}")',
-            f"{visible}\n<span data-carrier=\"{hidden}\"></span>",
-            f"{visible}\n<span hidden>{hidden}</span>",
-            f"{visible}\n<span aria-hidden=\"true\">{hidden}</span>",
-            f"{visible}\n<span style=\"display: none\">{hidden}</span>",
-            f"{visible}\n<span style='visibility:hidden'>{hidden}</span>",
-            f"{visible}\n<span style=display:none>{hidden}</span>",
-            f'{visible}\n<span data-x=\">\" hidden>{hidden}</span>',
-            f"{visible}\n<div hidden><div>decoy</div>{hidden}</div>",
-            f'{visible}\n<div style="display:/*x*/none">{hidden}</div>',
-            f'{visible}\n<div style="visibility:/*x*/hidden">{hidden}</div>',
-            f'{visible}\n<div style="d\\69splay:none">{hidden}</div>',
-            f'{visible}\n<div style="display:\\6e one">{hidden}</div>',
-            f'{visible}\n<div style="content-visibility:hidden">{hidden}</div>',
-            f'{visible}\n<div style="opacity:0">{hidden}</div>',
-            f"{visible}\n<div hidden/>{hidden}",
-            f"{visible}\n<script>{hidden}</script>",
-            f"{visible}\n<script>{hidden}",
-            f"{visible}\n<script/>{hidden}",
-            f"{visible}\n<template>{hidden}</template>",
-            f"{visible}\n<template><template>decoy</template>{hidden}</template>",
-            f'{visible}\n<style>.secret{{display:none}}</style><div class="secret">{hidden}</div>',
-            f"{visible}\n<style>div{{display:none}}</style><div>{hidden}</div>",
-            f'{visible}\n<link rel="stylesheet" href="hidden.css"><div>{hidden}</div>',
-            f"{visible}\n<iframe src=\"about:blank\">{hidden}</iframe>",
-            f"{visible}\n<svg><metadata>{hidden}</metadata></svg>",
-            f"{visible}\n<svg><desc>{hidden}</desc></svg>",
-            f"{visible}\n<canvas>{hidden}</canvas>",
-            f"{visible}\n<details><summary>More</summary>{hidden}</details>",
-            f"{visible}\n<details><summary>First</summary><summary>{hidden}</summary></details>",
-            f"{visible}\n<dialog>{hidden}</dialog>",
-            f"{visible}\n\n[carrier-image]: image.png\n\n![{hidden}][carrier-image]",
-            f"{visible}\n\n[{hidden}]: image.png\n\n![{hidden}]",
-            f'{visible}\n\n[ref]: image.png "open\n{hidden}"',
-            f'{visible}\n\n[foo\\]bar]: image.png "{hidden}"\n![decoration][foo\\]bar]',
-            f'{visible}\n\n[ref]:\n image.png "{hidden}"',
-            f'{visible}\n\n[//]: #\n"{hidden}"',
-            f'{visible}\n\n[comment]: <>\n"{hidden}"',
-            f'{visible}\n\n[foo\n bar]: image.png "{hidden}"',
-            f'{visible}\n\n[foo\n bar]: image.png\n"{hidden}"',
-            f"{visible}\n```\n{hidden}\n```",
-            f"{visible}\n`{hidden}`",
-            f"{visible}\n\n    {hidden}",
-            f"{visible}\n>     {hidden}",
-            f"{visible}\n<pre><code>{hidden}</code></pre>",
-            f"{visible}\n<textarea>{hidden}</textarea>",
-            f"{visible}\n![{hidden}][ref]\n```bad`info\n\n[ref]: image.png",
-            f"{visible}\nThe shot continues.\n<span>\n`{hidden}`\n</span>",
+            f"{visible}\n<!-- {hidden} -->", f"{visible}\n\n[//]: # ({hidden})", f"{visible}\n\n[{hidden}]: https://invalid.example/carrier",
+            f"---\nhidden_carrier: {hidden}\n---\n{visible}", f"---\nhidden_carrier: {hidden}\n...\n{visible}", f"---\rhidden_carrier: {hidden}\r---\r{visible}",
+            f"{visible}\n\n[carrier-note]: https://invalid.example\n \"{hidden}\"", f'{visible}\n\n[carrier-note]: https://invalid.example\n "prefix {hidden} \\"suffix\\""',
+            f'{visible}\n\n[carrier-note]: https://invalid.example\n "prefix\n{hidden}"', f'{visible}\n\n> [carrier-note]: https://invalid.example\n> "{hidden}"',
+            f'{visible}\n\n- [carrier-note]: https://invalid.example\n  "{hidden}"', f"{visible}\n[source](https://invalid.example \"{hidden}\")",
+            f'{visible}\n[source](https://invalid.example "prefix {hidden} \\"suffix\\"")', f'{visible}\n[source](https://invalid.example "prefix\n{hidden}")',
+            f'{visible}\n![decoration](image.png "open\n{hidden}")', f"{visible}\n<span data-carrier=\"{hidden}\"></span>", f"{visible}\n<span hidden>{hidden}</span>",
+            f"{visible}\n<span aria-hidden=\"true\">{hidden}</span>", f"{visible}\n<span style=\"display: none\">{hidden}</span>", f"{visible}\n<span style='visibility:hidden'>{hidden}</span>",
+            f"{visible}\n<span style=display:none>{hidden}</span>", f'{visible}\n<span data-x=\">\" hidden>{hidden}</span>', f"{visible}\n<div hidden><div>decoy</div>{hidden}</div>",
+            f'{visible}\n<div style="display:/*x*/none">{hidden}</div>', f'{visible}\n<div style="visibility:/*x*/hidden">{hidden}</div>', f'{visible}\n<div style="d\\69splay:none">{hidden}</div>',
+            f'{visible}\n<div style="display:\\6e one">{hidden}</div>', f'{visible}\n<div style="content-visibility:hidden">{hidden}</div>', f'{visible}\n<div style="opacity:0">{hidden}</div>',
+            f"{visible}\n<div hidden/>{hidden}", f"{visible}\n<script>{hidden}</script>", f"{visible}\n<script>{hidden}", f"{visible}\n<script/>{hidden}",
+            f"{visible}\n<template>{hidden}</template>", f"{visible}\n<template><template>decoy</template>{hidden}</template>",
+            f'{visible}\n<style>.secret{{display:none}}</style><div class="secret">{hidden}</div>', f"{visible}\n<style>div{{display:none}}</style><div>{hidden}</div>",
+            f'{visible}\n<link rel="stylesheet" href="hidden.css"><div>{hidden}</div>', f"{visible}\n<iframe src=\"about:blank\">{hidden}</iframe>",
+            f"{visible}\n<svg><metadata>{hidden}</metadata></svg>", f"{visible}\n<svg><desc>{hidden}</desc></svg>", f"{visible}\n<canvas>{hidden}</canvas>",
+            f"{visible}\n<details><summary>More</summary>{hidden}</details>", f"{visible}\n<details><summary>First</summary><summary>{hidden}</summary></details>",
+            f"{visible}\n<dialog>{hidden}</dialog>", f"{visible}\n\n[carrier-image]: image.png\n\n![{hidden}][carrier-image]", f"{visible}\n\n[{hidden}]: image.png\n\n![{hidden}]",
+            f'{visible}\n\n[ref]: image.png "open\n{hidden}"', f'{visible}\n\n[foo\\]bar]: image.png "{hidden}"\n![decoration][foo\\]bar]', f'{visible}\n\n[ref]:\n image.png "{hidden}"',
+            f'{visible}\n\n[//]: #\n"{hidden}"', f'{visible}\n\n[comment]: <>\n"{hidden}"', f'{visible}\n\n[foo\n bar]: image.png "{hidden}"',
+            f'{visible}\n\n[foo\n bar]: image.png\n"{hidden}"', f"{visible}\n```\n{hidden}\n```", f"{visible}\n`{hidden}`", f"{visible}\n\n    {hidden}",
+            f"{visible}\n>     {hidden}", f"{visible}\n<pre><code>{hidden}</code></pre>", f"{visible}\n<textarea>{hidden}</textarea>",
+            f"{visible}\n![{hidden}][ref]\n```bad`info\n\n[ref]: image.png", f"{visible}\nThe shot continues.\n<span>\n`{hidden}`\n</span>",
         )
         for prompt in prompts:
-            errors = project_state_check.compiled_prompt_errors(
-                prompt, state, "comment-hidden prompt", lane="narrative"
-            )
-            expected_missing = (
-                len(state["prompt_carriers"])
-                if "<style" in prompt or 'rel="stylesheet"' in prompt
-                else 1
-            )
             with self.subTest(prompt=prompt):
-                self.assertEqual(
-                    sum("missing exact prompt carrier" in error for error in errors),
-                    expected_missing,
-                    errors,
-                )
+                errors = project_state_check.compiled_prompt_errors(prompt, state, "comment-hidden prompt", lane="narrative")
+                expected_missing = len(state["prompt_carriers"]) if "<style" in prompt or 'rel="stylesheet"' in prompt else 1
+                self.assertEqual(sum("missing exact prompt carrier" in error for error in errors), expected_missing, errors)
 
     def test_rendered_markdown_that_resembles_metadata_remains_evidence(self) -> None:
-        state = load_json(
-            "examples/sequence-airport-arrival/clip-01-contract.json"
-        )["authoring_state"]
-        visible = " ".join(state["prompt_carriers"][:-1])
-        carrier = state["prompt_carriers"][-1]
-        long_definition_label = "a" + (" " * 1000) + "b"
-        long_image_label = "x" + (" " * 1000)
+        state = load_json("examples/sequence-airport-arrival/clip-01-contract.json")["authoring_state"]
+        visible, carrier = " ".join(state["prompt_carriers"][:-1]), state["prompt_carriers"][-1]
+        long_definition_label, long_image_label = "a" + (" " * 1000) + "b", "x" + (" " * 1000)
         prompts = (
-            f'{visible}\n[ref]: URL\n"unclosed\n\n{carrier}',
-            f"{visible}\n![{carrier}]",
-            f"{visible}\n![{carrier}][missing]",
-            f"{visible}\n\\![{carrier}]",
-            f"{visible}\n[note]: not a valid destination {carrier}",
-            f"{visible}\n![{carrier}](not a valid destination)",
-            f'{visible}\n![{carrier}](image.png "open\n\nclose")',
-            f'{visible}\n![{carrier}](image.png\n\n"title")',
-            f"{visible}\n![{carrier}](image.png\v)",
-            f"{visible}\n![{carrier}](foo\\ bar)",
-            f"{visible}\n![{carrier}](foo\\\nbar)",
-            f'{visible}\n[ref]: image.png "open\n\n{carrier}"',
-            f"{visible}\n![{carrier}][ref]\n[ref]: image.png\v",
-            f"{visible}\n![{carrier}][ref]\n[ref]: foo\\ bar",
-            f"{visible}\n![{carrier}][fooa]\n[foo\\a]: image.png",
-            f"{visible}\n![{carrier}][foo[bar]\n[foo\\[bar]: image.png",
-            f"{visible}\n![{carrier}][a b]\n[{long_definition_label}]: image.png",
-            f"{visible}\n![{carrier}][{long_image_label}]\n[x]: image.png",
-            f"{visible}\n![{carrier}][foo\\!]\n[foo!]: image.png",
-            f"{visible}\n![{carrier}][foo!]\n[foo\\!]: image.png",
-            f"{visible}\n![{carrier}][foo&amp;]\n[foo&]: image.png",
-            f"{visible}\n![{carrier}][foo&]\n[foo&amp;]: image.png",
-            f"{visible}\n![{carrier}][ref]\n```\n[ref]: image.png\n```",
-            f"{visible}\n![{carrier}][ref]\n<script>\n[ref]: image.png\n</script>",
-            f"{visible}\n![{carrier}][ref]\n\t[ref]: image.png",
-            f"{visible}\n![{carrier}][ref]\n<div>\n[ref]: image.png\n</div>",
-            f"{visible}\n<div>{carrier}</div>",
-            f"{visible}\nThe shot continues without a cut.\n    {carrier}",
-            f"{visible}\n<div>\n`{carrier}`\n</div>",
-            f"{visible}\n![{carrier}][ref]\n<hr>\n[ref]: image.png",
-            f"{visible}\n![{carrier}][ref]\n\n<span>\n[ref]: image.png\n</span>",
-            f"{visible}\n![{carrier}][ref]\n[ref]: image.png",
-            f"{visible}\n![{carrier}][ref]\n<span>\n[ref]: image.png\n</span>",
-            f"{visible}\n![{carrier}][ref]\n<?target\n[ref]: image.png\n?>",
-            f"{visible}\n![{carrier}][ref]\n<!DOCTYPE\n[ref]: image.png\n>",
-            f"{visible}\n![{carrier}][ref]\n<![CDATA[\n[ref]: image.png\n]]>",
+            f'{visible}\n[ref]: URL\n"unclosed\n\n{carrier}', f"{visible}\n![{carrier}]", f"{visible}\n![{carrier}][missing]",
+            f"{visible}\n\\![{carrier}]", f"{visible}\n[note]: not a valid destination {carrier}",
+            f"{visible}\n![{carrier}](not a valid destination)", f'{visible}\n![{carrier}](image.png "open\n\nclose")',
+            f'{visible}\n![{carrier}](image.png\n\n"title")', f"{visible}\n![{carrier}](image.png\v)", f"{visible}\n![{carrier}](foo\\ bar)",
+            f"{visible}\n![{carrier}](foo\\\nbar)", f'{visible}\n[ref]: image.png "open\n\n{carrier}"',
+            f"{visible}\n![{carrier}][ref]\n[ref]: image.png\v", f"{visible}\n![{carrier}][ref]\n[ref]: foo\\ bar",
+            f"{visible}\n![{carrier}][fooa]\n[foo\\a]: image.png", f"{visible}\n![{carrier}][foo[bar]\n[foo\\[bar]: image.png",
+            f"{visible}\n![{carrier}][a b]\n[{long_definition_label}]: image.png", f"{visible}\n![{carrier}][{long_image_label}]\n[x]: image.png",
+            f"{visible}\n![{carrier}][foo\\!]\n[foo!]: image.png", f"{visible}\n![{carrier}][foo!]\n[foo\\!]: image.png",
+            f"{visible}\n![{carrier}][foo&amp;]\n[foo&]: image.png", f"{visible}\n![{carrier}][foo&]\n[foo&amp;]: image.png",
+            f"{visible}\n![{carrier}][ref]\n```\n[ref]: image.png\n```", f"{visible}\n![{carrier}][ref]\n<script>\n[ref]: image.png\n</script>",
+            f"{visible}\n![{carrier}][ref]\n\t[ref]: image.png", f"{visible}\n![{carrier}][ref]\n<div>\n[ref]: image.png\n</div>",
+            f"{visible}\n<div>{carrier}</div>", f"{visible}\nThe shot continues without a cut.\n    {carrier}",
+            f"{visible}\n<div>\n`{carrier}`\n</div>", f"{visible}\n![{carrier}][ref]\n<hr>\n[ref]: image.png",
+            f"{visible}\n![{carrier}][ref]\n\n<span>\n[ref]: image.png\n</span>", f"{visible}\n![{carrier}][ref]\n[ref]: image.png",
+            f"{visible}\n![{carrier}][ref]\n<span>\n[ref]: image.png\n</span>", f"{visible}\n![{carrier}][ref]\n<?target\n[ref]: image.png\n?>",
+            f"{visible}\n![{carrier}][ref]\n<!DOCTYPE\n[ref]: image.png\n>", f"{visible}\n![{carrier}][ref]\n<![CDATA[\n[ref]: image.png\n]]>",
             f"{visible}\n> The shot continues without a cut.\n>     {carrier}",
             f"{visible}\n<details><summary>{carrier}</summary>hidden body</details>",
-            f"{visible}\n<details open><summary>More</summary>{carrier}</details>",
-            f"{visible}\n<dialog open>{carrier}</dialog>",
+            f"{visible}\n<details open><summary>More</summary>{carrier}</details>", f"{visible}\n<dialog open>{carrier}</dialog>",
         )
         for prompt in prompts:
-            errors = project_state_check.compiled_prompt_errors(
-                prompt, state, "rendered markdown prompt", lane="narrative"
-            )
             with self.subTest(prompt=prompt):
-                self.assertFalse(
-                    any("missing exact prompt carrier" in error for error in errors),
-                    errors,
-                )
+                errors = project_state_check.compiled_prompt_errors(prompt, state, "rendered markdown prompt", lane="narrative")
+                self.assertFalse(any("missing exact prompt carrier" in error for error in errors), errors)
 
     def test_reference_definitions_do_not_cross_container_instances(self) -> None:
         cross_container = (
@@ -1278,49 +1199,24 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
                 )
 
     def test_default_ignorable_only_authoring_text_and_carriers_are_empty(self) -> None:
-        base = load_json(
-            "examples/sequence-airport-arrival/clip-01-contract.json"
-        )["authoring_state"]
+        base = load_json("examples/sequence-airport-arrival/clip-01-contract.json")["authoring_state"]
         for invisible in ("\u200b", "\u2060\ufe0f", "\u3164", "\u0301", "\u2800", "...---"):
-            state = copy.deepcopy(base)
-            state["dramatic_function"] = invisible
-            errors: list[str] = []
-            project_state_check.check_authoring_state(
-                state,
-                "invisible authoring text",
-                errors,
-                required=True,
-                lane="narrative",
-            )
             with self.subTest(invisible=repr(invisible), field="dramatic_function"):
+                state, errors = copy.deepcopy(base), []
+                state["dramatic_function"] = invisible
+                project_state_check.check_authoring_state(state, "invisible authoring text", errors, required=True, lane="narrative")
                 self.assertTrue(any("dramatic_function" in error for error in errors), errors)
-
-            state = copy.deepcopy(base)
-            state["prompt_carriers"] = [invisible]
-            errors = []
-            project_state_check.check_authoring_state(
-                state,
-                "invisible carrier",
-                errors,
-                required=True,
-                lane="narrative",
-            )
             with self.subTest(invisible=repr(invisible), field="prompt_carriers"):
+                state, errors = copy.deepcopy(base), []
+                state["prompt_carriers"] = [invisible]
+                project_state_check.check_authoring_state(state, "invisible carrier", errors, required=True, lane="narrative")
                 self.assertTrue(any("prompt_carriers[0]" in error for error in errors), errors)
 
         for separator in "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029":
-            state = copy.deepcopy(base)
-            state["dramatic_function"] = f"left{separator}right"
-            state["prompt_carriers"] = [f"visible{separator}carrier"]
-            errors = []
-            project_state_check.check_authoring_state(
-                state,
-                "Unicode line boundary",
-                errors,
-                required=True,
-                lane="narrative",
-            )
             with self.subTest(separator=ord(separator)):
+                state, errors = copy.deepcopy(base), []
+                state.update({"dramatic_function": f"left{separator}right", "prompt_carriers": [f"visible{separator}carrier"]})
+                project_state_check.check_authoring_state(state, "Unicode line boundary", errors, required=True, lane="narrative")
                 self.assertTrue(any("dramatic_function" in error for error in errors), errors)
                 self.assertTrue(any("prompt_carriers[0]" in error for error in errors), errors)
 
@@ -1376,147 +1272,76 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
         self.assertTrue(any("authoring metadata requires directors_read_lane" in e for e in errors), errors)
 
         clip = copy.deepcopy(project["clips"][1])
-        contract = load_json(
-            "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
-        )
+        contract = load_json("examples/sequence-airport-arrival/clip-02-continuation-contract.json")
         clip.pop("directors_read_lane")
         contract.pop("directors_read_lane")
         contract.pop("authoring_state_provenance")
-        prompt = (ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md").read_text(
-            encoding="utf-8"
-        )
+        prompt = (ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md").read_text(encoding="utf-8")
         errors = []
         project_state_check.validate_contract(
-            contract,
-            "partial lane-less contract",
-            errors,
-            strict=False,
-            current_clip=clip,
-            prompt=prompt,
-            historical_ledger=protected_historical_ledger(),
+            contract, "partial lane-less contract", errors, strict=False,
+            current_clip=clip, prompt=prompt, historical_ledger=protected_historical_ledger(),
         )
         self.assertTrue(any("authoring metadata requires directors_read_lane" in e for e in errors), errors)
         self.assertTrue(any("missing authoring_state_provenance" in e for e in errors), errors)
 
         provenance_only_clip = copy.deepcopy(clip)
-        provenance_only_contract = load_json(
-            "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
-        )
+        provenance_only_contract = load_json("examples/sequence-airport-arrival/clip-02-continuation-contract.json")
         provenance_only_clip.pop("authoring_state", None)
         provenance_only_contract.pop("directors_read_lane")
         provenance_only_contract.pop("authoring_state")
         errors = []
         project_state_check.validate_contract(
-            provenance_only_contract,
-            "provenance-only lane-less contract",
-            errors,
-            strict=False,
-            current_clip=provenance_only_clip,
-            prompt=prompt,
-            historical_ledger=protected_historical_ledger(),
+            provenance_only_contract, "provenance-only lane-less contract", errors, strict=False,
+            current_clip=provenance_only_clip, prompt=prompt, historical_ledger=protected_historical_ledger(),
         )
         self.assertTrue(any("authoring metadata requires directors_read_lane" in e for e in errors), errors)
         self.assertTrue(any("missing authoring_state" in e for e in errors), errors)
 
-        project_provenance_only = load_json(
-            "examples/sequence-airport-arrival/project-state.json"
-        )
+        project_provenance_only = load_json("examples/sequence-airport-arrival/project-state.json")
         project_clip = project_provenance_only["clips"][2]
         project_clip.pop("directors_read_lane", None)
         project_clip.pop("authoring_state", None)
         project_clip["authoring_state_provenance"] = {
-            "project_id": project_provenance_only["project_id"],
-            "clip_id": project_clip["clip_id"],
-            "canon_revision": 2,
-            "state_revision": 2,
-            "authoring_state_sha256": "0" * 64,
+            "project_id": project_provenance_only["project_id"], "clip_id": project_clip["clip_id"],
+            "canon_revision": 2, "state_revision": 2, "authoring_state_sha256": "0" * 64,
         }
         errors = self.validate_project_copy(project_provenance_only, strict=False)
         self.assertTrue(any("authoring metadata requires directors_read_lane" in e for e in errors), errors)
         self.assertTrue(any("missing authoring_state" in e for e in errors), errors)
 
     def test_protected_ledger_rejects_coordinated_rewrites_and_status_downgrade(self) -> None:
-        ledger = protected_historical_ledger()
-        project = load_json("examples/sequence-airport-arrival/project-state.json")
+        ledger, project = protected_historical_ledger(), load_json("examples/sequence-airport-arrival/project-state.json")
         historical_clip = next(item for item in project["clips"] if item["clip_id"] == "clip_01")
         historical = load_json("examples/sequence-airport-arrival/clip-01-contract.json")
-        historical_prompt = (
-            ROOT / "examples/sequence-airport-arrival/clip-01-prompt.md"
-        ).read_text(encoding="utf-8")
+        historical_prompt = (ROOT / "examples/sequence-airport-arrival/clip-01-prompt.md").read_text(encoding="utf-8")
         historical["authoring_state"]["dramatic_function"] = "coordinated rewrite"
-        historical["authoring_state_provenance"]["authoring_state_sha256"] = (
-            project_state_check.authoring_state_digest(historical["authoring_state"])
-        )
-        historical_clip["contract_authoring_state_snapshots"] = [
-            copy.deepcopy(historical["authoring_state_provenance"])
-        ]
+        historical["authoring_state_provenance"]["authoring_state_sha256"] = project_state_check.authoring_state_digest(historical["authoring_state"])
+        historical_clip["contract_authoring_state_snapshots"] = [copy.deepcopy(historical["authoring_state_provenance"])]
         errors: list[str] = []
-        project_state_check.validate_contract(
-            historical,
-            "coordinated historical rewrite",
-            errors,
-            strict=True,
-            current_clip=historical_clip,
-            prompt=historical_prompt,
-            current_project_version=project_state_check.project_version(project),
-            historical_ledger=ledger,
-        )
+        project_state_check.validate_contract(historical, "coordinated historical rewrite", errors, strict=True, current_clip=historical_clip, prompt=historical_prompt, current_project_version=project_state_check.project_version(project), historical_ledger=ledger)
         self.assertTrue(any("contract_sha256" in error for error in errors), errors)
 
         downgraded_project = load_json("examples/sequence-airport-arrival/project-state.json")
-        downgraded_clip = next(
-            item for item in downgraded_project["clips"] if item["clip_id"] == "clip_02"
-        )
-        downgraded = load_json(
-            "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
-        )
-        downgraded_prompt = (
-            ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md"
-        ).read_text(encoding="utf-8")
-        downgraded_clip["status"] = "rejected"
-        downgraded_project["take_history"].append(
-            {
-                "take_id": "take_clip02_rejected",
-                "clip_id": "clip_02",
-                "verdict": "reject",
-                "evidence": "Synthetic terminal state for the provenance rollback test.",
-            }
-        )
-        downgraded["status"] = "rejected"
+        downgraded_clip = next(item for item in downgraded_project["clips"] if item["clip_id"] == "clip_02")
+        downgraded = load_json("examples/sequence-airport-arrival/clip-02-continuation-contract.json")
+        downgraded_prompt = (ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md").read_text(encoding="utf-8")
+        downgraded_clip["status"] = downgraded["status"] = "rejected"
+        downgraded_project["take_history"].append({"take_id": "take_clip02_rejected", "clip_id": "clip_02", "verdict": "reject", "evidence": "Synthetic terminal state for the provenance rollback test."})
         downgraded["authoring_state"]["hidden_want_objective"] = "status downgrade rewrite"
-        downgraded["authoring_state_provenance"]["authoring_state_sha256"] = (
-            project_state_check.authoring_state_digest(downgraded["authoring_state"])
-        )
-        downgraded_clip["contract_authoring_state_snapshots"] = [
-            copy.deepcopy(downgraded["authoring_state_provenance"])
-        ]
-        downgraded_project["clips"] = [
-            clip for clip in downgraded_project["clips"] if clip["clip_id"] != "clip_03"
-        ]
+        downgraded["authoring_state_provenance"]["authoring_state_sha256"] = project_state_check.authoring_state_digest(downgraded["authoring_state"])
+        downgraded_clip["contract_authoring_state_snapshots"] = [copy.deepcopy(downgraded["authoring_state_provenance"])]
+        downgraded_project["clips"] = [clip for clip in downgraded_project["clips"] if clip["clip_id"] != "clip_03"]
         downgraded_project["scenes"][0]["assigned_clip_ids"] = ["clip_01", "clip_02"]
-        downgraded_project["beats"] = [
-            beat
-            for beat in downgraded_project["beats"]
-            if beat.get("assigned_clip_id") != "clip_03"
-        ]
+        downgraded_project["beats"] = [beat for beat in downgraded_project["beats"] if beat.get("assigned_clip_id") != "clip_03"]
         downgraded_project["current_clip_id"] = "clip_02"
         self.assertEqual(self.validate_project_copy(downgraded_project, strict=True), [])
         errors = []
-        project_state_check.validate_contract(
-            downgraded,
-            "coordinated status downgrade",
-            errors,
-            strict=True,
-            current_clip=downgraded_clip,
-            prompt=downgraded_prompt,
-            current_project_version=project_state_check.project_version(downgraded_project),
-            historical_ledger=ledger,
-        )
+        project_state_check.validate_contract(downgraded, "coordinated status downgrade", errors, strict=True, current_clip=downgraded_clip, prompt=downgraded_prompt, current_project_version=project_state_check.project_version(downgraded_project), historical_ledger=ledger)
         self.assertTrue(any("no protected historical provenance ledger entry" in e for e in errors), errors)
 
-        ledger_data = load_json("validation/authoring-state-provenance-ledger.json")
+        ledger_data, ledger_errors = load_json("validation/authoring-state-provenance-ledger.json"), []
         ledger_data["entries"][0]["contract_status"] = "accepted"
-        ledger_errors: list[str] = []
         with mock.patch.object(project_state_check, "load_json", return_value=ledger_data):
             loaded = project_state_check.load_protected_provenance_ledger(ROOT, ledger_errors)
         self.assertIsNone(loaded)
@@ -1630,131 +1455,55 @@ class AuthoringStateAdversarialTests(unittest.TestCase):
 
     def test_contract_authoring_state_is_bound_to_exact_revision_and_digest(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")
-        current_version = project_state_check.project_version(project)
+        current_version, ledger = project_state_check.project_version(project), protected_historical_ledger()
 
         historical = load_json("examples/sequence-airport-arrival/clip-01-contract.json")
         historical_clip = next(item for item in project["clips"] if item["clip_id"] == "clip_01")
-        historical_prompt = (
-            ROOT / "examples/sequence-airport-arrival/clip-01-prompt.md"
-        ).read_text(encoding="utf-8")
+        historical_prompt = (ROOT / "examples/sequence-airport-arrival/clip-01-prompt.md").read_text(encoding="utf-8")
         errors: list[str] = []
-        project_state_check.validate_contract(
-            historical,
-            "historical contract",
-            errors,
-            strict=True,
-            current_clip=historical_clip,
-            prompt=historical_prompt,
-            current_project_version=current_version,
-            historical_ledger=protected_historical_ledger(),
-        )
+        project_state_check.validate_contract(historical, "historical contract", errors, strict=True, current_clip=historical_clip, prompt=historical_prompt, current_project_version=current_version, historical_ledger=ledger)
         self.assertEqual(errors, [])
 
         rewritten = copy.deepcopy(historical)
         rewritten["authoring_state"]["dramatic_function"] = "a later arbitrary rewrite"
         errors = []
-        project_state_check.validate_contract(
-            rewritten,
-            "rewritten historical contract",
-            errors,
-            strict=True,
-            current_clip=historical_clip,
-            prompt=historical_prompt,
-            current_project_version=current_version,
-            historical_ledger=protected_historical_ledger(),
-        )
+        project_state_check.validate_contract(rewritten, "rewritten historical contract", errors, strict=True, current_clip=historical_clip, prompt=historical_prompt, current_project_version=current_version, historical_ledger=ledger)
         self.assertTrue(any("immutable provenance digest" in error for error in errors), errors)
 
-        rewritten["authoring_state_provenance"]["authoring_state_sha256"] = (
-            project_state_check.authoring_state_digest(rewritten["authoring_state"])
-        )
+        rewritten["authoring_state_provenance"]["authoring_state_sha256"] = project_state_check.authoring_state_digest(rewritten["authoring_state"])
         errors = []
-        project_state_check.validate_contract(
-            rewritten,
-            "rewritten historical contract and digest",
-            errors,
-            strict=True,
-            current_clip=historical_clip,
-            prompt=historical_prompt,
-            current_project_version=current_version,
-            historical_ledger=protected_historical_ledger(),
-        )
+        project_state_check.validate_contract(rewritten, "rewritten historical contract and digest", errors, strict=True, current_clip=historical_clip, prompt=historical_prompt, current_project_version=current_version, historical_ledger=ledger)
         self.assertTrue(any("not bound to an exact planned snapshot" in error for error in errors), errors)
 
-        current = load_json(
-            "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
-        )
+        current = load_json("examples/sequence-airport-arrival/clip-02-continuation-contract.json")
         current_clip = next(item for item in project["clips"] if item["clip_id"] == "clip_02")
-        current_prompt = (
-            ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md"
-        ).read_text(encoding="utf-8")
+        current_prompt = (ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md").read_text(encoding="utf-8")
         current["authoring_state_provenance"]["state_revision"] = 1
         errors = []
-        project_state_check.validate_contract(
-            current,
-            "stale current provenance",
-            errors,
-            strict=True,
-            current_clip=current_clip,
-            prompt=current_prompt,
-            current_project_version=current_version,
-            historical_ledger=protected_historical_ledger(),
-        )
+        project_state_check.validate_contract(current, "stale current provenance", errors, strict=True, current_clip=current_clip, prompt=current_prompt, current_project_version=current_version, historical_ledger=ledger)
         self.assertTrue(any("does not match current project revision" in error for error in errors), errors)
 
     def test_contract_freshness_classifies_every_status_explicitly(self) -> None:
         project = load_json("examples/sequence-airport-arrival/project-state.json")
         base_clip = next(item for item in project["clips"] if item["clip_id"] == "clip_02")
-        base_contract = load_json(
-            "examples/sequence-airport-arrival/clip-02-continuation-contract.json"
-        )
-        prompt = (ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md").read_text(
-            encoding="utf-8"
-        )
+        base_contract = load_json("examples/sequence-airport-arrival/clip-02-continuation-contract.json")
+        prompt = (ROOT / "examples/sequence-airport-arrival/clip-02-prompt.md").read_text(encoding="utf-8")
 
         for status in sorted(project_state_check.CURRENT_CONTRACT_STATUSES):
-            clip = copy.deepcopy(base_clip)
-            contract = copy.deepcopy(base_contract)
-            clip["status"] = status
-            contract["status"] = status
-            contract["authoring_state"]["hidden_want_objective"] = "a stale objective"
-            errors: list[str] = []
-            project_state_check.validate_contract(
-                contract,
-                f"current {status}",
-                errors,
-                strict=True,
-                current_clip=clip,
-                prompt=prompt,
-                historical_ledger=protected_historical_ledger(),
-            )
             with self.subTest(status=status):
-                self.assertTrue(
-                    any("current authoring_state is stale" in error for error in errors),
-                    errors,
-                )
+                clip, contract, errors = copy.deepcopy(base_clip), copy.deepcopy(base_contract), []
+                clip["status"] = contract["status"] = status
+                contract["authoring_state"]["hidden_want_objective"] = "a stale objective"
+                project_state_check.validate_contract(contract, f"current {status}", errors, strict=True, current_clip=clip, prompt=prompt, historical_ledger=protected_historical_ledger())
+                self.assertTrue(any("current authoring_state is stale" in error for error in errors), errors)
 
         for status in sorted(project_state_check.HISTORICAL_CONTRACT_STATUSES):
-            clip = copy.deepcopy(base_clip)
-            contract = copy.deepcopy(base_contract)
-            clip["status"] = status
-            contract["status"] = status
-            contract["authoring_state"]["hidden_want_objective"] = "preserved planned objective"
-            errors = []
-            project_state_check.validate_contract(
-                contract,
-                f"historical {status}",
-                errors,
-                strict=True,
-                current_clip=clip,
-                prompt=prompt,
-                historical_ledger=protected_historical_ledger(),
-            )
             with self.subTest(status=status):
-                self.assertFalse(
-                    any("current authoring_state is stale" in error for error in errors),
-                    errors,
-                )
+                clip, contract, errors = copy.deepcopy(base_clip), copy.deepcopy(base_contract), []
+                clip["status"] = contract["status"] = status
+                contract["authoring_state"]["hidden_want_objective"] = "preserved planned objective"
+                project_state_check.validate_contract(contract, f"historical {status}", errors, strict=True, current_clip=clip, prompt=prompt, historical_ledger=protected_historical_ledger())
+                self.assertFalse(any("current authoring_state is stale" in error for error in errors), errors)
 
     def test_production_main_invokes_prompt_boundary(self) -> None:
         sentinel = "sentinel prompt boundary failure"
@@ -1890,17 +1639,10 @@ class AuthoringStateSchemaCompatibilityTests(unittest.TestCase):
         cls.contract_schema = load_json("schemas/clip-contract.schema.json")
 
     def test_schema_definitions_match_and_keep_legacy_absence(self) -> None:
-        for definition in (
-            "visible_one_line_text",
-            "authoring_state_provenance",
-            "authoring_state",
-            "narrative_authoring_state",
-            "non_narrative_authoring_state",
-        ):
-            self.assertEqual(
-                self.project_schema["$defs"][definition],
-                self.contract_schema["$defs"][definition],
-            )
+        definitions = ("visible_one_line_text", "authoring_state_provenance", "authoring_state", "narrative_authoring_state", "non_narrative_authoring_state")
+        for definition in definitions:
+            with self.subTest(definition=definition):
+                self.assertEqual(self.project_schema["$defs"][definition], self.contract_schema["$defs"][definition])
 
         project = load_json("examples/sequence-airport-arrival/project-state.json")
         for clip in project["clips"]:
@@ -1917,27 +1659,17 @@ class AuthoringStateSchemaCompatibilityTests(unittest.TestCase):
 
         partial_project = load_json("examples/sequence-airport-arrival/project-state.json")
         partial_project["clips"][0].pop("directors_read_lane")
-        self.assertTrue(
-            list(self.validator(self.project_schema).iter_errors(partial_project))
-        )
+        self.assertTrue(list(self.validator(self.project_schema).iter_errors(partial_project)))
 
-        partial_contract = load_json(
-            "examples/sequence-airport-arrival/clip-01-contract.json"
-        )
+        partial_contract = load_json("examples/sequence-airport-arrival/clip-01-contract.json")
         partial_contract.pop("directors_read_lane")
         partial_contract.pop("authoring_state_provenance")
-        self.assertTrue(
-            list(self.validator(self.contract_schema).iter_errors(partial_contract))
-        )
+        self.assertTrue(list(self.validator(self.contract_schema).iter_errors(partial_contract)))
 
-        provenance_only = load_json(
-            "examples/sequence-airport-arrival/clip-01-contract.json"
-        )
+        provenance_only = load_json("examples/sequence-airport-arrival/clip-01-contract.json")
         provenance_only.pop("directors_read_lane")
         provenance_only.pop("authoring_state")
-        self.assertTrue(
-            list(self.validator(self.contract_schema).iter_errors(provenance_only))
-        )
+        self.assertTrue(list(self.validator(self.contract_schema).iter_errors(provenance_only)))
 
     def test_schema_rejects_every_unicode_line_boundary_in_authoring_text(self) -> None:
         contract = load_json("examples/sequence-airport-arrival/clip-01-contract.json")

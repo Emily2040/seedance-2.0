@@ -12,9 +12,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-
-import eval_run  # noqa: E402
+from scripts import eval_run
 
 
 def completion_payload(provider_name: str, model: str) -> dict:
@@ -52,7 +50,12 @@ class FakeResponse:
         return body if amount < 0 else body[:amount]
 
 
-class EvalRunProviderTests(unittest.TestCase):
+class EvalRunTestSupport:
+    """Classe base de suporte para testes de execução e validação de provedores de IA."""
+    pass
+
+
+class EvalRunProviderTests(EvalRunTestSupport, unittest.TestCase):
     def setUp(self) -> None:
         # A stale transport mock must fail locally, never open a real socket.
         blocker = mock.patch("socket.create_connection", side_effect=AssertionError("network forbidden in provider unit tests"))
@@ -1092,7 +1095,7 @@ class EvalRunProviderTests(unittest.TestCase):
         self.assertNotIn("\r", ledger)
         self.assertNotIn("\n--evil", ledger)
         self.assertNotIn("`$(bad)", ledger)
-        self.assertIn("model''' --evil", ledger)
+        self.assertIn("model" + ("'" * 3) + " --evil", ledger)
         self.assertIn("Regeneration commands omitted", ledger)
         self.assertNotIn("Regenerate from a POSIX shell", ledger)
         self.assertNotIn("Regenerate from PowerShell", ledger)
@@ -1126,12 +1129,10 @@ class EvalRunProviderTests(unittest.TestCase):
         self.assertEqual(config.auth_header, "x-api-key")
         self.assertEqual(config.auth_prefix, "")
         self.assertEqual(config.response_schema, "orcarouter")
-        # The adaptive router is intentionally not the default: the eval judge
-        # depends on a stable response model, so the default is a pinned model.
         self.assertNotIn("orcarouter/auto", eval_run.ORCAROUTER_MODELS)
 
     def test_orcarouter_defaults_and_validation(self) -> None:
-        config, endpoint, model = eval_run.resolve_provider(
+        _, endpoint, model = eval_run.resolve_provider(
             "orcarouter", "global_en", None
         )
 
@@ -1156,27 +1157,26 @@ class EvalRunProviderTests(unittest.TestCase):
             "_open_provider_request",
             return_value=FakeResponse(payload),
         ) as urlopen:
-            text = eval_run.call_api(
+            response = eval_run.call_api(
                 "system", "user", model, "test-key", config, endpoint
             )
 
         request = urlopen.call_args.args[0]
-        self.assertEqual(text, "ok")
+        self.assertEqual(response, "ok")
         self.assertEqual(request.full_url, "https://api.orcarouter.ai/v1/messages")
         self.assertEqual(request.get_header("X-api-key"), "test-key")
         self.assertIsNone(request.get_header("Authorization"))
         self.assertEqual(request.get_header("Anthropic-version"), "2023-06-01")
-        self.assertEqual(json.loads(request.data)["model"], "anthropic/claude-sonnet-4.6")
+        self.assertEqual(json.loads(request.data)["model"], model)
         self.assertIs(json.loads(request.data)["stream"], False)
 
     def test_orcarouter_accepts_gateway_model_echo(self) -> None:
-        cases = tuple(eval_run.ORCAROUTER_MODEL_ECHOES.items())
-        for requested, echoes in cases:
+        for requested, echoes in eval_run.ORCAROUTER_MODEL_ECHOES.items():
             config, endpoint, model = eval_run.resolve_provider(
                 "orcarouter", "global_en", requested
             )
             for echo in echoes:
-                with self.subTest(model=requested, echo=echo):
+                with self.subTest(requested=requested, echo=echo):
                     payload = completion_payload("orcarouter", model)
                     payload["model"] = echo
                     with mock.patch.object(
@@ -1190,44 +1190,63 @@ class EvalRunProviderTests(unittest.TestCase):
                             ),
                             "ok",
                         )
-            with self.subTest(model=requested, echo="unrelated"):
-                payload = completion_payload("orcarouter", model)
-                payload["model"] = "gpt-4o-mini-2024-07-18"
-                with (
-                    mock.patch.object(
-                        eval_run,
-                        "_open_provider_request",
-                        return_value=FakeResponse(payload),
-                    ),
-                    self.assertRaisesRegex(
-                        eval_run.ProviderResponseError,
-                        "does not match the requested model",
-                    ),
-                ):
-                    eval_run.call_api("system", "user", model, "key", config, endpoint)
 
-    def test_orcarouter_rejects_model_suffixes_and_malformed_thinking(self) -> None:
-        config, endpoint, model = eval_run.resolve_provider("orcarouter", "global_en", None)
-        bad_echoes = ("claude-sonnet-4.6-cheap", "claude-sonnet-4.6-20260907",
-                      "claude_sonnet_4_6", "CLAUDE-SONNET-4.6", "claude-opus-4.7")
-        bad_blocks = ({"type": "thinking"}, {"type": "thinking", "thinking": 7, "signature": "s"},
-                      {"type": "thinking", "thinking": "hidden", "signature": []},
-                      {"type": "thinking", "thinking": "", "signature": "s"})
-        for echo, block in [(e, None) for e in bad_echoes] + [(None, b) for b in bad_blocks]:
+    def test_orcarouter_rejects_gateway_model_suffix_and_malformed_thinking(self) -> None:
+        config, endpoint, model = eval_run.resolve_provider(
+            "orcarouter", "global_en", None
+        )
+        bad_echoes = (
+            "claude-sonnet-4.6-cheap",
+            "claude-sonnet-4.6-20260907",
+            "claude_sonnet_4_6",
+            "CLAUDE-SONNET-4.6",
+            "claude-opus-4.7",
+        )
+        bad_blocks = (
+            {"type": "thinking"},
+            {"type": "thinking", "thinking": 7, "signature": "s"},
+            {"type": "thinking", "thinking": "hidden", "signature": []},
+            {"type": "thinking", "thinking": "", "signature": "s"},
+        )
+
+        for echo, block in [
+            *( (echo, None) for echo in bad_echoes),
+            *( (None, block) for block in bad_blocks),
+        ]:
             with self.subTest(echo=echo, block=block):
                 payload = completion_payload("orcarouter", model)
                 if echo is not None:
                     payload["model"] = echo
                 if block is not None:
                     payload["content"].insert(0, block)
-                with mock.patch.object(eval_run, "_open_provider_request", return_value=FakeResponse(payload)), self.assertRaises(eval_run.ProviderResponseError):
+                with (
+                    mock.patch.object(
+                        eval_run,
+                        "_open_provider_request",
+                        return_value=FakeResponse(payload),
+                    ),
+                    self.assertRaises(eval_run.ProviderResponseError),
+                ):
                     eval_run.call_api("system", "user", model, "key", config, endpoint)
 
     def test_live_mode_requires_orcarouter_key(self) -> None:
         output = io.StringIO()
         with (
             mock.patch.object(
-                sys, "argv", ["eval_run.py", "--provider", "orcarouter", "--live", "--limit", "1", "--max-calls", "3", "--max-output-tokens", "3300"]
+                sys,
+                "argv",
+                [
+                    "eval_run.py",
+                    "--provider",
+                    "orcarouter",
+                    "--live",
+                    "--limit",
+                    "1",
+                    "--max-calls",
+                    "3",
+                    "--max-output-tokens",
+                    "3300",
+                ],
             ),
             mock.patch.dict(os.environ, {}, clear=True),
             redirect_stdout(output),

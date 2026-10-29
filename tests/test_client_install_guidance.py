@@ -115,14 +115,12 @@ class ClientInstallGuidanceTests(unittest.TestCase):
         self.assertIn("Client skill discovery paths", self.source_registry)
 
     def test_installed_payload_carries_the_corrected_guidance(self) -> None:
+        from unittest.mock import patch
+
         with tempfile.TemporaryDirectory() as tmp:
-            argv = sys.argv
-            sys.argv = ["install_codex_skill.py", "--dest", tmp]
-            try:
+            with patch.object(sys, "argv", ["install_codex_skill.py", "--dest", tmp]):
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(installer.main(), 0)
-            finally:
-                sys.argv = argv
 
             payload = Path(tmp) / installer.SKILL_NAME
             installed_readme = read(payload / "README.md")
@@ -133,7 +131,6 @@ class ClientInstallGuidanceTests(unittest.TestCase):
             self.assertIn("skills.external_dirs", table_row(installed_readme, "Hermes Agent"))
             self.assertIn("Do not treat", installed_compatibility)
             self.assertIn("Client skill discovery paths", installed_registry)
-
-
+            
 if __name__ == "__main__":
     unittest.main()

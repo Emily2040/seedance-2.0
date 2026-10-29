@@ -334,40 +334,17 @@ class OutlinedTypeTests(unittest.TestCase):
         import build_masthead_outlines as gen
 
         with tempfile.TemporaryDirectory() as temp:
-            build_env = Path(temp) / "builder"
-            wheelhouse = Path(temp) / "wheelhouse"
+            build_env, wheelhouse = Path(temp) / "builder", Path(temp) / "wheelhouse"
             wheelhouse.mkdir()
             events: list[str] = []
             with (
-                mock.patch.object(
-                    gen,
-                    "prepare_build_environment",
-                    side_effect=lambda *args: events.append("prepare") or build_env,
-                ) as prepare,
-                mock.patch.object(
-                    gen,
-                    "bootstrap_build_environment_pip",
-                    side_effect=lambda *args: events.append("bootstrap"),
-                ) as bootstrap,
-                mock.patch.object(
-                    gen,
-                    "run_initialized_build_env_command",
-                    side_effect=lambda *args, **kwargs: events.append("install"),
-                ) as run,
-                mock.patch.object(
-                    gen,
-                    "seal_isolated_builder",
-                    side_effect=lambda *args: events.append("seal"),
-                ) as seal,
-                mock.patch.object(
-                    gen,
-                    "verify_isolated_builder",
-                    side_effect=lambda *args: events.append("verify"),
-                ) as verify,
+                mock.patch.object(gen, "prepare_build_environment", side_effect=lambda *a: events.append("prepare") or build_env) as prepare,
+                mock.patch.object(gen, "bootstrap_build_environment_pip", side_effect=lambda *a: events.append("bootstrap")) as bootstrap,
+                mock.patch.object(gen, "run_initialized_build_env_command", side_effect=lambda *a, **kw: events.append("install")) as run,
+                mock.patch.object(gen, "seal_isolated_builder", side_effect=lambda *a: events.append("seal")) as seal,
+                mock.patch.object(gen, "verify_isolated_builder", side_effect=lambda *a: events.append("verify")) as verify,
             ):
-                result = gen.install_pinned_builder_dependencies(
-                    wheelhouse=wheelhouse, build_env=build_env
-                )
+                result = gen.install_pinned_builder_dependencies(wheelhouse=wheelhouse, build_env=build_env)
 
         self.assertEqual(result, build_env)
         prepare.assert_called_once_with(build_env, wheelhouse.resolve())
@@ -376,27 +353,16 @@ class OutlinedTypeTests(unittest.TestCase):
         verify.assert_called_once_with(build_env)
         run.assert_called_once()
         self.assertEqual(events, ["prepare", "bootstrap", "install", "seal", "verify"])
-        self.assertEqual(
-            run.call_args.args[1],
-            gen.pinned_install_argv(
-                gen.build_env_python(build_env), wheelhouse.resolve(), build_env
-            ),
-        )
+        self.assertEqual(run.call_args.args[1], gen.pinned_install_argv(gen.build_env_python(build_env), wheelhouse.resolve(), build_env))
         self.assertEqual(run.call_args.args[0], build_env)
         pip_env = run.call_args.kwargs["environment"]
         self.assertEqual(pip_env["PIP_CONFIG_FILE"], os.devnull)
-        self.assertEqual(
-            [key for key in pip_env if key.upper().startswith("PIP_")],
-            ["PIP_CONFIG_FILE"],
-        )
+        self.assertEqual([key for key in pip_env if key.upper().startswith("PIP_")], ["PIP_CONFIG_FILE"])
         argv = run.call_args.args[1]
         self.assertEqual(argv[1], "-I")
-        self.assertIn("--force-reinstall", argv)
-        self.assertIn("--no-compile", argv)
-        self.assertIn("--no-deps", argv)
-        self.assertIn("--no-index", argv)
-        self.assertIn("--require-hashes", argv)
-        self.assertIn("--report", argv)
+        for flag in ("--force-reinstall", "--no-compile", "--no-deps", "--no-index", "--require-hashes", "--report"):
+            with self.subTest(flag=flag):
+                self.assertIn(flag, argv)
         self.assertEqual(Path(argv[-1]), ROOT / "requirements-masthead.lock")
 
     def test_build_environment_clear_is_marker_guarded_and_isolated(self) -> None:

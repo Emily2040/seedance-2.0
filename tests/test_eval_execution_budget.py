@@ -7,6 +7,8 @@ import os
 import sys
 import tempfile
 import unittest
+import contextlib
+import pytest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
@@ -92,49 +94,53 @@ class OfflinePlanTests(unittest.TestCase):
         transport.assert_not_called()
 
 
-class ExecutionBudgetTests(unittest.TestCase):
+
+@contextlib.contextmanager
+def active_budget_scope(budget):
+    token = eval_run._ACTIVE_BUDGET.set(budget)
+    try:
+        yield
+    finally:
+        eval_run._ACTIVE_BUDGET.reset(token)
+
+
+class TestExecutionBudget:
     def test_call_limit_reserves_failures_and_prevents_the_next_transport(self):
         budget = eval_run.EvaluationBudget(1, 3000)
-        token = eval_run._ACTIVE_BUDGET.set(budget)
-        try:
+        with active_budget_scope(budget):
             with mock.patch.object(eval_run, "_read_api_response", side_effect=eval_run.ProviderResponseError("uncertain transport")) as transport:
                 for _ in range(2):
-                    with self.assertRaises(eval_run.ProviderResponseError):
+                    with pytest.raises(eval_run.ProviderResponseError):
                         eval_run.call_api("s", "u", "model", "AUDIT-DUMMY", eval_run.PROVIDER_CONFIGS["anthropic"], eval_run.ANTHROPIC_API_URL)
-                self.assertEqual(transport.call_count, 1)
-        finally:
-            eval_run._ACTIVE_BUDGET.reset(token)
-        self.assertEqual(budget.attempted_calls, 1)
-        self.assertEqual(budget.reserved_output_tokens, 1500)
-        self.assertTrue(budget.exhausted)
-        self.assertTrue(budget.summary()["usage_may_be_incomplete"])
+                assert transport.call_count == 1
+
+        assert budget.attempted_calls == 1
+        assert budget.reserved_output_tokens == 1500
+        assert budget.exhausted
+        assert budget.summary()["usage_may_be_incomplete"]
 
     def test_output_budget_is_reserved_before_a_request(self):
         budget = eval_run.EvaluationBudget(3, 899)
-        token = eval_run._ACTIVE_BUDGET.set(budget)
-        try:
+        with active_budget_scope(budget):
             with mock.patch.object(eval_run, "_read_api_response") as transport:
-                with self.assertRaises(eval_run.ProviderResponseError):
+                with pytest.raises(eval_run.ProviderResponseError):
                     eval_run.call_api("s", "u", "model", "AUDIT-DUMMY", eval_run.PROVIDER_CONFIGS["anthropic"], eval_run.ANTHROPIC_API_URL, max_tokens=900)
                 transport.assert_not_called()
-        finally:
-            eval_run._ACTIVE_BUDGET.reset(token)
-        self.assertEqual(budget.attempted_calls, 0)
-        self.assertTrue(budget.exhausted)
+
+        assert budget.attempted_calls == 0
+        assert budget.exhausted
 
     def test_validated_usage_is_reported_without_refunding_reservations(self):
         body = {"id":"msg_dummy", "type":"message", "role":"assistant", "model":"model", "content":[{"type":"text", "text":"ok"}], "stop_reason":"end_turn", "stop_sequence":None, "usage":{"input_tokens":12,"output_tokens":3}}
         budget = eval_run.EvaluationBudget(1, 1500)
-        token = eval_run._ACTIVE_BUDGET.set(budget)
-        try:
+        with active_budget_scope(budget):
             with mock.patch.object(eval_run, "_read_api_response", return_value=json.dumps(body).encode()):
-                self.assertEqual(eval_run.call_api("s", "u", "model", "AUDIT-DUMMY", eval_run.PROVIDER_CONFIGS["anthropic"], eval_run.ANTHROPIC_API_URL), "ok")
-        finally:
-            eval_run._ACTIVE_BUDGET.reset(token)
-        self.assertEqual(budget.reported_input_tokens, 12)
-        self.assertEqual(budget.reported_output_tokens, 3)
-        self.assertEqual(budget.reserved_output_tokens, 1500)
-        self.assertFalse(budget.summary()["usage_may_be_incomplete"])
+                assert eval_run.call_api("s", "u", "model", "AUDIT-DUMMY", eval_run.PROVIDER_CONFIGS["anthropic"], eval_run.ANTHROPIC_API_URL) == "ok"
+
+        assert budget.reported_input_tokens == 12
+        assert budget.reported_output_tokens == 3
+        assert budget.reserved_output_tokens == 1500
+        assert not budget.summary()["usage_may_be_incomplete"]
 
 
 if __name__ == "__main__":
