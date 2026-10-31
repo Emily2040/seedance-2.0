@@ -62,11 +62,11 @@ class EvalRunProviderTests(unittest.TestCase):
     def test_minimax_configuration_matches_current_models_and_regions(self) -> None:
         config = eval_run.PROVIDER_CONFIGS["minimax"]
 
-        self.assertEqual(config.default_model, "MiniMax-M3")
+        self.assertEqual(config.default_model, "MiniMax-M3.1-Flash")
+        self.assertEqual(config.models, ("MiniMax-M3.1-Flash", "MiniMax-M3"))
         self.assertEqual(
-            config.models,
+            config.legacy_models,
             (
-                "MiniMax-M3",
                 "MiniMax-M2.7",
                 "MiniMax-M2.7-highspeed",
                 "MiniMax-M2.5",
@@ -92,14 +92,23 @@ class EvalRunProviderTests(unittest.TestCase):
 
         self.assertEqual(config.api_key_env, "MINIMAX_API_KEY")
         self.assertEqual(endpoint, "https://api.minimax.io/anthropic/v1/messages")
-        self.assertEqual(model, "MiniMax-M3")
-        with self.assertRaisesRegex(ValueError, "not supported"):
+        self.assertEqual(model, "MiniMax-M3.1-Flash")
+        with self.assertRaisesRegex(ValueError, "not supported") as caught:
             eval_run.resolve_provider("minimax", "global_en", "unsupported")
-        for supported in eval_run.MINIMAX_MODELS:
-            self.assertEqual(
-                eval_run.resolve_provider("minimax", "global_en", supported)[2],
-                supported,
-            )
+        self.assertIn("choose MiniMax-M3.1-Flash, MiniMax-M3", str(caught.exception))
+        self.assertNotIn("MiniMax-M2", str(caught.exception))
+        for region in ("global_en", "cn_zh"):
+            for supported in config.models + config.legacy_models:
+                with self.subTest(region=region, model=supported):
+                    self.assertEqual(
+                        eval_run.resolve_provider("minimax", region, supported)[2],
+                        supported,
+                    )
+                    eval_run.validate_model("minimax", config, supported)
+        self.assertEqual(
+            eval_run.resolve_provider("anthropic", "global_en", "custom-claude")[2],
+            "custom-claude",
+        )
         with self.assertRaisesRegex(ValueError, "not supported"):
             eval_run.resolve_provider("anthropic", "cn_zh", None)
 
@@ -112,6 +121,9 @@ class EvalRunProviderTests(unittest.TestCase):
             with self.subTest(region=region):
                 _, endpoint, model = eval_run.resolve_provider("minimax", region, None)
                 payload = completion_payload("minimax", model)
+                payload["content"].insert(0, {
+                    "type": "thinking", "thinking": "reasoning", "signature": "test-signature",
+                })
                 with mock.patch.object(
                     eval_run, "_open_provider_request",
                     return_value=FakeResponse(payload),
@@ -131,8 +143,12 @@ class EvalRunProviderTests(unittest.TestCase):
                 self.assertEqual(request.get_header("Authorization"), "Bearer test-key")
                 self.assertIsNone(request.get_header("X-api-key"))
                 self.assertEqual(request.get_header("Anthropic-version"), "2023-06-01")
-                self.assertEqual(json.loads(request.data)["model"], "MiniMax-M3")
-                self.assertIs(json.loads(request.data)["stream"], False)
+                body = json.loads(request.data)
+                self.assertEqual(body["model"], "MiniMax-M3.1-Flash")
+                self.assertIs(body["stream"], False)
+                self.assertNotIn("thinking", body)
+                self.assertNotIn("output_config", body)
+                self.assertNotIn("service_tier", body)
 
     def test_default_provider_preserves_existing_request_auth(self) -> None:
         config, endpoint, model = eval_run.resolve_provider("anthropic", "global_en", None)

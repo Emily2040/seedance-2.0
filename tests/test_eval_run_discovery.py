@@ -209,7 +209,7 @@ class DiscoveryBoundaryTests(unittest.TestCase):
             self.assertEqual(len(calls), 3)
             self.assertEqual(
                 [call["model"] for call in calls],
-                ["MiniMax-M3", "MiniMax-M3", "MiniMax-M2.5"],
+                ["MiniMax-M3.1-Flash", "MiniMax-M3.1-Flash", "MiniMax-M2.5"],
             )
             self.assertEqual([call["max_tokens"] for call in calls], [900, 1500, 900])
             for call in calls:

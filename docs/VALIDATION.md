@@ -144,9 +144,22 @@ python scripts/eval_run.py --live --limit 1 --max-calls 3 --max-output-tokens 33
 
 # Preview an alternate provider/region before choosing a live ceiling.
 python scripts/eval_run.py --provider minimax --region global_en --limit 1
-python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M2.7 --limit 1
+python scripts/eval_run.py --provider minimax --region cn_zh --model MiniMax-M3 --limit 1
 python scripts/eval_run.py --provider orcarouter --limit 1
 ```
+
+MiniMax defaults to `MiniMax-M3.1-Flash`; `MiniMax-M3` is the current alternate.
+Explicit older MiniMax model IDs remain accepted for saved commands and judge
+model overrides, subject to provider availability. The
+[global](https://platform.minimax.io/docs/api-reference/text-anthropic-api) and
+[CN](https://platform.minimaxi.com/docs/api-reference/text-anthropic-api) contracts
+checked on 2026-10-21 list both current models. The built-in CN endpoint uses
+the documented `https://api.minimaxi.com/anthropic/v1/messages` host.
+Flash always uses thinking; the
+harness omits `thinking`, `output_config`, and `service_tier`, retaining the
+provider's defaults. Its existing output-token ceilings are unchanged, so inspect
+the plan before a live run; offline checks do not establish live availability or
+answer quality.
 
 The optional [OrcaRouter evaluator](ORCAROUTER_EVAL.md) uses its native Messages endpoint and a restricted Claude allowlist. Its default is also an offline plan.
 
@@ -181,7 +194,7 @@ including its required `stop_sequence` field.
 Successful bodies are validated fail-closed: documented optional usage,
 citation, thinking, and tool-call structures are type-checked with unknown
 fields rejected, while optional MiniMax legacy `base_resp`/`stop_sequence`
-fields cannot contradict an otherwise successful response. M2.x thinking
+fields cannot contradict an otherwise successful response. Flash and M2.x thinking
 blocks are accepted only in their documented shape; unrequested tool calls and
 Anthropic/M3 thinking are rejected as non-final evidence. Transport errors name
 the failed open, context-entry, or read phase and redact API keys before console
