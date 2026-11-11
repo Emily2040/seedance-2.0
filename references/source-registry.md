@@ -1,9 +1,9 @@
 # Source Registry
 
-last_verified: 2026-09-26
+last_verified: 2026-11-12
 review_scope: partial
 
-**Scoped reviews: 2026-09-07 (provider surfaces, live) and 2026-09-26 (prompt-structure statements, mirror-read).** The date above covers the two reviews below, not a fresh verification of every historical source. Unlisted provider, pricing, client-installation, and policy claims retain their earlier verification dates and require rechecking before use. The older inventory is preserved for traceability.
+**Scoped reviews: 2026-09-07 (provider surfaces, live), 2026-09-26 (prompt-structure statements, mirror-read), and 2026-11-12 (selected live public claims).** The date above covers only the dated reviews recorded below, not a fresh verification of every historical source. Unlisted provider, pricing, client-installation, and policy claims retain their earlier verification dates and require rechecking before use. The older inventory is preserved for traceability.
 
 `review_scope: partial` keeps the scheduled source-review warning active even while the review date is fresh. Mark it `full` only after the remaining inventory has been checked or explicitly retired; passing the metadata-age gate does not complete that work.
 
@@ -33,6 +33,18 @@ The first-party hosts `www.volcengine.com` and `docs.byteplus.com` were unreacha
 The machine-readable [source inventory](../data/sources.seedance-2026-05-30.json) updates only the records inspected in the 2026-09-07 pass; the 2026-09-26 mirror-read statements are recorded here and in the evidence notes, not in the inventory, because no live page was retrieved. Its filename and `generated_at` describe the original inventory; individual `retrieved_at` dates describe subsequent checks. The broader [API status snapshot](api-status.md) retains its August header and dated historical sections.
 
 Use this registry before making factual claims about Seedance 2.0 platform behavior. Prefer primary public sources, attach a verification date, and mark volatile claims as recheck-required. This file is a claim-boundary map, not a guarantee of access on every product surface or region.
+
+## Selected public claims rechecked on 2026-11-12
+
+| Source | Verified claim | Boundary |
+|---|---|---|
+| [ByteDance Seedance 2.0 page](https://seed.bytedance.com/en/seedance2_0) | Describes a unified multimodal audio-video generation architecture with text, image, audio, and video inputs. | Broad model framing, not an endpoint contract. |
+| [ByteDance launch post](https://seed.bytedance.com/en/blog/seedance-2-0-official-launch) | Describes mixed-modality references and editing, video extension, and multi-shot audio-video output. | Product announcement, not a guarantee of output quality or a mandatory prompt parser. |
+| [Seedance 2.0 model card v1](https://arxiv.org/abs/2604.14148) | States 4–15 second generation and native 480p/720p output. The paper remains v1, submitted 2026-04-15. | Model-card statement; do not transfer these limits to another product surface. |
+| [Runway Seedance 2.0 help](https://help.runwayml.com/hc/en-us/articles/50488490233363-Creating-with-Seedance-2-0) | Lists 5–15 second output and 480p, 720p, and 1080p resolutions. | Runway UI settings do not revise the model card's native-resolution statement or establish API/account access. The previous Credits Mode note was not found in the current page and is not reasserted here. |
+| [Runway API model catalog](https://docs.dev.runwayml.com/guides/models/) | Lists `seedance2`, `seedance2_fast`, `seedance2_mini`, and a separate `seedance2_5`. | Catalog naming does not prove account entitlement. |
+
+**Unavailable or incomplete in this review:** the BytePlus 2.0 prompt guide and create-task API page exposed their titles and update dates but not the document body; the 2.5 guide was inaccessible. The ByteDance `agentkit-samples` repository page did not expose the referenced Seedance sample during this review. No claims were updated from those sources. `review_scope` remains `partial`; historical provider, pricing, client-installation, and policy inventory is still unreviewed.
 
 ## Evidence Labels
 
